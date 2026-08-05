@@ -1,0 +1,21 @@
+# Personal data never enters the repository.
+data/
+*.json.broken
+*.json.tmp
+ledger-backup-*.json
+pre-import-*.json
+
+# Agent context — local only.
+claude.md
+CLAUDE.md
+.claude/
+
+__pycache__/
+*.py[cod]
+build/
+dist/
+*.spec
+.venv/
+venv/
+
+.DS_Store

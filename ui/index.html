@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bitter:wght@600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="masthead">
+    <div class="mast-row">
+      <div class="brand">Ledger<span id="subtitle">Portfolio journal</span></div>
+      <div class="mast-stats" id="maststats"></div>
+    </div>
+  </header>
+  <nav class="tabs" role="tablist" id="tabs"></nav>
+  <main id="view"><p class="empty">Starting up…</p></main>
+  <p class="foot" id="foot"></p>
+</div>
+
+<dialog id="dlg">
+  <form method="dialog" id="dlgform">
+    <div class="dlg-head"><h3 id="dlgtitle"></h3><p id="dlgblurb"></p></div>
+    <div class="dlg-body" id="dlgbody"></div>
+    <div class="dlg-foot" id="dlgfoot"></div>
+  </form>
+</dialog>
+
+<script src="app.js" charset="utf-8"></script>
+</body>
+</html>

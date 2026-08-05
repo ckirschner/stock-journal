@@ -1,0 +1,6 @@
+pywebview>=5.0
+# Packaging only:
+#   pyinstaller>=6.0
+# Later, when you wire up a real data provider:
+#   requests>=2.31    (SEC EDGAR XBRL companyfacts)
+#   yfinance>=0.2     (prices only — unofficial scrape, expect breakage)

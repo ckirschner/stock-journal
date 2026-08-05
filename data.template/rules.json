@@ -1,0 +1,87 @@
+{
+  "versions": [
+    {
+      "version": 1,
+      "created": "2026-08-05T19:23:23+00:00",
+      "reason": "Initial ruleset from defaults.",
+      "min_optional": 6,
+      "metrics": {
+        "roic": {
+          "mode": "required",
+          "threshold": 12.0,
+          "enabled": true
+        },
+        "gross_margin": {
+          "mode": "optional",
+          "threshold": 35.0,
+          "enabled": true
+        },
+        "fcf_margin": {
+          "mode": "required",
+          "threshold": 8.0,
+          "enabled": true
+        },
+        "insider_own": {
+          "mode": "optional",
+          "threshold": 3.0,
+          "enabled": true
+        },
+        "net_debt_ebitda": {
+          "mode": "knockout",
+          "threshold": 2.5,
+          "enabled": true
+        },
+        "interest_cover": {
+          "mode": "knockout",
+          "threshold": 5.0,
+          "enabled": true
+        },
+        "current_ratio": {
+          "mode": "optional",
+          "threshold": 1.5,
+          "enabled": true
+        },
+        "share_change_5y": {
+          "mode": "optional",
+          "threshold": 0.0,
+          "enabled": true
+        },
+        "fcf_yield": {
+          "mode": "required",
+          "threshold": 5.0,
+          "enabled": true
+        },
+        "pe": {
+          "mode": "optional",
+          "threshold": 22.0,
+          "enabled": true
+        },
+        "peg": {
+          "mode": "optional",
+          "threshold": 1.2,
+          "enabled": true
+        },
+        "ev_ebit": {
+          "mode": "optional",
+          "threshold": 15.0,
+          "enabled": true
+        },
+        "rev_cagr_5y": {
+          "mode": "optional",
+          "threshold": 5.0,
+          "enabled": true
+        },
+        "eps_cagr_5y": {
+          "mode": "optional",
+          "threshold": 8.0,
+          "enabled": true
+        },
+        "op_margin_trend": {
+          "mode": "optional",
+          "threshold": 0.0,
+          "enabled": true
+        }
+      }
+    }
+  ]
+}
