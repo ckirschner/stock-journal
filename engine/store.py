@@ -19,7 +19,7 @@ from pathlib import Path
 APP_DIR = Path(__file__).resolve().parent.parent
 TEMPLATE_DIR = APP_DIR / "data.template"
 
-FILES = ("settings.json", "rules.json", "securities.json")
+FILES = ("settings.json", "securities.json", "profile_history.json")
 
 
 def data_dir() -> Path:
@@ -54,9 +54,15 @@ def load(name: str) -> dict:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
-        # Never lose a corrupt file silently. Move it aside and start clean.
+        # Never lose a corrupt file silently. Move it aside and start clean —
+        # and never overwrite an earlier .broken file doing it.
         if path.exists():
-            path.rename(path.with_suffix(".json.broken"))
+            aside = path.with_suffix(".json.broken")
+            if aside.exists():
+                from datetime import datetime
+                stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+                aside = path.with_name(f"{path.name}.broken-{stamp}")
+            path.rename(aside)
         src = TEMPLATE_DIR / name
         if src.exists():
             shutil.copy(src, path)

@@ -1,0 +1,440 @@
+schema: ledger.profile/1
+id: lynch
+name: Lynch
+bank: metric-bank          # names the bank, not a path
+
+# =============================================================================
+# All decision power lives in this file.
+#
+# Which bank entries this lens uses, at what levels, how they roll up, and what
+# forces an exit. Nothing here alters a bank definition — that direction is
+# one-way. Nothing here refers to any other profile; this lens is evaluated on
+# its own and is never compared or merged with another.
+#
+# Threshold forms used below
+#   abs           an absolute level of the value
+#   delta_entry   a change versus the value recorded at purchase
+#   delta_median  a change versus a trailing median
+#   compound      several conditions combined
+#   none          this entry can never force an exit
+#
+# Values are written exactly as stated in the source report, with their unit
+# alongside. Nothing is rounded or converted.
+# =============================================================================
+
+summary: |
+  Growth at a reasonable price. A good business growing fast, bought before the
+  market fully prices the growth, sold when the growth stops or the price gets
+  ahead of it.
+
+notice: |
+  One substitution, and it should be visible before you use this profile. The
+  original PEG uses *projected* earnings growth. Projections require analyst
+  estimates, which this tool does not carry, so every growth input here is
+  trailing five-year growth instead.
+
+  That changes the character of the measure: it will look good on companies
+  whose growth has just peaked and is about to roll over, which is exactly the
+  situation forward estimates were used to avoid. It is the largest compromise
+  in this profile. The partial defence is that the inventory and receivables
+  entries are early warnings for that same failure, which is why they sit in
+  CORE rather than BONUS.
+
+settings:
+
+  rollup:
+    rule: |
+      A buy verdict requires all 3 REQUIRED entries green, at least 6 of the 8
+      CORE entries green, and treats the 4 BONUS entries as score only.
+    tiers:
+      required:
+        count: 3
+        requires: all_green
+        meaning: |
+          Knockout. One red kills the buy verdict regardless of score.
+      core:
+        count: 8
+        requires: at_least
+        min_green: 6
+        meaning: |
+          X of Y must be green.
+      bonus:
+        count: 4
+        requires: none
+        contributes: score
+        meaning: |
+          Adds to the score, never blocks.
+    grey: |
+      Grey — uncomputable, or not meaningful for this company — propagates. A
+      grey REQUIRED entry makes the security grey, not red. The user decides and
+      logs an override.
+
+  holding_period_exit:
+    form: none
+    why: |
+      The exits in this profile are event-driven: the growth stops, or the price
+      runs ahead of it. Holding periods are measured in quarters to a few years,
+      but by what the business does rather than by a calendar.
+
+  defaults:
+    sell_confirmation:
+      count: 2
+      unit: consecutive_filings
+      applies_to: every sell threshold in this profile
+      why: |
+        One goodwill impairment, one legal settlement, one inventory build, and
+        a metric crosses the line on noise. For a tool whose purpose is
+        preventing panic decisions, firing a red on one quarter's one-off charge
+        is the worst possible failure mode: it would use the authority of the
+        system to cause exactly the behaviour it exists to prevent.
+
+
+entries:
+
+  # --- REQUIRED --------------------------------------------------------------
+
+  - metric: peg_trailing
+    tier: required
+    buy:
+      form: abs
+      comparator: at_most
+      value: 1.0
+      unit: ratio
+      why: |
+        Lynch's number, and the definition of this profile: the P/E of any fairly
+        priced company will equal its growth rate. Loosening to 1.2 or 1.5 turns
+        "growth at a reasonable price" into "growth", which is a different and
+        much worse strategy.
+    sell:
+      form: abs
+      comparator: at_least
+      value: 2.0
+      unit: ratio
+      why: |
+        Lynch sold, constantly, and he was explicit that a stock whose P/E has
+        run far ahead of its growth rate has borrowed its future returns. At 2.0
+        you are paying twice the growth rate for the growth.
+    note: |
+      Slow growers with 2% growth produce absurd readings here; the
+      dividend-adjusted version in BONUS is the entry to look at for those.
+
+  - metric: eps_cagr_5y
+    tier: required
+    buy:
+      form: abs
+      comparator: between
+      min: 15
+      max: 35
+      unit: percent
+      why: |
+        The upper bound is the distinctive part. Lynch was direct about avoiding
+        companies growing 50–100% a year, on the grounds that such growth
+        attracts competition, cannot persist, and is priced as if it can. A
+        20–25% grower is a better proposition than a 60% grower at the same PEG.
+        A ceiling of 35% catches the genuine hypergrowth cases without excluding
+        good fast growers.
+    sell:
+      form: abs
+      comparator: less_than
+      value: 8
+      unit: percent
+      sustained_for:
+        count: 4
+        unit: quarterly_filings
+      why: |
+        Lynch's actual sell discipline for a fast grower was that it stopped
+        being a fast grower. Eight percent is well clear of ordinary quarterly
+        noise and well below the 15% entry bar, so it fires on a real change of
+        regime rather than a wobble.
+
+  - metric: debt_to_equity
+    tier: required
+    buy:
+      form: abs
+      comparator: at_most
+      value: 0.5
+      unit: ratio
+      why: |
+        A company growing 20% a year is spending ahead of its revenue and has
+        never been tested by a downturn. Leverage plus a growth stumble is the
+        standard way these positions go to zero, and Lynch wrote about it
+        repeatedly. Half a turn is the most this profile will carry.
+    sell:
+      form: abs
+      comparator: at_least
+      value: 1.0
+      unit: ratio
+      why: |
+        A full turn of debt on an untested fast grower is the setup this profile
+        exists to avoid. If the company arrived there after you bought it, the
+        risk you underwrote has doubled.
+
+  # --- CORE ------------------------------------------------------------------
+
+  - metric: revenue_cagr_3y
+    tier: core
+    buy:
+      form: abs
+      comparator: at_least
+      value: 10
+      unit: percent
+      why: |
+        The question here is whether the business is actually growing, not merely
+        whether it is keeping up with the economy. The three-year window rather
+        than five is deliberate: it is the faster-moving signal, and you want to
+        know if the top line has decelerated recently, which a five-year window
+        would smooth away.
+    sell:
+      form: abs
+      comparator: less_than
+      value: 3
+      unit: percent
+      sustained_for:
+        count: 4
+        unit: quarterly_filings
+      why: |
+        A full year at under 3% top-line growth is not a slow patch in a company
+        bought at 10%+. The top line is what the earnings growth is eventually
+        built on.
+
+  - metric: eps_minus_revenue_cagr_spread_5y
+    tier: core
+    buy:
+      form: abs
+      comparator: at_most
+      value: 10
+      unit: percentage_points
+      why: |
+        Whether the earnings growth is coming from the business or from financial
+        engineering. Margin expansion and buybacks are real and legitimate, but a
+        company growing EPS at 30% on 4% revenue growth has nearly exhausted both,
+        and there is no third act. Ten points of headroom, because genuine
+        operating leverage in a scaling business easily produces that gap and
+        shouldn't be punished. Beyond it, the arithmetic runs out.
+    sell:
+      form: none
+      why: |
+        The source report records this as blank and gives no exit reasoning for
+        it.
+    note: |
+      The source report states this test as "EPS CAGR ≤ Revenue CAGR + 10 pp"
+      without naming the windows. This profile's EPS growth entry is five-year
+      and its revenue growth entry is three-year, so the pairing is ambiguous.
+      The five-year-against-five-year bank entry is used here, matching the
+      five-year EPS growth this profile buys on. Confirm before relying on it.
+
+  - metric: inventory_minus_revenue_growth_yoy
+    tier: core
+    buy:
+      form: abs
+      comparator: at_most
+      value: 5
+      unit: percentage_points
+      why: |
+        Whether product is piling up in the warehouse faster than it's selling.
+        Five points of tolerance absorbs an ordinary build; beyond it, the
+        balance sheet is telling you demand is softening a quarter or two before
+        the income statement will.
+    sell:
+      form: abs
+      comparator: at_least
+      value: 20
+      unit: percentage_points
+      why: |
+        Twenty points is no longer a build. It is inventory the company has not
+        been able to sell, and in a fast grower that is the first thing to go
+        wrong.
+
+  - metric: receivables_minus_revenue_growth_yoy
+    tier: core
+    buy:
+      form: abs
+      comparator: at_most
+      value: 5
+      unit: percentage_points
+      why: |
+        Whether sales are being booked but not collected. Rising receivables
+        outpacing sales means either customers are struggling or the company is
+        pushing product into the channel to make a quarter. Five points allows
+        for ordinary movement in payment terms.
+    sell:
+      form: abs
+      comparator: at_least
+      value: 20
+      unit: percentage_points
+      why: |
+        Twenty points ahead of sales is a collection problem or a channel-stuffing
+        problem, and both end the same way.
+
+  - metric: pe_to_own_5y_median_pe
+    tier: core
+    buy:
+      form: abs
+      comparator: at_most
+      value: 1.0
+      unit: times_own_median
+      why: |
+        Whether the stock is cheap compared to how the market has usually priced
+        this particular company. Absolute multiples mean different things for
+        different businesses; this is the one place in this profile where the
+        comparison that matters is against the company's own history rather than
+        a universal standard, so the bar is simply "no dearer than normal".
+    sell:
+      form: delta_median
+      basis: own_5y_median_pe
+      comparator: at_least
+      value: 1.75
+      unit: times_own_median
+      why: |
+        Seventy-five percent above its own normal multiple is the market having
+        re-rated the company rather than the company having earned it.
+
+  - metric: gross_margin_change_3y
+    tier: core
+    buy:
+      form: abs
+      comparator: at_least
+      value: -2
+      unit: percentage_points
+      why: |
+        Whether the growth is being bought with discounts. Rapid revenue growth
+        with falling gross margin usually means the company is purchasing market
+        share, and that stops working when the money runs out. Two points of
+        drift over three years is ordinary; more than that is a pattern.
+    sell:
+      form: none
+      why: |
+        The source report records this as blank and gives no exit reasoning for
+        it.
+
+  - metric: interest_coverage
+    tier: core
+    buy:
+      form: abs
+      comparator: at_least
+      value: 5
+      unit: times
+      why: |
+        A growing company reinvests everything it earns and legitimately carries
+        thinner coverage than a mature cash cow. Five times is Graham's old
+        bond-safety line and is the right floor for a business that is expected
+        to be bigger next year.
+    sell:
+      form: abs
+      comparator: less_than
+      value: 3
+      unit: times
+      why: |
+        Below three times, a single bad quarter turns the interest bill into the
+        thing that decides what the company can do next.
+
+  - metric: fcf_ttm
+    tier: core
+    buy:
+      form: abs
+      comparator: greater_than
+      value: 0
+      unit: usd
+      why: |
+        Merely positive, deliberately. This profile tolerates cash-hungry growth.
+        The requirement is only that the company isn't structurally dependent on
+        external funding to survive.
+    sell:
+      form: abs
+      comparator: less_than
+      value: 0
+      unit: usd
+      sustained_for:
+        count: 4
+        unit: quarterly_filings
+      why: |
+        Four consecutive negative quarters means the company is structurally
+        dependent on external funding, which is the one thing the entry bar was
+        there to rule out.
+
+  # --- BONUS -----------------------------------------------------------------
+
+  - metric: dividend_adjusted_peg
+    tier: bonus
+    buy:
+      form: abs
+      comparator: at_most
+      value: 1.0
+      unit: ratio
+      why: |
+        Lynch used this explicitly for stalwarts and slow growers, where the
+        plain PEG is useless, and at the same 1.0 bar: the total of growth and
+        yield should at least equal the multiple you're paying.
+    sell:
+      form: none
+      why: |
+        The source report records this as blank and gives no exit reasoning for
+        it.
+    note: |
+      In BONUS because in a profile whose entry bar is 15% growth, few holdings
+      will be paying a meaningful yield. If you widen the growth band downward,
+      promote this to CORE.
+
+  - metric: net_cash_to_market_cap
+    tier: bonus
+    buy:
+      form: abs
+      comparator: at_least
+      value: 0
+      unit: ratio
+      why: |
+        Lynch liked knowing how much of the price he was paying was already
+        sitting in the bank. At zero or better the company owes nothing net, which
+        lowers the effective multiple on the operating business and is a cushion
+        during a stumble.
+    sell:
+      form: none
+      why: |
+        The source report records this as blank and gives no exit reasoning for
+        it.
+
+  - metric: insider_net_buying_6m
+    tier: bonus
+    buy:
+      form: abs
+      comparator: greater_than
+      value: 0
+      unit: shares
+      why: |
+        Whether the people who know the most about the company are putting their
+        own money in. Any net positive counts; the signal is the direction, not
+        the size.
+    sell:
+      form: none
+      why: |
+        Insiders sell for dozens of reasons that have nothing to do with the
+        business — taxes, houses, divorce, diversification — but they buy for one.
+        Selling is uninformative. Buying is a signal. An exit trigger here would
+        read noise as news.
+    note: |
+      This entry requires parsing Form 4 XML rather than XBRL company facts, so
+      it is a separate ingestion path and genuinely more work than the rest of
+      the entries in this profile. If build cost matters, this is the one to
+      defer.
+
+  - metric: institutional_ownership_pct
+    tier: bonus
+    buy:
+      form: abs
+      comparator: at_most
+      value: 60
+      unit: percent
+      why: |
+        Counterintuitive on purpose: Lynch wanted institutional ownership to be
+        *low*. A stock already owned by every large fund has no marginal buyer
+        left, and the best opportunities are in companies Wall Street hasn't
+        covered yet.
+    sell:
+      form: none
+      why: |
+        The source report records this as blank and gives no exit reasoning for
+        it.
+    note: |
+      In BONUS because 13F data lags 45 days, aggregating it across hundreds of
+      filers per quarter is by far the heaviest data job here, and the number is
+      approximate at best. High value, high cost. Fair to defer indefinitely.

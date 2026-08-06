@@ -41,31 +41,40 @@ timestamped JSON file you can put wherever you like.
 
 ## How the verdict works
 
-In strict order, and nothing overrides it:
+Rules live in **profiles** — YAML files in your data directory, one lens per
+strategy. A profile references entries in the **metric bank**
+(`config/metric-bank.yaml`), which defines what each value *is* and holds no
+thresholds; every level, tier and rollup rule belongs to the profile. Four
+profiles ship as editable defaults. Switching the lens re-reads the same data
+through a different profile, instantly.
 
-1. Any **knockout** failure → red. Full stop.
-2. Any **required** failure → red.
-3. Six or more metrics missing → grey. Absent data is never a pass.
-4. Otherwise the **optional score** decides: green at or above your threshold,
-   amber below it.
+The buy verdict is three-valued, per the profile's own rollup:
 
-A metric within 10% of its threshold reads *watch*: still passing, but close
-enough that you want to know before it breaks.
+1. Any **required** entry red → No buy.
+2. Not enough **core** entries green → No buy.
+3. If grey entries — no value recorded, or a value that isn't meaningful for
+   this company — could still change the outcome → Can't say. Grey propagates;
+   it is never a pass and never a failure.
+4. Otherwise → Buy. **Bonus** entries only ever add to a score.
 
-Buy rules and sell rules are not the same thing. A holding that stops passing
-the entry screen gets *Trim* or *Review*, not an automatic exit; only a
-knockout produces *Exit*. Selling every time a ratio ticks is how you churn out
-of good businesses on a bad quarter.
+Buy rules and sell rules are not the same thing. A holding is watched against
+its profile's *sell* thresholds, and most sell breaches need the breach on
+consecutive filings before they count — the tool reports a first-reading
+breach as *unconfirmed* rather than firing, because panicking you out on one
+quarter's noise is the exact failure the confirmation exists to prevent. The
+position clocks (Graham and Discount Closure sell on a 24-month calendar) need
+no filing history and fire outright.
 
 ## The parts worth knowing about
 
 ### Entry snapshots are frozen
 
-When you record a purchase, every metric value, its state and the ruleset
-version are written once and never recomputed. If they were recomputed,
-restated filings and amended rules would quietly rewrite history, and the
-journal would lose the only thing that makes it a journal. The detail page
-shows entry → now for every metric, so you read the thesis holding or decaying
+When you record a purchase, every metric value, the verdict, and the profile
+(with its version) that produced it are written once and never recomputed. If
+they were recomputed, restated filings and amended rules would quietly rewrite
+history, and the journal would lose the only thing that makes it a journal.
+The detail page shows entry → now for every metric, both sides labelled with
+the profile that produced them, so you read the thesis holding or decaying
 rather than just a colour.
 
 ### Buying against the signal is recorded, not blocked
@@ -97,28 +106,33 @@ must total 100%, and makes you enter the bear case first. Owner earnings
 capitalises normalised cash flow at your discount rate, then takes a required
 discount off the result.
 
-### Rulesets are versioned in the app
+### Profile changes are versioned, even hand-edits
 
-Changing a threshold or a weight creates a new version with a timestamp and a
-written reason. Open positions stay bound to the version they were opened
-under. Without this you can rewrite the rules to justify holding a loser and
-never notice you did it.
+Profiles are edited by hand, so changes happen outside the app. On every load
+the app compares each profile against the last version it recorded; any change
+is appended to an append-only history immediately — timestamped, with a full
+snapshot and the exact lines that moved — and the app asks for a written
+reason, loudly, until one is given. Reasons are write-once. Open positions
+record the profile and version they were opened under. Without this you can
+rewrite the rules to justify holding a loser and never notice you did it.
 
 ## Layout
 
 ```
 app.py                    pywebview window + the JS-facing API
+config/metric-bank.yaml   what every value IS — no thresholds live here
 engine/                   no UI imports live here
-  schema.py               metric definitions, the only place to add one
-  rules.py                rulesets and version history
-  evaluate.py             the verdict
+  profiles.py             loads the bank, resolves profiles against it
+  evaluate.py             the verdict: buy tiers, sell watch, clock, flags
+  profile_history.py      append-only version history for hand-edited profiles
+  migrate.py              one-time move from the retired metric set to the bank
   expected_value.py       the three EV calculators
   portfolio.py            snapshots, override log, scorecards
   store.py                JSON persistence, atomic writes
   backup.py               export / import
   providers/base.py       data provider interface (not yet implemented)
 ui/                       index.html, app.css, app.js
-data.template/            what gets copied on first run
+data.template/            what gets copied on first run, incl. profiles/
 tools/make_sample.py      regenerates the sample set
 ```
 
@@ -128,13 +142,15 @@ reimplementing the scoring.
 
 ## Adding a metric
 
-Add an entry to `DEFAULT_SCHEMA` in `engine/schema.py`. The UI renders whatever
-the schema hands it: inputs, thresholds, tooltip, rules row, detail row. There
-is no view code to change.
+Add an entry to `config/metric-bank.yaml` — id, label, unit, format,
+derivation and the plain-language explanation are all required; a bare number
+with no explanation is incomplete, not a follow-up ticket. The UI renders
+whatever the bank and the profiles hand it; there is no view code to change.
 
-Existing rulesets won't have a rule for the new metric until you amend them on
-the Rules tab, which is the intended behaviour: a new metric shouldn't silently
-start scoring positions you opened before it existed.
+A bank entry does nothing until a profile references it with a threshold.
+That is the intended behaviour: a new metric shouldn't silently start scoring
+positions you opened before it existed, and the level it should sit at is a
+strategy decision that belongs in the profile, with a written reason.
 
 ## Data providers
 

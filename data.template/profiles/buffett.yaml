@@ -1,0 +1,438 @@
+schema: ledger.profile/1
+id: buffett
+name: Buffett
+bank: metric-bank          # names the bank, not a path
+
+# =============================================================================
+# All decision power lives in this file.
+#
+# Which bank entries this lens uses, at what levels, how they roll up, and what
+# forces an exit. Nothing here alters a bank definition — that direction is
+# one-way. Nothing here refers to any other profile; this lens is evaluated on
+# its own and is never compared or merged with another.
+#
+# Threshold forms used below
+#   abs           an absolute level of the value
+#   delta_entry   a change versus the value recorded at purchase
+#   delta_median  a change versus a trailing median
+#   compound      several conditions combined
+#   none          this entry can never force an exit
+#
+# Values are written exactly as stated in the source report, with their unit
+# alongside. Nothing is rounded or converted.
+# =============================================================================
+
+summary: |
+  Wonderful business, bought at a sane price, held until the business stops
+  being wonderful.
+
+notice: |
+  Ten of the fifteen entries in this profile have no sell threshold at all, and
+  not one of the five that do is a valuation measure — they are returns,
+  leverage, coverage, cash flow and share count. Nothing about price can make
+  Ledger tell you to sell a position held under this profile.
+
+  That is intended, not missing. It is possible to hold a position under this
+  profile for twenty years and never see a sell signal. Say this out loud on the
+  config page when the profile is saved, because otherwise it looks like the
+  tool is broken.
+
+settings:
+
+  rollup:
+    rule: |
+      A buy verdict requires all 3 REQUIRED entries green, at least 7 of the 9
+      CORE entries green, and treats the 3 BONUS entries as score only.
+    tiers:
+      required:
+        count: 3
+        requires: all_green
+        meaning: |
+          Knockout. One red kills the buy verdict regardless of score.
+      core:
+        count: 9
+        requires: at_least
+        min_green: 7
+        meaning: |
+          X of Y must be green.
+      bonus:
+        count: 3
+        requires: none
+        contributes: score
+        meaning: |
+          Adds to the score, never blocks.
+    grey: |
+      Grey — uncomputable, or not meaningful for this company — propagates. A
+      grey REQUIRED entry makes the security grey, not red. The user decides and
+      logs an override.
+
+  holding_period_exit:
+    form: none
+    why: |
+      The thesis is that a wonderful business compounds. A clock that forced an
+      exit would end the compounding on a calendar rather than on the business.
+
+  defaults:
+    sell_confirmation:
+      count: 2
+      unit: consecutive_filings
+      applies_to: every sell threshold in this profile
+      why: |
+        One goodwill impairment, one legal settlement, one inventory build, and
+        a metric crosses the line on noise. For a tool whose purpose is
+        preventing panic decisions, firing a red on one quarter's one-off charge
+        is the worst possible failure mode: it would use the authority of the
+        system to cause exactly the behaviour it exists to prevent.
+
+
+entries:
+
+  # --- REQUIRED --------------------------------------------------------------
+
+  - metric: roic_median_5y
+    tier: required
+    buy:
+      form: abs
+      comparator: at_least
+      value: 15
+      unit: percent
+      why: |
+        Cost of capital for a typical business is somewhere near 8–10%. At 12%
+        you're looking at a spread of two or three points, which is inside the
+        error bars of your own calculation. 15% is where the gap becomes wide
+        enough to survive being wrong about the inputs. It's also roughly where
+        the population thins out: plenty of companies clear 12% for a year or
+        two, far fewer hold 15% as a five-year median.
+    sell:
+      form: compound
+      require: all
+      conditions:
+        - form: delta_entry
+          comparator: falls_by_at_least
+          value: 33
+          unit: percent_of_entry_value
+        - form: abs
+          comparator: less_than
+          value: 12
+          unit: percent
+      why: |
+        The exit is relative, not absolute, on purpose. You don't sell because
+        ROIC printed 14%. You sell because a business that used to earn 22% now
+        earns 12% and the reason is that the moat leaked. An absolute floor of,
+        say, 10% would let you sit through the entire decay and only fire at the
+        bottom. Requiring both conditions catches the deterioration while it's
+        still a deterioration, and stops a company that was always around 13%
+        from firing on ordinary movement.
+
+  - metric: total_debt_to_ebitda
+    tier: required
+    buy:
+      form: abs
+      comparator: at_most
+      value: 2.5
+      unit: times
+      why: |
+        The preference is a business that could pay off its debt out of a couple
+        of years of earnings. Three times is where credit rating agencies start
+        marking down cyclical investment-grade issuers, so 2.5 gives a full turn
+        of cushion before anyone external gets nervous. The point of a permanent
+        holding is that it never has to renegotiate anything at a bad moment.
+    sell:
+      form: abs
+      comparator: greater_than
+      value: 4.0
+      unit: times
+      why: |
+        This is the exception to the buy-and-never-sell logic, and it is
+        deliberate. Overpaying for a great business costs you return. Leverage
+        costs you the business. Every permanent-capital disaster in this
+        tradition ran through the balance sheet, not the income statement.
+
+  - metric: owner_earnings_yield
+    tier: required
+    buy:
+      form: abs
+      comparator: at_least
+      value: 5
+      unit: percent
+      why: |
+        The reputation for ignoring price is mostly myth: Coca-Cola was bought at
+        roughly 15x earnings, Apple at roughly 13x, and dozens of great
+        businesses were walked away from on price alone. Twenty times owner
+        earnings is about the outer edge of what has historically been paid for
+        quality. Setting it at 7% would impose a deep-value price discipline and
+        you'd never buy anything wonderful. Setting it at 3% removes price
+        discipline entirely and the profile stops protecting you from paying
+        anything.
+    sell:
+      form: none
+      why: |
+        This is the flagship empty field and it matters most. A business that
+        compounds at 18% for twenty years will spend most of those twenty years
+        looking expensive. If this entry could force an exit, the profile would
+        sell every great business it ever bought, roughly three years in, and
+        the tool would be actively destroying your returns while appearing to
+        work correctly.
+
+  # --- CORE ------------------------------------------------------------------
+
+  - metric: interest_coverage
+    tier: core
+    buy:
+      form: abs
+      comparator: at_least
+      value: 8
+      unit: times
+      why: |
+        Graham used 5x as his bond-safety standard for average industrials. This
+        profile's quality bar sits above an average industrial, and 8x is where a
+        50% earnings collapse still leaves comfortable coverage. Below 5x you're
+        one recession from a covenant conversation.
+    sell:
+      form: abs
+      comparator: less_than
+      value: 4
+      unit: times
+      why: |
+        Below 4x the interest bill has stopped being an incidental line and
+        started being a constraint on what the business is allowed to do.
+
+  - metric: gross_margin_range_5y
+    tier: core
+    buy:
+      form: abs
+      comparator: at_most
+      value: 6
+      unit: percentage_points
+      why: |
+        Range rather than level, on purpose. Setting a minimum gross margin (say
+        40%) would exclude high-volume retail and most of retail generally,
+        which this style has owned happily. Stability is the actual signal;
+        pricing power shows up as a flat line, not a high one. Six points is
+        wide enough to absorb one bad input-cost year, narrow enough that
+        commodity producers fail every time, which is the intent.
+    sell:
+      form: none
+      why: |
+        Sustained margin compression will show up in return on invested capital
+        within a year or two, and that entry already has a sell trigger. Two
+        entries firing on the same underlying event is how a novice gets scared
+        out of a position twice.
+
+  - metric: fcf_margin_median_5y
+    tier: core
+    buy:
+      form: abs
+      comparator: at_least
+      value: 10
+      unit: percent
+      why: |
+        Below ten cents of free cash per sales dollar, growth eats the cash and
+        the owner never sees any of it. This is the line between a business that
+        funds itself and one that periodically needs your money back.
+    sell:
+      # The buy test is a five-year median; the exit watches the current
+      # reading, which is a different bank entry.
+      measured_on: fcf_margin_ttm
+      form: abs
+      comparator: less_than
+      value: 0
+      unit: percent
+      sustained_for:
+        count: 4
+        unit: quarterly_filings
+      why: |
+        A single negative quarter is working capital timing. A full year of
+        negative free cash flow in a mature business means the thing you bought
+        no longer generates owner earnings, which is the whole thesis gone.
+    note: |
+      Companies deliberately in a heavy investment cycle show negative free cash
+      flow as a choice, not a failure, and this entry will call them red for
+      years. If you are buying that pattern on purpose, move this to BONUS or
+      widen the sell window.
+
+  - metric: cash_conversion_median_5y
+    tier: core
+    buy:
+      form: abs
+      comparator: at_least
+      value: 0.90
+      unit: ratio
+      why: |
+        Perfect conversion is rare and slightly above 1.0 is common for
+        depreciation-heavy companies with low current capex. Persistently below
+        0.80 means accruals, aggressive capitalisation, or receivables that
+        aren't being collected. 0.90 sits between the two.
+    sell:
+      form: none
+      why: |
+        It's a quality-of-earnings check, and a bad reading tells you to go read
+        the filings, not to sell on a number.
+
+  - metric: diluted_share_count_change_5y
+    tier: core
+    buy:
+      form: abs
+      comparator: at_most
+      value: 0
+      unit: percent
+      why: |
+        Per-share is the only thing that matters, and stock compensation is a
+        real expense that transfers ownership from you to employees quietly.
+        Flat is the floor. Shrinking is the point.
+    sell:
+      # The buy test spans five years; the exit watches the three-year window,
+      # which is a different bank entry.
+      measured_on: diluted_share_count_change_3y
+      form: abs
+      comparator: greater_than
+      value: 10
+      unit: percent
+      why: |
+        A company diluting 3%+ per year forever is structurally not a holding
+        for this profile, and if it started doing that after you bought it,
+        something about how management thinks changed.
+
+  - metric: roe_median_5y
+    tier: core
+    buy:
+      form: abs
+      comparator: at_least
+      value: 15
+      unit: percent
+      why: |
+        The same reasoning as return on invested capital, at the same level:
+        below 15% the spread over the cost of equity is inside the error bars of
+        the calculation.
+    sell:
+      form: none
+      why: |
+        Return on equity is trivially inflated by borrowing money, which makes it
+        a bad exit trigger. A company that levers up to defend a falling return
+        on equity will keep this entry green right through the deterioration.
+        Return on invested capital catches that; this doesn't.
+    note: |
+      Carried alongside return on invested capital deliberately, and the
+      redundancy is only for the buy side: the two diverging is itself
+      informative, because the gap is leverage.
+
+  - metric: revenue_cagr_5y
+    tier: core
+    buy:
+      form: abs
+      comparator: at_least
+      value: 4
+      unit: percent
+      why: |
+        Roughly nominal GDP. A business growing slower than the economy is
+        losing share, and a wonderful business that's losing share is on its way
+        to being an ordinary one.
+    sell:
+      form: none
+      why: |
+        The source report records this as blank and gives no exit reasoning for
+        it.
+    note: |
+      In CORE rather than REQUIRED because growth is not what this profile is
+      buying. Slow growers are acceptable when the returns on capital are high
+      enough.
+
+  - metric: ni_minus_revenue_cagr_spread_5y
+    tier: core
+    buy:
+      form: abs
+      comparator: at_least
+      value: -1
+      unit: percentage_points
+      why: |
+        Profits should grow at least as fast as sales. If sales grow 8% and
+        profits grow 3%, the company is buying its growth by giving away margin.
+        Zero tolerance makes this fire on rounding and single-year noise; wider
+        than a point and it stops detecting anything.
+    sell:
+      form: none
+      why: |
+        The source report records this as blank and gives no exit reasoning for
+        it.
+
+  - metric: goodwill_intangibles_to_assets
+    tier: core
+    buy:
+      form: abs
+      comparator: at_most
+      value: 40
+      unit: percent
+      why: |
+        Above roughly 40% you are looking at a serial acquirer, and the
+        historical return figures reflect acquisition accounting more than
+        operating skill.
+    sell:
+      form: none
+      why: |
+        A goodwill impairment is an event, not a level, and it's usually the
+        market telling you something you already knew. Better handled as a flag
+        than an exit.
+    note: |
+      Genuinely good acquisitive compounders fail this and shouldn't. This
+      profile isn't built for them, which is a limitation to state rather than
+      fix.
+
+  # --- BONUS -----------------------------------------------------------------
+
+  - metric: effective_tax_rate_median_5y
+    tier: bonus
+    buy:
+      form: abs
+      comparator: between
+      min: 10
+      max: 35
+      unit: percent
+      why: |
+        A sanity check on earnings quality rather than a quality bar. A company
+        reporting a 4% tax rate is either running an aggressive structure that
+        will eventually be challenged, or booking one-time benefits that inflate
+        earnings per share and won't repeat. The band catches both ends.
+    sell:
+      form: none
+      why: |
+        The source report records this as blank and gives no exit reasoning for
+        it.
+
+  - metric: current_ratio
+    tier: bonus
+    buy:
+      form: abs
+      comparator: at_least
+      value: 1.0
+      unit: ratio
+      why: |
+        Deliberately a bare solvency check and not a quality signal. Negative
+        working capital is a feature in this style: a business that collects from
+        customers before paying suppliers is being financed for free by its own
+        operations, and several of the best businesses this profile would want
+        to own fail any stricter version of this test. That counts against the
+        test, not against them.
+    sell:
+      form: none
+      why: |
+        The source report records this as blank and gives no exit reasoning for
+        it.
+    note: |
+      Keep this in BONUS and never in REQUIRED for this profile. The best
+      businesses sometimes fail it.
+
+  - metric: payout_to_fcf_median_5y
+    tier: bonus
+    buy:
+      form: abs
+      comparator: at_most
+      value: 80
+      unit: percent
+      why: |
+        Sustainably above 100% means the returns are being funded with debt. 80%
+        leaves room for a bad year without the payout tipping over that line.
+    sell:
+      form: none
+      why: |
+        If the payout is being debt-funded, total debt to EBITDA catches it and
+        that entry already has a sell trigger. Don't fire twice on one problem.

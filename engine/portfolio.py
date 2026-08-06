@@ -4,6 +4,13 @@ The rule that matters here: an entry snapshot is written once, at purchase,
 and never recomputed. If it were recomputed, restated filings and amended
 rules would quietly rewrite history and the journal would lose the only thing
 that makes it a journal.
+
+A purchase is recorded under a profile — the lens the user was buying
+through. The snapshot freezes that profile's identity and version, every
+metric value on the security, and the verdict the profile produced. Snapshots
+recorded before the profile system carry a ``ruleset_version`` instead; they
+are recognised by that field and rendered as the frozen records they are,
+never re-scored.
 """
 
 from __future__ import annotations
@@ -11,7 +18,23 @@ from __future__ import annotations
 import copy
 from datetime import date, datetime, timezone
 
-from .evaluate import evaluate
+from .evaluate import evaluate_buy, evaluate_position
+
+EXIT_REASONS = [
+    "Thesis broke",
+    "Hit valuation",
+    "Better opportunity",
+    "Risk limit",
+    "Panic",
+]
+
+VERDICT_WORDS = {"buy": "Buy", "no_buy": "No buy", "cant_say": "Can't say"}
+SIGNAL_WORDS = {
+    "fired": "Sell signal",
+    "breached": "Breach unconfirmed",
+    "clear": "No signal",
+    "unwatched": "Unwatched",
+}
 
 
 def _today():
@@ -29,8 +52,8 @@ def new_security(ticker: str, name: str, bucket: str = "ideas") -> dict:
         "bucket": bucket,
         "added": _today(),
         "price": None,
-        "metrics": {},
-        "history": {},          # metric_id -> [[period, value], ...] for the 15y charts
+        "metrics": {},          # bank id -> value
+        "history": {},          # bank id -> [[period, value], ...], unfilled
         "entry_snapshot": None,
         "override": None,
         "ev": None,
@@ -49,14 +72,17 @@ def add_note(security: dict, text: str) -> dict:
     return security
 
 
-def open_position(security: dict, ruleset: dict, shares: float, cost: float,
-                  opened: str | None = None, override_reason: str = "") -> dict:
-    """Record a purchase and freeze the signal that was showing at the time.
+def open_position(security: dict, profile: dict, profile_version,
+                  shares: float, cost: float, opened: str | None = None,
+                  override_reason: str = "") -> dict:
+    """Record a purchase under a profile and freeze what the lens showed.
 
-    A failing verdict does not block anything. It gets recorded alongside the
-    purchase, with the user's stated reason for going ahead.
+    A failing or indeterminate verdict does not block anything. It gets
+    recorded alongside the purchase, with the user's stated reason for going
+    ahead — that includes buying on grey, where the profile's own rule is
+    that the user decides and logs an override.
     """
-    result = evaluate(security, ruleset, which="now")
+    result = evaluate_buy(security.get("metrics") or {}, profile)
 
     security["bucket"] = "holdings"
     security["position"] = {
@@ -66,33 +92,70 @@ def open_position(security: dict, ruleset: dict, shares: float, cost: float,
     }
     security["entry_snapshot"] = {
         "frozen": _stamp(),
-        "ruleset_version": ruleset["version"],
+        "profile": {"file": profile.get("file"), "id": profile.get("id"),
+                    "name": profile.get("name"), "version": profile_version},
         "metrics": copy.deepcopy(security.get("metrics") or {}),
         "price": security.get("price"),
         "result": result,
     }
 
-    if result["tone"] == "fail":
+    if result["verdict"] != "buy":
+        failed = [m for c in result["causes"]
+                  if c["kind"] == "fail" for m in c["metrics"]]
+        missing = [m for c in result["causes"]
+                   if c["kind"] == "indeterminate" for m in c["metrics"]]
+        word = VERDICT_WORDS[result["verdict"]]
         security["override"] = {
             "date": security["position"]["opened"],
-            "verdict": result["verdict"],
-            "failed": result["knockouts"] + result["required_fails"],
+            "verdict": word,
+            "profile": security["entry_snapshot"]["profile"],
+            "failed": failed,
+            "missing": missing,
             "reason": (override_reason or "").strip() or "No reason given.",
         }
-        add_note(security, f"Bought against signal ({result['verdict']}). "
-                           f"Stated reason: {security['override']['reason']}")
+        what = ("against signal" if result["verdict"] == "no_buy"
+                else "without a signal")
+        add_note(security, f"Bought {what} ({word} under "
+                           f"{profile.get('name')}). Stated reason: "
+                           f"{security['override']['reason']}")
     else:
         security["override"] = None
     return security
 
 
-def close_position(security: dict, ruleset: dict, reason: str,
-                   exit_price: float, exited: str | None = None) -> dict:
-    """Close a position, keeping the ticker in the journal for tracking."""
-    result = evaluate(security, ruleset, which="now")
+def close_position(security: dict, profile: dict | None, profile_version,
+                   governing: bool, reason: str, exit_price: float,
+                   exited: str | None = None, today: date | None = None,
+                   missing_profile_ref: dict | None = None) -> dict:
+    """Close a position, keeping the ticker in the journal for tracking.
+
+    profile is the lens the exit is judged under — the position's own entry
+    profile when it has one (governing=True), otherwise whatever lens the
+    user was looking through, labelled as such. Two absences are recorded
+    distinctly, never conflated: a position from before the profile system
+    has no governing profile at all, while a position whose governing profile
+    file is off disk at close time still names it (missing_profile_ref) and
+    records that no signal could be evaluated.
+    """
     pos = security.get("position") or {}
     cost = pos.get("cost_basis") or 0.0
     held_pct = ((exit_price / cost) - 1) * 100 if cost else None
+
+    if profile is not None:
+        state = evaluate_position(security, profile, today)
+        signal = SIGNAL_WORDS[state["overall"]]
+        rule_triggered = state["overall"] == "fired"
+        profile_ref = {"file": profile.get("file"), "id": profile.get("id"),
+                       "name": profile.get("name"), "version": profile_version}
+        is_governing = governing
+    elif missing_profile_ref is not None:
+        signal = "Profile not on disk"
+        rule_triggered = None
+        profile_ref = dict(missing_profile_ref)
+        is_governing = True
+    else:
+        signal, rule_triggered, profile_ref = "No governing profile", None, None
+        is_governing = False
 
     security["bucket"] = "previous"
     security["exit"] = {
@@ -100,13 +163,22 @@ def close_position(security: dict, ruleset: dict, reason: str,
         "reason": reason,
         "price": float(exit_price),
         "return_pct": round(held_pct, 2) if held_pct is not None else None,
-        "ruleset_version": ruleset["version"],
-        "signal_at_exit": result["verdict"],
-        "rule_triggered": bool(result["knockouts"] or result["required_fails"]),
+        "profile": profile_ref,
+        "governing": is_governing,
+        "signal_at_exit": signal,
+        "rule_triggered": rule_triggered,
     }
-    if not security["exit"]["rule_triggered"]:
+    if rule_triggered is False:
         add_note(security, f"Closed with no rule triggering the exit. "
-                           f"Signal at exit was {result['verdict']}.")
+                           f"Signal at exit was {signal} under "
+                           f"{profile.get('name')}.")
+    elif rule_triggered is None and missing_profile_ref is not None:
+        add_note(security, f"Closed while its governing profile "
+                           f"({missing_profile_ref.get('name')}) was not on "
+                           "disk, so no signal could be evaluated.")
+    elif rule_triggered is None:
+        add_note(security, "Closed with no governing profile on record — "
+                           "the position predates the profile system.")
     return security
 
 

@@ -1,0 +1,398 @@
+schema: ledger.profile/1
+id: discount_closure
+name: Discount Closure
+bank: metric-bank          # names the bank, not a path
+
+# =============================================================================
+# All decision power lives in this file.
+#
+# Which bank entries this lens uses, at what levels, how they roll up, and what
+# forces an exit. Nothing here alters a bank definition — that direction is
+# one-way. Nothing here refers to any other profile; this lens is evaluated on
+# its own and is never compared or merged with another.
+#
+# Threshold forms used below
+#   abs           an absolute level of the value
+#   delta_entry   a change versus the value recorded at purchase
+#   delta_median  a change versus a trailing median
+#   compound      several conditions combined
+#   none          this entry can never force an exit
+#
+# Values are written exactly as stated in the source report, with their unit
+# alongside. Nothing is rounded or converted.
+# =============================================================================
+
+summary: |
+  Buy a measurable statistical discount in a business that is demonstrably not
+  dying. Exit when the discount closes or when the clock expires. Deliberately
+  form no opinion about whether the business is wonderful — there isn't time for
+  a quality thesis to play out. Every entry here is either a solvency floor or a
+  discount measurement.
+
+notice: |
+  Expected holding period is six to twenty-four months, not weeks. Call it what
+  it is in the interface. If this is labelled "swing trading", a beginner will
+  expect it to tell him something in week three, and it won't: the underlying
+  data refreshes quarterly, so for most of the trade the only input that changes
+  is price, and rules driven only by price movement are technical rules, which
+  this tool does not run.
+
+  There are fewer entries here than in the other profiles, deliberately, because
+  on a short horizon fewer things can meaningfully change.
+
+settings:
+
+  rollup:
+    rule: |
+      A buy verdict requires all 5 REQUIRED entries green, at least 5 of the 6
+      CORE entries green, and treats the 2 BONUS entries as score only.
+    tiers:
+      required:
+        count: 5
+        requires: all_green
+        meaning: |
+          Knockout. One red kills the buy verdict regardless of score.
+      core:
+        count: 6
+        requires: at_least
+        min_green: 5
+        meaning: |
+          X of Y must be green.
+      bonus:
+        count: 2
+        requires: none
+        contributes: score
+        meaning: |
+          Adds to the score, never blocks.
+    grey: |
+      Grey — uncomputable, or not meaningful for this company — propagates. A
+      grey REQUIRED entry makes the security grey, not red. The user decides and
+      logs an override.
+
+  holding_period_exit:
+    form: fixed_period
+    value: 24
+    unit: months
+    why: |
+      Exit at 24 months regardless of any metric. No metric can hold "it's been
+      two years", and without this there is no exit for the case where the stock
+      simply stays cheap — the single most common way this style of investing
+      fails. The clock also does some of the work a larger solvency cushion would
+      otherwise have to.
+
+  defaults:
+    sell_confirmation:
+      count: 2
+      unit: consecutive_filings
+      applies_to: every sell threshold in this profile
+      why: |
+        One goodwill impairment, one legal settlement, one inventory build, and
+        a metric crosses the line on noise. For a tool whose purpose is
+        preventing panic decisions, firing a red on one quarter's one-off charge
+        is the worst possible failure mode: it would use the authority of the
+        system to cause exactly the behaviour it exists to prevent.
+
+
+entries:
+
+  # --- REQUIRED --------------------------------------------------------------
+
+  - metric: ev_ebit_to_own_5y_median
+    tier: required
+    buy:
+      form: abs
+      comparator: at_most
+      value: 0.70
+      unit: times_own_median
+      why: |
+        This entry is the profile. Everything else is a filter that stops you
+        buying a discount that exists because the company is dying; this one is
+        the actual thesis. The market has priced this business at 30% below its
+        own normal, and nothing in the filings explains why.
+    sell:
+      form: delta_median
+      basis: own_5y_median_ev_ebit
+      comparator: at_least
+      value: 1.00
+      unit: times_own_median
+      why: |
+        The entry is a 30% discount to normal. The exit is normal. That symmetry
+        is the whole design: the trade is complete when the thing that made it a
+        trade is gone, and there is no second thesis waiting to justify holding
+        on.
+    note: |
+      A company whose business has permanently deteriorated has a median that
+      describes a company that no longer exists, and it will read as a 30%
+      discount all the way down. The revenue and gross margin entries below exist
+      specifically to catch that case.
+
+  - metric: ev_to_ebit
+    tier: required
+    buy:
+      form: abs
+      comparator: at_most
+      value: 8.0
+      unit: times
+      why: |
+        A 12.5% pre-tax operating earnings yield, which is roughly where
+        Greenblatt's Magic Formula work found the cheap decile historically.
+    sell:
+      form: abs
+      comparator: at_least
+      value: 13.0
+      unit: times
+      why: |
+        Well past the cheap decile. What was bought as a statistical discount is
+        now priced at an ordinary multiple.
+    note: |
+      A caveat that belongs on the security, not buried. Greenblatt would not
+      endorse this as a fixed level, because his method is a cross-sectional
+      ranking: buy the cheapest 30 out of 3,500, whatever the absolute number
+      happens to be that year. Freezing it at 8 makes this profile un-buyable in
+      an expensive market and too loose in a cheap one. That is a real limitation
+      of a tool that evaluates one security at a time.
+
+  - metric: altman_z_score
+    tier: required
+    buy:
+      form: abs
+      comparator: at_least
+      value: 2.5
+      unit: score
+      why: |
+        Less cushion than a permanent-capital position would need, because the
+        24-month clock does some of that work and a position that might hold
+        through a full cycle needs more. It stays a knockout, though: on a
+        compressed horizon there is no time to recover from a solvency event.
+    sell:
+      form: abs
+      comparator: less_than
+      value: 1.8
+      unit: score
+      why: |
+        Altman's distress zone. Cheap stocks that go bankrupt are the
+        characteristic failure of this entire approach.
+
+  - metric: net_debt_to_ebitda
+    tier: required
+    buy:
+      form: abs
+      comparator: at_most
+      value: 3.0
+      unit: times
+      why: |
+        A net measure rather than a gross one, because netting cash is more
+        appropriate for a time-limited position, and because a modestly leveraged
+        cheap company is exactly what this profile is hunting.
+    sell:
+      form: abs
+      comparator: at_least
+      value: 4.5
+      unit: times
+      why: |
+        A hard stop. A leveraged company whose leverage is rising while you hold
+        it is the one situation where waiting for the clock is the wrong answer.
+
+  - metric: operating_income_ttm
+    tier: required
+    buy:
+      form: abs
+      comparator: greater_than
+      value: 0
+      unit: usd
+      why: |
+        The company makes money from what it does. No turnarounds, no story
+        stocks, no "it'll be profitable in 2028."
+    sell:
+      form: abs
+      comparator: less_than
+      value: 0
+      unit: usd
+      sustained_for:
+        count: 2
+        unit: quarterly_filings
+      why: |
+        Two quarters of operating losses and the arithmetic the whole profile
+        runs on has stopped working.
+    note: |
+      This is a knockout for a mechanical reason, not a quality judgement. Every
+      entry in this profile that measures a discount uses earnings in the
+      denominator. If earnings are negative, the discount isn't measurable and
+      the profile has nothing to say.
+
+  # --- CORE ------------------------------------------------------------------
+
+  - metric: fcf_yield_on_ev
+    tier: core
+    buy:
+      form: abs
+      comparator: at_least
+      value: 8
+      unit: percent
+      why: |
+        The cash cross-check on the earnings-based discount. EBIT can be
+        flattered by accounting choices; free cash flow is harder to fake.
+        Requiring both to show a discount is what keeps this profile from buying
+        accounting artifacts.
+    sell:
+      form: abs
+      comparator: at_most
+      value: 4
+      unit: percent
+      why: |
+        Half the entry yield. The cash discount has closed even if the earnings
+        one hasn't.
+
+  - metric: fcf_ttm
+    tier: core
+    buy:
+      form: abs
+      comparator: greater_than
+      value: 0
+      unit: usd
+      why: |
+        The company funds itself. A cheap company that needs external money to
+        keep going is not a discount, it is a financing risk.
+    sell:
+      form: abs
+      comparator: less_than
+      value: 0
+      unit: usd
+      sustained_for:
+        count: 2
+        unit: quarterly_filings
+      why: |
+        Two quarters rather than four, deliberately: on a 24-month horizon, two
+        bad quarters is 8% of your holding period and you don't have time to be
+        patient about it.
+
+  - metric: interest_coverage
+    tier: core
+    buy:
+      form: abs
+      comparator: at_least
+      value: 4
+      unit: times
+      why: |
+        Modest leverage in a cheap company is part of the setup, not a defect, so
+        this is a floor rather than a quality bar.
+    sell:
+      form: abs
+      comparator: less_than
+      value: 2.5
+      unit: times
+      why: |
+        Below 2.5x you're in the zone where a bad quarter becomes a covenant
+        problem.
+
+  - metric: revenue_change_yoy
+    tier: core
+    buy:
+      form: abs
+      comparator: at_least
+      value: -10
+      unit: percent
+      why: |
+        The difference between a business having a bad year and a business
+        disappearing. A 5% revenue decline in a cyclical downturn is the setup. A
+        20% decline in a structurally challenged industry is the trap.
+    sell:
+      form: abs
+      comparator: at_most
+      value: -15
+      unit: percent
+      sustained_for:
+        count: 2
+        unit: quarterly_filings
+      why: |
+        Two quarters at −15% or worse is no longer a bad year. It is the trap
+        this entry exists to detect, arriving after you bought.
+    note: |
+      Deep cyclicals at a genuine trough will fail this and they are, in
+      principle, exactly what this profile wants. That is an accepted cost:
+      distinguishing a cyclical trough from a structural collapse in the numbers
+      alone isn't reliably possible, and for a novice-facing tool the false
+      negative is much cheaper than the false positive.
+
+  - metric: gross_margin_vs_3y_median
+    tier: core
+    buy:
+      form: abs
+      comparator: at_least
+      value: -3
+      unit: percentage_points
+      why: |
+        This is the entry that distinguishes cyclical weakness from structural
+        decline. Revenue falls in both cases. Gross margin holding up through a
+        revenue decline means the company still has pricing power and is just
+        selling less; gross margin collapsing alongside revenue means it's
+        discounting to hold volume, which is the pattern that precedes permanent
+        impairment. Three points of give allows for an ordinary bad stretch.
+    sell:
+      form: delta_median
+      basis: own_3y_median_gross_margin
+      comparator: at_most
+      value: -5
+      unit: percentage_points
+      why: |
+        Five points below its own normal margin is discounting to hold volume,
+        and that is the permanent-impairment pattern rather than the cyclical one.
+
+  - metric: diluted_share_count_change_ttm
+    tier: core
+    buy:
+      form: abs
+      comparator: at_most
+      value: 3
+      unit: percent
+      why: |
+        A cheap company that funds itself by issuing stock into a depressed price
+        is transferring your discount to new shareholders. Three percent allows
+        for ordinary stock compensation without allowing a funding programme.
+    sell:
+      form: abs
+      comparator: at_least
+      value: 8
+      unit: percent
+      why: |
+        A hard one. Eight percent means management has decided the way out of the
+        problem is your ownership stake.
+
+  # --- BONUS -----------------------------------------------------------------
+
+  - metric: accruals_ratio
+    tier: bonus
+    buy:
+      form: abs
+      comparator: at_most
+      value: 0.10
+      unit: ratio
+      why: |
+        A check that the cheapness is real and not the reversal of aggressive
+        prior-period accounting.
+    sell:
+      form: none
+      why: |
+        The source report records this as blank and gives no exit reasoning for
+        it.
+
+  - metric: insider_net_buying_6m
+    tier: bonus
+    buy:
+      form: abs
+      comparator: greater_than
+      value: 0
+      unit: shares
+      why: |
+        The single most timely fundamental signal available on this horizon, and
+        the only one in the whole set that updates in days rather than quarters.
+        For a profile whose problem is that nothing changes fast enough, this is
+        disproportionately valuable.
+    sell:
+      form: none
+      why: |
+        The source report records this as blank and gives no exit reasoning for
+        it.
+    note: |
+      Requires parsing Form 4 XML rather than XBRL company facts, so it is a
+      separate ingestion path from every other entry here.

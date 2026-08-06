@@ -1,0 +1,452 @@
+schema: ledger.profile/1
+id: graham
+name: Graham
+bank: metric-bank          # names the bank, not a path
+
+# =============================================================================
+# All decision power lives in this file.
+#
+# Which bank entries this lens uses, at what levels, how they roll up, and what
+# forces an exit. Nothing here alters a bank definition — that direction is
+# one-way. Nothing here refers to any other profile; this lens is evaluated on
+# its own and is never compared or merged with another.
+#
+# Threshold forms used below
+#   abs           an absolute level of the value
+#   delta_entry   a change versus the value recorded at purchase
+#   delta_median  a change versus a trailing median
+#   compound      several conditions combined
+#   none          this entry can never force an exit
+#
+# Values are written exactly as stated in the source report, with their unit
+# alongside. Nothing is rounded or converted.
+# =============================================================================
+
+summary: |
+  An ordinary or mediocre business bought so far below what its assets and
+  earnings justify that the business quality stops mattering.
+
+notice: |
+  The valuation entries in this profile have sell thresholds, and the discount
+  closing is the entire reason to exit. You are buying a statistical discount on
+  a business you have no particular faith in. When the discount closes, the
+  reason to own it is gone, and holding on means you have quietly switched to a
+  different thesis you never tested.
+
+  This profile needs its position clock. Without it there is no coherent exit
+  for a stock that stays cheap forever, which is the characteristic way this
+  style of investing fails.
+
+settings:
+
+  rollup:
+    rule: |
+      A buy verdict requires all 4 REQUIRED entries green, at least 6 of the 8
+      CORE entries green, and treats the 3 BONUS entries as score only.
+    tiers:
+      required:
+        count: 4
+        requires: all_green
+        meaning: |
+          Knockout. One red kills the buy verdict regardless of score.
+      core:
+        count: 8
+        requires: at_least
+        min_green: 6
+        meaning: |
+          X of Y must be green.
+      bonus:
+        count: 3
+        requires: none
+        contributes: score
+        meaning: |
+          Adds to the score, never blocks.
+    grey: |
+      Grey — uncomputable, or not meaningful for this company — propagates. A
+      grey REQUIRED entry makes the security grey, not red. The user decides and
+      logs an override.
+
+  holding_period_exit:
+    form: fixed_period
+    value: 24
+    unit: months
+    why: |
+      Sell after two years regardless of what happened. No metric can hold "it's
+      been two years", and without this there is no exit for the case where the
+      stock simply stays cheap — the single most common way this style of
+      investing fails.
+
+  defaults:
+    sell_confirmation:
+      count: 2
+      unit: consecutive_filings
+      applies_to: every sell threshold in this profile
+      why: |
+        One goodwill impairment, one legal settlement, one inventory build, and
+        a metric crosses the line on noise. For a tool whose purpose is
+        preventing panic decisions, firing a red on one quarter's one-off charge
+        is the worst possible failure mode: it would use the authority of the
+        system to cause exactly the behaviour it exists to prevent.
+
+
+entries:
+
+  # --- REQUIRED --------------------------------------------------------------
+
+  - metric: pe_3y_avg_eps
+    tier: required
+    buy:
+      form: abs
+      comparator: at_most
+      value: 15
+      unit: times
+      why: |
+        Graham's published figure from *The Intelligent Investor*, chapter 14. It
+        corresponds to a 6.7% earnings yield. His number is used rather than a
+        modernised one, because the whole value of this profile is that it's his.
+    sell:
+      form: abs
+      comparator: at_least
+      value: 25
+      unit: times
+      why: |
+        The discount is the reason you own this. At 25x a dollar of typical
+        earnings, the statistical discount you bought has closed. Continuing to
+        hold means owning it for a reason you never tested.
+
+  - metric: price_to_book
+    tier: required
+    buy:
+      form: abs
+      comparator: at_most
+      value: 1.5
+      unit: times
+      why: |
+        Graham's number, for the same reason his P/E figure is used unmodified.
+    sell:
+      form: abs
+      comparator: at_least
+      value: 3.0
+      unit: times
+      why: |
+        A doubling of the entry multiple. What you paid a discount to net worth
+        for is now priced at a premium to it.
+    note: |
+      The misfire here is severe and worth surfacing on the security. Book value
+      stopped describing modern businesses sometime around 1990, so this entry
+      systematically rejects software, pharma, brands and services companies.
+      Where it still works well is banks, insurers and asset-heavy industrials —
+      which is to say, the sectors this profile handles best are the ones a
+      novice is least likely to want to own.
+
+  - metric: graham_combined_multiple
+    tier: required
+    buy:
+      form: abs
+      comparator: at_most
+      value: 22.5
+      unit: ratio
+      why: |
+        15 × 1.5, which is exactly how Graham derived it. It lets one number be
+        high if the other is low: a stock at 18x earnings and 1.2x book passes;
+        one at 18x and 2.0x doesn't.
+    sell:
+      form: abs
+      comparator: at_least
+      value: 50
+      unit: ratio
+      why: |
+        Roughly a doubling of the combined multiple, which is the discount
+        closing by any reasonable reading.
+
+  - metric: current_ratio
+    tier: required
+    buy:
+      form: abs
+      comparator: at_least
+      value: 2.0
+      unit: ratio
+      why: |
+        This profile is buying a business it doesn't trust, so the balance sheet
+        has to carry the risk that the operations can't. Two dollars of
+        short-term assets per dollar of short-term bills is the cushion that
+        makes an unremarkable business survivable.
+    sell:
+      form: abs
+      comparator: less_than
+      value: 1.2
+      unit: ratio
+      why: |
+        The cushion the whole thesis rests on has gone. At 1.2 the liquid
+        position is no longer carrying risk the operations can't.
+    note: |
+      Retailers, restaurants, and subscription businesses with large deferred
+      revenue routinely run below 1.0 and are fine businesses. Graham's answer
+      would be that they are then not Graham stocks.
+
+  # --- CORE ------------------------------------------------------------------
+
+  - metric: ltd_to_working_capital
+    tier: core
+    buy:
+      form: abs
+      comparator: at_most
+      value: 1.0
+      unit: ratio
+      why: |
+        Graham's own test, stated in exactly this form. It is stricter and more
+        literal than a leverage ratio because it ignores fixed assets entirely,
+        which is deliberate: in liquidation, the factory sells for a fraction of
+        book.
+    sell:
+      form: abs
+      comparator: greater_than
+      value: 2.0
+      unit: ratio
+      why: |
+        Long-term borrowings at twice the liquid cushion means the cushion has
+        stopped covering them.
+    note: |
+      Utilities, telecom, railroads and anything capital-intensive fail this
+      permanently. From this profile's perspective that is correct behaviour,
+      not a defect.
+
+  - metric: profitable_years_10y
+    tier: core
+    buy:
+      form: abs
+      comparator: at_least
+      value: 10
+      unit: count
+      of: 10
+      why: |
+        Ten of ten, not eight of ten. Graham's criterion is stability itself, and
+        a tool for a novice that says "a couple of loss years is fine" is
+        teaching the wrong lesson at the exact point where the lesson matters.
+        Relax it consciously in config if you want to, not in the default.
+    sell:
+      # The buy test is a count over ten years; the exit watches the current
+      # loss streak, which is a different bank entry.
+      measured_on: consecutive_annual_loss_years
+      form: abs
+      comparator: at_least
+      value: 2
+      unit: count
+      sell_confirmation:
+        form: inherent
+        why: |
+          The profile default is two consecutive filings. Here the two
+          consecutive annual losses are themselves that confirmation, so the
+          default is not applied a second time on top of it.
+      why: |
+        One loss year can be an impairment or a settlement. Two in a row is the
+        business, and the stability that was the reason to accept an
+        unremarkable company has gone.
+    note: |
+      This is currently the most punishing entry in the profile, because 2020 put
+      a non-cash impairment or a shutdown loss on the books of a great many
+      otherwise stable companies. Through roughly 2030 it will exclude businesses
+      this profile would otherwise accept. Worth saying so on the security.
+      Allowing one excluded year with a logged reason would be a reasonable
+      relaxation to make consciously.
+
+  - metric: altman_z_score
+    tier: core
+    buy:
+      form: abs
+      comparator: at_least
+      value: 3.0
+      unit: score
+      why: |
+        Above 3.0 is Altman's safe zone. This profile holds permanent capital in
+        a business it does not trust, so it takes the full cushion rather than
+        the grey area.
+    sell:
+      form: abs
+      comparator: less_than
+      value: 1.8
+      unit: score
+      why: |
+        Below 1.8 is Altman's distress zone. A cheap stock that goes bankrupt is
+        the characteristic failure of this entire approach.
+    note: |
+      This is the one place in this profile where something the named investor
+      never used has been added. Altman published in 1968 and it isn't Graham's,
+      but it is the formalisation of precisely what Graham's balance sheet tests
+      were reaching for, and it has fifty years of out-of-sample validation
+      behind it, which none of Graham's individual ratios do.
+
+  - metric: eps_growth_10y
+    tier: core
+    buy:
+      form: abs
+      comparator: at_least
+      value: 33
+      unit: percent
+      why: |
+        Graham's exact figure. It's under 3% a year: a very low bar,
+        deliberately. The three-year averaging at both ends is also his method,
+        and it matters more than the threshold does, because single-year
+        endpoints make the number meaningless.
+    sell:
+      form: none
+      why: |
+        Growth was never the reason you bought. Discount was.
+
+  - metric: consecutive_dividend_years
+    tier: core
+    buy:
+      form: abs
+      comparator: at_least
+      value: 10
+      unit: years
+      why: |
+        Graham's own requirement was twenty years, and relaxing it to ten is a
+        deliberate departure worth being explicit about. He wrote before SEC Rule
+        10b-18 (1982) made buybacks a safe, routine alternative to dividends. A
+        twenty-year dividend requirement today screens out a large set of
+        companies that return capital consistently through repurchases instead,
+        which Graham had no reason to anticipate. Ten years preserves the signal
+        — this company has survived a full cycle and returns cash — without
+        penalising the mechanism change.
+    sell:
+      form: none
+      why: |
+        A dividend cut is real information about financial distress, but by the
+        time it happens the balance sheet entries will already be red. It should
+        send you to the filings, not to the sell button.
+    flag:
+      form: delta_entry
+      comparator: falls_below_entry_value
+      severity: flag
+      never_blocks: true
+      why: |
+        The dividend run resets when the company stops paying. Surface it so you
+        go and read. It records what happened and prompts a decision; it does not
+        make one.
+
+  - metric: debt_to_equity
+    tier: core
+    buy:
+      form: abs
+      comparator: at_most
+      value: 1.0
+      unit: ratio
+      why: |
+        This profile buys a mature, boring, stable business with ten straight
+        profitable years behind it. A full turn of leverage on a company with
+        that record is survivable.
+    sell:
+      form: abs
+      comparator: at_least
+      value: 2.0
+      unit: ratio
+      why: |
+        At two turns the lenders own more of the outcome than the owners do, and
+        the balance sheet has stopped being the thing carrying the risk.
+
+  - metric: price_to_net_tangible_assets
+    tier: core
+    buy:
+      form: abs
+      comparator: at_most
+      value: 2.0
+      unit: times
+      why: |
+        Price to book with the imaginary parts removed. Two dollars per dollar of
+        things that could actually be sold is the outer edge of what a
+        liquidation-minded discount justifies.
+    sell:
+      form: none
+      why: |
+        The source report records this as blank and gives no exit reasoning for
+        it.
+
+  - metric: accruals_ratio
+    tier: core
+    buy:
+      form: abs
+      comparator: at_most
+      value: 0.10
+      unit: ratio
+      why: |
+        A portfolio bought this way is bought on reported numbers, so a check
+        that the reported numbers are real is doing exactly Graham's job with
+        better tools. High accruals predict poor subsequent returns with unusual
+        reliability.
+    sell:
+      form: none
+      why: |
+        The source report records this as blank and gives no exit reasoning for
+        it.
+
+  # --- BONUS -----------------------------------------------------------------
+
+  - metric: market_cap
+    tier: bonus
+    buy:
+      form: abs
+      comparator: at_least
+      value: 300000000
+      unit: usd
+      why: |
+        Graham used $100M in 1972 as an "adequate size" test, which
+        inflation-adjusts to roughly $750M. This is set lower deliberately,
+        because the discounts this profile hunts are disproportionately in
+        smaller companies and a $750M floor removes most of the opportunity set.
+        $300M keeps filing quality and liquidity acceptable without gutting the
+        universe.
+    sell:
+      form: none
+      why: |
+        The source report records this as blank and gives no exit reasoning for
+        it.
+
+  - metric: ncav_to_market_cap
+    tier: bonus
+    buy:
+      form: abs
+      comparator: at_least
+      value: 0.50
+      unit: ratio
+      why: |
+        A true net-net — Graham's own bar, at 1.5 — would leave you with an empty
+        screen for years at a time. As a bonus at 0.50 it rewards the balance
+        sheet cushion without demanding the impossible.
+    sell:
+      form: none
+      why: |
+        The source report records this as blank and gives no exit reasoning for
+        it.
+
+  - metric: earnings_yield_to_risk_free_multiple
+    tier: bonus
+    parameters:
+      risk_free_rate: null
+    buy:
+      form: abs
+      comparator: at_least
+      value: 2
+      unit: times
+      why: |
+        Graham's Enterprising Investor test: the earnings yield has to pay at
+        least twice what the risk-free alternative pays, or you are taking equity
+        risk without being paid for it.
+    sell:
+      form: none
+      why: |
+        The source report records this as blank and gives no exit reasoning for
+        it.
+    note: |
+      `risk_free_rate` is deliberately unset. It is an input to the computation,
+      not a threshold, and no value for it appears in the source report — so
+      inventing one here would put a made-up number into every reading of this
+      entry. Unset means this entry resolves grey, which is the correct state for
+      a value that is genuinely not known.
+
+      This figure is not in EDGAR and is not price data. Graham's original test
+      compared the earnings yield to the AAA corporate bond yield; the modern
+      stand-in is the current 10-year Treasury yield, entered by hand and updated
+      quarterly. One number, four times a year, and every valuation threshold in
+      the tool becomes cycle-aware instead of frozen at whatever rate environment
+      it was calibrated against.

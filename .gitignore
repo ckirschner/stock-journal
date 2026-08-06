@@ -4,6 +4,7 @@ data/
 *.json.tmp
 ledger-backup-*.json
 pre-import-*.json
+dev_reference_docs/
 
 # Agent context — local only.
 claude.md

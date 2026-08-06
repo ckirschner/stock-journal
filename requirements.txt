@@ -1,4 +1,5 @@
 pywebview>=5.0
+ruamel.yaml>=0.17    # round-trip YAML for the metric bank and profiles
 # Packaging only:
 #   pyinstaller>=6.0
 # Later, when you wire up a real data provider:

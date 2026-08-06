@@ -146,3 +146,56 @@ def compute(method: str, inputs: dict) -> dict:
     if not fn:
         raise EVError(f"Unknown method: {method}")
     return fn(inputs)
+
+
+# What each method is, in plain language. Each assumption is an input the
+# user supplies; the result is always computed, never typed.
+EV_METHODS = {
+    "reverse_dcf": {
+        "label": "Reverse DCF",
+        "blurb": "Don't forecast. Invert. Ask what growth rate today's price already "
+                 "requires, then decide whether the market is asking too much or too little.",
+        "who": "Mauboussin · Rappaport",
+        "inputs": [
+            ("price", "Current price", "The market's number. Everything else is solved against it."),
+            ("fcf_ttm", "Free cash flow (TTM)", "Trailing twelve months of free cash flow, in millions."),
+            ("shares", "Shares outstanding", "Diluted, in millions."),
+            ("discount_rate", "Discount rate %", "Your required return. Set it once and leave it alone. "
+                                                 "Moving it per stock is how a DCF becomes a rationalisation."),
+            ("terminal_growth", "Terminal growth %", "Long-run growth after year 10. Above about 3% you're "
+                                                     "claiming the company outgrows the economy forever."),
+        ],
+        "output": ("implied_growth", "Implied growth"),
+    },
+    "scenario": {
+        "label": "Scenario weighted",
+        "blurb": "Bear, base and bull with explicit probabilities. The bear case is entered "
+                 "first, by rule, so downside gets estimated before upside.",
+        "who": "Klarman · Greenblatt",
+        "inputs": [
+            ("bear_value", "Bear value per share", "What it's worth if the thing you're worried about happens."),
+            ("bear_prob", "Bear probability %", "Entered first. Probabilities must total 100%."),
+            ("base_value", "Base value per share", "No recovery, no further deterioration."),
+            ("base_prob", "Base probability %", "The boring outcome, which is usually the likeliest."),
+            ("bull_value", "Bull value per share", "The thesis works."),
+            ("bull_prob", "Bull probability %", "Whatever is left after bear and base."),
+        ],
+        "output": ("weighted_value", "Weighted value"),
+    },
+    "owner_earnings": {
+        "label": "Owner earnings + margin of safety",
+        "blurb": "Normalised free cash flow capitalised at your discount rate, then discounted "
+                 "again by a required margin of safety. The margin isn't a return target. "
+                 "It's protection against your own estimation error.",
+        "who": "Buffett · Graham",
+        "inputs": [
+            ("owner_earnings", "Owner earnings", "Net income + depreciation − maintenance capex, in millions."),
+            ("shares", "Shares outstanding", "Diluted, in millions."),
+            ("growth", "Sustainable growth %", "What the business can grow at without extra capital."),
+            ("discount_rate", "Discount rate %", "Your required return."),
+            ("margin_of_safety", "Margin of safety %", "Graham's traditional number is 30%. The wider your "
+                                                       "uncertainty, the wider this should be."),
+        ],
+        "output": ("buy_below", "Buy below"),
+    },
+}

@@ -1,0 +1,2192 @@
+schema: ledger.metric-bank/1
+
+# =============================================================================
+# THE METRIC BANK
+# =============================================================================
+#
+# This file defines what a value IS. It holds no decision power whatsoever.
+#
+# There are no thresholds here, no tiers, no pass/fail, no good/bad, and no
+# reference to any profile. Every entry below would read identically for a user
+# who runs one profile and for a user who invents ten more.
+#
+# Where a level appears in this file it is only ever an APPLICABILITY test —
+# a statement that the number does not mean anything for this company, not a
+# judgement about what to do when it doesn't. What a profile does with a
+# non-meaningful value is the profile's business.
+#
+# The reasoning for any specific level ("15% because...") lives in the profile
+# that chose that level, never here.
+#
+# -----------------------------------------------------------------------------
+# Conventions
+# -----------------------------------------------------------------------------
+#
+# kind
+#   computed      derived from filings, prices, or other entries
+#   qualitative   not computed; the user writes prose and marks it
+#
+# polarity        Which direction is favourable, as an intrinsic property of
+#                 the measure. NEVER a statement about any particular level.
+#   higher_is_better
+#   lower_is_better
+#   none          The measure has no intrinsically favourable direction.
+#                 Several entries below are deliberately `none` because the
+#                 profiles that use them read the same number in opposite
+#                 directions. That disagreement belongs to them, not here.
+#
+# unit            percent | percentage_points | times | ratio | score | usd |
+#                 shares | years | count | times_own_median
+#
+# inputs
+#   filings       raw figures from SEC XBRL company facts
+#   prices        daily price data
+#   entries       other entries in this bank
+#
+# parameters      A value the computation needs that this file does not fix —
+#                 a rate, a multiple, a period. The formula stays here and is
+#                 identical for every profile; the profile supplies the number.
+#                 A parameter is an INPUT, never a threshold.
+#
+# not_meaningful_when
+#                 Conditions under which the value does not mean anything for
+#                 this company. Stated only where the source report states it.
+#
+# =============================================================================
+
+
+entries:
+
+  # ===========================================================================
+  # Returns on capital
+  # ===========================================================================
+
+  - id: roic_median_5y
+    kind: computed
+    label: Return on invested capital, 5-year median
+    unit: percent
+    format: "0.0%"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        ROIC(year) = EBIT × (1 − effective tax rate)
+                     ÷ (total debt + total equity − cash & equivalents)
+
+        value = median( ROIC(year) for each of the last five fiscal years )
+      window: five fiscal years, annual observations, median
+    inputs:
+      filings:
+        - EBIT
+        - income tax expense
+        - pre-tax income
+        - short-term debt
+        - long-term debt
+        - total shareholders' equity
+        - cash and cash equivalents
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        How many cents of profit the business earns per dollar that's tied up
+        in it. A company earning 20 cents on every dollar of capital is a
+        machine; one earning 7 cents is a job.
+      misfires: |
+        A company that just closed a large acquisition carries fresh goodwill
+        in the denominator and will understate ROIC for a year or two.
+        Post-ASC 842, operating lease assets sit on the balance sheet and
+        depress ROIC for retailers and restaurants relative to their pre-2019
+        history.
+      attribution: |
+        Buffett, unambiguously. He'd phrase it as return on unleveraged net
+        tangible assets, which is stricter than this (it strips goodwill).
+        This version is the common approximation.
+    not_meaningful_when:
+      - test: the company is a bank or an insurer
+        because: |
+          Banks and insurers have no meaningful invested capital in this sense.
+      - test: invested capital (the denominator) is under 10% of revenue
+        because: |
+          Asset-light companies can have near-zero or negative invested
+          capital, which makes the ratio explode or invert into nonsense.
+
+  - id: roe_median_5y
+    kind: computed
+    label: Return on equity, 5-year median
+    unit: percent
+    format: "0.0%"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        ROE(year) = net income ÷ average shareholders' equity
+
+        value = median( ROE(year) for each of the last five fiscal years )
+      window: five fiscal years, annual observations, median
+    inputs:
+      filings:
+        - net income
+        - total shareholders' equity
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        Profit earned per dollar of shareholder money left in the business.
+      misfires: |
+        Heavy goodwill inflates equity and depresses ROE for acquirers. Any
+        leveraged business will look better on this than it deserves, because
+        borrowing money shrinks the denominator without improving the business.
+      attribution: |
+        Buffett. His most-cited single figure through the 1970s and 1980s
+        letters.
+    not_meaningful_when:
+      - test: total shareholders' equity is zero or negative
+        because: |
+          Companies that have bought back so much stock that equity is negative
+          produce a negative or absurd denominator.
+
+  # ===========================================================================
+  # Leverage and solvency
+  # ===========================================================================
+
+  - id: total_debt_to_ebitda
+    kind: computed
+    label: Total debt to EBITDA
+    unit: times
+    format: "0.0x"
+    polarity: lower_is_better
+    derivation:
+      formula: |
+        (short-term debt + long-term debt + finance lease obligations)
+        ÷ EBITDA (TTM)
+      window: trailing twelve months
+    inputs:
+      filings:
+        - short-term debt
+        - long-term debt
+        - finance lease obligations
+        - EBITDA
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        How many years of earnings it would take to repay everything the
+        company owes. Two years is comfortable. Five is a company whose future
+        belongs partly to its lenders.
+      misfires: |
+        Regulated utilities and pipelines run at 4–6x as a matter of course and
+        that's fine, because the revenue is legislated. REITs, the same.
+      attribution: |
+        Buffett's stated preference is a business that could pay off its debt
+        out of a couple of years of earnings.
+    not_meaningful_when:
+      - test: the company has a captive finance arm
+        because: |
+          Companies with a captive finance arm carry debt that funds a loan
+          book, not operations. The consolidated number is meaningless without
+          splitting industrial from financial, which XBRL tagging won't
+          reliably let you do.
+
+  - id: net_debt_to_ebitda
+    kind: computed
+    label: Net debt to EBITDA
+    unit: times
+    format: "0.0x"
+    polarity: lower_is_better
+    derivation:
+      formula: |
+        (total debt − cash & equivalents) ÷ EBITDA (TTM)
+      window: trailing twelve months
+    inputs:
+      filings:
+        - short-term debt
+        - long-term debt
+        - cash and cash equivalents
+        - EBITDA
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        The same question as total debt to EBITDA, but crediting the company
+        for the cash it already holds: how many years of earnings it would take
+        to repay what it owes after spending its own bank balance first.
+      misfires: |
+        Inherits the captive-finance and regulated-utility distortions of the
+        gross measure. Netting cash also flatters a company whose cash is
+        committed — trapped offshore, pledged, or already earmarked for an
+        announced acquisition.
+      attribution: |
+        Standard credit analysis. Used here as the net counterpart to
+        [total_debt_to_ebitda].
+    not_meaningful_when:
+      - test: the company has a captive finance arm
+        because: |
+          Same reason as the gross measure: consolidated debt funds a loan
+          book, not operations.
+
+  - id: debt_to_equity
+    kind: computed
+    label: Debt to equity
+    unit: ratio
+    format: "0.00"
+    polarity: lower_is_better
+    derivation:
+      formula: |
+        total debt ÷ total shareholders' equity
+      window: most recent balance sheet
+    inputs:
+      filings:
+        - short-term debt
+        - long-term debt
+        - total shareholders' equity
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        How much of the company is financed by lenders versus by its owners.
+        At 1.0 there is a dollar of debt for every dollar of shareholder money.
+      misfires: |
+        Recently-IPO'd companies with large cash balances and small equity
+        bases can read oddly.
+      attribution: |
+        Graham's balance-sheet tests and Lynch's, both. Standard.
+    not_meaningful_when:
+      - test: total shareholders' equity is zero or negative
+        because: |
+          The ratio has no interpretation with a zero or negative denominator.
+
+  - id: interest_coverage
+    kind: computed
+    label: Interest coverage
+    unit: times
+    format: "0.0x"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        EBIT ÷ interest expense (TTM)
+      window: trailing twelve months
+    inputs:
+      filings:
+        - EBIT
+        - interest expense
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        How many times over the company's operating profit covers its interest
+        bill. At 8x, earnings could fall by half and the lenders still get paid
+        without anyone noticing.
+      misfires: |
+        Companies capitalising interest into construction projects understate
+        the expense, which flatters the ratio.
+      attribution: |
+        Graham's bond-safety standard, in its original form.
+    not_meaningful_when:
+      - test: interest expense is zero or near zero
+        because: |
+          Debt-free companies have interest expense near zero, which makes the
+          ratio infinite or undefined.
+
+  - id: ltd_to_working_capital
+    kind: computed
+    label: Long-term debt to working capital
+    unit: ratio
+    format: "0.00"
+    polarity: lower_is_better
+    derivation:
+      formula: |
+        long-term debt ÷ (current assets − current liabilities)
+      window: most recent balance sheet
+    inputs:
+      filings:
+        - long-term debt
+        - total current assets
+        - total current liabilities
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        Whether the company's long-term borrowings could be covered by the
+        liquid cushion it already has. It ignores fixed assets entirely, which
+        is deliberate: in liquidation, the factory sells for a fraction of book.
+      misfires: |
+        Utilities, telecom, railroads, and anything capital-intensive fail this
+        permanently.
+      attribution: |
+        Graham's own test, stated in exactly this form. Stricter and more
+        literal than debt-to-equity.
+    not_meaningful_when:
+      - test: working capital (current assets − current liabilities) is zero or negative
+        because: |
+          Negative working capital makes the ratio undefined.
+
+  - id: current_ratio
+    kind: computed
+    label: Current ratio
+    unit: ratio
+    format: "0.00"
+    polarity: none
+    polarity_note: |
+      Deliberately none. A low current ratio can mean a company is fragile, or
+      it can mean the company collects from customers before it pays suppliers
+      and is being financed for free by its own operations. The measure does not
+      distinguish these and this file must not pretend to.
+    derivation:
+      formula: |
+        total current assets ÷ total current liabilities
+      window: most recent balance sheet
+    inputs:
+      filings:
+        - total current assets
+        - total current liabilities
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        Whether the company holds enough short-term assets — cash, receivables,
+        inventory — to cover the bills coming due within a year.
+      misfires: |
+        Retailers, restaurants, and subscription businesses with large deferred
+        revenue routinely run below 1.0 and are fine. Negative working capital
+        has been read both as a solvency problem and as evidence of competitive
+        strength, depending entirely on who is reading it.
+      attribution: |
+        Graham, as a solvency test. Buffett has repeatedly praised negative
+        working capital as a feature.
+
+  - id: altman_z_score
+    kind: computed
+    label: Altman Z-score
+    unit: score
+    format: "0.00"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        1.2 × (working capital / total assets)
+        + 1.4 × (retained earnings / total assets)
+        + 3.3 × (EBIT / total assets)
+        + 0.6 × (market cap / total liabilities)
+        + 1.0 × (revenue / total assets)
+      window: most recent balance sheet and trailing twelve months
+    inputs:
+      filings:
+        - total current assets
+        - total current liabilities
+        - retained earnings
+        - total assets
+        - total liabilities
+        - EBIT
+        - revenue
+      prices:
+        - current price
+      entries:
+        - market_cap
+    explanation:
+      plain: |
+        A bankruptcy probability score, built from five balance-sheet and
+        income-statement ratios weighted by how well each predicted failure in
+        the original study.
+      misfires: |
+        Very asset-light companies score poorly on the working capital and
+        asset turnover terms for reasons unrelated to distress. Young companies
+        have low retained earnings by construction.
+      attribution: |
+        Altman, 1968. Not Graham's, but the formalisation of what Graham's
+        balance sheet tests were reaching for, with fifty years of
+        out-of-sample validation behind it.
+    not_meaningful_when:
+      - test: the company is a financial company
+        because: |
+          Altman himself excluded financial companies; the ratios don't map.
+
+  # ===========================================================================
+  # Margins, cash generation and earnings quality
+  # ===========================================================================
+
+  - id: gross_margin_ttm
+    kind: computed
+    label: Gross margin, trailing twelve months
+    unit: percent
+    format: "0.0%"
+    polarity: none
+    polarity_note: |
+      Deliberately none. A high gross margin and a low one describe different
+      business models, not better and worse businesses — high-volume retail and
+      branded software sit at opposite ends and both work.
+    derivation:
+      formula: |
+        (revenue − cost of revenue) ÷ revenue, over the trailing twelve months
+      window: trailing twelve months
+    inputs:
+      filings:
+        - revenue
+        - cost of revenue
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        Out of every hundred dollars of sales, how much is left after paying
+        the direct cost of what was sold — before any overhead, research or
+        marketing.
+      misfires: |
+        Companies that changed segment reporting or restated mid-window make
+        period-to-period comparison unreliable.
+      attribution: |
+        Standard. Defined here because several measures below are built on it.
+    not_meaningful_when:
+      - test: the company does not report cost of revenue separately
+        because: |
+          Some financials and some conglomerates do not break it out, so gross
+          margin cannot be computed at all.
+
+  - id: gross_margin_range_5y
+    kind: computed
+    label: Gross margin range, 5-year
+    unit: percentage_points
+    format: "0.0 pp"
+    polarity: lower_is_better
+    polarity_note: |
+      This is a dispersion measure. Less dispersion means the margin is more
+      stable; it says nothing about whether the level is high or low.
+    derivation:
+      formula: |
+        max(annual gross margin, 5 yrs) − min(annual gross margin, 5 yrs)
+      window: five fiscal years, annual observations
+    inputs:
+      filings:
+        - revenue
+        - cost of revenue
+      prices: []
+      entries:
+        - gross_margin_ttm
+    explanation:
+      plain: |
+        Whether the company sets its own prices or the market sets them. A
+        business whose gross margin sits between 61% and 63% for five years is
+        telling you customers don't shop it on price. One that swings from 22%
+        to 38% is telling you it sells a commodity. Pricing power shows up as a
+        flat line, not a high one.
+      misfires: |
+        Any company that changed segment reporting, made a transformative
+        acquisition, or restated within the window will show artificial range.
+      attribution: |
+        Buffett's pricing-power thinking, expressed as stability rather than
+        level.
+    not_meaningful_when:
+      - test: the company does not report cost of revenue separately
+        because: |
+          Gross margin cannot be computed, so its range cannot be either.
+
+  - id: gross_margin_change_3y
+    kind: computed
+    label: Gross margin change over three years
+    unit: percentage_points
+    format: "+0.0 pp"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        gross margin (TTM) − gross margin (3 fiscal years ago)
+      window: trailing twelve months against the fiscal year three years back
+    inputs:
+      filings:
+        - revenue
+        - cost of revenue
+      prices: []
+      entries:
+        - gross_margin_ttm
+    explanation:
+      plain: |
+        Whether the growth is being bought with discounts. Rapid revenue growth
+        with falling gross margin usually means the company is purchasing market
+        share, and that stops working when the money runs out.
+      misfires: |
+        Inherits every distortion of gross margin itself: a mid-window
+        acquisition, a segment reclassification or a restatement moves this
+        without anything changing in the business.
+      attribution: |
+        Lynch. An early-warning check on the quality of growth.
+    not_meaningful_when:
+      - test: the company does not report cost of revenue separately
+        because: |
+          Gross margin cannot be computed, so its change cannot be either.
+
+  - id: gross_margin_vs_3y_median
+    kind: computed
+    label: Gross margin versus its own three-year median
+    unit: percentage_points
+    format: "+0.0 pp"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        gross margin (TTM) − median(annual gross margin, 3 yrs)
+      window: trailing twelve months against a three-year annual median
+    inputs:
+      filings:
+        - revenue
+        - cost of revenue
+      prices: []
+      entries:
+        - gross_margin_ttm
+    explanation:
+      plain: |
+        Whether the company is still getting its usual price for what it sells.
+        This is the measure that separates cyclical weakness from structural
+        decline: revenue falls in both cases, but gross margin holding up
+        through a revenue decline means the company still has pricing power and
+        is just selling less, while gross margin collapsing alongside revenue
+        means it's discounting to hold volume — the pattern that precedes
+        permanent impairment.
+      misfires: |
+        A three-year median is short. A company that spent all three years in a
+        single unusual condition has a median describing that condition rather
+        than its normal.
+      attribution: |
+        The report's own construction, in Graham's discount-closure tradition.
+    not_meaningful_when:
+      - test: the company does not report cost of revenue separately
+        because: |
+          Gross margin cannot be computed, so the comparison cannot be either.
+
+  - id: fcf_ttm
+    kind: computed
+    label: Free cash flow, trailing twelve months
+    unit: usd
+    format: "$0,0"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        cash from operations − capital expenditures, over the trailing twelve
+        months
+      window: trailing twelve months
+    inputs:
+      filings:
+        - net cash provided by operating activities
+        - payments to acquire property, plant and equipment
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        The cash left over after running the business and keeping its equipment
+        current. Positive means the company funds itself. Negative means it
+        needs someone else's money to keep going.
+      misfires: |
+        Breaks where capital expenditure is really acquisitions in disguise, or
+        the reverse. Companies deliberately in a heavy investment cycle show
+        negative free cash flow as a choice, not a failure.
+      attribution: |
+        Standard. The cash counterpart to reported profit.
+
+  - id: fcf_margin_ttm
+    kind: computed
+    label: Free cash flow margin, trailing twelve months
+    unit: percent
+    format: "0.0%"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        (cash from operations − capital expenditures) ÷ revenue, over the
+        trailing twelve months
+      window: trailing twelve months
+    inputs:
+      filings:
+        - net cash provided by operating activities
+        - payments to acquire property, plant and equipment
+        - revenue
+      prices: []
+      entries:
+        - fcf_ttm
+    explanation:
+      plain: |
+        Out of every hundred dollars of sales in the last year, how many ended
+        up as spendable cash.
+      misfires: |
+        A single quarter's working capital timing can swing this. Same
+        capex-versus-acquisitions confusion as free cash flow itself.
+      attribution: |
+        Standard. The current-period counterpart to
+        [fcf_margin_median_5y].
+
+  - id: fcf_margin_median_5y
+    kind: computed
+    label: Free cash flow margin, 5-year median
+    unit: percent
+    format: "0.0%"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        FCF margin(year) = (cash from operations − capital expenditures)
+                           ÷ revenue
+
+        value = median( FCF margin(year) for each of the last five fiscal
+        years )
+      window: five fiscal years, annual observations, median
+    inputs:
+      filings:
+        - net cash provided by operating activities
+        - payments to acquire property, plant and equipment
+        - revenue
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        Out of every hundred dollars of sales, how many end up as spendable
+        cash after keeping the lights on and the equipment current. Ten dollars
+        is healthy. Zero means the business grows by consuming everything it
+        earns.
+      misfires: |
+        Companies deliberately in a heavy investment cycle show negative free
+        cash flow as a choice, not a failure, and this measure will read low for
+        them for years. Also breaks where capex is really acquisitions in
+        disguise.
+      attribution: |
+        Buffett's owner-earnings thinking applied to the income statement.
+
+  - id: fcf_yield_on_ev
+    kind: computed
+    label: Free cash flow yield on enterprise value
+    unit: percent
+    format: "0.0%"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        (cash from operations − capital expenditures) ÷ enterprise value
+      window: trailing twelve months over the current enterprise value
+    inputs:
+      filings:
+        - net cash provided by operating activities
+        - payments to acquire property, plant and equipment
+      prices:
+        - current price
+      entries:
+        - fcf_ttm
+        - enterprise_value
+    explanation:
+      plain: |
+        The cash the whole business throws off each year, divided by what the
+        whole business costs including its debts. It is the cash cross-check on
+        an earnings-based price: EBIT can be flattered by accounting choices,
+        free cash flow is harder to fake.
+      misfires: |
+        Inherits the lumpy-capex problem of free cash flow. A year of unusually
+        light capital spending makes the yield look structurally high when it
+        is only temporarily high.
+      attribution: |
+        Standard value-investing construction; the cash analogue of
+        [ev_to_ebit].
+    not_meaningful_when:
+      - test: enterprise value is zero or negative
+        because: |
+          A negative denominator inverts the yield into nonsense.
+
+  - id: cash_conversion_median_5y
+    kind: computed
+    label: Cash conversion, 5-year median
+    unit: ratio
+    format: "0.00"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        cash conversion(year) = free cash flow ÷ net income
+
+        value = median( cash conversion(year) for each of the last five fiscal
+        years )
+      window: five fiscal years, annual observations, median
+    inputs:
+      filings:
+        - net cash provided by operating activities
+        - payments to acquire property, plant and equipment
+        - net income
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        Whether the reported profits turn into actual money. If a company
+        reports a billion in earnings and collects nine hundred million in cash,
+        fine. If it reports a billion and collects three hundred million, the
+        earnings are an accounting opinion. Persistently below 0.80 means
+        accruals, aggressive capitalisation, or receivables that aren't being
+        collected.
+      misfires: |
+        Fast growers show poor conversion because working capital absorbs cash;
+        that's normal and not a defect. Software companies with large deferred
+        revenue balances show conversion well above 1.0 and look better than
+        they are. Companies with high depreciation and amortisation and low
+        current capex flatter this badly.
+      attribution: |
+        Buffett's owner-earnings thinking, formalised. Also standard in forensic
+        accounting (Schilit).
+
+  - id: accruals_ratio
+    kind: computed
+    label: Accruals ratio
+    unit: ratio
+    format: "0.00"
+    polarity: lower_is_better
+    derivation:
+      formula: |
+        (net income − cash from operations) ÷ total assets
+      window: trailing twelve months over the most recent balance sheet
+    inputs:
+      filings:
+        - net income
+        - net cash provided by operating activities
+        - total assets
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        How much of the reported profit is bookkeeping rather than cash. High
+        accruals predict poor subsequent returns with unusual reliability.
+      misfires: |
+        Rapid growth generates accruals legitimately. Seasonal businesses show
+        distorted readings at particular quarter-ends.
+      attribution: |
+        Sloan (1996). Not Graham, but a check that reported numbers are real,
+        which is doing Graham's job with better tools.
+
+  - id: effective_tax_rate_median_5y
+    kind: computed
+    label: Effective tax rate, 5-year median
+    unit: percent
+    format: "0.0%"
+    polarity: none
+    polarity_note: |
+      Deliberately none. This is a sanity check, and both extremes are
+      informative — an unusually low rate and an unusually high one each say
+      something. Neither direction is favourable in itself.
+    derivation:
+      formula: |
+        effective tax rate(year) = income tax expense ÷ pre-tax income
+
+        value = median( effective tax rate(year) for each of the last five
+        fiscal years )
+      window: five fiscal years, annual observations, median
+    inputs:
+      filings:
+        - income tax expense
+        - pre-tax income
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        A sanity check on earnings quality. A company reporting a 4% tax rate is
+        either running an aggressive structure that will eventually be
+        challenged, or booking one-time benefits that inflate earnings per share
+        and won't repeat.
+      misfires: |
+        Companies with large foreign-derived intangible income legitimately run
+        low. Loss carryforwards suppress the rate for years after a bad patch.
+        REITs pay essentially no corporate tax by design.
+      attribution: |
+        Not Buffett. Forensic accounting practice. He'd recognise the concern.
+
+  - id: payout_to_fcf_median_5y
+    kind: computed
+    label: Total payout over free cash flow, 5-year median
+    unit: percent
+    format: "0.0%"
+    polarity: none
+    polarity_note: |
+      Deliberately none. A low payout can mean a company is reinvesting or that
+      it is hoarding; a high payout can mean generosity or borrowing to pay
+      shareholders. The measure does not distinguish these.
+    derivation:
+      formula: |
+        payout(year) = (dividends paid + share repurchases − share issuance)
+                       ÷ free cash flow
+
+        value = median( payout(year) for each of the last five fiscal years )
+      window: five fiscal years, annual observations, median
+    inputs:
+      filings:
+        - payments of dividends
+        - payments for repurchase of common stock
+        - proceeds from issuance of common stock
+        - net cash provided by operating activities
+        - payments to acquire property, plant and equipment
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        Whether the company is returning more cash than it produces.
+        Sustainably above 100% means the returns are being funded with debt.
+      misfires: |
+        A single large buyback year, or an equity raise inside the window,
+        swings the ratio without describing a policy. Negative free cash flow in
+        any year makes that year's ratio uninterpretable before the median is
+        taken.
+      attribution: |
+        Standard capital-allocation check, in Buffett's owner-earnings
+        tradition.
+
+  - id: operating_income_ttm
+    kind: computed
+    label: Operating income, trailing twelve months
+    unit: usd
+    format: "$0,0"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        OperatingIncomeLoss (TTM)
+      window: trailing twelve months
+    inputs:
+      filings:
+        - operating income (loss)
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        Whether the company makes money from what it actually does, before
+        interest and tax. Positive means the operations pay for themselves.
+      misfires: |
+        A single large one-off charge — an impairment, a legal settlement, a
+        restructuring — can push a structurally profitable company negative for
+        one period.
+      attribution: |
+        Standard. Used as a precondition for any measure that puts earnings in
+        a denominator.
+
+  # ===========================================================================
+  # Price and valuation
+  # ===========================================================================
+
+  - id: market_cap
+    kind: computed
+    label: Market capitalization
+    unit: usd
+    format: "$0,0"
+    polarity: none
+    polarity_note: |
+      Size has no favourable direction. Small companies are where discounts
+      concentrate; large companies file more reliably and trade more liquidly.
+    derivation:
+      formula: |
+        shares outstanding × current price
+      window: current
+    inputs:
+      filings:
+        - common shares outstanding
+      prices:
+        - current price
+      entries: []
+    explanation:
+      plain: |
+        What the stock market says the whole company's equity is worth today:
+        every share multiplied by the price of one share.
+      misfires: |
+        Uses shares outstanding at the last filing date, so it lags any
+        buyback or issuance since. Companies with multiple share classes are
+        understated if only one class is tagged.
+      attribution: |
+        Standard. Used both as a size test and as an input to several ratios
+        below.
+
+  - id: enterprise_value
+    kind: computed
+    label: Enterprise value
+    unit: usd
+    format: "$0,0"
+    polarity: none
+    derivation:
+      formula: |
+        market cap + total debt − cash & equivalents
+      window: current price over the most recent balance sheet
+    inputs:
+      filings:
+        - short-term debt
+        - long-term debt
+        - cash and cash equivalents
+      prices:
+        - current price
+      entries:
+        - market_cap
+    explanation:
+      plain: |
+        What the entire business costs, including its debts. When you buy a
+        leveraged company you assume its debts, and the price tag should say so.
+      misfires: |
+        Mixes a live price against a balance sheet up to a quarter old. Minority
+        interests and preferred stock belong in enterprise value and are
+        inconsistently tagged.
+      attribution: |
+        Standard. Defined here because three measures below are built on it.
+
+  - id: pe_ttm
+    kind: computed
+    label: Price to earnings, trailing twelve months
+    unit: times
+    format: "0.0x"
+    polarity: lower_is_better
+    derivation:
+      formula: |
+        current price ÷ diluted earnings per share (TTM)
+      window: trailing twelve months
+    inputs:
+      filings:
+        - diluted earnings per share
+      prices:
+        - current price
+      entries: []
+    explanation:
+      plain: |
+        What you're paying for a dollar of the last year's earnings. At 20x you
+        are paying twenty dollars for each dollar the company earned last year.
+      misfires: |
+        A single year's earnings can be unrepresentative in either direction —
+        a one-off charge makes the stock look expensive, a one-off gain makes it
+        look cheap. Cyclicals look cheapest at the top of the cycle.
+      attribution: |
+        Standard. The trailing counterpart to [pe_3y_avg_eps].
+    not_meaningful_when:
+      - test: diluted earnings per share (TTM) is zero or negative
+        because: |
+          A negative denominator makes the ratio meaningless rather than
+          negative.
+
+  - id: pe_3y_avg_eps
+    kind: computed
+    label: Price to earnings on three-year average EPS
+    unit: times
+    format: "0.0x"
+    polarity: lower_is_better
+    derivation:
+      formula: |
+        current price ÷ mean(diluted EPS, last 3 fiscal years)
+      window: three fiscal years, annual observations, mean
+    inputs:
+      filings:
+        - diluted earnings per share
+      prices:
+        - current price
+      entries: []
+    explanation:
+      plain: |
+        What you're paying for a dollar of typical earnings. Averaging three
+        years is the point: it stops you paying a low multiple on a fluke good
+        year.
+      misfires: |
+        Cyclicals at the trough have collapsed earnings, so this explodes and
+        they look expensive at the exact moment they're cheapest. Any large
+        one-off charge inside the three-year window drags the average down and
+        makes the stock look dearer than it is.
+      attribution: |
+        Graham, *The Intelligent Investor*, chapter 14. The three-year averaging
+        is his method.
+    not_meaningful_when:
+      - test: the three-year average diluted EPS is zero or negative
+        because: |
+          Negative average EPS makes the ratio meaningless.
+
+  - id: price_to_book
+    kind: computed
+    label: Price to book
+    unit: times
+    format: "0.00x"
+    polarity: lower_is_better
+    derivation:
+      formula: |
+        market capitalization ÷ total shareholders' equity
+      window: current price over the most recent balance sheet
+    inputs:
+      filings:
+        - total shareholders' equity
+      prices:
+        - current price
+      entries:
+        - market_cap
+    explanation:
+      plain: |
+        What you pay for a dollar of the company's accounting net worth — the
+        assets it reports, less what it owes.
+      misfires: |
+        This one is severe. Book value stopped describing modern businesses
+        sometime around 1990: software, pharma, brands, and services companies
+        carry their real assets off the balance sheet entirely, so this measure
+        systematically rejects them. Where it still works well is banks,
+        insurers, and asset-heavy industrials.
+      attribution: |
+        Graham.
+    not_meaningful_when:
+      - test: total shareholders' equity is zero or negative
+        because: |
+          Companies with buyback-driven negative equity produce a meaningless
+          ratio.
+
+  - id: price_to_net_tangible_assets
+    kind: computed
+    label: Price to net tangible assets
+    unit: times
+    format: "0.00x"
+    polarity: lower_is_better
+    derivation:
+      formula: |
+        market capitalization
+        ÷ (total equity − goodwill − intangible assets)
+      window: current price over the most recent balance sheet
+    inputs:
+      filings:
+        - total shareholders' equity
+        - goodwill
+        - intangible assets excluding goodwill
+      prices:
+        - current price
+      entries:
+        - market_cap
+    explanation:
+      plain: |
+        Price to book with the imaginary parts removed. What you're paying per
+        dollar of things that could actually be sold.
+      misfires: |
+        Asset-light businesses fail this by construction — there is nothing
+        tangible to price.
+      attribution: |
+        Graham. The stricter form of price to book.
+    not_meaningful_when:
+      - test: net tangible assets (equity − goodwill − intangibles) is zero or negative
+        because: |
+          Companies with negative tangible book, common after large
+          acquisitions, produce a meaningless ratio.
+
+  - id: graham_combined_multiple
+    kind: computed
+    label: Graham combined multiple
+    unit: ratio
+    format: "0.0"
+    polarity: lower_is_better
+    derivation:
+      formula: |
+        P/E (3-yr average EPS) × price to book
+      window: current price over three-year average EPS and the most recent
+        balance sheet
+    inputs:
+      filings: []
+      prices: []
+      entries:
+        - pe_3y_avg_eps
+        - price_to_book
+    explanation:
+      plain: |
+        A single test that lets one number be high if the other is low. A stock
+        at 18x earnings and 1.2x book scores 21.6; one at 18x and 2.0x scores
+        36.
+      misfires: |
+        Inherits every problem of both components, and compounds them: a
+        cyclical at trough earnings with an asset-light model fails twice for
+        two unrelated bad reasons.
+      attribution: |
+        Graham. Often called the Graham Number in his honour. The product form
+        is exactly how he derived it.
+    not_meaningful_when:
+      - test: either component is not meaningful
+        because: |
+          The product of a meaningless factor is meaningless.
+
+  - id: owner_earnings_yield
+    kind: computed
+    label: Owner earnings yield
+    unit: percent
+    format: "0.0%"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        (cash flow from operations − maintenance capex) ÷ market capitalization
+
+        where maintenance capex is proxied as min(capex, depreciation &
+        amortization)
+      window: trailing twelve months over the current market capitalization
+    inputs:
+      filings:
+        - net cash provided by operating activities
+        - payments to acquire property, plant and equipment
+        - depreciation, depletion and amortization
+      prices:
+        - current price
+      entries:
+        - market_cap
+    explanation:
+      plain: |
+        The cash the business throws off for its owners each year, divided by
+        what you'd pay for the whole thing. At 5% you're buying a dollar of
+        annual owner cash for twenty dollars. It's the closest thing available
+        to "what am I actually getting for my money."
+      misfires: |
+        Cyclicals at the top of the cycle look cheapest exactly when they're
+        most dangerous, because earnings are at peak. Any company with genuinely
+        lumpy capex will have years where min(capex, D&A) badly misstates
+        maintenance. Companies whose capex is really disguised M&A, or the
+        reverse, break the proxy entirely.
+      attribution: |
+        Buffett, from the 1986 shareholder letter appendix. He would recognise
+        owner earnings; he'd quibble that the maintenance capex proxy is crude,
+        and he'd be right.
+
+  - id: ev_to_ebit
+    kind: computed
+    label: Enterprise value to EBIT
+    unit: times
+    format: "0.0x"
+    polarity: lower_is_better
+    derivation:
+      formula: |
+        (market cap + total debt − cash & equivalents) ÷ EBIT (TTM)
+      window: current enterprise value over trailing twelve months EBIT
+    inputs:
+      filings:
+        - EBIT
+      prices:
+        - current price
+      entries:
+        - enterprise_value
+    explanation:
+      plain: |
+        What the entire business costs, including its debts, per dollar of
+        operating profit. Enterprise value rather than market cap because when
+        you buy a leveraged company you assume its debts, and the price tag
+        should say so. Inverted, 8x is a 12.5% pre-tax operating earnings yield.
+      misfires: |
+        A single depressed or inflated year of EBIT moves this a long way.
+        Companies whose operating income is dominated by one segment in trouble
+        read cheap on a consolidated basis.
+      attribution: |
+        Greenblatt's earnings yield, inverted. With a caveat that matters: his
+        method is a cross-sectional ranking — buy the cheapest 30 out of 3,500,
+        whatever the absolute number happens to be that year — so he would not
+        endorse any fixed level of this measure.
+    not_meaningful_when:
+      - test: EBIT (TTM) is zero or negative
+        because: |
+          With negative earnings in the denominator the multiple has no
+          interpretation.
+
+  - id: ev_ebit_to_own_5y_median
+    kind: computed
+    label: EV/EBIT versus its own five-year median
+    unit: times_own_median
+    format: "0.00x"
+    polarity: lower_is_better
+    derivation:
+      formula: |
+        EV/EBIT (current) ÷ median( EV/EBIT over 20 trailing quarters )
+      window: current against a five-year quarterly median
+    inputs:
+      filings:
+        - EBIT
+        - short-term debt
+        - long-term debt
+        - cash and cash equivalents
+      prices:
+        - current price
+        - historical quarterly prices, 20 quarters
+      entries:
+        - ev_to_ebit
+    explanation:
+      plain: |
+        How the business is priced today compared with how the market has
+        usually priced this particular business. At 0.70 the market has put this
+        company at 30% below its own normal. Absolute multiples mean different
+        things for different businesses; this asks a company-specific question
+        instead.
+      misfires: |
+        A company whose business has permanently deteriorated has a median that
+        describes a company that no longer exists, and it will read as a
+        discount all the way down.
+      attribution: |
+        Graham's discount-closure logic, measured against the company's own
+        history rather than a universal standard.
+    not_meaningful_when:
+      - test: fewer than 20 trailing quarters of EV/EBIT are available
+        because: |
+          Five years of data is the minimum; anything shorter and the median is
+          noise.
+      - test: EV/EBIT is not meaningful in the current period
+        because: |
+          A ratio against a median needs a current value to compare.
+
+  - id: pe_to_own_5y_median_pe
+    kind: computed
+    label: P/E versus its own five-year median P/E
+    unit: times_own_median
+    format: "0.00x"
+    polarity: lower_is_better
+    derivation:
+      formula: |
+        current P/E (TTM) ÷ median( quarterly P/E over 5 yrs )
+      window: current against a five-year quarterly median
+    inputs:
+      filings:
+        - diluted earnings per share
+      prices:
+        - current price
+        - historical quarterly prices, 20 quarters
+      entries:
+        - pe_ttm
+    explanation:
+      plain: |
+        Whether the stock is cheap compared to how the market has usually priced
+        this particular company. Absolute multiples mean different things for
+        different businesses; this asks a company-specific question instead.
+      misfires: |
+        A company whose business has genuinely changed — a hardware company that
+        became a software company — has a stale median that describes a company
+        that no longer exists. Five years of persistent multiple compression
+        makes a falling knife look cheap.
+      attribution: |
+        Lynch, applied to a company's own history.
+    not_meaningful_when:
+      - test: fewer than 20 trailing quarters of P/E are available
+        because: |
+          A five-year median needs five years.
+      - test: P/E (TTM) is not meaningful in the current period
+        because: |
+          A ratio against a median needs a current value to compare.
+
+  - id: peg_trailing
+    kind: computed
+    label: PEG ratio, trailing
+    unit: ratio
+    format: "0.00"
+    polarity: lower_is_better
+    derivation:
+      formula: |
+        P/E (TTM) ÷ (5-yr diluted EPS CAGR expressed as a whole number)
+
+        A company at 24x earnings growing 20% a year has a PEG of 1.2.
+      window: current P/E over a five-year annual growth rate
+    inputs:
+      filings:
+        - diluted earnings per share
+      prices:
+        - current price
+      entries:
+        - pe_ttm
+        - eps_cagr_5y
+    explanation:
+      plain: |
+        Whether the price you're paying is justified by the speed the company is
+        growing. Lynch's formulation: the P/E of any fairly priced company will
+        equal its growth rate.
+      misfires: |
+        This version uses trailing growth, and Lynch's own PEG used projected
+        growth. That inverts the measure's behaviour at the moment it matters
+        most: it will look good on companies whose growth has just peaked and is
+        about to roll over, which is exactly the situation forward estimates
+        were used to avoid. Slow growers with 2% growth produce absurd values.
+        Cyclicals coming off a trough show enormous trailing growth and a
+        flattering reading at exactly the wrong moment.
+      attribution: |
+        Lynch, with the forward-looking growth input substituted for a trailing
+        one.
+    not_meaningful_when:
+      - test: the five-year EPS CAGR is not meaningful
+        because: |
+          A near-zero or negative base year makes the growth rate meaningless,
+          and the ratio built on it with it.
+      - test: P/E (TTM) is not meaningful
+        because: |
+          A negative or absent numerator has no interpretation here.
+
+  - id: dividend_adjusted_peg
+    kind: computed
+    label: Dividend-adjusted PEG
+    unit: ratio
+    format: "0.00"
+    polarity: lower_is_better
+    derivation:
+      formula: |
+        P/E ÷ (5-yr EPS CAGR + dividend yield)
+      window: current P/E over a five-year annual growth rate plus current yield
+    inputs:
+      filings:
+        - diluted earnings per share
+        - payments of dividends
+      prices:
+        - current price
+      entries:
+        - pe_ttm
+        - eps_cagr_5y
+        - dividend_yield
+    explanation:
+      plain: |
+        The same question as PEG, but counting the dividend as part of what the
+        company gives you. A company growing 6% and paying a 4% yield is
+        returning 10% a year in total, and this measure prices it that way.
+      misfires: |
+        Inherits every problem of the trailing PEG. Additionally, a dividend
+        that is about to be cut is counted at full value here.
+      attribution: |
+        Lynch, used explicitly for stalwarts and slow growers, where the plain
+        PEG is useless.
+    not_meaningful_when:
+      - test: the five-year EPS CAGR is not meaningful
+        because: |
+          The denominator inherits it.
+      - test: P/E (TTM) is not meaningful
+        because: |
+          A negative or absent numerator has no interpretation here.
+
+  - id: dividend_yield
+    kind: computed
+    label: Dividend yield
+    unit: percent
+    format: "0.00%"
+    polarity: none
+    polarity_note: |
+      A high yield can mean generous distribution or a collapsing price. No
+      intrinsically favourable direction.
+    derivation:
+      formula: |
+        dividends paid (TTM) ÷ market capitalization
+      window: trailing twelve months over current market capitalization
+    inputs:
+      filings:
+        - payments of dividends
+      prices:
+        - current price
+      entries:
+        - market_cap
+    explanation:
+      plain: |
+        The cash the company paid out to shareholders over the last year, as a
+        percentage of what the whole company costs today.
+      misfires: |
+        A special one-off dividend inside the window inflates the yield. A
+        recently initiated or recently cut dividend is misstated by a trailing
+        window in both directions.
+      attribution: |
+        Standard. Defined here as an input to [dividend_adjusted_peg].
+
+  - id: ncav_to_market_cap
+    kind: computed
+    label: Net current asset value over market capitalization
+    unit: ratio
+    format: "0.00"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        (current assets − total liabilities) ÷ market capitalization
+      window: most recent balance sheet over current market capitalization
+    inputs:
+      filings:
+        - total current assets
+        - total liabilities
+      prices:
+        - current price
+      entries:
+        - market_cap
+    explanation:
+      plain: |
+        How much of the purchase price is covered by liquid assets net of all
+        debts. At 1.5 you'd be buying the company for two-thirds of its net
+        current assets and getting the business itself free. That's Graham's
+        net-net, and it barely exists in modern markets outside of Japan and
+        micro-caps.
+      misfires: |
+        Current assets are carried at book, and inventory in particular rarely
+        realises book in a wind-down. The measure assumes an orderly liquidation
+        that would not actually happen.
+      attribution: |
+        Graham. The net-net construction.
+
+  - id: net_cash_to_market_cap
+    kind: computed
+    label: Net cash over market capitalization
+    unit: ratio
+    format: "0.00"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        (cash + short-term investments − total debt) ÷ market capitalization
+      window: most recent balance sheet over current market capitalization
+    inputs:
+      filings:
+        - cash and cash equivalents
+        - short-term investments
+        - short-term debt
+        - long-term debt
+      prices:
+        - current price
+      entries:
+        - market_cap
+    explanation:
+      plain: |
+        How much of the price you're paying is already sitting in the bank. It
+        lowers the effective multiple on the operating business and it's a
+        cushion during a stumble.
+      misfires: |
+        Cash held overseas, pledged, or committed to an announced acquisition is
+        counted here as if it were free. Companies with captive finance arms
+        show debt that funds a loan book.
+      attribution: |
+        Lynch. He liked knowing how much of the price was already money.
+
+  - id: earnings_yield_to_risk_free_multiple
+    kind: computed
+    label: Earnings yield as a multiple of the risk-free rate
+    unit: times
+    format: "0.00x"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        (1 ÷ P/E on 3-yr average EPS) ÷ risk_free_rate
+      window: current earnings yield against the supplied rate
+    parameters:
+      - id: risk_free_rate
+        label: Risk-free rate
+        unit: percent
+        means: |
+          The rate a risk-free alternative pays right now — the current yield on
+          the 10-year US Treasury note, as an annual percentage. It is the
+          denominator of this measure, not a level to be passed. Neither this
+          figure nor any substitute for it is in SEC EDGAR, and it is not price
+          data; it has to be supplied.
+    inputs:
+      filings:
+        - diluted earnings per share
+      prices:
+        - current price
+      entries:
+        - pe_3y_avg_eps
+    explanation:
+      plain: |
+        How many times more the company's earnings pay you than lending the
+        money to the government would. At 2.0 the stock yields twice the
+        risk-free rate; at 1.0 you are taking equity risk for a government-bond
+        return.
+      misfires: |
+        The supplied rate goes stale. A figure entered once and never updated
+        makes every reading of this measure describe a rate environment that has
+        moved on, and it will do so silently.
+      attribution: |
+        Graham's Enterprising Investor test, which compared earnings yield to
+        the AAA corporate bond yield. Buffett has said for decades that the long
+        bond is the hurdle rate against which everything is measured.
+    not_meaningful_when:
+      - test: no risk-free rate has been supplied
+        because: |
+          The denominator is missing, so there is nothing to compare against.
+      - test: P/E on three-year average EPS is not meaningful
+        because: |
+          The earnings yield inherits it.
+
+  # ===========================================================================
+  # Growth
+  # ===========================================================================
+
+  - id: revenue_cagr_5y
+    kind: computed
+    label: Revenue CAGR, 5-year
+    unit: percent
+    format: "0.0%"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        (revenue_t ÷ revenue_{t−5})^(1/5) − 1
+      window: five fiscal years, endpoint to endpoint
+    inputs:
+      filings:
+        - revenue
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        How fast sales have grown per year over five years. Roughly, whether the
+        business is growing at least as fast as the economy around it — nominal
+        GDP growth is the natural yardstick.
+      misfires: |
+        A large divestiture drops revenue permanently without anything being
+        wrong. Companies that shifted from gross to net revenue recognition
+        under ASC 606 show artificial declines across the 2018 boundary.
+      attribution: |
+        More Lynch than Buffett. Buffett would accept it as sensible but
+        wouldn't lead with it; he's held slow growers happily when the returns
+        on capital were high enough.
+    not_meaningful_when:
+      - test: revenue five fiscal years ago is zero or negative
+        because: |
+          The compound growth rate has no interpretation from a zero or negative
+          base.
+
+  - id: revenue_cagr_3y
+    kind: computed
+    label: Revenue CAGR, 3-year
+    unit: percent
+    format: "0.0%"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        (revenue_t ÷ revenue_{t−3})^(1/3) − 1
+      window: three fiscal years, endpoint to endpoint
+    inputs:
+      filings:
+        - revenue
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        How fast sales have grown per year over three years. The shorter window
+        is the faster-moving signal: it shows whether the top line has
+        decelerated recently, which a five-year window would smooth away.
+      misfires: |
+        Same divestiture and revenue-recognition distortions as the five-year
+        measure, and more exposed to them because there are fewer years to
+        dilute a single bad one.
+      attribution: |
+        Lynch. Recency over smoothness.
+    not_meaningful_when:
+      - test: revenue three fiscal years ago is zero or negative
+        because: |
+          The compound growth rate has no interpretation from a zero or negative
+          base.
+
+  - id: revenue_change_yoy
+    kind: computed
+    label: Revenue change, year over year
+    unit: percent
+    format: "+0.0%"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        revenue (TTM) ÷ revenue (prior year TTM) − 1
+      window: trailing twelve months against the prior trailing twelve months
+    inputs:
+      filings:
+        - revenue
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        Whether the company is selling more or less than it was a year ago. This
+        is the difference between a business having a bad year and a business
+        disappearing: a 5% decline in a cyclical downturn is one thing, a 20%
+        decline in a structurally challenged industry is another.
+      misfires: |
+        Deep cyclicals at a genuine trough post large declines that are the
+        setup rather than the problem. Distinguishing a cyclical trough from a
+        structural collapse in the numbers alone isn't reliably possible.
+        Acquisitions and divestitures move this without organic change.
+      attribution: |
+        Standard. Used here as a survival check rather than a growth check.
+
+  - id: net_income_cagr_5y
+    kind: computed
+    label: Net income CAGR, 5-year
+    unit: percent
+    format: "0.0%"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        (net income_t ÷ net income_{t−5})^(1/5) − 1
+      window: five fiscal years, endpoint to endpoint
+    inputs:
+      filings:
+        - net income
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        How fast the company's bottom-line profit has grown per year over five
+        years.
+      misfires: |
+        One-time charges at either endpoint of the window swing this wildly. The
+        2017 tax act permanently changed effective rates and distorts any
+        five-year window spanning it.
+      attribution: |
+        Standard. Defined here as an input to
+        [ni_minus_revenue_cagr_spread_5y].
+    not_meaningful_when:
+      - test: net income five fiscal years ago is zero or negative
+        because: |
+          The compound growth rate has no interpretation from a zero or negative
+          base.
+
+  - id: eps_cagr_5y
+    kind: computed
+    label: Diluted EPS CAGR, 5-year
+    unit: percent
+    format: "0.0%"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        (diluted EPS_t ÷ diluted EPS_{t−5})^(1/5) − 1
+      window: five fiscal years, endpoint to endpoint
+    inputs:
+      filings:
+        - diluted earnings per share
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        How fast the profit attributable to each share you own has grown per
+        year over five years. Per-share rather than total, so a company that
+        grew by issuing stock gets no credit for it.
+      misfires: |
+        Buyback-heavy companies show EPS growth that isn't operating growth.
+        Single-year endpoints make any compound rate sensitive to which two
+        years happen to sit at the ends.
+      attribution: |
+        Lynch. The growth input to his PEG.
+    not_meaningful_when:
+      - test: diluted EPS five fiscal years ago is zero, negative or very small
+        because: |
+          A negative or tiny base-year EPS breaks the compound rate entirely.
+
+  - id: eps_growth_10y
+    kind: computed
+    label: Ten-year EPS growth, three-year averages at both ends
+    unit: percent
+    format: "0.0%"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        mean(EPS, most recent 3 yrs) ÷ mean(EPS, 3 yrs ending 10 yrs ago) − 1
+      window: ten fiscal years, three-year mean at each end
+    inputs:
+      filings:
+        - diluted earnings per share
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        How much more the company earns per share than it did a decade ago,
+        stated as a total rather than an annual rate. A third more over ten
+        years is under 3% a year.
+      misfires: |
+        Requires ten years of filings, which excludes anything that listed
+        recently. The three-year averaging at both ends is what makes this
+        usable at all — single-year endpoints make the number meaningless.
+      attribution: |
+        Graham. Both the ten-year span and the three-year averaging are his
+        method.
+    not_meaningful_when:
+      - test: the earlier three-year mean EPS is zero or negative
+        because: |
+          The growth ratio has no interpretation from a zero or negative base.
+      - test: fewer than ten fiscal years of EPS are available
+        because: |
+          The window cannot be constructed.
+
+  - id: ni_minus_revenue_cagr_spread_5y
+    kind: computed
+    label: Net income CAGR minus revenue CAGR, 5-year
+    unit: percentage_points
+    format: "+0.0 pp"
+    polarity: none
+    polarity_note: |
+      Deliberately none. A positive spread means margins are expanding, which
+      reads as operating leverage to one investor and as an unsustainable
+      one-off to another. Both readings are held by profiles in this tool.
+    derivation:
+      formula: |
+        (5-yr net income CAGR) − (5-yr revenue CAGR), in percentage points
+      window: five fiscal years, endpoint to endpoint, both series
+    inputs:
+      filings: []
+      prices: []
+      entries:
+        - net_income_cagr_5y
+        - revenue_cagr_5y
+    explanation:
+      plain: |
+        Whether profits are growing at least as fast as sales. If sales grow 8%
+        and profits grow 3%, the company is buying its growth by giving away
+        margin.
+      misfires: |
+        The 2017 tax act permanently changed effective rates and distorts any
+        five-year window spanning it. One-time charges at either endpoint of the
+        window swing this wildly; three-year averages at each end would be
+        steadier if too many false readings appear.
+      attribution: |
+        Buffett's margin-discipline thinking, expressed as a spread.
+    not_meaningful_when:
+      - test: either component CAGR is not meaningful
+        because: |
+          The difference of a meaningless number is meaningless.
+
+  - id: eps_minus_revenue_cagr_spread_5y
+    kind: computed
+    label: Diluted EPS CAGR minus revenue CAGR, 5-year
+    unit: percentage_points
+    format: "+0.0 pp"
+    polarity: none
+    polarity_note: |
+      Deliberately none. A wide positive spread is genuine operating leverage in
+      a scaling business and exhausted margin-and-buyback arithmetic in a mature
+      one. The measure cannot tell them apart.
+    derivation:
+      formula: |
+        (5-yr diluted EPS CAGR) − (5-yr revenue CAGR), in percentage points
+      window: five fiscal years, endpoint to endpoint, both series
+    inputs:
+      filings: []
+      prices: []
+      entries:
+        - eps_cagr_5y
+        - revenue_cagr_5y
+    explanation:
+      plain: |
+        Whether the earnings growth is coming from the business or from
+        financial engineering. Margin expansion and buybacks are real and
+        legitimate, but a company growing EPS at 30% on 4% revenue growth has
+        nearly exhausted both, and there is no third act.
+      misfires: |
+        Inherits the endpoint sensitivity of both compound rates. A large
+        buyback programme inside the window widens the spread without any
+        operating change.
+      attribution: |
+        Lynch. The check on where growth in earnings per share is coming from.
+    not_meaningful_when:
+      - test: either component CAGR is not meaningful
+        because: |
+          The difference of a meaningless number is meaningless.
+
+  - id: inventory_minus_revenue_growth_yoy
+    kind: computed
+    label: Inventory growth minus revenue growth, year over year
+    unit: percentage_points
+    format: "+0.0 pp"
+    polarity: lower_is_better
+    derivation:
+      formula: |
+        (inventory YoY % change) − (revenue YoY % change)
+
+        Year-over-year specifically, never sequential.
+      window: most recent period against the same period one year earlier
+    inputs:
+      filings:
+        - inventory, net
+        - revenue
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        Whether product is piling up in the warehouse faster than it's selling.
+        This is one of the oldest and most reliable early warnings that demand
+        is softening, and it shows up in the balance sheet a quarter or two
+        before it shows up in the income statement.
+      misfires: |
+        Deliberate builds ahead of a product launch or through a supply chain
+        disruption look identical to demand weakness in the numbers. Seasonal
+        businesses need year-over-year comparison specifically, never sequential.
+      attribution: |
+        Lynch, and he'd recognise it instantly. He wrote about walking through
+        stores and checking whether inventory was moving; this is the
+        filing-level version of the same instinct.
+    not_meaningful_when:
+      - test: the company reports no inventory
+        because: |
+          Software, services and most financials carry no inventory, so the
+          comparison has nothing to measure.
+
+  - id: receivables_minus_revenue_growth_yoy
+    kind: computed
+    label: Receivables growth minus revenue growth, year over year
+    unit: percentage_points
+    format: "+0.0 pp"
+    polarity: lower_is_better
+    derivation:
+      formula: |
+        (accounts receivable YoY % change) − (revenue YoY % change)
+
+        Year-over-year specifically, never sequential.
+      window: most recent period against the same period one year earlier
+    inputs:
+      filings:
+        - accounts receivable, net
+        - revenue
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        Whether sales are being booked but not collected. Rising receivables
+        outpacing sales means either customers are struggling or the company is
+        pushing product into the channel to make a quarter.
+      misfires: |
+        A genuine shift toward larger enterprise customers with longer payment
+        terms will trigger this legitimately. Acquisitions bring receivables
+        with them.
+      attribution: |
+        Lynch. The receivables counterpart to the inventory check.
+    not_meaningful_when:
+      - test: the company reports no accounts receivable
+        because: |
+          The comparison has nothing to measure.
+
+  # ===========================================================================
+  # Consistency and history
+  # ===========================================================================
+
+  - id: profitable_years_10y
+    kind: computed
+    label: Years of positive net income out of the last ten
+    unit: count
+    format: "0 of 10"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        Count of fiscal years, among the ten most recent, with
+        NetIncomeLoss > 0
+      window: ten fiscal years, annual observations
+    inputs:
+      filings:
+        - net income (loss)
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        How many of the last ten years the company made money. Ten out of ten
+        means it has never lost money in a decade — not "usually profitable",
+        never lost money.
+      misfires: |
+        2020 put a non-cash impairment or a shutdown loss on the books of a
+        great many otherwise stable companies. Through roughly 2030 any test
+        built on this will exclude businesses that were stable before and after.
+      attribution: |
+        Graham. Stability of earnings, counted rather than averaged.
+    not_meaningful_when:
+      - test: fewer than ten fiscal years of filings are available
+        because: |
+          A count out of ten cannot be made from a shorter history.
+
+  - id: consecutive_annual_loss_years
+    kind: computed
+    label: Consecutive annual losses, most recent backward
+    unit: count
+    format: "0"
+    polarity: lower_is_better
+    derivation:
+      formula: |
+        Count of consecutive fiscal years, counting back from the most recent,
+        with NetIncomeLoss < 0. Zero if the most recent fiscal year was
+        profitable.
+      window: consecutive fiscal years, most recent backward
+    inputs:
+      filings:
+        - net income (loss)
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        How many years in a row the company has lost money right now. One loss
+        year can be an impairment or a settlement; a run of them is the business.
+      misfires: |
+        A single large non-cash charge — goodwill impairment, pension
+        remeasurement — can produce a reported annual loss at a company whose
+        operations never stopped generating cash.
+      attribution: |
+        Graham. The streak form of his earnings-stability test.
+
+  - id: consecutive_dividend_years
+    kind: computed
+    label: Consecutive years paying a dividend
+    unit: years
+    format: "0 yrs"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        Count of consecutive fiscal years, counting back from the most recent,
+        with PaymentsOfDividends > 0
+      window: consecutive fiscal years, most recent backward
+    inputs:
+      filings:
+        - payments of dividends
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        How many years in an unbroken run the company has paid its owners cash.
+        A long run means the company has survived a full cycle and returns cash
+        to shareholders.
+      misfires: |
+        This measures one mechanism of returning capital. SEC Rule 10b-18 (1982)
+        made buybacks a safe, routine alternative, and a company that returns
+        capital consistently through repurchases instead reads as zero here.
+      attribution: |
+        Graham. His own test used a twenty-year run, written before the
+        buyback-versus-dividend choice existed in its modern form.
+
+  - id: diluted_share_count_change_5y
+    kind: computed
+    label: Diluted share count change, 5-year
+    unit: percent
+    format: "+0.0%"
+    polarity: lower_is_better
+    derivation:
+      formula: |
+        (diluted weighted shares, latest FY
+         ÷ diluted weighted shares, 5 FYs ago) − 1
+      window: five fiscal years, endpoint to endpoint
+    inputs:
+      filings:
+        - weighted average number of diluted shares outstanding
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        Whether your slice of the company is getting bigger or smaller. A
+        company can grow earnings 8% a year and still deliver you nothing if it
+        issues 8% more shares a year. Stock compensation is a real expense that
+        transfers ownership from you to employees quietly.
+      misfires: |
+        A single large stock-funded acquisition will blow the window and it may
+        have been a fine deal. Post-IPO companies work through lockups and grant
+        overhangs for years. Banks that raised equity in a crisis get punished
+        by this for half a decade afterward.
+      attribution: |
+        Buffett, explicit and repetitive: per-share is the only thing that
+        matters.
+
+  - id: diluted_share_count_change_3y
+    kind: computed
+    label: Diluted share count change, 3-year
+    unit: percent
+    format: "+0.0%"
+    polarity: lower_is_better
+    derivation:
+      formula: |
+        (diluted weighted shares, latest FY
+         ÷ diluted weighted shares, 3 FYs ago) − 1
+      window: three fiscal years, endpoint to endpoint
+    inputs:
+      filings:
+        - weighted average number of diluted shares outstanding
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        The same question as the five-year measure over a shorter run: whether
+        your slice of the company has shrunk or been diluted recently. The
+        shorter window catches a change in management's behaviour rather than
+        its long-run habit.
+      misfires: |
+        Same as the five-year measure, and more exposed to a single stock-funded
+        acquisition because there are fewer years to absorb it.
+      attribution: |
+        Buffett. The recency counterpart to
+        [diluted_share_count_change_5y].
+
+  - id: diluted_share_count_change_ttm
+    kind: computed
+    label: Diluted share count change, trailing twelve months
+    unit: percent
+    format: "+0.0%"
+    polarity: lower_is_better
+    derivation:
+      formula: |
+        (diluted weighted shares, TTM
+         ÷ diluted weighted shares, prior year TTM) − 1
+      window: trailing twelve months against the prior trailing twelve months
+    inputs:
+      filings:
+        - weighted average number of diluted shares outstanding
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        Whether the company has issued or retired shares in the last year. A
+        company that funds itself by issuing stock into a depressed price is
+        transferring value from existing owners to new ones.
+      misfires: |
+        A convertible issue, a stock-funded deal, or an at-the-market programme
+        all read the same here. The measure says shares were issued, never why.
+      attribution: |
+        Buffett's per-share discipline, on the shortest available window.
+
+  - id: goodwill_intangibles_to_assets
+    kind: computed
+    label: Goodwill plus intangibles over total assets
+    unit: percent
+    format: "0.0%"
+    polarity: none
+    polarity_note: |
+      Deliberately none. A high figure describes a company that was assembled by
+      acquisition rather than built; whether that is a strength or a weakness is
+      a judgement this file does not make.
+    derivation:
+      formula: |
+        (goodwill + intangible assets) ÷ total assets
+      window: most recent balance sheet
+    inputs:
+      filings:
+        - goodwill
+        - intangible assets excluding goodwill
+        - total assets
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        How much of the company was bought rather than built. Goodwill is the
+        premium paid over the fair value of things acquired; it represents
+        returns purchased with shareholder money rather than generated by
+        operations.
+      misfires: |
+        Genuinely good acquisitive compounders read high on this and are not
+        thereby worse businesses. A goodwill impairment is an event rather than
+        a level, and this measure only ever shows the level.
+      attribution: |
+        Buffett's preference for return on unleveraged net *tangible* assets,
+        expressed as a balance-sheet composition.
+
+  # ===========================================================================
+  # Ownership and insider behaviour
+  # ===========================================================================
+
+  - id: insider_net_buying_6m
+    kind: computed
+    label: Insider net buying, trailing six months
+    unit: shares
+    format: "+0,0 sh"
+    polarity: higher_is_better
+    polarity_note: |
+      Asymmetric on purpose. Net buying is favourable; net selling is
+      uninformative rather than unfavourable — insiders sell for dozens of
+      reasons that have nothing to do with the business, but they buy for one.
+    derivation:
+      formula: |
+        Net shares purchased across all Form 4 filings for the issuer over the
+        last 180 days, excluding option exercises and transactions coded as
+        10b5-1 plan sales.
+      window: trailing 180 days
+    inputs:
+      filings:
+        - Form 4 ownership reports (XML, not XBRL company facts)
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        Whether the people who know the most about the company are putting their
+        own money in.
+      misfires: |
+        Small purchases timed for optics. Option exercises misparsed as
+        purchases. Requires parsing Form 4 XML rather than XBRL company facts,
+        so it is a separate ingestion path from every other entry in this file.
+      attribution: |
+        Lynch. It is also the only measure available here that updates in days
+        rather than quarters.
+    not_meaningful_when:
+      - test: no Form 4 filings exist for the issuer in the window
+        because: |
+          Silence is not the same as an absence of buying; there is nothing to
+          report either way.
+
+  - id: institutional_ownership_pct
+    kind: computed
+    label: Institutional ownership
+    unit: percent
+    format: "0.0%"
+    polarity: none
+    polarity_note: |
+      Deliberately none. High institutional ownership reads as validation to one
+      investor and as an absence of any marginal buyer left to another. Both
+      readings are held by real strategies.
+    derivation:
+      formula: |
+        Sum of shares reported across 13F filings for the ticker
+        ÷ shares outstanding
+      window: most recent 13F reporting quarter
+    inputs:
+      filings:
+        - 13F holdings reports (aggregated across filers)
+        - common shares outstanding
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        What share of the company is held by professional fund managers rather
+        than by individuals.
+      misfires: |
+        13F data lags 45 days, aggregating it across hundreds of filers per
+        quarter is heavy, and the resulting number is approximate at best.
+      attribution: |
+        Lynch, who wanted this to be low: a stock already owned by every large
+        fund has no marginal buyer left, and the best opportunities are in
+        companies Wall Street hasn't covered yet.
+    not_meaningful_when:
+      - test: 13F holdings have not been aggregated for the ticker
+        because: |
+          A partial sum understates ownership without saying by how much.
+
+  # ===========================================================================
+  # Qualitative fields
+  #
+  # Not computed. The user writes their reasoning in prose and marks the field
+  # pass or fail. Unmarked is a third state — it is not a fail, and it is not a
+  # pass.
+  #
+  # These entries define the question. They never say what a good answer is.
+  # ===========================================================================
+
+  - id: moat_durability
+    kind: qualitative
+    label: Moat durability
+    question: |
+      What stops a competitor from taking this business's customers or its
+      margin over the next ten years, and will that still be true in ten years?
+    response:
+      prose: required
+      marks: [pass, fail]
+      unmarked: unassessed
+    explanation:
+      plain: |
+        A moat is whatever makes it hard or unprofitable for someone else to do
+        what this company does — a brand people ask for by name, a network that
+        gets more useful as it grows, a cost position nobody can match, a
+        switching cost customers won't pay. The question is not whether the
+        company is winning now. It is whether the reason it is winning will
+        still hold.
+      misfires: |
+        Nothing about this is recoverable from filings. It is also the field
+        most vulnerable to being written after the decision rather than before
+        it: a moat can be argued for almost any company if the answer is already
+        known.
+      attribution: |
+        Buffett. He would say this, and not any ratio, is most of the job.
+
+  - id: management_integrity
+    kind: qualitative
+    label: Management integrity
+    question: |
+      Has management told shareholders the truth, including when the news was
+      bad, and does what they say in the letter match what shows up in the
+      filings?
+    response:
+      prose: required
+      marks: [pass, fail]
+      unmarked: unassessed
+    explanation:
+      plain: |
+        Whether the people running the company can be taken at their word. The
+        evidence is in the record: promises made and then kept or quietly
+        dropped, bad quarters explained or buried, accounting that gets more
+        aggressive when results get worse.
+      misfires: |
+        Not tagged anywhere and not computable. Partial evidence is recoverable
+        from DEF 14A compensation structures and from Form 4 insider behaviour,
+        but neither is a substitute for reading what management wrote and
+        comparing it with what happened.
+      attribution: |
+        Buffett. One of the qualities the data constraint of this tool cannot
+        reach.
+
+  - id: capital_allocation
+    kind: qualitative
+    label: Capital allocation
+    question: |
+      When this company has spare cash, where has it gone — and did those
+      decisions turn out to be worth more than paying it out would have been?
+    response:
+      prose: required
+      marks: [pass, fail]
+      unmarked: unassessed
+    explanation:
+      plain: |
+        Every year a company decides what to do with the money it earns:
+        reinvest it, buy something, pay down debt, buy back stock, or hand it
+        over. Done well this compounds; done badly it is the main way good
+        businesses become ordinary ones. The distinction to look for is whether
+        the chief executive behaves like an allocator of capital or like an
+        empire builder.
+      misfires: |
+        Not computable. The quantitative traces — goodwill on the balance sheet,
+        share count, payout — say what was done, never whether it was worth
+        doing.
+      attribution: |
+        Buffett. Named in the report as one of the things the data constraint
+        costs, alongside moat durability and management integrity.
