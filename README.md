@@ -106,6 +106,30 @@ must total 100%, and makes you enter the bear case first. Owner earnings
 capitalises normalised cash flow at your discount rate, then takes a required
 discount off the result.
 
+### Fetched data never outranks you
+
+**Fetch data** on a security pulls the company's full filing history from SEC
+EDGAR (raw reported figures, per filing, stored exactly as tagged) and its
+daily price history from Tiingo (as-traded closes plus split/dividend events —
+never a pre-adjusted series, because sources rewrite adjusted history
+retroactively). Every metric the bank can compute from that is computed on the
+fly; nothing derived is ever saved, and a hand-entered value always wins over
+a computed one, visibly — the computed value stays on screen beside it.
+
+An entry that cannot be computed is absent with the reason, in place: source
+doesn't carry it, the mapping is ambiguous, a restatement makes the window
+mix accounting bases, or the data simply hasn't been fetched. Absence is never
+zero. Multi-year windows refuse to mix accounting bases by construction — a
+five-year CAGR spliced across a restatement is arithmetic on two different
+definitions, so it reports why it can't compute instead.
+
+Fetching happens only when you press the button. The SEC requires every
+automated tool to identify itself (name + monitored email — set it on the
+Data tab); prices need your own free Tiingo key. Each 10-K's price × shares is
+cross-checked against the company's own reported public float, which catches
+adjusted-price, split-basis, currency and share-class errors in one
+comparison; the result is on each security's Data coverage section.
+
 ### Profile changes are versioned, even hand-edits
 
 Profiles are edited by hand, so changes happen outside the app. On every load
@@ -121,6 +145,8 @@ rewrite the rules to justify holding a loser and never notice you did it.
 ```
 app.py                    pywebview window + the JS-facing API
 config/metric-bank.yaml   what every value IS — no thresholds live here
+config/concept-map.yaml   how bank inputs resolve onto XBRL concepts — the
+                          tag-selection judgement, as reviewable data
 engine/                   no UI imports live here
   profiles.py             loads the bank, resolves profiles against it
   evaluate.py             the verdict: buy tiers, sell watch, clock, flags
@@ -130,9 +156,20 @@ engine/                   no UI imports live here
   portfolio.py            snapshots, override log, scorecards
   store.py                JSON persistence, atomic writes
   backup.py               export / import
-  providers/base.py       data provider interface (not yet implemented)
+  gateway.py              the edgartools boundary — nothing else imports it
+  facts_store.py          raw filing facts, append-only, keyed by CIK
+  price_store.py          as-traded prices + adjustment events, never adjusted
+  tiingo.py               the price source client
+  tickermap.py            SEC ticker→CIK snapshots, diffed for renames/reuse
+  concept_map.py          resolves bank inputs from one filing's facts
+  periods.py              fiscal years, TTM, basis-consistent windows
+  compute.py              every computed bank entry, from raw facts on the fly
+  crosscheck.py           price × shares vs public float
+  fetch.py                the explicit-action fetch orchestrator
+  dataview.py             computed values joined under hand-entered ones
 ui/                       index.html, app.css, app.js
 data.template/            what gets copied on first run, incl. profiles/
+tests/fixtures/           hand-read ground truth + recorded extractions
 tools/make_sample.py      regenerates the sample set
 ```
 

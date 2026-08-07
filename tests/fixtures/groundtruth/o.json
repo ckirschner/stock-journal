@@ -1,0 +1,272 @@
+{
+  "ticker": "O",
+  "company": "Realty Income Corporation",
+  "cik": "0000726728",
+  "method": "Hand-read from primary HTML filing documents on EDGAR. No XBRL APIs, no R*.htm renderings, no FilingSummary.xml, no third-party sites.",
+  "filings": [
+    {
+      "form": "10-K",
+      "fiscal_year": "FY2024",
+      "period_end": "2024-12-31",
+      "filing_date": "2025-02-25",
+      "accession": "0000726728-25-000055",
+      "primary_document": "o-20241231.htm",
+      "url": "https://www.sec.gov/Archives/edgar/data/726728/000072672825000055/o-20241231.htm",
+      "stated_scale": {
+        "income_statement": "in thousands, except per share amounts",
+        "balance_sheet": "in thousands, except per share amounts",
+        "cash_flow": "in thousands"
+      }
+    },
+    {
+      "form": "10-K",
+      "fiscal_year": "FY2016",
+      "period_end": "2016-12-31",
+      "filing_date": "2017-02-23",
+      "accession": "0001104659-17-011170",
+      "primary_document": "a17-1163_110k.htm",
+      "url": "https://www.sec.gov/Archives/edgar/data/726728/000110465917011170/a17-1163_110k.htm",
+      "stated_scale": {
+        "income_statement": "dollars in thousands, except per share data",
+        "balance_sheet": "dollars in thousands, except per share data"
+      }
+    }
+  ],
+  "values": [
+    {
+      "fiscal_year": "FY2024",
+      "statement": "Consolidated Statements of Income and Comprehensive Income",
+      "caption": "Rental (including reimbursable)",
+      "concept": "revenue_line",
+      "as_printed": "$ 5,043,748",
+      "scale": "thousands",
+      "value_usd": 5043748000,
+      "accession": "0000726728-25-000055"
+    },
+    {
+      "fiscal_year": "FY2024",
+      "statement": "Consolidated Statements of Income and Comprehensive Income",
+      "caption": "Other",
+      "concept": "revenue_line",
+      "as_printed": "227,394",
+      "scale": "thousands",
+      "value_usd": 227394000,
+      "accession": "0000726728-25-000055"
+    },
+    {
+      "fiscal_year": "FY2024",
+      "statement": "Consolidated Statements of Income and Comprehensive Income",
+      "caption": "Total revenue",
+      "concept": "total_revenue",
+      "as_printed": "5,271,142",
+      "scale": "thousands",
+      "value_usd": 5271142000,
+      "accession": "0000726728-25-000055"
+    },
+    {
+      "fiscal_year": "FY2024",
+      "statement": "Consolidated Statements of Income and Comprehensive Income",
+      "caption": "Operating income",
+      "concept": "operating_income",
+      "as_printed": null,
+      "scale": null,
+      "value_usd": null,
+      "missing": true,
+      "note": "No operating income subtotal is printed anywhere on the income statement. Statement runs: Total revenue -> Total expenses -> gains/other items -> Income before income taxes -> Net income.",
+      "accession": "0000726728-25-000055"
+    },
+    {
+      "fiscal_year": "FY2024",
+      "statement": "Consolidated Statements of Income and Comprehensive Income",
+      "caption": "Net income",
+      "concept": "net_income",
+      "as_printed": "867,341",
+      "scale": "thousands",
+      "value_usd": 867341000,
+      "note": "Recorded in lieu of operating income, which is not printed. Net income attributable to the Company: 860,772; Net income available to common stockholders: $ 847,893.",
+      "accession": "0000726728-25-000055"
+    },
+    {
+      "fiscal_year": "FY2024",
+      "statement": "Consolidated Statements of Cash Flows",
+      "caption": "Net cash provided by operating activities",
+      "concept": "operating_cash_flow",
+      "as_printed": "3,573,276",
+      "scale": "thousands",
+      "value_usd": 3573276000,
+      "accession": "0000726728-25-000055"
+    },
+    {
+      "fiscal_year": "FY2024",
+      "statement": "Consolidated Statements of Cash Flows",
+      "caption": "Payments to acquire property, plant and equipment / Capital expenditures",
+      "concept": "capex_ppe_line",
+      "as_printed": null,
+      "scale": null,
+      "value_usd": null,
+      "missing": true,
+      "note": "No PP&E-capex-style caption exists. The real-estate investing captions are 'Investment in real estate' and 'Improvements to real estate, including leasing costs' (see next two entries).",
+      "accession": "0000726728-25-000055"
+    },
+    {
+      "fiscal_year": "FY2024",
+      "statement": "Consolidated Statements of Cash Flows",
+      "caption": "Investment in real estate",
+      "concept": "investing_real_estate_acquisition",
+      "as_printed": "(3,262,437)",
+      "scale": "thousands",
+      "value_usd": -3262437000,
+      "accession": "0000726728-25-000055"
+    },
+    {
+      "fiscal_year": "FY2024",
+      "statement": "Consolidated Statements of Cash Flows",
+      "caption": "Improvements to real estate, including leasing costs",
+      "concept": "investing_real_estate_improvements",
+      "as_printed": "(121,411)",
+      "scale": "thousands",
+      "value_usd": -121411000,
+      "accession": "0000726728-25-000055"
+    },
+    {
+      "fiscal_year": "FY2024",
+      "statement": "Consolidated Balance Sheets",
+      "date": "2024-12-31",
+      "caption": "Line of credit payable and commercial paper",
+      "concept": "borrowing_line",
+      "as_printed": "1,130,201",
+      "scale": "thousands",
+      "value_usd": 1130201000,
+      "accession": "0000726728-25-000055"
+    },
+    {
+      "fiscal_year": "FY2024",
+      "statement": "Consolidated Balance Sheets",
+      "date": "2024-12-31",
+      "caption": "Term loans, net",
+      "concept": "borrowing_line",
+      "as_printed": "2,358,417",
+      "scale": "thousands",
+      "value_usd": 2358417000,
+      "accession": "0000726728-25-000055"
+    },
+    {
+      "fiscal_year": "FY2024",
+      "statement": "Consolidated Balance Sheets",
+      "date": "2024-12-31",
+      "caption": "Mortgages payable, net",
+      "concept": "borrowing_line",
+      "as_printed": "80,784",
+      "scale": "thousands",
+      "value_usd": 80784000,
+      "accession": "0000726728-25-000055"
+    },
+    {
+      "fiscal_year": "FY2024",
+      "statement": "Consolidated Balance Sheets",
+      "date": "2024-12-31",
+      "caption": "Notes payable, net",
+      "concept": "borrowing_line",
+      "as_printed": "22,657,592",
+      "scale": "thousands",
+      "value_usd": 22657592000,
+      "accession": "0000726728-25-000055"
+    },
+    {
+      "fiscal_year": "FY2024",
+      "statement": "MD&A (non-statement corroboration)",
+      "date": "2024-12-31",
+      "caption": "Total debt per the consolidated balance sheets, excluding deferred financing costs and net premiums and discounts",
+      "concept": "total_debt_company_stated",
+      "as_printed": "$ 26,510,798",
+      "scale": "thousands",
+      "value_usd": 26510798000,
+      "note": "Company-stated aggregate from MD&A, not a balance-sheet line. Note it excludes deferred financing costs and net premiums/discounts, so it does not equal the sum of the four net balance-sheet lines (sum of net lines = 26,226,994 thousand).",
+      "accession": "0000726728-25-000055"
+    },
+    {
+      "fiscal_year": "FY2016",
+      "statement": "Consolidated Statements of Income",
+      "caption": "Rental",
+      "concept": "revenue_line",
+      "as_printed": "$ 1,057,413",
+      "scale": "thousands",
+      "value_usd": 1057413000,
+      "accession": "0001104659-17-011170"
+    },
+    {
+      "fiscal_year": "FY2016",
+      "statement": "Consolidated Statements of Income",
+      "caption": "Tenant reimbursements",
+      "concept": "revenue_line",
+      "as_printed": "43,104",
+      "scale": "thousands",
+      "value_usd": 43104000,
+      "accession": "0001104659-17-011170"
+    },
+    {
+      "fiscal_year": "FY2016",
+      "statement": "Consolidated Statements of Income",
+      "caption": "Other",
+      "concept": "revenue_line",
+      "as_printed": "2,655",
+      "scale": "thousands",
+      "value_usd": 2655000,
+      "accession": "0001104659-17-011170"
+    },
+    {
+      "fiscal_year": "FY2016",
+      "statement": "Consolidated Statements of Income",
+      "caption": "Total revenue",
+      "concept": "total_revenue",
+      "as_printed": "1,103,172",
+      "scale": "thousands",
+      "value_usd": 1103172000,
+      "accession": "0001104659-17-011170"
+    },
+    {
+      "fiscal_year": "FY2016",
+      "statement": "Consolidated Balance Sheets",
+      "date": "2016-12-31",
+      "caption": "Line of credit payable",
+      "concept": "borrowing_line",
+      "as_printed": "1,120,000",
+      "scale": "thousands",
+      "value_usd": 1120000000,
+      "accession": "0001104659-17-011170"
+    },
+    {
+      "fiscal_year": "FY2016",
+      "statement": "Consolidated Balance Sheets",
+      "date": "2016-12-31",
+      "caption": "Term loans, net",
+      "concept": "borrowing_line",
+      "as_printed": "319,127",
+      "scale": "thousands",
+      "value_usd": 319127000,
+      "accession": "0001104659-17-011170"
+    },
+    {
+      "fiscal_year": "FY2016",
+      "statement": "Consolidated Balance Sheets",
+      "date": "2016-12-31",
+      "caption": "Mortgages payable, net",
+      "concept": "borrowing_line",
+      "as_printed": "466,045",
+      "scale": "thousands",
+      "value_usd": 466045000,
+      "accession": "0001104659-17-011170"
+    },
+    {
+      "fiscal_year": "FY2016",
+      "statement": "Consolidated Balance Sheets",
+      "date": "2016-12-31",
+      "caption": "Notes payable, net",
+      "concept": "borrowing_line",
+      "as_printed": "3,934,433",
+      "scale": "thousands",
+      "value_usd": 3934433000,
+      "accession": "0001104659-17-011170"
+    }
+  ]
+}

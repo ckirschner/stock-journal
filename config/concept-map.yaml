@@ -1,0 +1,608 @@
+schema: ledger.concept-map/1
+
+# =============================================================================
+# THE CONCEPT MAP
+# =============================================================================
+#
+# This file is the tag-selection judgement the decision memo kept for us: how
+# each filing input named by the metric bank resolves onto XBRL concepts in a
+# filing's own fact set. It is data, not code, for the same reason the metric
+# bank is — the engine holds no opinions, and neither should a dependency.
+# edgartools' standardization layer was measured mapping term loans to
+# short-term debt and mortgages to a section total; every mapping below is
+# ours instead, and each questionable one says so.
+#
+# How resolution works (engine/concept_map.py):
+#
+# - Candidates are tried IN ORDER within one filing; the first concept with an
+#   undimensioned fact for the requested period wins. The winner is recorded
+#   in provenance, so every number can say which tag produced it.
+# - `family` marks accounting-basis families (pre-ASC-606 vs post). A
+#   multi-year window may not mix families: a series that switches family
+#   mid-window is refused (absent with the reason), because the two tags
+#   measure differently-defined things. `either` is compatible with both.
+# - `caution` text travels into provenance: the value is served, with the
+#   caveat attached, and the coverage report lists it.
+# - `resolve: aggregate` inputs sum balance-sheet FACE lines only. Face lines
+#   are disjoint by construction (they sum to the statement total), which is
+#   what makes summing safe. Facts from notes never enter an aggregate.
+# - `label_patterns` extend an aggregate to face lines whose concept we don't
+#   list — company extension tags above all (a REIT's revolver line is the
+#   measured example). A pattern match is an UNCERTAIN inclusion: it is
+#   summed, marked as label-matched in provenance, and surfaced in the
+#   coverage report rather than silently trusted.
+# - `absent_means_zero: true` is the statement-completeness rule: when the
+#   statement's face was located for that date or period and carries no such
+#   line, the statement itself is asserting the item is nil (face lines sum
+#   to their totals). This is the one narrow place absence may read as zero;
+#   it is per input, deliberate, and never applies when the face could not be
+#   located. It exists for balance-sheet lines a company simply doesn't have
+#   (debt for the debt-free, goodwill for the never-acquisitive) and for
+#   shareholder-return cash flows (a non-payer prints no dividends line —
+#   zero paid is what the statement says, and the dividend-streak count needs
+#   that zero to be a zero, not an unknown). Income-statement inputs and
+#   capex NEVER get it: a REIT with no PP&E-capex caption still spends —
+#   under captions this map refuses to guess at — so zero would be a
+#   plausible wrong number, which is the failure mode this whole file exists
+#   to prevent.
+#
+# =============================================================================
+
+inputs:
+
+  # --------------------------------------------------------------- durations
+
+  revenue:
+    label: Revenue
+    period: duration
+    families_apply: true
+    candidates:
+      - concept: us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+        family: asc606
+      - concept: us-gaap:RevenueFromContractWithCustomerIncludingAssessedTax
+        family: asc606
+        caution: >
+          Gross of sales/excise taxes collected from customers. A filer using
+          this element is usually signalling the difference is material.
+      - concept: us-gaap:Revenues
+        family: either
+      - concept: us-gaap:SalesRevenueNet
+        family: pre606
+      - concept: us-gaap:SalesRevenueGoodsNet
+        family: pre606
+        caution: Goods only; a filer with a services line is understated here.
+      - concept: us-gaap:RealEstateRevenueNet
+        family: either
+        caution: >
+          REIT rental revenue. Used only when no total revenue element exists;
+          non-rental income is not in it.
+    notes: >
+      Financial-sector filers often tag no single revenue total at all
+      (interest and non-interest income are separate statements of fact); for
+      them revenue is genuinely absent and everything downstream of it goes
+      absent too.
+
+  cost_of_revenue:
+    label: Cost of revenue
+    period: duration
+    candidates:
+      - concept: us-gaap:CostOfRevenue
+      - concept: us-gaap:CostOfGoodsAndServicesSold
+      # The two-line pair MUST outrank either single: a filer with separate
+      # product and services cost lines served goods-only cost during review,
+      # silently overstating gross margin by the whole services cost.
+      - sum:
+          - us-gaap:CostOfGoodsSold
+          - us-gaap:CostOfServices
+        min_present: 2
+        caution: Product and services cost lines summed from the income
+          statement face.
+      - concept: us-gaap:CostOfGoodsSold
+        caution: Goods cost only — right for goods-only filers; a filer that
+          also books services cost under another element is understated.
+      - concept: us-gaap:CostOfServices
+        caution: Services cost only — valid alone only for pure-services filers.
+      - sum:
+          - us-gaap:CostOfGoodsAndServicesSoldExcludingDepreciationDepletionAndAmortization
+          - us-gaap:CostOfGoodsSoldDepreciationDepletionAndAmortization
+        caution: Filer splits D&A out of cost of sales; both face lines summed.
+
+  gross_profit:
+    label: Gross profit
+    period: duration
+    candidates:
+      - concept: us-gaap:GrossProfit
+    notes: >
+      Preferred over revenue − cost of revenue when the filer tags the
+      subtotal itself; compute falls back to the subtraction otherwise. Many
+      filers legitimately print no gross margin line — absence here is not
+      absence of gross margin if cost of revenue exists.
+
+  operating_income:
+    label: Operating income (loss)
+    period: duration
+    candidates:
+      - concept: us-gaap:OperatingIncomeLoss
+    notes: >
+      Exactly the element the bank names, nothing else. Banks, insurers and
+      REITs that present no operating subtotal are genuinely absent — the
+      measured Realty Income case — and no adjacent subtotal is an honest
+      substitute (pretax income sits below interest; revenue minus total
+      expenses is not a GAAP operating figure when interest lives inside
+      expenses).
+
+  ebit:
+    label: EBIT (approximated as operating income)
+    period: duration
+    derive: operating_income
+    caution: >
+      The bank's EBIT is served as OperatingIncomeLoss. That is the common
+      approximation, not an identity: strictly EBIT adds back non-operating
+      income/expense. Where the two differ materially (large other-income
+      lines), this understates or overstates EBIT — recorded here as a
+      standing mapping judgement rather than hidden in code.
+
+  dda:
+    label: Depreciation, depletion and amortization
+    period: duration
+    candidates:
+      - concept: us-gaap:DepreciationDepletionAndAmortization
+      - concept: us-gaap:DepreciationAmortizationAndAccretionNet
+      - concept: us-gaap:DepreciationAndAmortization
+      - sum:
+          - us-gaap:Depreciation
+          - us-gaap:AmortizationOfIntangibleAssets
+        caution: Depreciation and intangible amortization summed from the cash
+          flow statement face; excludes other amortization lines a filer may
+          split out.
+
+  ebitda:
+    label: EBITDA (EBIT + D&A)
+    period: duration
+    derive_sum: [ebit, dda]
+    caution: >
+      Derived, not tagged — no EBITDA element exists in US GAAP. Inherits the
+      EBIT approximation above.
+
+  pretax_income:
+    label: Pre-tax income
+    period: duration
+    candidates:
+      - concept: us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest
+      - concept: us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments
+        caution: Excludes equity-method earnings; slightly narrower pre-tax base.
+
+  income_tax_expense:
+    label: Income tax expense
+    period: duration
+    candidates:
+      - concept: us-gaap:IncomeTaxExpenseBenefit
+
+  net_income:
+    label: Net income (loss)
+    period: duration
+    candidates:
+      - concept: us-gaap:NetIncomeLoss
+      - concept: us-gaap:ProfitLoss
+        caution: >
+          Includes the portion attributable to noncontrolling interests;
+          slightly overstates income attributable to shareholders where NCI
+          is material.
+
+  interest_expense:
+    label: Interest expense
+    period: duration
+    candidates:
+      - concept: us-gaap:InterestExpense
+      - concept: us-gaap:InterestExpenseDebt
+        caution: Debt interest only; excludes other interest items.
+      - concept: us-gaap:InterestAndDebtExpense
+        caution: Includes debt extinguishment items for some filers.
+      - concept: us-gaap:InterestExpenseNonoperating
+        caution: >
+          Nonoperating interest only. Filers who also capitalise interest or
+          book interest in cost of sales are understated by any of these; the
+          bank's own misfire note covers this.
+    notes: >
+      Interest expense tagging is genuinely inconsistent. This chain is a
+      known-uncertain mapping: coverage reports which element served each
+      company so a wrong pick is visible rather than silent.
+
+  cfo:
+    label: Net cash provided by operating activities
+    period: duration
+    candidates:
+      - concept: us-gaap:NetCashProvidedByUsedInOperatingActivities
+      - concept: us-gaap:NetCashProvidedByUsedInOperatingActivitiesContinuingOperations
+        caution: >
+          Continuing operations only. Identical to the total when there are no
+          discontinued operations — which is exactly when filers tag only this
+          — but a filer WITH discontinued operations who tags only this is
+          understated against the statement's own bottom line.
+
+  capex:
+    label: Payments to acquire property, plant and equipment
+    period: duration
+    sign: outflow_positive
+    candidates:
+      - concept: us-gaap:PaymentsToAcquirePropertyPlantAndEquipment
+      - concept: us-gaap:PaymentsToAcquireProductiveAssets
+      - concept: us-gaap:PaymentsToAcquirePropertyPlantAndEquipmentIntangibleAssets
+        caution: Includes intangible purchases; slightly overstates PP&E capex.
+    refused:
+      - concept: us-gaap:PaymentsForCapitalImprovements
+        because: >
+          Measured failure: for Realty Income this element is real-estate
+          improvement spending, not what the bank's FCF definition means by
+          capex — a plausible wrong answer. A REIT with no PP&E capex line
+          reports absent, which is correct.
+
+  dividends_paid:
+    label: Payments of dividends
+    period: duration
+    sign: outflow_positive
+    absent_means_zero: true
+    candidates:
+      - concept: us-gaap:PaymentsOfDividends
+      - sum:
+          - us-gaap:PaymentsOfDividendsCommonStock
+          - us-gaap:PaymentsOfDividendsPreferredStockAndPreferenceStock
+        min_present: 1
+        caution: Common and preferred dividend lines summed from the cash flow
+          face; a filer tagging only one line contributes that line.
+    notes: >
+      Distributions to noncontrolling interests are deliberately not included
+      — they are not payments to this company's shareholders.
+
+  buybacks:
+    label: Payments for repurchase of common stock
+    period: duration
+    sign: outflow_positive
+    absent_means_zero: true
+    candidates:
+      - concept: us-gaap:PaymentsForRepurchaseOfCommonStock
+
+  stock_issuance:
+    label: Proceeds from issuance of common stock
+    period: duration
+    absent_means_zero: true
+    candidates:
+      - concept: us-gaap:ProceedsFromIssuanceOfCommonStock
+      - concept: us-gaap:ProceedsFromIssuanceOrSaleOfEquity
+    notes: >
+      Option-exercise and employee-plan proceeds elements are not summed in;
+      where a filer routes issuance through those, net payout is overstated.
+      Recorded as a known mapping gap in the coverage report.
+
+  diluted_eps:
+    label: Diluted earnings per share
+    period: duration
+    unit: usd_per_share
+    candidates:
+      - concept: us-gaap:EarningsPerShareDiluted
+      - concept: us-gaap:EarningsPerShareBasicAndDiluted
+        caution: Filer reports a combined basic-and-diluted figure.
+
+  diluted_wavg_shares:
+    label: Weighted average diluted shares outstanding
+    period: duration
+    unit: shares
+    candidates:
+      - concept: us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding
+      - concept: us-gaap:WeightedAverageNumberOfShareOutstandingBasicAndDiluted
+        caution: Combined basic-and-diluted share count.
+
+  # ---------------------------------------------------------------- instants
+
+  cash_and_equivalents:
+    label: Cash and cash equivalents
+    period: instant
+    candidates:
+      - concept: us-gaap:CashAndCashEquivalentsAtCarryingValue
+      - concept: us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents
+        caution: >
+          Includes restricted cash — a different, larger number by design
+          (post-ASU 2016-18 cash-flow reconciliation basis). Served only when
+          the plain element is not tagged.
+
+  short_term_investments:
+    label: Short-term investments
+    period: instant
+    absent_means_zero: true
+    candidates:
+      - concept: us-gaap:ShortTermInvestments
+      - concept: us-gaap:MarketableSecuritiesCurrent
+      - concept: us-gaap:AvailableForSaleSecuritiesDebtSecuritiesCurrent
+        caution: Debt securities only; equity holdings under a different
+          element are not counted.
+
+  current_assets:
+    label: Total current assets
+    period: instant
+    candidates:
+      - concept: us-gaap:AssetsCurrent
+    notes: >
+      Absent for filers presenting an unclassified balance sheet (most REITs,
+      banks). That absence is real — the statement genuinely draws no
+      current/noncurrent line — and everything needing it goes absent.
+
+  current_liabilities:
+    label: Total current liabilities
+    period: instant
+    candidates:
+      - concept: us-gaap:LiabilitiesCurrent
+
+  total_assets:
+    label: Total assets
+    period: instant
+    candidates:
+      - concept: us-gaap:Assets
+
+  total_liabilities:
+    label: Total liabilities
+    period: instant
+    candidates:
+      - concept: us-gaap:Liabilities
+      - subtract:
+          from: us-gaap:LiabilitiesAndStockholdersEquity
+          take: us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest
+        caution: >
+          Derived as (liabilities + equity) − total equity incl. NCI, for
+          filers who tag no Liabilities total. Arithmetic on two tagged facts,
+          both shown in provenance.
+      - subtract:
+          from: us-gaap:LiabilitiesAndStockholdersEquity
+          take: us-gaap:StockholdersEquity
+        caution: >
+          Same derivation with parent-only equity; overstates liabilities by
+          any noncontrolling interest.
+
+  retained_earnings:
+    label: Retained earnings (accumulated deficit)
+    period: instant
+    candidates:
+      - concept: us-gaap:RetainedEarningsAccumulatedDeficit
+
+  total_equity:
+    label: Total shareholders' equity
+    period: instant
+    candidates:
+      - concept: us-gaap:StockholdersEquity
+      - concept: us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest
+        caution: >
+          Includes noncontrolling interests; used only when parent-only equity
+          is not tagged.
+
+  goodwill:
+    label: Goodwill
+    period: instant
+    absent_means_zero: true
+    candidates:
+      - concept: us-gaap:Goodwill
+
+  intangibles_ex_goodwill:
+    label: Intangible assets excluding goodwill
+    period: instant
+    absent_means_zero: true
+    candidates:
+      - concept: us-gaap:IntangibleAssetsNetExcludingGoodwill
+      - sum:
+          - us-gaap:FiniteLivedIntangibleAssetsNet
+          - us-gaap:IndefiniteLivedIntangibleAssetsExcludingGoodwill
+        min_present: 1
+        caution: Finite- and indefinite-lived intangible lines summed; a filer
+          tagging only one contributes that one.
+
+  inventory_net:
+    label: Inventory, net
+    period: instant
+    candidates:
+      - concept: us-gaap:InventoryNet
+      - concept: us-gaap:InventoryFinishedGoodsNetOfReserves
+        caution: Finished goods only.
+    notes: >
+      No absent-means-zero here even though it is a balance-sheet line: the
+      bank's inventory entry is explicitly not meaningful for companies that
+      carry none, and absence is what signals that.
+
+  accounts_receivable_net:
+    label: Accounts receivable, net
+    period: instant
+    candidates:
+      - concept: us-gaap:AccountsReceivableNetCurrent
+      - concept: us-gaap:ReceivablesNetCurrent
+        caution: Broader — includes notes and other receivables.
+      - concept: us-gaap:AccountsNotesAndLoansReceivableNetCurrent
+        caution: Broader — includes notes and loans receivable.
+
+  finance_lease_obligations:
+    label: Finance lease obligations
+    period: instant
+    any_placement: true
+    absent_means_zero: true
+    candidates:
+      - concept: us-gaap:FinanceLeaseLiability
+      - sum:
+          - us-gaap:FinanceLeaseLiabilityCurrent
+          - us-gaap:FinanceLeaseLiabilityNoncurrent
+        min_present: 1
+      - concept: us-gaap:CapitalLeaseObligations
+      - sum:
+          - us-gaap:CapitalLeaseObligationsCurrent
+          - us-gaap:CapitalLeaseObligationsNoncurrent
+        min_present: 1
+    notes: >
+      Finance-lease liabilities commonly live only in the notes (folded into
+      other-liabilities lines on the face), so this input may resolve from any
+      placement — it is a distinct liability concept, counted once, and the
+      debt aggregates below exclude lease-combined elements so it can never be
+      double-counted. absent_means_zero here rests on disclosure rules rather
+      than face completeness: a filer with finance leases must tag the
+      liability somewhere.
+
+  # ------------------------------------------------------- debt (aggregates)
+
+  short_term_debt:
+    label: Short-term debt (incl. current portion of long-term debt)
+    period: instant
+    resolve: aggregate
+    absent_means_zero: true
+    zero_guard: total_debt
+    total_candidates:
+      - us-gaap:DebtCurrent
+    components:
+      - us-gaap:ShortTermBorrowings
+      - us-gaap:ShortTermDebt
+      - us-gaap:CommercialPaper
+      - us-gaap:LongTermDebtCurrent
+      - us-gaap:LongtermDebtCurrentMaturities
+      - us-gaap:NotesPayableCurrent
+      - us-gaap:LinesOfCreditCurrent
+      - us-gaap:SecuredDebtCurrent
+      - us-gaap:ConvertibleDebtCurrent
+      - us-gaap:ConvertibleNotesPayableCurrent
+      - us-gaap:SeniorNotesCurrent
+      - us-gaap:OtherShortTermBorrowings
+      - us-gaap:BankOverdrafts
+      - us-gaap:LongTermDebtAndCapitalLeaseObligationsCurrent
+        # marked below as lease-combined
+    lease_combined:
+      - us-gaap:LongTermDebtAndCapitalLeaseObligationsCurrent
+    notes: >
+      Summed from balance-sheet FACE lines only — face lines are disjoint, so
+      the ShortTermBorrowings-contains-CommercialPaper overlap cannot occur
+      (a filer prints one or the other on the face). When a total-style
+      element (DebtCurrent) is on the face it wins outright.
+
+  long_term_debt:
+    label: Long-term debt (noncurrent)
+    period: instant
+    resolve: aggregate
+    absent_means_zero: true
+    total_candidates:
+      - us-gaap:LongTermDebtNoncurrent
+    components:
+      - us-gaap:SeniorNotesNoncurrent
+      - us-gaap:NotesPayableNoncurrent
+      - us-gaap:ConvertibleDebtNoncurrent
+      - us-gaap:ConvertibleNotesPayableNoncurrent
+      - us-gaap:SecuredDebtNoncurrent
+      - us-gaap:UnsecuredDebtNoncurrent
+      - us-gaap:SubordinatedDebtNoncurrent
+      - us-gaap:LineOfCreditFacilityAmountOutstanding
+      - us-gaap:OtherLongTermDebtNoncurrent
+      - us-gaap:LongTermDebtAndCapitalLeaseObligationsNoncurrent
+      - us-gaap:JuniorSubordinatedDebentureOwedToUnconsolidatedSubsidiaryTrustNoncurrent
+    lease_combined:
+      - us-gaap:LongTermDebtAndCapitalLeaseObligationsNoncurrent
+    zero_guard: total_debt
+    fallback_total:
+      - concept: us-gaap:LongTermDebt
+        caution: >
+          LongTermDebt often INCLUDES the current portion, so where this
+          serves, long-term debt may be overstated by the current maturities
+          — conservative for the one entry that uses the split alone
+          (Graham's long-term debt to working capital).
+    notes: >
+      On unclassified balance sheets (REITs, banks) there is no noncurrent
+      classification at all; the unclassified debt lines are picked up by
+      total_debt below, and this split input stays absent — which is honest,
+      and the only bank entry that needs the split alone (Graham's long-term
+      debt to working capital) needs a classified sheet anyway. zero_guard
+      means this input may never claim a completeness zero while debt-like
+      lines it cannot classify sit on the same face.
+
+  total_debt:
+    label: Total debt (all interest-bearing borrowings)
+    period: instant
+    resolve: aggregate
+    absent_means_zero: true
+    total_candidates:
+      - us-gaap:DebtLongtermAndShorttermCombinedAmount
+    components:
+      # classified-current
+      - us-gaap:ShortTermBorrowings
+      - us-gaap:ShortTermDebt
+      - us-gaap:CommercialPaper
+      - us-gaap:LongTermDebtCurrent
+      - us-gaap:LongtermDebtCurrentMaturities
+      - us-gaap:NotesPayableCurrent
+      - us-gaap:LinesOfCreditCurrent
+      - us-gaap:SecuredDebtCurrent
+      - us-gaap:ConvertibleDebtCurrent
+      - us-gaap:ConvertibleNotesPayableCurrent
+      - us-gaap:SeniorNotesCurrent
+      - us-gaap:OtherShortTermBorrowings
+      - us-gaap:BankOverdrafts
+      - us-gaap:DebtCurrent
+      # classified-noncurrent
+      - us-gaap:LongTermDebtNoncurrent
+      - us-gaap:SeniorNotesNoncurrent
+      - us-gaap:NotesPayableNoncurrent
+      - us-gaap:ConvertibleDebtNoncurrent
+      - us-gaap:ConvertibleNotesPayableNoncurrent
+      - us-gaap:SecuredDebtNoncurrent
+      - us-gaap:UnsecuredDebtNoncurrent
+      - us-gaap:SubordinatedDebtNoncurrent
+      - us-gaap:OtherLongTermDebtNoncurrent
+      # unclassified (REIT-style balance sheets)
+      - us-gaap:LongTermDebt
+      - us-gaap:NotesPayable
+      - us-gaap:LoansPayable
+      - us-gaap:SecuredDebt
+      - us-gaap:UnsecuredDebt
+      - us-gaap:ConvertibleDebt
+      - us-gaap:SeniorNotes
+      - us-gaap:SubordinatedDebt
+      - us-gaap:LineOfCredit
+      - us-gaap:LineOfCreditFacilityAmountOutstanding
+      # us-gaap:MortgageLoansOnRealEstate is deliberately NOT here: it is the
+      # taxonomy's ASSET element (mortgage loans the registrant holds as
+      # lender). Mortgages a REIT owes are SecuredDebt or extensions. Review
+      # caught it listed as a component; a lender's whole loan book would
+      # have been summed into its debt.
+      - us-gaap:OtherNotesPayable
+      - us-gaap:JuniorSubordinatedNotes
+      - us-gaap:DebtInstrumentCarryingAmount
+      - us-gaap:LongTermDebtAndCapitalLeaseObligations
+    lease_combined:
+      - us-gaap:LongTermDebtAndCapitalLeaseObligationsCurrent
+      - us-gaap:LongTermDebtAndCapitalLeaseObligationsNoncurrent
+      - us-gaap:LongTermDebtAndCapitalLeaseObligations
+    label_patterns:
+      # Bare "loan" is deliberately absent: it matched "securities loaned"
+      # inside a short-term investments caption and pulled $125B of assets
+      # into MSFT's FY2017 debt during validation. Every include term names a
+      # borrowing unambiguously.
+      include: >-
+        debt|borrowing|term loans?|loans? payable|mortgage|commercial
+        paper|line of credit|credit facilit|notes? payable|bonds?
+        payable|debenture|senior notes?|convertible notes?
+      exclude: >-
+        receivable|asset|income|expense|interest rate|operating lease|deferred
+        financ|issuance cost|securit|lending payable|investment
+    notes: >
+      Face-only summation (disjoint by construction). Because a filer either
+      prints DebtCurrent-style totals OR their components on the face — never
+      both — listing totals and components together in one component list is
+      safe under face-disjointness, and it is what lets classified and
+      unclassified sheets share one aggregate. label_patterns is what reaches
+      extension-tagged lines like a REIT revolver ("Line of credit payable
+      and commercial paper"): included in the sum, marked uncertain in
+      provenance, listed in the coverage report. The measured case this
+      exists for: Realty Income's four printed debt lines, one of them an
+      extension tag invisible to companyfacts.
+
+  # -------------------------------------------------------------- cover page
+
+  shares_outstanding:
+    label: Common shares outstanding (cover page)
+    period: instant
+    resolve: cover_shares
+    notes: >
+      dei:EntityCommonStockSharesOutstanding from the filing cover, dated as
+      of the cover date, not the balance-sheet date. Multi-class filers tag it
+      once per class along the class-of-stock axis — the classes are kept
+      separate, because each class has its own price. Falls back to the
+      balance-sheet us-gaap:CommonStockSharesOutstanding when the dei fact is
+      missing.

@@ -1,0 +1,188 @@
+{
+  "ticker": "MSFT",
+  "filings": [
+    {
+      "accession": "0000950170-24-087843",
+      "form": "10-K",
+      "period_end": "2024-06-30",
+      "doc_url": "https://www.sec.gov/Archives/edgar/data/789019/000095017024087843/msft-20240630.htm"
+    },
+    {
+      "accession": "0001564590-17-014900",
+      "form": "10-K",
+      "period_end": "2017-06-30",
+      "doc_url": "https://www.sec.gov/Archives/edgar/data/789019/000156459017014900/msft-10k_20170630.htm"
+    }
+  ],
+  "values": [
+    {
+      "metric": "revenue",
+      "fiscal_year": "FY2024",
+      "period_end": "2024-06-30",
+      "as_printed": "245,122",
+      "scale": "millions",
+      "value_usd": 245122000000,
+      "caption": "Total revenue",
+      "statement": "income",
+      "accession": "0000950170-24-087843"
+    },
+    {
+      "metric": "operating_income",
+      "fiscal_year": "FY2024",
+      "period_end": "2024-06-30",
+      "as_printed": "109,433",
+      "scale": "millions",
+      "value_usd": 109433000000,
+      "caption": "Operating income",
+      "statement": "income",
+      "accession": "0000950170-24-087843"
+    },
+    {
+      "metric": "net_cash_from_operations",
+      "fiscal_year": "FY2024",
+      "period_end": "2024-06-30",
+      "as_printed": "118,548",
+      "scale": "millions",
+      "value_usd": 118548000000,
+      "caption": "Net cash from operations",
+      "statement": "cash_flows",
+      "accession": "0000950170-24-087843"
+    },
+    {
+      "metric": "capex",
+      "fiscal_year": "FY2024",
+      "period_end": "2024-06-30",
+      "as_printed": "(44,477)",
+      "scale": "millions",
+      "value_usd": -44477000000,
+      "caption": "Additions to property and equipment",
+      "statement": "cash_flows",
+      "accession": "0000950170-24-087843",
+      "note": "Printed in parentheses (cash outflow) under Investing. Caption does not mention finance leases; assets acquired under finance leases are disclosed elsewhere and are not in this line."
+    },
+    {
+      "metric": "short_term_debt",
+      "fiscal_year": "FY2024",
+      "period_end": "2024-06-30",
+      "as_printed": "6,693",
+      "scale": "millions",
+      "value_usd": 6693000000,
+      "caption": "Short-term debt",
+      "statement": "balance_sheet",
+      "accession": "0000950170-24-087843"
+    },
+    {
+      "metric": "current_portion_of_long_term_debt",
+      "fiscal_year": "FY2024",
+      "period_end": "2024-06-30",
+      "as_printed": "2,249",
+      "scale": "millions",
+      "value_usd": 2249000000,
+      "caption": "Current portion of long-term debt",
+      "statement": "balance_sheet",
+      "accession": "0000950170-24-087843"
+    },
+    {
+      "metric": "long_term_debt",
+      "fiscal_year": "FY2024",
+      "period_end": "2024-06-30",
+      "as_printed": "42,688",
+      "scale": "millions",
+      "value_usd": 42688000000,
+      "caption": "Long-term debt",
+      "statement": "balance_sheet",
+      "accession": "0000950170-24-087843"
+    },
+    {
+      "metric": "shares_outstanding_cover",
+      "fiscal_year": "FY2024",
+      "period_end": "2024-06-30",
+      "as_printed": "7,433,038,381",
+      "scale": "units (whole shares)",
+      "value_usd": null,
+      "value_shares": 7433038381,
+      "as_of_date": "2024-07-25",
+      "caption": "As of July 25, 2024, there were 7,433,038,381 shares of common stock outstanding.",
+      "statement": "cover_page",
+      "accession": "0000950170-24-087843"
+    },
+    {
+      "metric": "revenue",
+      "fiscal_year": "FY2017",
+      "period_end": "2017-06-30",
+      "as_printed": "89,950",
+      "scale": "millions",
+      "value_usd": 89950000000,
+      "caption": "Total revenue",
+      "statement": "income",
+      "accession": "0001564590-17-014900"
+    },
+    {
+      "metric": "operating_income",
+      "fiscal_year": "FY2017",
+      "period_end": "2017-06-30",
+      "as_printed": "22,326",
+      "scale": "millions",
+      "value_usd": 22326000000,
+      "caption": "Operating income",
+      "statement": "income",
+      "accession": "0001564590-17-014900"
+    },
+    {
+      "metric": "net_cash_from_operations",
+      "fiscal_year": "FY2017",
+      "period_end": "2017-06-30",
+      "as_printed": "39,507",
+      "scale": "millions",
+      "value_usd": 39507000000,
+      "caption": "Net cash from operations",
+      "statement": "cash_flows",
+      "accession": "0001564590-17-014900"
+    },
+    {
+      "metric": "capex",
+      "fiscal_year": "FY2017",
+      "period_end": "2017-06-30",
+      "as_printed": "(8,129)",
+      "scale": "millions",
+      "value_usd": -8129000000,
+      "caption": "Additions to property and equipment",
+      "statement": "cash_flows",
+      "accession": "0001564590-17-014900",
+      "note": "Printed in parentheses (cash outflow) under Investing. Caption does not mention finance/capital leases."
+    },
+    {
+      "metric": "short_term_debt",
+      "fiscal_year": "FY2017",
+      "period_end": "2017-06-30",
+      "as_printed": "9,072",
+      "scale": "millions",
+      "value_usd": 9072000000,
+      "caption": "Short-term debt",
+      "statement": "balance_sheet",
+      "accession": "0001564590-17-014900"
+    },
+    {
+      "metric": "current_portion_of_long_term_debt",
+      "fiscal_year": "FY2017",
+      "period_end": "2017-06-30",
+      "as_printed": "1,049",
+      "scale": "millions",
+      "value_usd": 1049000000,
+      "caption": "Current portion of long-term debt",
+      "statement": "balance_sheet",
+      "accession": "0001564590-17-014900"
+    },
+    {
+      "metric": "long_term_debt",
+      "fiscal_year": "FY2017",
+      "period_end": "2017-06-30",
+      "as_printed": "76,073",
+      "scale": "millions",
+      "value_usd": 76073000000,
+      "caption": "Long-term debt",
+      "statement": "balance_sheet",
+      "accession": "0001564590-17-014900"
+    }
+  ]
+}

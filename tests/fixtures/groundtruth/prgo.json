@@ -1,0 +1,88 @@
+{
+  "ticker": "PRGO",
+  "company": "Perrigo Company plc",
+  "cik": "1585364",
+  "case_type": "fiscal-year-end-change",
+  "filings": [
+    {
+      "form": "10-KT",
+      "accession": "0001585364-16-000245",
+      "filing_date": "2016-02-25",
+      "report_date": "2015-12-31",
+      "primary_document": "cy15stubperiod10k.htm",
+      "url": "https://www.sec.gov/Archives/edgar/data/1585364/000158536416000245/cy15stubperiod10k.htm",
+      "period_covered_as_printed": "For the transition period from June 28, 2015 to December 31, 2015",
+      "note": "Transition report. Cover page uses the FORM 10-K template with the TRANSITION REPORT box checked; EDGAR form type is 10-KT. The filing refers to the stub period as 'the six months ended December 31, 2015'. Income statement columns: Six Months Ended December 31, 2015 | Fiscal Year Ended June 27, 2015 | June 28, 2014 | June 29, 2013 (no comparative six-month Dec 27, 2014 column in the audited statement)."
+    },
+    {
+      "form": "10-K",
+      "accession": "0001585364-24-000009",
+      "filing_date": "2024-02-27",
+      "report_date": "2023-12-31",
+      "primary_document": "prgo-20231231.htm",
+      "url": "https://www.sec.gov/Archives/edgar/data/1585364/000158536424000009/prgo-20231231.htm",
+      "period_covered_as_printed": "Year Ended December 31, 2023",
+      "note": "Normal calendar-year annual report after the fiscal-year-end change."
+    }
+  ],
+  "values": [
+    {
+      "metric": "net_sales",
+      "fiscal_year": "transition-2015",
+      "period_start": "2015-06-28",
+      "period_end": "2015-12-31",
+      "period_label_as_printed": "Six Months Ended December 31, 2015",
+      "caption_as_printed": "Net sales",
+      "value_as_printed": "$ 2,769.5",
+      "stated_scale": "millions",
+      "value_whole_dollars": 2769500000,
+      "statement": "Consolidated Statements of Operations",
+      "form": "10-KT",
+      "accession": "0001585364-16-000245"
+    },
+    {
+      "metric": "operating_income",
+      "fiscal_year": "transition-2015",
+      "period_start": "2015-06-28",
+      "period_end": "2015-12-31",
+      "period_label_as_printed": "Six Months Ended December 31, 2015",
+      "caption_as_printed": "Operating income",
+      "value_as_printed": "94.5",
+      "stated_scale": "millions",
+      "value_whole_dollars": 94500000,
+      "statement": "Consolidated Statements of Operations",
+      "form": "10-KT",
+      "accession": "0001585364-16-000245",
+      "note": "An explicit 'Operating income' subtotal IS printed on the statement (no dollar sign on this line in the statement body)."
+    },
+    {
+      "metric": "net_sales",
+      "fiscal_year": "FY2023",
+      "period_start": "2023-01-01",
+      "period_end": "2023-12-31",
+      "period_label_as_printed": "Year Ended December 31, 2023",
+      "caption_as_printed": "Net sales",
+      "value_as_printed": "$ 4,655.6",
+      "stated_scale": "millions",
+      "value_whole_dollars": 4655600000,
+      "statement": "Consolidated Statements of Operations",
+      "form": "10-K",
+      "accession": "0001585364-24-000009"
+    },
+    {
+      "metric": "operating_income",
+      "fiscal_year": "FY2023",
+      "period_start": "2023-01-01",
+      "period_end": "2023-12-31",
+      "period_label_as_printed": "Year Ended December 31, 2023",
+      "caption_as_printed": "Operating income",
+      "value_as_printed": "151.9",
+      "stated_scale": "millions",
+      "value_whole_dollars": 151900000,
+      "statement": "Consolidated Statements of Operations",
+      "form": "10-K",
+      "accession": "0001585364-24-000009",
+      "note": "Explicit 'Operating income' subtotal printed. FY2023 operating income relates to continuing operations; discontinued operations are presented separately below the tax line."
+    }
+  ]
+}

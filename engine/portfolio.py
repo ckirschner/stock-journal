@@ -74,15 +74,23 @@ def add_note(security: dict, text: str) -> dict:
 
 def open_position(security: dict, profile: dict, profile_version,
                   shares: float, cost: float, opened: str | None = None,
-                  override_reason: str = "") -> dict:
+                  override_reason: str = "", values: dict | None = None,
+                  value_sources: dict | None = None,
+                  price_seen: dict | None = None) -> dict:
     """Record a purchase under a profile and freeze what the lens showed.
 
     A failing or indeterminate verdict does not block anything. It gets
     recorded alongside the purchase, with the user's stated reason for going
     ahead — that includes buying on grey, where the profile's own rule is
     that the user decides and logs an override.
+
+    `values` are the values the lens actually evaluated — hand-entered merged
+    over computed. They are what the snapshot freezes, because the snapshot's
+    job is to record what was seen, and `value_sources` records where each
+    one came from so the frozen record can say so forever.
     """
-    result = evaluate_buy(security.get("metrics") or {}, profile)
+    values = values if values is not None else (security.get("metrics") or {})
+    result = evaluate_buy(values, profile)
 
     security["bucket"] = "holdings"
     security["position"] = {
@@ -94,8 +102,13 @@ def open_position(security: dict, profile: dict, profile_version,
         "frozen": _stamp(),
         "profile": {"file": profile.get("file"), "id": profile.get("id"),
                     "name": profile.get("name"), "version": profile_version},
-        "metrics": copy.deepcopy(security.get("metrics") or {}),
-        "price": security.get("price"),
+        "metrics": copy.deepcopy(values),
+        "value_sources": copy.deepcopy(value_sources or {}),
+        # The snapshot records what was SEEN — the effective price (manual
+        # over fetched), with its source and date, not just the manual field.
+        "price": (price_seen or {}).get("value", security.get("price")),
+        "price_source": (price_seen or {}).get("source"),
+        "price_date": (price_seen or {}).get("date"),
         "result": result,
     }
 
@@ -126,7 +139,8 @@ def open_position(security: dict, profile: dict, profile_version,
 def close_position(security: dict, profile: dict | None, profile_version,
                    governing: bool, reason: str, exit_price: float,
                    exited: str | None = None, today: date | None = None,
-                   missing_profile_ref: dict | None = None) -> dict:
+                   missing_profile_ref: dict | None = None,
+                   values: dict | None = None) -> dict:
     """Close a position, keeping the ticker in the journal for tracking.
 
     profile is the lens the exit is judged under — the position's own entry
@@ -142,7 +156,8 @@ def close_position(security: dict, profile: dict | None, profile_version,
     held_pct = ((exit_price / cost) - 1) * 100 if cost else None
 
     if profile is not None:
-        state = evaluate_position(security, profile, today)
+        eval_sec = security if values is None else {**security, "metrics": values}
+        state = evaluate_position(eval_sec, profile, today)
         signal = SIGNAL_WORDS[state["overall"]]
         rule_triggered = state["overall"] == "fired"
         profile_ref = {"file": profile.get("file"), "id": profile.get("id"),

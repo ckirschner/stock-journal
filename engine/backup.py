@@ -89,6 +89,15 @@ def import_bundle(src: str | Path, keep_backup: bool = True) -> dict:
         if name in store.FILES:
             store.save(name, payload)
 
+    # A bundle exported before secrets moved out of settings may still carry
+    # a plaintext key or contact — clean it on arrival rather than letting an
+    # import resurrect the problem. (Fresh exports cannot contain either:
+    # secrets and machine-local settings live outside store.FILES entirely.)
+    from . import secrets
+    settings = store.load("settings.json")
+    if secrets.migrate_from_settings(settings):
+        store.save("settings.json", settings)
+
     if data.get("bundle_version") == 1:
         rules = data["files"].get("rules.json")
         if rules:

@@ -3,6 +3,5 @@
   "terminal_growth": 2.5,
   "margin_of_safety": 30.0,
   "default_ev_method": "reverse_dcf",
-  "provider": "manual",
   "active_profile": null
 }

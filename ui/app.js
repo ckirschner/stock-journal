@@ -25,7 +25,9 @@ let C = {
   selected: null,             // profiles page selection
   bank: null, bankErr: null, loadingBank: false,
   search: "",
+  coverage: null, coverageFor: null, loadingCoverage: false,
 };
+let FETCH_POLLS = {};         // ticker -> true while a poll loop runs
 
 /* ------------------------------------------------------------------ words */
 /* Semantic verdicts arrive from Python; the words are a view concern. */
@@ -99,6 +101,30 @@ const fmtMetric = (id, v) => {
 };
 
 const money = (n) => (n === null || n === undefined) ? "—" : "$" + Number(n).toFixed(2);
+/* Effective price: hand-entered wins; otherwise the newest fetched close.
+   The source and date travel with it so a stale quote is visibly stale. */
+const px = (s) => (s._price && s._price.value != null) ? s._price.value : s.price;
+/* A close's age must be readable at a glance: a year-old close shown as
+   MM-DD reads as days old, which is the display lying about staleness. */
+function fmtCloseDate(d) {
+  if (!d) return "";
+  const s = String(d).slice(0, 10);
+  return s.startsWith(String(new Date().getFullYear()) + "-") ? s.slice(5) : s;
+}
+function priceCell(s) {
+  const p = s._price;
+  if (!p || p.value == null) return money(null);
+  if (p.source === "fetched")
+    return `${money(p.value)} <span class="dim" title="Fetched close, as of ${esc(p.date)}">·${esc(fmtCloseDate(p.date))}</span>`;
+  return money(p.value);
+}
+function dataFact(s) {
+  if (s._fetch && s._fetch.running) return "fetching…";
+  const d = s._data;
+  if (!d) return "never fetched";
+  const when = d.last_fetch ? String(d.last_fetch.at).slice(0, 10) : "never";
+  return `${d.filings_held} filings · fetched ${when}`;
+}
 function pctCell(v) {
   if (v === null || v === undefined) return '<span class="dim">—</span>';
   return `<span class="${v >= 0 ? "pos" : "neg"}">${v >= 0 ? "+" : ""}${Number(v).toFixed(1)}%</span>`;
@@ -155,14 +181,22 @@ const profLabel = (p) => p ? `${p.name} v${p.version ?? "?"}` : "—";
 /* ---------------------------------------------------------------- chrome */
 function renderMast() {
   const h = inBucket("holdings");
-  const mv = h.reduce((a, s) => a + (s.price || 0) * (s.position ? s.position.shares : 0), 0);
+  /* A holding without a price must never enter these sums as zero — that
+     would render a confident, wrong loss in the most prominent numbers in
+     the app. Absence propagates: any unpriced holding makes the totals
+     honestly unknown. */
+  const unpriced = h.filter((s) => px(s) == null).length;
+  const mv = h.reduce((a, s) => a + (px(s) || 0) * (s.position ? s.position.shares : 0), 0);
   const cb = h.reduce((a, s) => a + (s.position ? s.position.cost_basis * s.position.shares : 0), 0);
+  const mvTxt = unpriced ? "—" : "$" + mv.toLocaleString(undefined, { maximumFractionDigits: 0 });
+  const unrealTxt = (unpriced || !cb) ? "—" : (mv >= cb ? "+" : "") + ((mv / cb - 1) * 100).toFixed(1) + "%";
+  const unpricedNote = unpriced ? ` title="${unpriced} of ${h.length} position${h.length === 1 ? "" : "s"} ha${unpriced === 1 ? "s" : "ve"} no price — fetch data or enter one"` : "";
   /* The header counts signals under each position's own profile — the rules
      it was bought under — so the count doesn't change when the lens does. */
   const fired = h.filter((s) => s._own && s._own.state && s._own.state.overall === "fired").length;
   $("maststats").innerHTML = !h.length ? "" :
-    `<div><i>Market value</i><b>$${mv.toLocaleString(undefined, { maximumFractionDigits: 0 })}</b></div>
-     <div><i>Unrealised</i><b class="${mv >= cb ? "pos" : "neg"}">${cb ? (mv >= cb ? "+" : "") + ((mv / cb - 1) * 100).toFixed(1) + "%" : "—"}</b></div>
+    `<div><i>Market value${unpriced ? ` · ${unpriced} unpriced` : ""}</i><b${unpricedNote}>${mvTxt}</b></div>
+     <div><i>Unrealised</i><b class="${unpriced || !cb ? "" : mv >= cb ? "pos" : "neg"}"${unpricedNote}>${unrealTxt}</b></div>
      <div><i>Positions</i><b>${h.length}</b></div>
      <div><i>Sell signals</i><b class="${fired ? "neg" : ""}" title="Counted under each position's own profile">${fired}</b></div>`;
   const p = lensProfile();
@@ -256,7 +290,7 @@ function listView() {
       ${s.override ? '<span class="flagdot" title="Bought against or without the signal"></span>' : ""}
       ${ownFired ? `<span class="flagdot" title="Sell signal under ${esc(ownName)}, the profile it was bought under"></span>` : ""}
       <div class="coname">${esc(s.name)}</div></td>
-      <td>${money(s.price)}</td><td class="dim">${money(s.position && s.position.cost_basis)}</td>
+      <td>${priceCell(s)}</td><td class="dim">${money(s.position && s.position.cost_basis)}</td>
       <td>${pctCell(s._realised)}</td>
       <td class="hide-sm">${buyPill(evalFor(s) && evalFor(s).buy)}</td>
       <td>${verdictCell(s)}</td></tr>`;
@@ -276,7 +310,7 @@ function listView() {
     head = '<th class="l">Candidate</th><th>Price</th><th class="hide-sm">Added</th><th class="hide-sm">Score</th><th>Verdict</th>';
     body = rows.map((s) => `<tr data-t="${s.ticker}"><td class="l"><span class="tick">${esc(s.ticker)}</span>
       <div class="coname">${esc(s.name)}</div></td>
-      <td>${money(s.price)}</td><td class="dim hide-sm">${esc(s.added)}</td>
+      <td>${priceCell(s)}</td><td class="dim hide-sm">${esc(s.added)}</td>
       <td class="hide-sm">${buyPill(evalFor(s) && evalFor(s).buy)}</td>
       <td>${verdictCell(s)}</td></tr>`).join("");
   }
@@ -367,22 +401,31 @@ function detailView(s) {
     <div style="text-align:right"><span class="stamp big v-${stamp.tone}">${esc(stamp.word)}</span>
     <div class="stamp-note">${esc(stamp.note)}</div></div></div>`;
 
+  const fetching = s._fetch && s._fetch.running;
   h += `<div class="toolbar" style="margin-top:16px;justify-content:space-between;align-items:center">
     <div class="lensbar">${lensBar()}</div><div>
+    <button class="btn" data-act="fetchdata" ${fetching ? "disabled" : ""}>${fetching ? "Fetching…" : "Fetch data"}</button>
     <button class="btn" data-act="metrics">Edit metrics</button>
     <button class="btn" data-act="ev">Expected value</button>
     <button class="btn" data-act="falsifier">Falsifier</button>
     <button class="btn" data-act="note">Add note</button>
     ${!isHold && !isPrev ? '<button class="btn primary" data-act="buy">Record a purchase</button>' : ""}
+    ${!isHold && !isPrev ? '<button class="btn danger" data-act="remove">Remove</button>' : ""}
     ${isHold ? '<button class="btn danger" data-act="sell">Close position</button>' : ""}
     </div></div>`;
+  if (fetching) {
+    h += `<p class="hint" id="fetchstate" style="margin:8px 0 0">${esc(fetchStateText(s._fetch))}</p>`;
+    startFetchPoll(s.ticker);
+  }
 
   /* facts */
+  const priceLabel = (s._price && s._price.source === "fetched")
+    ? `Price · close ${String(s._price.date).slice(0, 10)}` : "Price";
   let facts = [];
   if (isHold) {
-    facts = [["Price", money(s.price)], ["Cost basis", money(s.position.cost_basis)],
+    facts = [[priceLabel, money(px(s))], ["Cost basis", money(s.position.cost_basis)],
       ["Shares", s.position.shares], ["Since buy", s._realised === null ? "—" : (s._realised >= 0 ? "+" : "") + s._realised + "%"],
-      ["Value", s.price ? "$" + (s.price * s.position.shares).toLocaleString(undefined, { maximumFractionDigits: 0 }) : "—"]];
+      ["Value", px(s) ? "$" + (px(s) * s.position.shares).toLocaleString(undefined, { maximumFractionDigits: 0 }) : "—"]];
   } else if (isPrev) {
     facts = [["Exit price", money(s.exit.price)],
       ["Return held", s.exit.return_pct === null || s.exit.return_pct === undefined
@@ -390,9 +433,10 @@ function detailView(s) {
       ["Since exit", s._since_exit === null ? "—" : (s._since_exit >= 0 ? "+" : "") + s._since_exit + "%"],
       ["Reason", s.exit.reason]];
   } else {
-    facts = [["Price", money(s.price)], ["Added", s.added],
+    facts = [[priceLabel, money(px(s))], ["Added", s.added],
       ["Values entered", Object.keys(s.metrics || {}).length + " of " + S.input_metrics.length]];
   }
+  facts.push(["Filing data", dataFact(s)]);
   h += '<div class="facts">' + facts.map((f) =>
     `<div class="fact"><i>${esc(f[0])}</i><b>${esc(f[1])}</b></div>`).join("") + "</div>";
 
@@ -444,6 +488,9 @@ function detailView(s) {
 
   /* buy tiers under the lens */
   h += tierSections(s, prof, ev.buy, cmp ? snap : null);
+
+  /* where the numbers come from */
+  h += coverageSection(s);
 
   /* panels */
   h += '<div class="panels">';
@@ -574,17 +621,39 @@ function tierSections(s, prof, buy, snap) {
       const dGood = d === null ? null
         : meta.polarity === "higher_is_better" ? d >= 0
         : meta.polarity === "lower_is_better" ? d <= 0 : null;
+      /* Where the merged value came from, and why a grey one is grey. The
+         reason a value is absent lives with the computed layer; it beats the
+         generic "no value recorded". */
+      const src = (s._value_sources || {})[e.metric];
+      const comp = (s._computed || {})[e.metric];
+      let reason = st.reason;
+      if (reason === "no value recorded" && comp && comp.status === "absent" && comp.reason)
+        reason = comp.reason;
+      let srcMark = "";
+      if (vNow !== null && vNow !== undefined) {
+        if (src === "computed") srcMark = '<span class="delta dim" title="Computed from stored filings and prices">filings</span>';
+        else if (src === "manual" && comp && comp.status === "computed")
+          srcMark = `<span class="delta dim" title="Hand-entered; overrides the computed ${fmtBank(comp.value, meta.format)}">by hand*</span>`;
+        else if (src === "manual") srcMark = '<span class="delta dim" title="Hand-entered">by hand</span>';
+      }
       h += `<div class="mrow"><div class="mname">${esc(e.label || e.metric)}
         <button class="tip" data-tip="${esc(e.metric)}:${i}" aria-expanded="${tipOpen === e.metric + ":" + i}" aria-label="What is ${esc(e.label || e.metric)}?">?</button>
-        ${st.reason ? `<div class="greynote">${esc(st.reason)}</div>` : ""}</div>
+        ${reason ? `<div class="greynote">${esc(reason)}</div>` : ""}</div>
         ${snap ? `<div class="mval entry">${fmtBank(vEntry, meta.format)}<span class="delta dim">at entry</span></div>` : '<div class="mval entry"></div>'}
         <div class="mval">${fmtBank(vNow, meta.format)}${d !== null
-          ? `<span class="delta ${dGood === null ? "dim" : dGood ? "pos" : "neg"}">${d >= 0 ? "+" : "−"}${Math.abs(d) < 0.05 && d !== 0 ? Math.abs(d).toFixed(2) : Math.abs(d).toFixed(1)}</span>` : ""}</div>
+          ? `<span class="delta ${dGood === null ? "dim" : dGood ? "pos" : "neg"}">${d >= 0 ? "+" : "−"}${Math.abs(d) < 0.05 && d !== 0 ? Math.abs(d).toFixed(2) : Math.abs(d).toFixed(1)}</span>` : ""}${srcMark}</div>
         <div class="mthresh">${esc0(condText(e.buy) || "—")}</div>
         <div class="mstate"><span class="chip s-${st.state === "green" ? "pass" : st.state === "red" ? "fail" : "none"}">${esc(st.state || "—")}</span></div>`;
       if (tipOpen === e.metric + ":" + i) {
+        const provenance = (src === "computed" && comp && comp.provenance && comp.provenance.length)
+          ? `<div class="pe-why"><b>Computed from:</b> ${comp.provenance.map(oneline).join("; ")}</div>` : "";
+        const cautions = (src === "computed" && comp && comp.cautions && comp.cautions.length)
+          ? `<div class="pe-why"><b>Cautions:</b> ${comp.cautions.map(oneline).join("; ")}</div>` : "";
+        const overridden = (src === "manual" && comp && comp.status === "computed")
+          ? `<div class="pe-why"><b>Hand-entered value in force.</b> The computed value from filings reads ${fmtBank(comp.value, meta.format)}; clear the hand-entered value in Edit metrics to use it.</div>` : "";
         h += `<div class="tipbox">${prose(e.description)}
           ${e.buy && e.buy.why ? `<div class="pe-why"><b>Why this level:</b> ${prose(e.buy.why)}</div>` : ""}
+          ${provenance}${cautions}${overridden}
           ${e.not_meaningful_when && e.not_meaningful_when.length
             ? `<div class="pe-why"><b>Not meaningful when:</b> ${e.not_meaningful_when.map((t) => oneline(t.test)).join("; ")}</div>` : ""}
           <span class="who">Bank entry <code>${esc(e.metric)}</code> — full definition on the Metrics tab</span></div>`;
@@ -594,6 +663,135 @@ function tierSections(s, prof, buy, snap) {
     h += "</section>";
   });
   return h;
+}
+
+/* ------------------------------------------------------------ data layer */
+function fetchStateText(st) {
+  if (!st) return "";
+  const stage = st.stage || "working";
+  const n = st.total ? ` — ${st.done || 0} of ${st.total} filings` : "";
+  return `Fetching: ${stage}${n}. A first fetch walks the whole filing history at the SEC's polite request rate; expect a minute or two.`;
+}
+function fetchDoneText(report) {
+  if (!report) return "Fetch finished.";
+  if (report.no_coverage) return report.no_coverage;
+  const bits = [];
+  if (report.filings_new) bits.push(`${report.filings_new} new filings`);
+  if (report.filings_held != null) bits.push(`${report.filings_held} held`);
+  if ((report.prices_fetched || []).length) bits.push(`prices for ${report.prices_fetched.join(", ")}`);
+  const errs = (report.errors || []).length;
+  return `Fetch finished: ${bits.join(" · ") || "nothing new"}.` + (errs ? ` ${errs} problem${errs === 1 ? "" : "s"} — details in the data coverage section.` : "");
+}
+function startFetchPoll(ticker) {
+  if (FETCH_POLLS[ticker]) return;
+  FETCH_POLLS[ticker] = true;
+  const poll = async () => {
+    const r = await api("get_fetch_status", ticker);
+    const st = r && r.status;
+    if (st && st.running) {
+      const el = $("fetchstate");
+      if (el) el.textContent = fetchStateText(st);
+      setTimeout(poll, 1500);
+      return;
+    }
+    delete FETCH_POLLS[ticker];
+    if (st && st.report && st.report.conflict) toast(st.report.conflict, true);
+    else if (st && st.error) toast("Fetch failed: " + st.error, true);
+    else if (st) {
+      toast(fetchDoneText(st.report));
+      const notes = (st.report && st.report.price_notes) || [];
+      if (notes.length) setTimeout(() => toast(notes[0], true), 4400);
+    }
+    C.coverage = null; C.coverageFor = null;
+    await refresh();
+  };
+  setTimeout(poll, 1200);
+}
+
+async function loadCoverage(ticker) {
+  if (C.loadingCoverage) return;
+  C.loadingCoverage = true;
+  const r = await apiRaw("get_coverage", ticker);
+  C.loadingCoverage = false;
+  C.coverageFor = ticker;
+  C.coverage = r.ok === false ? { error: r.error } : r;
+  if (openTicker === ticker) render();
+}
+
+function coverageSection(s) {
+  let inner;
+  if (!s.cik) {
+    inner = `<p class="hint">Nothing fetched yet. “Fetch data” pulls this company's full filing
+      history from SEC EDGAR and its price history from Tiingo, stores the raw reported figures,
+      and computes every metric it can. Hand-entered values always win where both exist.</p>`;
+  } else if (C.coverageFor !== s.ticker || !C.coverage) {
+    loadCoverage(s.ticker);
+    inner = '<p class="hint">Reading the stored filings…</p>';
+  } else if (C.coverage.error) {
+    inner = cfgErrorBox([C.coverage.error]);
+  } else if (C.coverage.note) {
+    inner = `<p class="hint">${esc(C.coverage.note)}</p>`;
+  } else {
+    const cov = C.coverage.coverage;
+    const st = cov.status || {};
+    inner = `<p class="hint" style="margin:8px 0 12px">${st.filings_held || 0} filings held
+      (${esc(st.identity || "")}, CIK ${st.cik})${st.pre_xbrl_filings ? ` · ${st.pre_xbrl_filings} older filings predate XBRL (2009–2011 phase-in) and carry no structured data` : ""}
+      · prices through ${esc(st.price_through || "none stored")}
+      · last fetch ${st.last_fetch ? esc(String(st.last_fetch.at).slice(0, 10)) : "never"}.
+      Every value below is recomputed from raw stored figures on each read; nothing derived is saved.</p>`;
+    /* Problems from the last fetch stay readable here — a toast is not a
+       record, and an entry absent because filings failed to extract must
+       not read like a fact about the company. */
+    const fetchErrs = (st.last_fetch && st.last_fetch.errors) || [];
+    const extractErrs = st.extraction_error_detail || [];
+    if (fetchErrs.length || extractErrs.length) {
+      inner += `<div class="notice"><h4>Problems from fetching</h4>
+        <ul class="pe-nmw">${fetchErrs.map((e) => `<li>${esc(e)}</li>`).join("")}
+        ${extractErrs.map((e) => `<li>${esc(e.accession)}: ${esc(e.error)}</li>`).join("")}</ul>
+        <p class="hint">Entries that can't compute because of these will say so below.
+        Fetching again retries anything transient.</p></div>`;
+    }
+    (st.terminal_series || []).forEach((t) => {
+      inner += `<div class="notice quiet"><h4>${esc(t.ticker)} price series is terminal</h4><p>${esc(t.reason)}</p></div>`;
+    });
+    inner += cov.entries.map((e) => {
+      const val = e.status === "computed" ? fmtBank(e.value, e.format) : "—";
+      const chip = e.status === "computed"
+        ? '<span class="chip s-none">computed</span>'
+        : '<span class="chip blank">absent</span>';
+      const why = e.status === "computed"
+        ? (e.provenance || []).map((p) => `<div class="greynote">${esc(p)}</div>`).join("")
+        : `<div class="greynote">${esc(e.reason || "")}</div>`;
+      const warn = (e.cautions || []).map((c) => `<div class="greynote">⚠ ${esc(c)}</div>`).join("");
+      return `<div class="srow"><div class="sname">${esc(e.label)}</div>
+        <div class="scond">${val === "—" ? "" : `<b>${val}</b>`}${why}${warn}</div>
+        <div class="sstate">${chip}</div></div>`;
+    }).join("");
+    inner = `<div class="slist">${inner}</div>` + crosscheckHTML(cov.crosscheck);
+  }
+  return `<section class="group"><div class="ghead"><h3>Data coverage</h3>
+    <span>what computes from filings, and why the rest doesn't</span></div>${inner}</section>`;
+}
+
+function crosscheckHTML(cc) {
+  if (!cc || !cc.checks || !cc.checks.length) return "";
+  const words = { pass: ["Consistent", "s-pass"], warn: ["Look closer", "s-watch"],
+    fail: ["Inconsistent", "s-fail"], skipped: ["Could not run", "s-none"] };
+  const rows = cc.checks.slice().reverse().map((c) => {
+    const [txt, cls] = words[c.status] || [c.status, "s-none"];
+    const detail = c.ratio != null
+      ? `market cap ÷ public float = ${c.ratio}× (float $${Number(c.float_usd).toLocaleString()} measured ${esc(c.float_measured)})`
+      : "";
+    return `<div class="srow"><div class="sname">${esc(c.form)} ${esc(c.period)}</div>
+      <div class="scond">${detail}${c.note ? `<div class="greynote">${esc(c.note)}</div>` : ""}</div>
+      <div class="sstate"><span class="chip ${cls}">${txt}</span></div></div>`;
+  }).join("");
+  return `<div class="ghead" style="margin-top:18px"><h3 style="font-size:13px">Price × shares vs public float</h3>
+    <span>${cc.summary.ran} ran · ${cc.summary.skipped} could not run</span></div>
+    <p class="hint" style="margin:6px 0 0">Each 10-K states its own public float — the company's price × shares for
+    non-affiliate holders. Comparing it against this tool's price × shares catches adjusted-price, split-basis,
+    currency and share-class errors in one shot. Market cap should sit at or above float.</p>
+    <div class="slist">${rows}</div>`;
 }
 
 /* --------------------------------------------------- config: shared bits */
@@ -913,7 +1111,46 @@ function dataView() {
           <span class="dim">— ${esc(p.why)}</span></li>`).join("")}</ul>` : ""}
     </div>`;
   }
+  const sec = S.data_security || {};
+  const storage = sec.storage || {};
+  const keyStatus = sec.key_configured
+    ? `A key is configured — stored in ${esc(storage.where || "the OS credential store")}. It is never shown again, never exported, and never written to settings.`
+    : "No key is stored. Filing metrics still compute; price-dependent entries say why they can't.";
+  const unencryptedNote = storage.unencrypted
+    ? `<p class="hint"><b>This platform offers no credential vault</b>, so the key is stored <b>unencrypted</b> at
+       <code>${esc(storage.where)}</code> with owner-only file permissions. That is an honest fallback, not protection
+       against someone using this account.</p>` : "";
+  const rotateNotice = sec.rotate_notice
+    ? `<div class="notice"><h4>Rotate this key</h4><p>It previously sat in plain text inside settings — and inside any
+       export made while it did. It has been moved to ${esc(storage.where || "the credential store")}, but copies that
+       already left this machine can't be recalled. Generate a new key at tiingo.com/account/api/token and save it
+       here; saving a new key clears this notice.</p></div>` : "";
+  const secProblem = sec.problem
+    ? `<div class="notice"><h4>Credential store problem</h4><p>${esc(sec.problem)}</p></div>` : "";
   return `<div class="cards">
+    <div class="panel"><h3>Data sources</h3><div class="sub">SEC EDGAR filings · Tiingo prices</div>
+      <p class="hint" style="margin-top:0">Filings come straight from SEC EDGAR — free, no key, but the SEC
+      requires every automated tool to identify itself with a name and a monitored email, and blocks the
+      anonymous ones. Prices come from Tiingo under your own free API key (tiingo.com). Fetching happens only
+      when you press Fetch data, and hand-entered values are never overwritten by anything fetched.</p>
+      ${secProblem}${rotateNotice}
+      <div class="field"><label for="ds_ident">SEC identity — name and email</label>
+        <input id="ds_ident" type="text" value="${esc(sec.sec_identity || "")}" placeholder="Jane Doe jane@example.com">
+        <div class="help">Sent as the User-Agent on every EDGAR request. Kept on this machine only — it is personal
+        information, so it never rides along in an export bundle.</div></div>
+      <div class="toolbar" style="justify-content:flex-start;margin:0 0 14px">
+        <button class="btn" data-act="save-identity">Save identity</button></div>
+      <div class="field"><label for="ds_token">Tiingo API key</label>
+        <div class="help" style="margin:0 0 6px">${keyStatus}</div>
+        <input id="ds_token" type="password" autocomplete="off" value="" placeholder="${sec.key_configured ? "paste a replacement key" : "paste your key"}">
+        <div class="help">To rotate: generate a new key at tiingo.com/account/api/token, paste it here, save. The old
+        key stops working the moment Tiingo regenerates it.</div></div>
+      ${unencryptedNote}
+      <div class="toolbar" style="justify-content:flex-start;margin-top:8px">
+        <button class="btn primary" data-act="save-key">Save key</button>
+        <button class="btn" data-act="test-key" ${sec.key_configured ? "" : "disabled"}>Test key</button>
+        <button class="btn danger" data-act="remove-key" ${sec.key_configured ? "" : "disabled"}>Remove key</button></div></div>
+
     <div class="panel"><h3>Back up</h3><div class="sub">Export to a folder you control</div>
       <p class="hint" style="margin-top:0">Writes one timestamped file containing your positions, notes,
       profiles and their version history. Put it wherever you keep backups. Nothing is uploaded anywhere.</p>
@@ -1013,17 +1250,27 @@ function dlgAdd() {
 }
 
 function dlgMetrics(s) {
-  let body = field("price", "Price", s.price ?? "", "Leave blank if you don't have it.", "number");
+  const priceHelp = (s._price && s._price.source === "fetched")
+    ? `Blank uses the fetched close (${money(s._price.value)}, ${s._price.date}). A value typed here overrides it.`
+    : "Leave blank if you don't have it.";
+  let body = field("price", "Price", s.price ?? "", priceHelp, "number");
   S.input_metrics.forEach((m) => {
     const users = m.used_by.length ? "Used by " + m.used_by.join(" · ")
       : "No profile currently uses this — kept because a value was recorded";
+    const comp = (s._computed || {})[m.id];
+    let compNote = "";
+    if (comp && comp.status === "computed") {
+      compNote = `<div class="u">Computed from filings: <b>${fmtBank(comp.value, m.format)}</b> — a value typed here overrides it; blank uses it.</div>`;
+    } else if (comp && comp.status === "absent" && comp.reason) {
+      compNote = `<div class="u">Not computed — ${esc(comp.reason)}</div>`;
+    }
     body += `<div class="metric-input"><div>${esc(m.label)}
-      <div class="u">${esc(m.unit || "")} · ${esc(users)}</div></div>
+      <div class="u">${esc(m.unit || "")} · ${esc(users)}</div>${compNote}</div>
       <input name="m_${m.id}" type="number" step="any" value="${s.metrics[m.id] ?? ""}"></div>`;
   });
   dialog({
     title: `Metrics · ${s.ticker}`,
-    blurb: "Only what your profiles use is listed. Leave a field blank if you don't have the number — blank shows grey. A zero would read as a confident failure.",
+    blurb: "Only what your profiles use is listed. Hand-entered values always beat fetched ones, visibly. Leave a field blank to use the computed value, or to show grey where none computes — a zero would read as a confident failure.",
     body, confirm: "Save",
     onConfirm: async (d) => {
       const metrics = {};
@@ -1084,8 +1331,14 @@ async function dlgBuy(s) {
     onConfirm: async (d) => {
       if (!d.shares || !d.cost) return "Shares and cost per share are required.";
       if (bad && !(d.override_reason || "").trim()) return "A reason is required when the signal doesn't say buy.";
-      const r = await api("open_position", s.ticker, d.shares, d.cost, d.opened, d.override_reason || "", lens);
+      const r = await api("open_position", s.ticker, d.shares, d.cost, d.opened, d.override_reason || "", lens, p.verdict);
       if (!r) return " ";
+      /* The verdict is re-evaluated at commit; if it moved while the dialog
+         was open (a fetch completed, a profile changed), the record differs
+         from what the user was shown — say so, loudly. */
+      if (r.verdict_changed) {
+        toast(`The verdict changed to ${r.verdict === "no_buy" ? "No buy" : r.verdict === "cant_say" ? "Can't say" : "Buy"} between preview and commit (data or profiles moved). The purchase is recorded under the new verdict${r.override ? " as an override — add a note with your reasoning" : ""}.`, r.verdict !== "buy");
+      }
       tab = "holdings";
     },
   });
@@ -1093,13 +1346,25 @@ async function dlgBuy(s) {
 
 function dlgSell(s) {
   const opts = S.exit_reasons.map((r) => `<option value="${esc(r)}">${esc(r)}</option>`).join("");
+  /* The exit price enters an append-only record. A stale fetched close must
+     never slide in as a silent default. */
+  const p = s._price || {};
+  const fetchedAge = p.source === "fetched" && p.date
+    ? Math.round((Date.now() - new Date(p.date).getTime()) / 86400000) : null;
+  const stale = fetchedAge !== null && fetchedAge > 7;
+  const prefill = p.source === "fetched" ? (stale ? "" : p.value) : (px(s) ?? "");
+  const priceHelp = p.source === "fetched"
+    ? (stale
+      ? `Left blank on purpose: the newest fetched close is ${fetchedAge} days old (${p.date}). Enter the price you actually sold at.`
+      : `Prefilled from the fetched close of ${p.date} — replace it with the price you actually sold at.`)
+    : "The price you actually sold at.";
   dialog({
     title: `Close position · ${s.ticker}`,
     blurb: "It stays in the journal and keeps being priced, so you can see what happened after you sold.",
     body: `<div class="field"><label for="f_reason">Why are you selling?</label>
         <select id="f_reason" name="reason">${opts}</select>
         <div class="help">Answer honestly. The Previous holdings tab groups outcomes by this, and it is the only way to find out whether your sell rules work.</div></div>`
-      + field("price", "Exit price per share", s.price ?? "", "", "number")
+      + field("price", "Exit price per share", prefill, priceHelp, "number")
       + field("exited", "Date", new Date().toISOString().slice(0, 10), "", "date"),
     confirm: "Close position", danger: true,
     onConfirm: async (d) => {
@@ -1204,6 +1469,77 @@ document.addEventListener("click", async (ev) => {
   switch (act.dataset.act) {
     case "back": openTicker = null; tipOpen = null; return render();
     case "add": return dlgAdd();
+    case "remove": {
+      if (!s) return;
+      /* Only ideas reach this button; the backend re-checks regardless.
+         Say exactly what goes with it — an informed removal, not a shrug. */
+      const lost = [];
+      const vals = Object.keys(s.metrics || {}).length;
+      const notes = (s.notes || []).length;
+      if (vals) lost.push(`${vals} hand-entered value${vals === 1 ? "" : "s"}`);
+      if (notes) lost.push(`${notes} note${notes === 1 ? "" : "s"}`);
+      if ((s.falsifier || "").trim()) lost.push("its falsifier");
+      dialog({
+        title: `Remove ${s.ticker}`,
+        blurb: "It was never a position, so no decision history is lost. Positions and previous holdings can never be removed.",
+        body: `<p class="hint">${lost.length
+          ? `Going with it: ${lost.join(", ")}.`
+          : "Nothing else was recorded on it."}
+          Fetched filings and prices stay cached on disk, so adding the ticker again starts warm.</p>`,
+        confirm: "Remove", danger: true,
+        onConfirm: async () => {
+          const r = await api("remove_security", s.ticker);
+          if (!r) return " ";
+          openTicker = null;
+          tab = "ideas";
+          toast(`${r.removed} removed from the journal.`);
+        },
+      });
+      return;
+    }
+    case "fetchdata": {
+      if (!s) return;
+      const r = await api("fetch_security", s.ticker);
+      if (r) {
+        s._fetch = { running: true, stage: "starting" };
+        render();
+        startFetchPoll(s.ticker);
+      }
+      return;
+    }
+    case "save-identity": {
+      const r = await api("save_sec_identity", $("ds_ident").value);
+      if (r) { toast("SEC identity saved — on this machine only."); await refresh(); }
+      return;
+    }
+    case "save-key": {
+      const el = $("ds_token");
+      const r = await api("save_api_key", el.value);
+      if (r) {
+        el.value = "";        /* the key went in; it never comes back out */
+        toast(`Key saved to ${r.storage && r.storage.where ? r.storage.where : "the credential store"}.`);
+        await refresh();
+      }
+      return;
+    }
+    case "test-key": {
+      const r = await api("test_api_key");
+      if (r) toast(r.valid ? `Key works: ${r.message}` : `Key failed: ${r.message}`, !r.valid);
+      return;
+    }
+    case "remove-key": {
+      dialog({
+        title: "Remove the API key",
+        blurb: "Prices stop fetching until a new key is saved; everything already stored stays.",
+        body: '<p class="hint">Filing data is unaffected. Price-dependent metrics will show why they can\'t compute.</p>',
+        confirm: "Remove key", danger: true,
+        onConfirm: async () => {
+          if (!(await api("remove_api_key"))) return " ";
+          toast("Key removed.");
+        },
+      });
+      return;
+    }
     case "metrics": return dlgMetrics(s);
     case "falsifier": return dlgFalsifier(s);
     case "note": return dlgNote(s);

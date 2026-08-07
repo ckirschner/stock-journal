@@ -1,0 +1,157 @@
+{
+  "ticker": "TGT",
+  "company": "Target Corporation",
+  "cik": 27419,
+  "method": "Hand-read from the primary HTML document of each 10-K on SEC EDGAR. No XBRL APIs, no R*.htm renderings, no FilingSummary.xml, no third-party sites.",
+  "filings": [
+    {
+      "form": "10-K",
+      "fiscal_year": "FY2023",
+      "accession": "0000027419-24-000032",
+      "report_date": "2024-02-03",
+      "primary_document": "tgt-20240203.htm",
+      "url": "https://www.sec.gov/Archives/edgar/data/27419/000002741924000032/tgt-20240203.htm",
+      "fiscal_period_statement": "Fiscal year - Our fiscal year ends on the Saturday nearest January 31. ... Fiscal 2023 ended February 3, 2024, and consisted of 53 weeks. Fiscal 2022 and 2021 ended January 28, 2023, and January 29, 2022, respectively, and consisted of 52 weeks. Fiscal 2024 will end February 1, 2025, and will consist of 52 weeks.",
+      "statement_footnote": "Note: 2023 consisted of 53 weeks compared with 52 weeks in 2022 and 2021.",
+      "weeks_in_fiscal_year": 53,
+      "period_end": "2024-02-03"
+    },
+    {
+      "form": "10-K",
+      "fiscal_year": "FY2016",
+      "accession": "0000027419-17-000008",
+      "report_date": "2017-01-28",
+      "primary_document": "tgt-20170128x10k.htm",
+      "url": "https://www.sec.gov/Archives/edgar/data/27419/000002741917000008/tgt-20170128x10k.htm",
+      "fiscal_period_statement": "Fiscal year Our fiscal year ends on the Saturday nearest January 31. ... Fiscal 2016 ended January 28, 2017, and consisted of 52 weeks. Fiscal 2015 ended January 30, 2016, and consisted of 52 weeks. Fiscal 2014 ended January 31, 2015, and consisted of 52 weeks. Fiscal 2017 will end February 3, 2018, and will consist of 53 weeks.",
+      "weeks_in_fiscal_year": 52,
+      "period_end": "2017-01-28"
+    }
+  ],
+  "values": [
+    {
+      "metric": "revenue_sales",
+      "fiscal_year": "FY2023",
+      "period_end": "2024-02-03",
+      "as_printed": "$ 105,803",
+      "scale": "in millions",
+      "value_usd": 105803000000,
+      "caption": "Sales",
+      "statement": "Consolidated Statements of Operations",
+      "accession": "0000027419-24-000032"
+    },
+    {
+      "metric": "revenue_other",
+      "fiscal_year": "FY2023",
+      "period_end": "2024-02-03",
+      "as_printed": "1,609",
+      "scale": "in millions",
+      "value_usd": 1609000000,
+      "caption": "Other revenue",
+      "statement": "Consolidated Statements of Operations",
+      "accession": "0000027419-24-000032"
+    },
+    {
+      "metric": "revenue_total",
+      "fiscal_year": "FY2023",
+      "period_end": "2024-02-03",
+      "as_printed": "107,412",
+      "scale": "in millions",
+      "value_usd": 107412000000,
+      "caption": "Total revenue",
+      "statement": "Consolidated Statements of Operations",
+      "accession": "0000027419-24-000032"
+    },
+    {
+      "metric": "operating_income",
+      "fiscal_year": "FY2023",
+      "period_end": "2024-02-03",
+      "as_printed": "5,707",
+      "scale": "in millions",
+      "value_usd": 5707000000,
+      "caption": "Operating income",
+      "statement": "Consolidated Statements of Operations",
+      "accession": "0000027419-24-000032"
+    },
+    {
+      "metric": "cash_from_operations",
+      "fiscal_year": "FY2023",
+      "period_end": "2024-02-03",
+      "as_printed": "8,621",
+      "scale": "in millions",
+      "value_usd": 8621000000,
+      "caption": "Cash provided by operating activities",
+      "statement": "Consolidated Statements of Cash Flows",
+      "accession": "0000027419-24-000032"
+    },
+    {
+      "metric": "capital_expenditures",
+      "fiscal_year": "FY2023",
+      "period_end": "2024-02-03",
+      "as_printed": "(4,806)",
+      "scale": "in millions",
+      "value_usd": -4806000000,
+      "caption": "Expenditures for property and equipment",
+      "statement": "Consolidated Statements of Cash Flows (Investing activities)",
+      "accession": "0000027419-24-000032"
+    },
+    {
+      "metric": "revenue_sales",
+      "fiscal_year": "FY2016",
+      "period_end": "2017-01-28",
+      "as_printed": "$ 69,495",
+      "scale": "in millions",
+      "value_usd": 69495000000,
+      "caption": "Sales",
+      "statement": "Consolidated Statements of Operations",
+      "accession": "0000027419-17-000008",
+      "note": "Pre-ASC 606 presentation. 'Sales' is the ONLY revenue line printed; there is no 'Other revenue' and no 'Total revenue' line in this statement."
+    },
+    {
+      "metric": "operating_income",
+      "fiscal_year": "FY2016",
+      "period_end": "2017-01-28",
+      "as_printed": "4,969",
+      "scale": "in millions",
+      "value_usd": 4969000000,
+      "caption": "Earnings from continuing operations before interest expense and income taxes",
+      "statement": "Consolidated Statements of Operations",
+      "accession": "0000027419-17-000008",
+      "note": "No line captioned 'Operating income' is printed in this statement; this EBIT line (continuing operations) is the operating-income-equivalent subtotal as printed."
+    },
+    {
+      "metric": "cash_from_operations",
+      "fiscal_year": "FY2016",
+      "period_end": "2017-01-28",
+      "as_printed": "5,436",
+      "scale": "in millions",
+      "value_usd": 5436000000,
+      "caption": "Cash provided by operations",
+      "statement": "Consolidated Statements of Cash Flows",
+      "accession": "0000027419-17-000008",
+      "note": "Total including discontinued operations. Components as printed: 'Cash provided by operating activities—continuing operations' 5,329; 'Cash provided by / (required for) operating activities—discontinued operations' 107."
+    },
+    {
+      "metric": "cash_from_operations_continuing",
+      "fiscal_year": "FY2016",
+      "period_end": "2017-01-28",
+      "as_printed": "5,329",
+      "scale": "in millions",
+      "value_usd": 5329000000,
+      "caption": "Cash provided by operating activities—continuing operations",
+      "statement": "Consolidated Statements of Cash Flows",
+      "accession": "0000027419-17-000008"
+    },
+    {
+      "metric": "capital_expenditures",
+      "fiscal_year": "FY2016",
+      "period_end": "2017-01-28",
+      "as_printed": "(1,547)",
+      "scale": "in millions",
+      "value_usd": -1547000000,
+      "caption": "Expenditures for property and equipment",
+      "statement": "Consolidated Statements of Cash Flows (Investing activities)",
+      "accession": "0000027419-17-000008"
+    }
+  ]
+}

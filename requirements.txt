@@ -1,7 +1,17 @@
 pywebview>=5.0
 ruamel.yaml>=0.17    # round-trip YAML for the metric bank and profiles
+
+# Data acquisition. edgartools is pinned EXACTLY: it ships ~10 releases a month
+# with a bus factor of 1, and the decision memo's measurements were made against
+# this version. It is quarantined behind engine/gateway.py — nothing else may
+# import it. Upgrades are deliberate events: bump the pin, re-run the
+# ground-truth tests (tests/test_compute_groundtruth.py), read the changelog.
+# Requires Python >= 3.10 (the 3.9 floor was given up knowingly; see the
+# decision memo).
+edgartools==5.45.1
+requests>=2.31       # Tiingo price client and the SEC ticker map fetch
+keyring>=25          # the API key lives in the OS credential store, never in
+                     # settings.json — settings are exported, secrets are not
+
 # Packaging only:
-#   pyinstaller>=6.0
-# Later, when you wire up a real data provider:
-#   requests>=2.31    (SEC EDGAR XBRL companyfacts)
-#   yfinance>=0.2     (prices only — unofficial scrape, expect breakage)
+#   pyinstaller>=6.0  (needs --collect-data edgar; expect a ~200MB bundle)

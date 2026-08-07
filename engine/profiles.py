@@ -80,17 +80,28 @@ def to_plain(node):
 
 # -- bank ---------------------------------------------------------------------
 
+_bank_cache: dict = {}
+
+
 def load_bank(name: str):
     path = bank_path(name)
     if not path.exists():
         raise FileNotFoundError(
             f'The metric bank "{name}" was not found at {path}.')
+    # Round-trip parsing a 2,000-line YAML costs real time and get_state asks
+    # for the bank several times per render; cache by mtime so edits still
+    # show up without a restart. The doc is treated as read-only everywhere.
+    mtime = path.stat().st_mtime
+    held = _bank_cache.get(name)
+    if held and held[0] == mtime:
+        return held[1]
     doc = load_yaml(path) or {}
     schema = str(doc.get("schema") or "")
     if not schema.startswith("ledger.metric-bank/"):
         raise ValueError(
             f'{path.name} does not declare a metric-bank schema '
             f'(found "{schema or "nothing"}").')
+    _bank_cache[name] = (mtime, doc)
     return doc
 
 
