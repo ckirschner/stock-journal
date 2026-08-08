@@ -137,7 +137,11 @@ def close_on(doc: dict, ticker: str, date: str, max_lookback_days: int = 7):
     """As-traded close on `date`, or the nearest earlier trading day within
     the lookback. Returns (date_used, close) or None. Never interpolates,
     never reaches forward — a price from the future of the asked date would
-    silently describe a different world."""
+    silently describe a different world.
+
+    A zero or null close is a no-trade artifact, not a price; it is stepped
+    over, exactly as latest_close steps over it, so a halt on the asked day
+    cannot mask a real close from the day before."""
     s = (doc.get("series") or {}).get(str(ticker).upper())
     if not s or not s["rows"]:
         return None
@@ -149,17 +153,15 @@ def close_on(doc: dict, ticker: str, date: str, max_lookback_days: int = 7):
             lo = mid + 1
         else:
             hi = mid
-    if lo == 0:
-        return None
-    row = rows[lo - 1]
     from datetime import date as D
-    gap = (D.fromisoformat(date) - D.fromisoformat(row[0])).days
-    if gap > max_lookback_days:
-        return None
-    close = row[1]
-    if close in (None, 0):               # zero closes are no-trade artifacts
-        return None
-    return (row[0], float(close))
+    target = D.fromisoformat(date)
+    for i in range(lo - 1, -1, -1):
+        row = rows[i]
+        if (target - D.fromisoformat(row[0])).days > max_lookback_days:
+            return None
+        if row[1] not in (None, 0):
+            return (row[0], float(row[1]))
+    return None
 
 
 def latest_close(doc: dict, ticker: str):

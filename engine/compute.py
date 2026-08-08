@@ -307,8 +307,11 @@ def shares_outstanding_result(ctx):
     r = computed(shares["total"],
                  [f"shares outstanding from {shares['source']}, filing "
                   f"{shares['accession']}"], cautions)
-    if shares.get("filed"):
-        r["asof"] = str(shares["filed"])[:10]
+    # The date the cover fact itself states, when it states one; the filing
+    # date is only the fallback, and is a few weeks later than the count.
+    when = shares.get("stated") or shares.get("filed")
+    if when:
+        r["asof"] = str(when)[:10]
     return r
 
 

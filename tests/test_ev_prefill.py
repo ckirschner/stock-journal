@@ -38,11 +38,12 @@ def _one_filing():
 
 
 class TestComputeHelpers:
-    def test_shares_outstanding_from_the_cover_with_its_date(self):
+    def test_shares_outstanding_from_the_cover_with_its_stated_date(self):
         r = shares_outstanding_result(Ctx([_one_filing()], None, ["SYN"]))
         assert r["status"] == "computed"
         assert r["value"] == 1.0e9
-        assert r["asof"] == "2024-02-20"
+        # the date the cover fact itself states, not the later filing date
+        assert r["asof"] == "2024-01-25"
         assert any("E-1" in p for p in r["provenance"])
 
     def test_no_cover_fact_is_absent_with_the_reason(self):

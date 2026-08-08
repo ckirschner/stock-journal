@@ -221,13 +221,24 @@ def close_position(security: dict, profile: dict | None, profile_version,
 
 # ------------------------------------------------------------------ analytics
 def override_scorecard(securities: list[dict]) -> dict:
-    """Did overriding the tool help or hurt? And is any rule miscalibrated?"""
-    overrides, compliant = [], []
+    """Did overriding the tool help or hurt? And is any rule miscalibrated?
+
+    Reconstructed overrides — backfilled purchases whose verdict was rebuilt
+    for the purchase date, never seen live — are counted, because the
+    decision was real, but their number is reported so the aggregate never
+    quietly mixes what the user faced with what was rebuilt later.
+    """
+    overrides, compliant, reconstructed = [], [], 0
     for s in securities:
         r = _realised(s)
         if r is None:
             continue
-        (overrides if s.get("override") else compliant).append(r)
+        if s.get("override"):
+            overrides.append(r)
+            if s["override"].get("basis") == "reconstructed":
+                reconstructed += 1
+        else:
+            compliant.append(r)
 
     per_rule: dict[str, dict] = {}
     for s in securities:
@@ -248,6 +259,7 @@ def override_scorecard(securities: list[dict]) -> dict:
     return {
         "override": _summarise(overrides),
         "compliant": _summarise(compliant),
+        "reconstructed_overrides": reconstructed,
         # If overrides on a specific rule keep working out, the rule is wrong,
         # not the person. Surfacing this is the difference between a feedback
         # loop and a guilt machine.

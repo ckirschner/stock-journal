@@ -558,22 +558,37 @@ class Api:
         parts = []
         if cik:
             tickers = self._tickers_of(s)
-            computed = dataview.asof_results(cik, tickers, list(used), as_of)
-            avail = dataview.asof_availability(cik, tickers, as_of)
-            price = avail["price"]
-            if avail["filings_by_then"]:
-                parts.append(f'{avail["filings_by_then"]} of the '
-                             f'{avail["filings_held"]} stored filings had '
-                             f'been filed by {as_of} (newest '
-                             f'{avail["newest_filed"]})')
-            else:
-                parts.append(f"none of the {avail['filings_held']} stored "
-                             f"filings had been filed by {as_of}")
-            if price.get("value") is not None:
-                parts.append(f'priced at the {price["date"]} close')
-            else:
-                parts.append(price.get("reason")
-                             or f"no close is stored for {as_of}")
+            # Same contract as the live path's _computed_layer: a broken data
+            # layer must not block recording the decision. The purchase still
+            # records; the reconstruction honestly reports that nothing
+            # computed could enter it, and the verdict goes grey.
+            try:
+                computed = dataview.asof_results(cik, tickers, list(used),
+                                                 as_of)
+                avail = dataview.asof_availability(cik, tickers, as_of)
+                price = avail["price"]
+                if avail["filings_by_then"]:
+                    parts.append(f'{avail["filings_by_then"]} of the '
+                                 f'{avail["filings_held"]} stored filings had '
+                                 f'been filed by {as_of} (newest '
+                                 f'{avail["newest_filed"]})')
+                else:
+                    parts.append(f"none of the {avail['filings_held']} stored "
+                                 f"filings had been filed by {as_of}")
+                if price.get("value") is not None:
+                    parts.append(f'priced at the {price["date"]} close')
+                else:
+                    parts.append(price.get("reason")
+                                 or f"no close is stored for {as_of}")
+            except Exception as e:                      # noqa: BLE001
+                traceback.print_exc()
+                computed, avail = {}, None
+                price = {"value": None, "source": None, "date": None,
+                         "reason": f"the data layer failed: "
+                                   f"{type(e).__name__}: {e}"}
+                parts.append("the stored filing and price data could not be "
+                             f"read ({type(e).__name__}: {e}) — nothing "
+                             "computed enters this reconstruction")
         else:
             computed, tickers = {}, [s["ticker"]]
             avail = None

@@ -455,27 +455,33 @@ def resolve_cover_shares(fi: FilingIndex):
     """
     per_class = fi.class_share_facts()
     if per_class:
-        classes, seen = [], set()
+        classes, seen, instants = [], set(), set()
         for f in per_class:
             dims = f.get("dimensions") or {}
             member = next((dims[a] for a in CLASS_AXES if a in dims), None)
             if member in seen or not isinstance(f.get("value"), (int, float)):
                 continue
             seen.add(member)
+            instants.add(str(f.get("instant") or "")[:10] or None)
             classes.append({"member": member, "label": f.get("label"),
                             "value": float(f["value"]),
                             "symbol": fi.class_symbol(member)})
         if classes:
+            # `stated` is the date the cover fact itself claims — carried
+            # only when every class states the same one, never averaged.
+            only = instants.pop() if len(instants) == 1 else None
             return {"classes": classes,
                     "total": sum(c["value"] for c in classes),
                     "source": "dei:EntityCommonStockSharesOutstanding (per class)",
                     "accession": fi.accession, "filed": fi.filed,
-                    "cautions": []}
+                    "stated": only, "cautions": []}
     f = fi.dei_value("dei:EntityCommonStockSharesOutstanding")
     if f is not None and isinstance(f.get("value"), (int, float)):
         return {"classes": None, "total": float(f["value"]),
                 "source": "dei:EntityCommonStockSharesOutstanding",
-                "accession": fi.accession, "filed": fi.filed, "cautions": []}
+                "accession": fi.accession, "filed": fi.filed,
+                "stated": str(f.get("instant") or "")[:10] or None,
+                "cautions": []}
     dates = fi.balance_dates()
     if dates:
         f = fi.instant_fact("us-gaap:CommonStockSharesOutstanding", dates[-1])
@@ -484,6 +490,7 @@ def resolve_cover_shares(fi: FilingIndex):
                     "source": "us-gaap:CommonStockSharesOutstanding "
                               "(balance sheet; cover fact missing)",
                     "accession": fi.accession, "filed": fi.filed,
+                    "stated": str(dates[-1])[:10],
                     "cautions": ["Share count is at the balance-sheet date, "
                                  "not the cover date."]}
     return None

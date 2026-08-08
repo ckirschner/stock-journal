@@ -101,6 +101,17 @@ const fmtMetric = (id, v) => {
 };
 
 const money = (n) => (n === null || n === undefined) ? "—" : "$" + Number(n).toFixed(2);
+/* The user's own calendar date. toISOString() is UTC, which on an American
+   evening is already tomorrow — a date the backend rightly refuses as the
+   future. Dates the user acts on must be local. */
+const localToday = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+/* Whole days between two YYYY-MM-DD strings (a minus b). Snapshot "frozen"
+   stamps are UTC while purchase dates are local, so a one-day skew proves
+   nothing; claims about backdating require a gap of at least two days. */
+const dayGap = (a, b) => Math.round((Date.parse(a) - Date.parse(b)) / 86400000);
 /* Effective price: hand-entered wins; otherwise the newest fetched close.
    The source and date travel with it so a stale quote is visibly stale. */
 const px = (s) => (s._price && s._price.value != null) ? s._price.value : s.price;
@@ -342,8 +353,11 @@ function scorecards() {
       + ` · after ${b.avg_after === null ? "—" : (b.avg_after >= 0 ? "+" : "") + b.avg_after + "%"}`);
   }).join("") || '<p class="hint">No closed positions yet.</p>';
 
+  const reconNote = o.reconstructed_overrides
+    ? `<p class="hint">${o.reconstructed_overrides} of these ${o.reconstructed_overrides === 1 ? "is a" : "are"} reconstructed
+       backfill${o.reconstructed_overrides === 1 ? "" : "s"} — the verdict was rebuilt for the purchase date, not seen at the time.</p>` : "";
   return `<div class="cards">
-    <div class="panel"><h3>Overrides</h3><div class="sub">Bought against or without the signal</div>${summ(o.override)}</div>
+    <div class="panel"><h3>Overrides</h3><div class="sub">Bought against or without the signal</div>${summ(o.override)}${reconNote}</div>
     <div class="panel"><h3>Compliant</h3><div class="sub">Bought with the signal</div>${summ(o.compliant)}</div>
     <div class="panel"><h3>By exit reason</h3><div class="sub">Return while held · return since</div>${exRows}
       <p class="hint">If one reason keeps showing a strong return <em>after</em> you sold, that is the sell rule to look at.</p></div>
@@ -462,10 +476,10 @@ function detailView(s) {
       lead = `This purchase is dated ${esc(s.override.date)}; the verdict — <strong>${esc(s.override.verdict)}</strong>${under} —
         was <strong>reconstructed</strong> from the data available by that day, not seen live at the time.`;
       if (snapEval && snapEval.note) basisNote = `<p class="hint" style="margin:6px 0 0">Reconstructed from: ${esc(snapEval.note)}.</p>`;
-    } else if (!basis && frozen && frozen !== s.override.date) {
+    } else if (!basis && frozen && dayGap(frozen, s.override.date) >= 2) {
       lead = `This purchase is dated ${esc(s.override.date)}, but its verdict — <strong>${esc(s.override.verdict)}</strong>${under} —
-        was evaluated on ${esc(frozen)}, the day it was recorded, with that day's data. The record predates
-        purchase-date evaluation and is preserved as written.`;
+        was evaluated when it was recorded, around ${esc(frozen)}, with the data current then. The record
+        predates purchase-date evaluation and is preserved as written.`;
     } else {
       lead = `On ${esc(s.override.date)} this evaluated to <strong>${esc(s.override.verdict)}</strong>${under}.`;
     }
@@ -530,7 +544,10 @@ function detailView(s) {
       if (src.used === "fetched") return ` <span class="dim">· fetched${src.asof ? ", as of " + esc(src.asof) : ""}</span>`;
       if (src.used === "computed") return ' <span class="dim">· computed from filings</span>';
       if (src.used === "manual") return ' <span class="dim">· hand-entered metric</span>';
-      if (src.used === "overridden") return ` <span class="dim">· overridden by hand — replaced the ${esc(src.instead_of === "fetched" ? "fetched" : "computed")} ${esc(src.offered ?? "value")}</span>`;
+      if (src.used === "overridden") {
+        const was = { fetched: "fetched", manual: "hand-entered", computed: "computed" }[src.instead_of] || "offered";
+        return ` <span class="dim">· overridden by hand — replaced the ${esc(was)} ${esc(src.offered ?? "value")}</span>`;
+      }
       if (src.used === "typed") return ' <span class="dim">· entered by hand; nothing computed</span>';
       return "";
     };
@@ -564,9 +581,10 @@ function detailView(s) {
         available by that day (${esc(sev.note || "")}), it read <b>${esc(word)}</b>. The snapshot is never
         recomputed, so restatements and profile changes cannot rewrite it.</p>`;
     } else {
-      const caveat = (!sev && openedD && frozenD !== openedD)
-        ? ` The verdict was evaluated on ${esc(frozenD)} with that day's data, though the purchase is dated
-           ${esc(openedD)} — this record predates purchase-date evaluation.` : "";
+      const caveat = (!sev && openedD && dayGap(frozenD, openedD) >= 2)
+        ? ` The verdict was evaluated when the snapshot was frozen, around ${esc(frozenD)}, with the data
+           current then, though the purchase is dated ${esc(openedD)} — this record predates purchase-date
+           evaluation.` : "";
       h += `<p class="locked">Entry snapshot frozen ${esc(frozenD)} under
         ${esc(sp.name)} v${esc(sp.version)} — it read <b>${esc(word)}</b> then.${caveat} The snapshot is never
         recomputed, so restatements and profile changes cannot rewrite it.</p>`;
@@ -1431,11 +1449,16 @@ function dlgNote(s) {
    asserting "on <date> this evaluated to X" about an evaluation that ran
    today would be claiming a fact never computed. Changing the date re-runs
    the preview for the new date, keeping whatever was already typed. */
-async function dlgBuy(s, dateChosen, keep) {
-  const today = new Date().toISOString().slice(0, 10);
+async function dlgBuy(s, dateChosen, keep, fallbackDate) {
+  const today = localToday();
   const when = dateChosen || today;
   const p = await api("preview_purchase", s.ticker, lens, when);
-  if (!p) return;
+  if (!p) {
+    /* The chosen date was refused (future, unparseable). Reopen on the last
+       date that worked rather than eating everything already typed. */
+    if (fallbackDate) dlgBuy(s, fallbackDate, keep);
+    return;
+  }
   const recon = p.basis === "reconstructed";
   const grey = p.verdict === "cant_say", red = p.verdict === "no_buy";
   const bad = red || grey;
@@ -1458,7 +1481,9 @@ async function dlgBuy(s, dateChosen, keep) {
     title: `Record a purchase · ${s.ticker}`,
     blurb: `Recorded under ${p.profile_name} v${p.profile_version} — the lens you are looking through. This records what you already did; the tool cannot place trades.`,
     body: reconBox + warn + `<div class="grid2">${field("shares", "Shares", (keep && keep.shares) || "", "", "number")}${field("cost", "Cost per share", (keep && keep.cost) || "", "", "number")}</div>`
-      + field("opened", "Date", when, recon ? "" : "A past date is evaluated with the data of that day, and the preview updates when you change this.", "date")
+      + `<div class="field"><label for="f_opened">Date</label>
+         <input id="f_opened" name="opened" type="date" value="${esc(when)}" max="${esc(today)}">
+         ${recon ? "" : '<div class="help">A past date is evaluated with the data of that day, and the preview updates when you change this. The future is not offered — its data does not exist yet.</div>'}</div>`
       + (bad ? area("override_reason", red ? "Why are you buying anyway?" : "Why are you buying without a signal?", (keep && keep.override_reason) || "",
         "Required. One sentence. You will read this again later.") : ""),
     confirm: bad ? "Record anyway" : "Record purchase", danger: bad,
@@ -1482,7 +1507,7 @@ async function dlgBuy(s, dateChosen, keep) {
     const keepNow = { shares: $("f_shares").value, cost: $("f_cost").value,
       override_reason: ($("f_override_reason") || {}).value || "" };
     $("dlg").close();
-    dlgBuy(s, dateEl.value, keepNow);
+    dlgBuy(s, dateEl.value, keepNow, when);
   };
 }
 
@@ -1507,7 +1532,7 @@ function dlgSell(s) {
         <select id="f_reason" name="reason">${opts}</select>
         <div class="help">Answer honestly. The Previous holdings tab groups outcomes by this, and it is the only way to find out whether your sell rules work.</div></div>`
       + field("price", "Exit price per share", prefill, priceHelp, "number")
-      + field("exited", "Date", new Date().toISOString().slice(0, 10), "", "date"),
+      + field("exited", "Date", localToday(), "", "date"),
     confirm: "Close position", danger: true,
     onConfirm: async (d) => {
       if (!d.price) return "An exit price is required.";
@@ -1538,6 +1563,11 @@ function dlgEV(s, methodOverride, pf) {
   const meth = S.ev_methods[cur];
   const prefill = (pf && pf.prefill) || {};
   const refs = (pf && pf.references) || {};
+  /* pf === null means the prefill call itself failed — a different fact
+     from "nothing is fetched", and it must not render as silently blank. */
+  const pfFailed = pf === null
+    ? `<div class="dlg-err">The computed prefills (price, cash flow, shares) could not be read just now.
+       Anything typed below is recorded as entered by hand, without provenance.</div>` : "";
   const opts = Object.keys(S.ev_methods).map((k) =>
     `<option value="${k}" ${k === cur ? "selected" : ""}>${esc(S.ev_methods[k].label)}</option>`).join("");
   const DEFAULT_KEYS = ["discount_rate", "terminal_growth", "margin_of_safety"];
@@ -1557,13 +1587,20 @@ function dlgEV(s, methodOverride, pf) {
         asof: pre.asof || null, offered: String(pre.value) };
       const prov = (pre.provenance || []).map(esc).join(" · ")
         + ((pre.cautions || []).length ? " · ⚠ " + (pre.cautions || []).map(esc).join(" · ") : "");
+      /* A fresh computed value replaces the stored one on reopen — that is
+         the fix working. But if the last computation deliberately overrode
+         this key, that fact is acknowledged, not silently dropped. */
+      const priorSrc = (s.ev && s.ev.method === cur && s.ev.sources) ? s.ev.sources[key] : null;
+      const prior = (priorSrc && priorSrc.used === "overridden"
+        && String(s.ev.inputs[key]) !== String(pre.value))
+        ? `<div class="help">Your last computation overrode this with ${esc(s.ev.inputs[key])}; the fresh ${esc(SOURCE_WORDS[pre.source] || pre.source).toLowerCase()} value is shown. Override again if you still disagree.</div>` : "";
       return `<div class="field"><label for="f_${key}">${esc(label)}</label>
         <div class="prefill-row">
           <input id="f_${key}" name="${key}" type="number" step="any" value="${esc(pre.value)}" readonly>
           <button type="button" class="btn" data-unlock="${key}">Override</button>
         </div>
         <div class="help" id="prov_${key}"><b>${esc(SOURCE_WORDS[pre.source] || pre.source)}</b> — ${prov}.${pre.source === "manual" ? "" : " Computed, never typed; override only when you have reason to disagree."}</div>
-        <div class="help">${esc(help)}</div>${refLines}</div>`;
+        ${prior}<div class="help">${esc(help)}</div>${refLines}</div>`;
     }
     let v = s.ev && s.ev.method === cur ? s.ev.inputs[key] : "";
     let extra = "";
@@ -1585,7 +1622,7 @@ function dlgEV(s, methodOverride, pf) {
   dialog({
     title: `Expected value · ${s.ticker}`,
     blurb: meth.blurb + "  ·  " + meth.who,
-    body: `<div class="field"><label for="f_method">Method</label>
+    body: pfFailed + `<div class="field"><label for="f_method">Method</label>
         <select id="f_method" name="method">${opts}</select>
         <div class="help">Changing the method reopens this with its own assumptions.</div></div>${inputs}`,
     confirm: "Compute",

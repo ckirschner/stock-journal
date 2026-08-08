@@ -104,6 +104,18 @@ class TestAsofPrice:
         p = dataview.price_view_asof(cik, ["SYN"], "2025-06-26")
         assert p["value"] is None
 
+    def test_a_no_trade_zero_row_cannot_mask_the_prior_real_close(self):
+        """A halt or bad row stored as close 0 is an artifact, not a price;
+        the as-of read steps over it to the real close the day before — a
+        false 'no close is stored' here would freeze a false absence into
+        the entry snapshot."""
+        cik = next(_CIK)
+        _store_company(cik, [], [["2025-06-27", 10.0, 1000],
+                                 ["2025-06-30", 0, 0]])
+        p = dataview.price_view_asof(cik, ["SYN"], "2025-06-30")
+        assert p["value"] == 10.0
+        assert p["date"] == "2025-06-27"
+
 
 class TestAvailability:
     def test_counts_what_the_day_could_see(self):
@@ -256,6 +268,54 @@ class TestApiPurchasePath:
         now = api.preview_purchase("SYN", "graham.yaml",
                                    date.today().isoformat())
         assert now["basis"] == "live"
+
+    def test_a_broken_data_layer_never_blocks_recording_the_decision(self):
+        """Principle 2: the tool records decisions, it never blocks them.
+        The live path survives a broken data layer by degrading to absent
+        values; the as-of path must do the same — a backdated purchase that
+        errors out while a today-dated one records would pressure the user
+        to falsify the date."""
+        cik = next(_CIK)
+        self._company(cik)
+        api = self._seed(cik)
+
+        import engine.dataview as dv
+        real = dv.asof_results
+        def boom(*a, **kw):
+            raise RuntimeError("kaput store")
+        dv.asof_results = boom
+        try:
+            r = api.open_position("SYN", 5, 9.5, "2025-06-30",
+                                  override_reason="backfilled",
+                                  profile_file="graham.yaml")
+        finally:
+            dv.asof_results = real
+        assert r["ok"], r
+        from engine import store
+        s = store.load("securities.json")["securities"][0]
+        snap = s["entry_snapshot"]
+        assert snap["evaluation"]["basis"] == "reconstructed"
+        assert "could not be read" in snap["evaluation"]["note"]
+        assert "kaput store" in snap["evaluation"]["note"]
+        # nothing computed entered: the verdict went grey, honestly
+        assert snap["result"]["verdict"] == "cant_say"
+
+    def test_scorecard_names_its_reconstructed_backfills(self):
+        live = portfolio.new_security("liv", "Live Co")
+        live["override"] = {"date": "2026-01-05", "basis": "live",
+                            "failed": [], "missing": ["x"], "reason": "r"}
+        live["position"] = {"shares": 1, "cost_basis": 10.0,
+                            "opened": "2026-01-05"}
+        live["price"] = 12.0
+        rec = portfolio.new_security("rec", "Recon Co")
+        rec["override"] = {"date": "2025-06-30", "basis": "reconstructed",
+                           "failed": [], "missing": ["x"], "reason": "r"}
+        rec["position"] = {"shares": 1, "cost_basis": 10.0,
+                           "opened": "2025-06-30"}
+        rec["price"] = 8.0
+        card = portfolio.override_scorecard([live, rec])
+        assert card["override"]["n"] == 2
+        assert card["reconstructed_overrides"] == 1
 
     def test_no_company_linked_reconstruction_says_so(self):
         api = self._seed(None)
