@@ -103,6 +103,29 @@ def computed_results(cik: int, tickers: list[str], entry_ids) -> dict:
     return out
 
 
+def confirmation_history(cik: int, tickers: list[str], entry_id: str,
+                         params: dict | None = None) -> dict:
+    """Per-filing readings for one sell-watched entry, cached with the same
+    per-CIK bundle as the computed values — the fingerprint invalidates on
+    new filings or prices. The history itself is derived, never stored:
+    engine/compute.confirmation_history recomputes it from the filing files
+    every time the cache turns over, so it cannot drift from the data."""
+    b = _bundle(cik, tickers)
+    key = (entry_id, tuple(sorted((params or {}).items())))
+    cache = b.setdefault("confirmations", {})
+    if key not in cache:
+        try:
+            cache[key] = compute.confirmation_history(
+                b["filings"], b["prices"], list(b["tickers"]), entry_id,
+                params or None)
+        except Exception as e:                          # noqa: BLE001
+            cache[key] = {"entry": entry_id, "cadence": None, "readings": [],
+                          "boundaries_held": 0, "truncated": False,
+                          "note": f"the filing history could not be read: "
+                                  f"{type(e).__name__}: {e}"}
+    return cache[key]
+
+
 def merged_values(security: dict, computed: dict) -> tuple[dict, dict]:
     """(values, sources): computed values with hand-entered on top.
 

@@ -35,7 +35,7 @@ from statistics import median
 
 from . import concept_map as cm
 from . import price_store
-from .periods import SeriesBuilder, absent, is_absent, label
+from .periods import ANNUAL_FORMS, SeriesBuilder, absent, is_absent, label
 
 STALE_PRICE_DAYS = 7
 QUARTERS_FOR_OWN_MEDIAN = 20
@@ -46,37 +46,73 @@ QUARTERS_FOR_OWN_MEDIAN = 20
 # --------------------------------------------------------------------------
 
 class Ctx:
-    """One company's computation context: filings, prices, memoised entries."""
+    """One company's computation context: filings, prices, memoised entries.
+
+    `price_cutoff` turns the context into an as-of observation: price_now()
+    then serves the close on or shortly before that day instead of the newest
+    close, and `today` should be pinned to the same day so nothing in the
+    context runs on two clocks. Used for per-filing confirmation readings —
+    "what was observable when this filing arrived" — never for the live view.
+    """
 
     def __init__(self, filings: list[dict], prices_doc: dict | None,
                  tickers: list[str], params: dict | None = None,
-                 today: str | None = None):
+                 today: str | None = None, price_cutoff: str | None = None):
         self.sb = SeriesBuilder(filings)
         self.prices = prices_doc or {"series": {}}
         self.tickers = [str(t).upper() for t in tickers if t]
         self.params = params or {}
         self.today = today or date.today().isoformat()
+        self.price_cutoff = str(price_cutoff)[:10] if price_cutoff else None
+        self.price_dates_served: set = set()
         self._memo: dict = {}
 
     # -- prices -------------------------------------------------------------
     def price_now(self):
         """(date, close, ticker) of the newest as-traded close held for any of
-        this company's tickers, with staleness answered by the date itself."""
+        this company's tickers — or, under a price_cutoff, the close on or
+        shortly before that day. Staleness is answered by the date itself."""
         best = None
         for t in self.tickers:
-            got = price_store.latest_close(self.prices, t)
+            if self.price_cutoff:
+                got = price_store.close_on(self.prices, t, self.price_cutoff,
+                                           max_lookback_days=STALE_PRICE_DAYS)
+            else:
+                got = price_store.latest_close(self.prices, t)
             if got and (best is None or got[0] > best[0]):
                 best = (got[0], got[1], t)
         if best is None:
+            if self.price_cutoff:
+                return absent("no close is stored on or shortly before "
+                              f"{self.price_cutoff} for "
+                              + (", ".join(self.tickers) or "this security"))
             return absent("no price history is stored for "
                           + (", ".join(self.tickers) or "this security")
                           + " — fetch prices, or check the price source "
                             "settings")
+        self.price_dates_served.add(best[0])
         return {"date": best[0], "close": best[1], "ticker": best[2]}
 
     def price_on(self, ticker, day):
-        return price_store.close_on(self.prices, ticker, day,
-                                    max_lookback_days=STALE_PRICE_DAYS)
+        got = price_store.close_on(self.prices, ticker, day,
+                                   max_lookback_days=STALE_PRICE_DAYS)
+        if got:
+            self.price_dates_served.add(got[0])
+        return got
+
+    def price_for(self, ticker):
+        """The close a computation should use for one specific symbol: the
+        newest held, or under a price_cutoff the close on or shortly before
+        it. Every price consumer must come through the context — a direct
+        latest_close call would quietly price an as-of reading at today."""
+        if self.price_cutoff:
+            got = price_store.close_on(self.prices, ticker, self.price_cutoff,
+                                       max_lookback_days=STALE_PRICE_DAYS)
+        else:
+            got = price_store.latest_close(self.prices, ticker)
+        if got:
+            self.price_dates_served.add(got[0])
+        return got
 
     # -- memoised entry access ----------------------------------------------
     def entry(self, entry_id):
@@ -267,7 +303,7 @@ def _market_cap_result(ctx):
             sym = cl.get("symbol")
             close = None
             if sym:
-                got = price_store.latest_close(ctx.prices, sym)
+                got = ctx.price_for(sym)
                 if got:
                     close = got
             if close is None:
@@ -1658,3 +1694,165 @@ def compute_all(filings: list[dict], prices_doc: dict | None,
                              "reason": f"computation failed: "
                                        f"{type(e).__name__}: {e}"}
     return out
+
+
+# --------------------------------------------------------------------------
+# per-filing confirmation readings
+# --------------------------------------------------------------------------
+# Sell-threshold confirmation counts distinct filing periods in which a
+# metric's inputs actually changed. CADENCE states, per entry, which filings
+# can change its inputs: "annual" for entries whose filing inputs are annual
+# windows only (a 10-Q cannot move a five-year median), "quarterly" for
+# entries consuming trailing-twelve-month figures, balance-sheet instants or
+# cover data, all of which a quarterly report refreshes. Price is not a
+# filing input — a price-bearing entry over annual windows is still "annual".
+#
+# This is a statement of fact about each formula above, not a judgement about
+# any metric's importance; tests/test_confirmation.py verifies each claim
+# against which period helpers the formula actually touches.
+
+CADENCE = {
+    # annual windows / annual streaks only
+    "roic_median_5y": "annual", "roe_median_5y": "annual",
+    "gross_margin_range_5y": "annual", "fcf_margin_median_5y": "annual",
+    "cash_conversion_median_5y": "annual",
+    "effective_tax_rate_median_5y": "annual",
+    "payout_to_fcf_median_5y": "annual", "pe_3y_avg_eps": "annual",
+    "earnings_yield_to_risk_free_multiple": "annual",
+    "revenue_cagr_5y": "annual", "revenue_cagr_3y": "annual",
+    "net_income_cagr_5y": "annual", "eps_cagr_5y": "annual",
+    "eps_growth_10y": "annual",
+    "ni_minus_revenue_cagr_spread_5y": "annual",
+    "eps_minus_revenue_cagr_spread_5y": "annual",
+    "profitable_years_10y": "annual",
+    "consecutive_annual_loss_years": "annual",
+    "consecutive_dividend_years": "annual",
+    "diluted_share_count_change_5y": "annual",
+    "diluted_share_count_change_3y": "annual",
+    # anything touching TTM, instants, cover shares or the latest filing
+    "total_debt_to_ebitda": "quarterly", "net_debt_to_ebitda": "quarterly",
+    "debt_to_equity": "quarterly", "interest_coverage": "quarterly",
+    "ltd_to_working_capital": "quarterly", "current_ratio": "quarterly",
+    "altman_z_score": "quarterly", "gross_margin_ttm": "quarterly",
+    "gross_margin_change_3y": "quarterly",
+    "gross_margin_vs_3y_median": "quarterly", "fcf_ttm": "quarterly",
+    "fcf_margin_ttm": "quarterly", "fcf_yield_on_ev": "quarterly",
+    "accruals_ratio": "quarterly", "operating_income_ttm": "quarterly",
+    "market_cap": "quarterly", "enterprise_value": "quarterly",
+    "pe_ttm": "quarterly", "price_to_book": "quarterly",
+    "price_to_net_tangible_assets": "quarterly",
+    "graham_combined_multiple": "quarterly",
+    "owner_earnings_yield": "quarterly", "ev_to_ebit": "quarterly",
+    "ev_ebit_to_own_5y_median": "quarterly",
+    "pe_to_own_5y_median_pe": "quarterly", "peg_trailing": "quarterly",
+    "dividend_adjusted_peg": "quarterly", "dividend_yield": "quarterly",
+    "ncav_to_market_cap": "quarterly", "net_cash_to_market_cap": "quarterly",
+    "revenue_change_yoy": "quarterly",
+    "inventory_minus_revenue_growth_yoy": "quarterly",
+    "receivables_minus_revenue_growth_yoy": "quarterly",
+    "diluted_share_count_change_ttm": "quarterly",
+    "goodwill_intangibles_to_assets": "quarterly",
+    # never computed here (separate ingestion paths); cadence is nominal
+    "insider_net_buying_6m": "quarterly",
+    "institutional_ownership_pct": "quarterly",
+}
+
+CONFIRMATION_BOUNDARY_CAP = 12
+
+
+def confirmation_boundaries(filings: list[dict], cadence: str) -> list[dict]:
+    """The filings on which a metric of this cadence gained new inputs,
+    oldest first: {"filed", "accession", "form", "period_end"}.
+
+    A filing qualifies only if it advanced the newest-known reporting period
+    when it arrived (the frontier rule): an amendment, a re-issue, or a
+    delinquent filer's late catch-up of an old period brings no new inputs to
+    a metric that reads the newest data, so it creates no boundary. Filings
+    sharing a filed date collapse to one boundary — everything filed that day
+    is one observation moment, and counting a same-day catch-up batch as
+    several would confirm a breach nobody watched persist.
+    """
+    forms = ANNUAL_FORMS if cadence == "annual" else None
+    docs = sorted(filings, key=lambda f: (str(f.get("filed") or ""),
+                                          str(f.get("accession") or "")))
+    frontier = ""
+    picked: dict[str, dict] = {}
+    for f in docs:
+        form = str(f.get("form") or "")
+        period = str(f.get("period_of_report") or "")[:10]
+        filed = str(f.get("filed") or "")[:10]
+        if not period or not filed:
+            continue
+        if forms is not None and form not in forms:
+            continue
+        if period <= frontier:
+            continue
+        frontier = period
+        picked[filed] = {"filed": filed, "accession": f.get("accession"),
+                         "form": form, "period_end": period}
+    return [picked[d] for d in sorted(picked)]
+
+
+def confirmation_history(filings: list[dict], prices_doc: dict | None,
+                         tickers: list[str], entry_id: str,
+                         params: dict | None = None,
+                         max_boundaries: int = CONFIRMATION_BOUNDARY_CAP) -> dict:
+    """Per-filing readings of one bank entry, newest first, for
+    sell-confirmation.
+
+    Each reading recomputes the entry from only the filings filed by that
+    boundary's date, with the price pinned to the close on or before it —
+    what was observable when that filing arrived. Later restatements and
+    re-issues are invisible to earlier readings. Nothing here is persisted;
+    the whole history is re-derived from the stores on every call, so it can
+    never drift from the filings that justify it.
+    """
+    cadence = CADENCE.get(entry_id)
+    if entry_id not in REGISTRY or cadence is None:
+        return {"entry": entry_id, "cadence": cadence, "readings": [],
+                "boundaries_held": 0, "truncated": False,
+                "note": f"{entry_id} has no computation, so no per-filing "
+                        "readings exist"}
+    if not filings:
+        return {"entry": entry_id, "cadence": cadence, "readings": [],
+                "boundaries_held": 0, "truncated": False,
+                "note": "no filings are stored for this security — fetch "
+                        "data to begin building its filing history"}
+    bounds = confirmation_boundaries(filings, cadence)
+    if not bounds:
+        kind = "annual" if cadence == "annual" else "quarterly or annual"
+        return {"entry": entry_id, "cadence": cadence, "readings": [],
+                "boundaries_held": 0, "truncated": False,
+                "note": f"none of the stored filings delivers a new {kind} "
+                        "reporting period, so there is nothing to read"}
+    take = bounds[-max_boundaries:] if max_boundaries else bounds
+    # A filing without a filed date cannot be placed in time, so it can never
+    # be shown to precede a boundary — it belongs to no as-of prefix.
+    dated = [f for f in filings if str(f.get("filed") or "")[:10]]
+    readings = []
+    for b in take:
+        prefix = [f for f in dated
+                  if str(f.get("filed") or "")[:10] <= b["filed"]]
+        priced = None
+        try:
+            ctx = Ctx(prefix, prices_doc, tickers, params=params,
+                      today=b["filed"], price_cutoff=b["filed"])
+            r = ctx.entry(entry_id)
+            priced = max(ctx.price_dates_served) if ctx.price_dates_served \
+                else None
+        except Exception as e:                          # noqa: BLE001
+            r = {"status": "absent",
+                 "reason": f"computation failed: {type(e).__name__}: {e}"}
+        ok = isinstance(r, dict) and r.get("status") == "computed"
+        readings.append({
+            "period_end": b["period_end"], "filed": b["filed"],
+            "accession": b["accession"], "form": b["form"],
+            "value": r.get("value") if ok else None,
+            "reason": None if ok else (r or {}).get("reason")
+            or "the reading could not be computed",
+            "priced": priced,
+        })
+    readings.reverse()
+    return {"entry": entry_id, "cadence": cadence, "readings": readings,
+            "boundaries_held": len(bounds),
+            "truncated": len(bounds) > len(take), "note": None}

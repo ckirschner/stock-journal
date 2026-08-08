@@ -26,16 +26,27 @@ indeterminate -> cant_say. Else buy. This is the report's rule that grey
 propagates rather than counting for or against.
 
 Sell side, per entry with a threshold, four states:
-  fired        the condition holds and its confirmation requirement is met —
-               inherent confirmation, or the calendar clock, which needs no
-               filing history
-  breached     the condition holds on the current reading, but confirmation
-               needs a run of consecutive filings and the journal stores one
-               reading per metric, so it cannot be checked yet
+  fired        the condition holds and its confirmation requirement is met:
+               inherent confirmation, the calendar clock (which needs no
+               filing history), or the breach observed on the required run of
+               per-filing readings recomputed from the stored filings
+  breached     the condition holds on the current reading but has not yet
+               appeared on enough consecutive filing periods — the signal
+               reports how many it has, how many it needs, and when it could
+               next be confirmed
   clear        the condition does not hold
   unevaluable  a value it needs is missing — the current reading, the entry
                snapshot for a delta-versus-entry test, or the snapshot predates
                the profile system
+
+Confirmation is recomputed, never accumulated: the caller passes per-filing
+reading histories (plain data, newest first, one reading per filing that
+actually changed the metric's inputs) and the walk here counts the consecutive
+readings on which the breach appears. A reading that could not be computed
+neither advances nor resets the count — a gap must not confirm what nobody
+observed, and must not grant an indefinite reprieve either. It pauses, and the
+signal says so. Absence on the sell side always means "do not sell": no
+reading, no fire.
 
 A breached-but-unconfirmed sell never claims to have fired. The profiles
 demand the confirmation precisely so one quarter's noise cannot use the tool's
@@ -268,45 +279,246 @@ def _tier_cause(t: dict, failed: bool) -> dict:
 # -- sell side ---------------------------------------------------------------
 
 def _confirmation(entry_sell: dict, profile: dict):
-    """(kind, text). kind: 'inherent' | 'sustained' | 'default' | 'none'."""
+    """(kind, spec). kind: 'inherent' | 'sustained' | 'default' | 'none'."""
     conf = entry_sell.get("sell_confirmation")
     if isinstance(conf, dict) and conf.get("form") == "inherent":
         return "inherent", None
     sust = entry_sell.get("sustained_for")
     if isinstance(sust, dict):
-        return "sustained", _confirmation_text(sust)
+        return "sustained", sust
     default = profile.get("sell_confirmation")
     if isinstance(default, dict):
-        return "default", _confirmation_text(default)
+        return "default", default
     return "none", None
 
 
-def _confirmation_text(spec: dict) -> str:
-    unit = str(spec.get("unit") or "").replace("_", " ")
-    run = unit if unit.startswith("consecutive") else f"consecutive {unit}"
-    return (f"needs the breach on {spec.get('count')} {run}; the journal "
-            "holds one current reading per metric, so this cannot be "
-            "confirmed yet")
+# Mirrors periods.ANNUAL_FORMS. Restated here rather than imported so this
+# module keeps needing nothing but the standard library; a drift test in
+# tests/test_confirmation.py holds the two equal.
+_ANNUAL_FORMS = ("10-K", "10-K/A", "10-KT", "10-KT/A")
 
 
-def evaluate_position(security: dict, profile: dict, today: date | None = None) -> dict:
+def _cadence_words(cadence, n: int) -> str:
+    one = {"annual": "annual report",
+           "quarterly": "quarterly report"}.get(cadence, "filing")
+    return one if n == 1 else one + "s"
+
+
+def _run_words(spec: dict) -> str:
+    unit = str((spec or {}).get("unit") or "").replace("_", " ")
+    if not unit:
+        return "consecutive filings"
+    return unit if unit.startswith("consecutive") else f"consecutive {unit}"
+
+
+def _next_estimate(readings: list, remaining: int) -> dict:
+    """When the breach could next be confirmed — an estimate from the spacing
+    of past qualifying reports, always labelled as one, or an honest unknown.
+    Nothing here is a measurement; it is a projection and says so."""
+    ends = sorted((d for d in (_parse_date(r.get("period_end"))
+                               for r in readings) if d), reverse=True)[:5]
+    if len(ends) < 2:
+        return {"unknown": "only one qualifying report is on record, so the "
+                           "spacing of future reports cannot be estimated"}
+    gaps = [(ends[i] - ends[i + 1]).days for i in range(len(ends) - 1)]
+    gaps = [g for g in gaps if g > 0]
+    if not gaps:
+        return {"unknown": "the qualifying reports on record share a period "
+                           "end, so future spacing cannot be estimated"}
+    med = sorted(gaps)[len(gaps) // 2]
+    last_filed = _parse_date(readings[0].get("filed"))
+    if last_filed is None:
+        return {"unknown": "the newest qualifying report carries no filed "
+                           "date, so nothing can be projected from it"}
+    days = med * max(remaining, 1)
+    if days > (date.max - last_filed).days:
+        return {"unknown": f"confirmation would need {remaining} more "
+                           "qualifying reports, which at the observed "
+                           "spacing lies beyond any projectable date — "
+                           "check the profile's confirmation count"}
+    due = last_filed + timedelta(days=days)
+    return {"date": due.isoformat(),
+            "basis": f"estimated from the roughly {med}-day spacing of past "
+                     "reports"}
+
+
+def _confirm_from_history(cond: dict, spec: dict, history, entry_value,
+                          opened: str | None) -> dict:
+    """Walk per-filing readings, newest first, and count the consecutive ones
+    on which the condition holds.
+
+    True advances the count; False stops it (that period was observed clear);
+    an uncomputable reading is a pause — it neither advances nor resets, and
+    is reported. For a condition that compares against the entry snapshot,
+    readings filed before the position opened are out of scope: a change
+    versus the entry value is not a proposition that had a truth value before
+    the entry existed. An absolute threshold, by contrast, counts standing
+    breaches from before the purchase — a condition that has persisted across
+    filings is a fact about the security, not noise, whenever one lived
+    through it.
+    """
+    required = int(_num((spec or {}).get("count")) or 0)
+    unit = str((spec or {}).get("unit") or "")
+    lead = f"needs the breach on {required} {_run_words(spec)}"
+    detail = {"required": required, "unit": unit, "confirmed": False,
+              "observed": 0, "cadence": None, "readings": [], "gaps": 0,
+              "undecided": 0, "unit_mismatch": False, "next": None,
+              "note": None}
+    if required <= 0:
+        detail["note"] = (f"the confirmation is declared as "
+                          f"{(spec or {}).get('count')!r} {unit or '?'}, "
+                          "which cannot be counted — the breach stays "
+                          "unconfirmed until the profile is corrected")
+        return detail
+    if not isinstance(history, dict):
+        detail["note"] = (lead + "; stored filings were not consulted in "
+                                 "this evaluation")
+        return detail
+    cadence = history.get("cadence")
+    detail["cadence"] = cadence
+    readings = history.get("readings") or []
+    if not readings:
+        why = history.get("note") or "no per-filing readings are available"
+        detail["note"] = f"{lead}; {why}"
+        return detail
+    # Unit versus cadence, both directions. A quarterly unit on an annual
+    # metric can only be counted in annual reports (slower than written —
+    # conservative, reported). An annual unit on a quarterly metric is
+    # honoured as written: only readings on annual reports advance the count,
+    # because counting quarterly readings would fire years earlier than the
+    # profile demanded. In both directions a clear reading on ANY report ends
+    # the run — a mismatch may make confirming slower, never easier.
+    strict_annual = cadence == "quarterly" and "annual" in unit
+    if strict_annual or (cadence == "annual" and "quarter" in unit):
+        detail["unit_mismatch"] = True
+    unit_cadence = "annual" if strict_annual else cadence
+    needs_entry = _needs_entry_value(cond)
+    if needs_entry and not opened:
+        detail["note"] = (lead + "; the position's opened date could not be "
+                                 "read, so it cannot be said which reports "
+                                 "arrived during this holding")
+        return detail
+    observed, gaps, undecided, rows, stopped = 0, 0, 0, [], None
+    for r in readings:
+        pre_entry = needs_entry and str(r.get("filed") or "") < opened
+        countable = (not strict_annual
+                     or str(r.get("form") or "") in _ANNUAL_FORMS)
+        # A pre-entry reading is probed with the entry value withheld: a leg
+        # that compares against it had no truth value then, but an absolute
+        # leg can still settle the reading either way.
+        holds = condition_holds(cond, r.get("value"),
+                                None if pre_entry else entry_value)
+        if holds is False:
+            rows.append({**r, "state": "clear"})
+            stopped = "clear"
+            break
+        if pre_entry and holds is None:
+            rows.append({**r, "state": "out_of_scope"})
+            stopped = "pre_entry"
+            break
+        if holds is True and countable:
+            observed += 1
+            rows.append({**r, "state": "breached"})
+            if observed >= required:
+                break
+        elif holds is True:
+            rows.append({**r, "state": "not_counted"})
+        elif r.get("value") is not None:
+            undecided += 1
+            rows.append({**r, "state": "undecided"})
+        else:
+            gaps += 1
+            rows.append({**r, "state": "unobserved"})
+    detail.update(observed=observed, gaps=gaps, undecided=undecided,
+                  readings=rows, confirmed=observed >= required)
+    if detail["confirmed"]:
+        which = ", ".join(f"{r['form']} for {r['period_end']}"
+                          for r in rows if r["state"] == "breached")
+        w = _cadence_words(unit_cadence, observed)
+        if gaps:
+            detail["note"] = (
+                f"the breach appears on {observed} {w} with no clear "
+                f"reading between them ({which}); "
+                f"{gaps} report{'s' if gaps != 1 else ''} in between could "
+                "not be read — a gap neither advances nor resets the count")
+        else:
+            run = " in a row" if observed > 1 else ""
+            detail["note"] = (f"the breach appears on {observed} {w}{run} "
+                              f"({which})")
+        return detail
+    parts = [f"{lead}; so far it appears on {observed} of {required} "
+             f"{_cadence_words(unit_cadence, required)}"]
+    if stopped == "clear":
+        r = rows[-1]
+        if observed == 0:
+            where = ("the newest reading" if len(rows) == 1
+                     else "the newest reading that could settle the run")
+            parts.append(f"{where} ({r['form']} for {r['period_end']}) is "
+                         "clear of the exit threshold, so no run has started")
+        else:
+            parts.append(f"the run is bounded by a clear reading on "
+                         f"{r['form']} for {r['period_end']}")
+    elif stopped == "pre_entry":
+        parts.append("reports filed before this position was opened are not "
+                     "counted for a change-versus-entry test")
+    if gaps:
+        parts.append(f"{gaps} report{'s' if gaps != 1 else ''} could not be "
+                     "read — a gap neither advances nor resets the count")
+    if undecided:
+        parts.append(f"{undecided} reading{'s' if undecided != 1 else ''} "
+                     "computed but could not be judged against this "
+                     "threshold, which neither advances nor resets the count")
+    if history.get("truncated") and stopped is None:
+        parts.append(f"only the newest {len(readings)} qualifying reports "
+                     "were examined")
+    if detail["unit_mismatch"]:
+        if strict_annual:
+            parts.append("the profile counts annual reports and this metric "
+                         "refreshes with every quarterly report, so only "
+                         "readings on annual reports advance the count")
+        else:
+            parts.append("the profile counts quarterly filings, but this "
+                         "metric's inputs change only with annual reports, "
+                         "so annual reports are what is counted")
+    detail["next"] = _next_estimate(readings, required - observed)
+    nxt = detail["next"]
+    if nxt.get("date"):
+        parts.append(f"next possible confirmation around {nxt['date']} "
+                     f"({nxt['basis']})")
+    else:
+        parts.append(nxt.get("unknown") or "")
+    detail["note"] = "; ".join(p for p in parts if p)
+    return detail
+
+
+def evaluate_position(security: dict, profile: dict, today: date | None = None,
+                      histories: dict | None = None) -> dict:
     """Sell conditions, flags and the position clock for one security.
 
     Uses the security's current values and, for delta-versus-entry tests, the
     values frozen in the entry snapshot. A snapshot recorded before the
     profile system (it carries a ruleset_version) has no bank-id values, so
     those tests report unevaluable rather than guessing.
+
+    `histories`, when supplied, maps a bank id (the metric a sell condition is
+    measured on) to its per-filing reading history — plain data as produced by
+    compute.confirmation_history — and lets a breached threshold confirm.
+    Without it a breach stays unconfirmed and says that stored filings were
+    not consulted; it never claims anything about what is on disk.
     """
     today = today or date.today()
     values = security.get("metrics") or {}
     snap = security.get("entry_snapshot") or {}
     snap_is_legacy = "ruleset_version" in snap
     snap_values = {} if snap_is_legacy else (snap.get("metrics") or {})
+    opened = str((security.get("position") or {}).get("opened") or "")[:10] \
+        or None
 
     signals, flags = [], []
     for tier in profile.get("tiers", []):
         for e in tier.get("entries", []):
-            sig = _sell_signal(e, values, snap_values, snap_is_legacy, profile)
+            sig = _sell_signal(e, values, snap_values, snap_is_legacy,
+                               profile, histories, opened)
             if sig is not None:
                 signals.append(sig)
             flg = _flag_signal(e, values, snap_values, snap_is_legacy)
@@ -372,7 +584,8 @@ def _unevaluable_reason(cond, measured_on, value, entry_value, snap_is_legacy):
     return "the condition could not be evaluated"
 
 
-def _sell_signal(entry, values, snap_values, snap_is_legacy, profile):
+def _sell_signal(entry, values, snap_values, snap_is_legacy, profile,
+                 histories=None, opened=None):
     sell = entry.get("sell")
     if not isinstance(sell, dict):
         return None
@@ -401,12 +614,21 @@ def _sell_signal(entry, values, snap_values, snap_is_legacy, profile):
     if not holds:
         return out
 
-    kind, needs = _confirmation(sell, profile)
+    kind, spec = _confirmation(sell, profile)
     if kind in ("inherent", "none"):
+        out["status"] = "fired"
+        return out
+
+    conf = _confirm_from_history(sell, spec,
+                                 (histories or {}).get(measured_on),
+                                 entry_value, opened)
+    conf["kind"] = kind
+    out["confirmation"] = conf
+    if conf["confirmed"]:
         out["status"] = "fired"
     else:
         out["status"] = "breached"
-        out["needs"] = needs
+        out["needs"] = conf["note"]
     return out
 
 

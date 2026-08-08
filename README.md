@@ -61,9 +61,17 @@ Buy rules and sell rules are not the same thing. A holding is watched against
 its profile's *sell* thresholds, and most sell breaches need the breach on
 consecutive filings before they count — the tool reports a first-reading
 breach as *unconfirmed* rather than firing, because panicking you out on one
-quarter's noise is the exact failure the confirmation exists to prevent. The
-position clocks (Graham and Discount Closure sell on a 24-month calendar) need
-no filing history and fire outright.
+quarter's noise is the exact failure the confirmation exists to prevent.
+Confirmation is checked against the stored filings themselves: the breach must
+appear on the required run of reports that actually brought new numbers for
+that metric (only the report that first delivered each period counts — a
+re-filing of a period already counted adds nothing — and a report that
+can't be read pauses the count: it neither confirms nor resets). A breach in
+progress says how many reports it has, how many it needs, and when it could
+next be confirmed. For metrics built on annual figures that run counts annual
+reports, so confirmation can genuinely take a year or more — the watch says
+so rather than hiding it. The position clocks (Graham and Discount Closure
+sell on a 24-month calendar) need no filing history and fire outright.
 
 ## The parts worth knowing about
 

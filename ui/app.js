@@ -371,7 +371,10 @@ function positionNote(pos) {
     return which.join(" · ");
   }
   if (pos.overall === "breached")
-    return pos.signals.filter((x) => x.status === "breached").map((x) => labelOf(x.metric)).join(" · ") + " — awaiting confirmation";
+    return pos.signals.filter((x) => x.status === "breached").map((x) => {
+      const c = x.confirmation;
+      return labelOf(x.metric) + (c ? ` (${c.observed} of ${c.required})` : "");
+    }).join(" · ") + " — awaiting confirmation";
   if (pos.overall === "unwatched") return "sell thresholds exist but none can currently be checked";
   return pos.watchable ? `${pos.watchable - pos.unevaluable} of ${pos.watchable} sell checks running` : "no sell thresholds";
 }
@@ -536,6 +539,54 @@ function detailView(s) {
   return h;
 }
 
+function cadenceWords(c, n) {
+  const one = c === "annual" ? "annual report" : c === "quarterly" ? "quarterly report" : "filing";
+  return n === 1 ? one : one + "s";
+}
+
+/* Per-filing confirmation trace for one sell signal. Every row names the
+   report it read, so a count is always traceable to the filings behind it;
+   runs of unreadable reports collapse to one line — accurate without being a
+   wall of failure rows. */
+function confirmationDetail(sig) {
+  const c = sig.confirmation;
+  const rs = (c && c.readings) || [];
+  if (!rs.length) return "";
+  const w = cadenceWords(c.unit_mismatch && c.cadence === "quarterly" ? "annual" : c.cadence, c.required);
+  const mid = sig.measured_on || sig.metric;
+  const rows = [];
+  for (let i = 0; i < rs.length; i++) {
+    if (rs[i].state === "unobserved") {
+      let j = i;
+      while (j + 1 < rs.length && rs[j + 1].state === "unobserved") j++;
+      if (j > i) {
+        rows.push(`<li>${j - i + 1} reports (${esc(rs[j].period_end)} to ${esc(rs[i].period_end)}) could not be read — a gap neither advances nor resets the count</li>`);
+        i = j;
+        continue;
+      }
+      rows.push(`<li>${esc(rs[i].form)} for ${esc(rs[i].period_end)} — could not be read: ${esc(rs[i].reason || "no reason recorded")} — a gap neither advances nor resets the count</li>`);
+      continue;
+    }
+    const r = rs[i];
+    const word = r.state === "breached" ? "breached"
+      : r.state === "clear" ? "clear"
+      : r.state === "undecided" ? "could not be judged against this threshold"
+      : r.state === "not_counted" ? "not counted — this rule counts annual reports"
+      : "filed before this position opened — not counted";
+    const val = r.value === null || r.value === undefined ? "—" : fmtMetric(mid, r.value);
+    rows.push(`<li>${esc(r.form)} for ${esc(r.period_end)} · filed ${esc(r.filed)} — ${esc(val)}, ${esc(word)}${
+      r.priced ? " · priced at the " + esc(r.priced) + " close" : ""}</li>`);
+  }
+  const runWord = c.required === 1 ? "" : " with no clear reading in between";
+  return `<details class="whybox"><summary>Confirmation — ${c.observed} of ${c.required} ${esc(w)}</summary>
+    <p class="hint" style="margin:6px 0">A sell threshold fires only once its breach has appeared on ${c.required} ${esc(w)}${runWord}.
+    One bad quarter or a one-day price move is noise, not a decision — that is what the run guards against.
+    A report that cannot be read neither advances nor resets the count.
+    Only the report that first brought each period's numbers counts; a re-filing of a period already counted adds nothing.</p>
+    <ul class="pe-nmw">${rows.join("")}</ul>
+    ${rs[0] ? `<p class="hint" style="margin:6px 0 0">Based on stored filings through the ${esc(rs[0].form)} for ${esc(rs[0].period_end)}.</p>` : ""}</details>`;
+}
+
 function sellWatch(s, lensEv) {
   const own = s._own || {};
   let intro, state;
@@ -574,9 +625,11 @@ function sellWatch(s, lensEv) {
       : ` <span class="dim">now ${esc(fmtMetric(sig.measured_on || sig.metric, sig.value))}${
         sig.entry_value !== null && sig.entry_value !== undefined
           ? ", at entry " + esc(fmtMetric(sig.measured_on || sig.metric, sig.entry_value)) : ""}</span>`;
+    const firedNote = sig.status === "fired" && sig.confirmation && sig.confirmation.note
+      ? `<div class="greynote">${esc(sig.confirmation.note)}</div>` : "";
     rows += `<div class="srow"><div class="sname">${esc(labelOf(sig.metric))}${measured}</div>
       <div class="scond">${cond ? esc0(cond) : '<span class="dim">no sell threshold, by choice</span>'}${val}
-      ${sig.needs ? `<div class="greynote">${esc(sig.needs)}</div>` : ""}</div>
+      ${sig.needs ? `<div class="greynote">${esc(sig.needs)}</div>` : ""}${firedNote}${confirmationDetail(sig)}</div>
       <div class="sstate"><span class="chip ${cls}">${esc(txt)}</span></div></div>`;
   });
   state.flags.forEach((f) => {

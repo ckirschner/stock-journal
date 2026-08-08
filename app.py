@@ -222,8 +222,8 @@ class Api:
                                                  param_ids, tickers)
                 view = {"buy": evaluate_buy(pv, prof)}
                 if s.get("bucket") == "holdings":
-                    view["position"] = evaluate_position(
-                        {**eval_sec, "metrics": pv}, prof)
+                    view["position"], _ = self._position_state(
+                        s, {**eval_sec, "metrics": pv}, prof, tickers)
                 s["_eval"][file] = view
             s["_own"] = self._own_view(s, resolved, eval_sec, values, sources,
                                        param_ids, tickers)
@@ -264,6 +264,45 @@ class Api:
         except Exception:                               # noqa: BLE001
             return values, sources
 
+    def _position_state(self, s, eval_sec, prof, tickers):
+        """(state, histories): sell-watch state with confirmation checked
+        against stored filings.
+
+        Two passes, both cheap where it matters: evaluate once to learn which
+        thresholds are breached on the current reading, build per-filing
+        histories for exactly those (usually none), evaluate again with them.
+        The histories dict is returned so a close can freeze the same signal
+        the watch showed, never a re-derived one.
+        """
+        state = evaluate_position(eval_sec, prof)
+        needs = sorted({sig["measured_on"] for sig in state["signals"]
+                        if sig["status"] == "breached"
+                        and sig.get("measured_on")})
+        if not needs:
+            return state, None
+        cik = s.get("cik")
+        params_by = dataview.profile_params_for(prof)
+        histories = {}
+        for mid in needs:
+            if not cik:
+                histories[mid] = {
+                    "entry": mid, "cadence": None, "readings": [],
+                    "boundaries_held": 0, "truncated": False,
+                    "note": "no company is linked to this ticker yet — "
+                            "fetch data to identify it and store its filings"}
+                continue
+            try:
+                histories[mid] = dataview.confirmation_history(
+                    cik, tickers, mid, params_by.get(mid))
+            except Exception as e:                      # noqa: BLE001
+                histories[mid] = {
+                    "entry": mid, "cadence": None, "readings": [],
+                    "boundaries_held": 0, "truncated": False,
+                    "note": f"the filing history could not be read: "
+                            f"{type(e).__name__}: {e}"}
+        return evaluate_position(eval_sec, prof, histories=histories), \
+            histories
+
     def _own_view(self, s, resolved, eval_sec, values, sources, param_ids,
                   tickers):
         """The position judged under the profile it was bought under.
@@ -290,10 +329,12 @@ class Api:
         # The sell rules that run are the profile's CURRENT content; the
         # snapshot records which version the purchase was made under. Both
         # versions travel so the UI can label them honestly.
+        state, _ = self._position_state(s, {**eval_sec, "metrics": pv}, prof,
+                                        tickers)
         return {"legacy": False,
                 "profile": {**ref, "version": prof["version"]},
                 "bought_version": ref.get("version"),
-                "state": evaluate_position({**eval_sec, "metrics": pv}, prof)}
+                "state": state}
 
     def _bank_meta(self):
         doc = profiles.load_bank("metric-bank")
@@ -531,11 +572,15 @@ class Api:
         elif lens_file and lens_file in resolved:
             prof = resolved[lens_file]
 
-        values = self._profile_values(s, prof)[0] if prof else None
+        values, histories = None, None
+        if prof:
+            values = self._profile_values(s, prof)[0]
+            _, histories = self._position_state(
+                s, {**s, "metrics": values}, prof, self._tickers_of(s))
         portfolio.close_position(s, prof, prof["version"] if prof else None,
                                  governing, reason, float(price), exited or None,
                                  missing_profile_ref=missing_ref,
-                                 values=values)
+                                 values=values, histories=histories)
         self._write_securities_doc(doc)
         ex = s["exit"]
         return ok(rule_triggered=ex["rule_triggered"],

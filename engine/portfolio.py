@@ -140,7 +140,8 @@ def close_position(security: dict, profile: dict | None, profile_version,
                    governing: bool, reason: str, exit_price: float,
                    exited: str | None = None, today: date | None = None,
                    missing_profile_ref: dict | None = None,
-                   values: dict | None = None) -> dict:
+                   values: dict | None = None,
+                   histories: dict | None = None) -> dict:
     """Close a position, keeping the ticker in the journal for tracking.
 
     profile is the lens the exit is judged under — the position's own entry
@@ -157,7 +158,11 @@ def close_position(security: dict, profile: dict | None, profile_version,
 
     if profile is not None:
         eval_sec = security if values is None else {**security, "metrics": values}
-        state = evaluate_position(eval_sec, profile, today)
+        # histories carries the per-filing readings for breached thresholds so
+        # the signal frozen here agrees with what the sell watch showed — a
+        # confirmed breach must not read "unconfirmed" in the record merely
+        # because the close path forgot the filings.
+        state = evaluate_position(eval_sec, profile, today, histories=histories)
         signal = SIGNAL_WORDS[state["overall"]]
         rule_triggered = state["overall"] == "fired"
         profile_ref = {"file": profile.get("file"), "id": profile.get("id"),

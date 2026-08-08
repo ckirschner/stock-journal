@@ -186,13 +186,18 @@ def holding(metrics, snap_metrics=None, legacy=False, opened="2026-01-10"):
 
 
 class SellTests(unittest.TestCase):
-    def test_breach_needs_confirmation_it_cannot_get(self):
+    def test_breach_without_filing_histories_stays_unconfirmed(self):
+        """Confirmation is checked against per-filing readings the caller
+        supplies (tests/test_confirmation.py owns that walk); when none are
+        supplied a breach must never fire, and the reason must not claim
+        anything about what is on disk."""
         sell = {"form": "abs", "comparator": "at_least", "value": 2.0}
         p = prof([tier("required", "all_green", [entry("a", AT_LEAST_5, sell)])],
                  sell_confirmation=DEFAULT_CONF)
         r = evaluate_position(holding({"a": 2.3}), p, date(2026, 8, 6))
         self.assertEqual(r["signals"][0]["status"], "breached")
         self.assertIn("consecutive filings", r["signals"][0]["needs"])
+        self.assertEqual(r["signals"][0]["confirmation"]["observed"], 0)
         self.assertEqual(r["overall"], "breached")
 
     def test_inherent_confirmation_fires(self):
@@ -204,7 +209,7 @@ class SellTests(unittest.TestCase):
         self.assertEqual(r["signals"][0]["status"], "fired")
         self.assertEqual(r["overall"], "fired")
 
-    def test_sustained_for_replaces_the_default_and_stays_unconfirmed(self):
+    def test_sustained_for_replaces_the_default(self):
         sell = {"form": "abs", "comparator": "less_than", "value": 0,
                 "sustained_for": {"count": 4, "unit": "quarterly_filings"}}
         p = prof([tier("required", "all_green", [entry("a", AT_LEAST_5, sell)])],
@@ -212,6 +217,7 @@ class SellTests(unittest.TestCase):
         r = evaluate_position(holding({"a": -1}), p, date(2026, 8, 6))
         self.assertEqual(r["signals"][0]["status"], "breached")
         self.assertIn("4 consecutive quarterly filings", r["signals"][0]["needs"])
+        self.assertEqual(r["signals"][0]["confirmation"]["required"], 4)
 
     def test_measured_on_another_metric(self):
         sell = {"form": "abs", "comparator": "at_least", "value": 2,
