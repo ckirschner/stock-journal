@@ -448,10 +448,32 @@ function detailView(s) {
     const failed = (s.override.failed || []).map(labelOf).join(", ");
     const missing = (s.override.missing || []).map(labelOf).join(", ");
     const under = s.override.profile ? ` under ${esc(s.override.profile.name)} v${s.override.profile.version}` : "";
-    h += `<div class="notice"><h4>${failed ? "Bought against signal" : "Bought without a signal"}</h4>
-      <p>On ${esc(s.override.date)} this evaluated to <strong>${esc(s.override.verdict)}</strong>${under}.
+    /* The lead sentence must say when the verdict was actually computed.
+       basis "live": seen on screen when recorded. basis "reconstructed":
+       rebuilt later from the data of the purchase date. No basis: the
+       record predates purchase-date evaluation — if it was backdated, its
+       verdict was computed on the recording day, and the honest move is to
+       say so, never to restate the record. */
+    const basis = s.override.basis;
+    const snapEval = (s.entry_snapshot && s.entry_snapshot.evaluation) || null;
+    const frozen = String((s.entry_snapshot || {}).frozen || "").slice(0, 10);
+    let lead, basisNote = "";
+    if (basis === "reconstructed") {
+      lead = `This purchase is dated ${esc(s.override.date)}; the verdict — <strong>${esc(s.override.verdict)}</strong>${under} —
+        was <strong>reconstructed</strong> from the data available by that day, not seen live at the time.`;
+      if (snapEval && snapEval.note) basisNote = `<p class="hint" style="margin:6px 0 0">Reconstructed from: ${esc(snapEval.note)}.</p>`;
+    } else if (!basis && frozen && frozen !== s.override.date) {
+      lead = `This purchase is dated ${esc(s.override.date)}, but its verdict — <strong>${esc(s.override.verdict)}</strong>${under} —
+        was evaluated on ${esc(frozen)}, the day it was recorded, with that day's data. The record predates
+        purchase-date evaluation and is preserved as written.`;
+    } else {
+      lead = `On ${esc(s.override.date)} this evaluated to <strong>${esc(s.override.verdict)}</strong>${under}.`;
+    }
+    h += `<div class="notice"><h4>${failed ? "Bought against signal" : "Bought without a signal"}${basis === "reconstructed" ? " · reconstructed" : ""}</h4>
+      <p>${lead}
       ${failed ? esc(failed) + " failed." : ""}${missing ? " " + esc(missing) + " could not be evaluated." : ""}
       The purchase was recorded anyway.${s._realised !== null ? ` Position is ${s._realised >= 0 ? "up" : "down"} ${Math.abs(s._realised).toFixed(1)}% since.` : ""}</p>
+      ${basisNote}
       <q>${esc(s.override.reason)}</q></div>`;
   }
   if (isPrev && s.exit && s.exit.rule_triggered === false) {
@@ -500,9 +522,21 @@ function detailView(s) {
   h += `<div class="panel" id="evpanel"><h3>Expected value</h3><div class="sub">${s.ev ? esc(S.ev_methods[s.ev.method].label) : "Not calculated"}</div>`;
   if (s.ev) {
     const meth = S.ev_methods[s.ev.method];
+    /* Each stored assumption says where it came from, in place: fetched
+       with its as-of date, computed from filings, or typed — and an
+       override names what it replaced. No bare numbers in the record. */
+    const SRC_MARK = (src) => {
+      if (!src) return "";
+      if (src.used === "fetched") return ` <span class="dim">· fetched${src.asof ? ", as of " + esc(src.asof) : ""}</span>`;
+      if (src.used === "computed") return ' <span class="dim">· computed from filings</span>';
+      if (src.used === "manual") return ' <span class="dim">· hand-entered metric</span>';
+      if (src.used === "overridden") return ` <span class="dim">· overridden by hand — replaced the ${esc(src.instead_of === "fetched" ? "fetched" : "computed")} ${esc(src.offered ?? "value")}</span>`;
+      if (src.used === "typed") return ' <span class="dim">· entered by hand; nothing computed</span>';
+      return "";
+    };
     h += '<div class="assump">';
     meth.inputs.forEach(([key, label]) => {
-      h += `<div class="k">${esc(label)}</div><div class="v">${esc(s.ev.inputs[key] ?? "—")}</div>`;
+      h += `<div class="k">${esc(label)}</div><div class="v">${esc(s.ev.inputs[key] ?? "—")}${SRC_MARK((s.ev.sources || {})[key])}</div>`;
     });
     h += `</div><div class="evout" id="evout"><div><div class="lbl">Computing…</div><div class="big">—</div></div></div>`;
     h += `<p class="locked">Computed ${esc(s.ev.computed)} from the assumptions above. There is no field anywhere that accepts a target price.</p>`;
@@ -521,9 +555,22 @@ function detailView(s) {
   if (snap && !snapLegacy) {
     const sp = snap.profile || {};
     const word = BUY_WORDS.ideas[(snap.result || {}).verdict] || "—";
-    h += `<p class="locked">Entry snapshot frozen ${esc(String(snap.frozen).slice(0, 10))} under
-      ${esc(sp.name)} v${esc(sp.version)} — it read <b>${esc(word)}</b> then. The snapshot is never
-      recomputed, so restatements and profile changes cannot rewrite it.</p>`;
+    const sev = snap.evaluation || null;
+    const frozenD = String(snap.frozen).slice(0, 10);
+    const openedD = String((s.position || {}).opened || "").slice(0, 10);
+    if (sev && sev.basis === "reconstructed") {
+      h += `<p class="locked">Entry snapshot frozen ${esc(frozenD)} under
+        ${esc(sp.name)} v${esc(sp.version)} — <b>reconstructed</b> for ${esc(sev.as_of)} from the data
+        available by that day (${esc(sev.note || "")}), it read <b>${esc(word)}</b>. The snapshot is never
+        recomputed, so restatements and profile changes cannot rewrite it.</p>`;
+    } else {
+      const caveat = (!sev && openedD && frozenD !== openedD)
+        ? ` The verdict was evaluated on ${esc(frozenD)} with that day's data, though the purchase is dated
+           ${esc(openedD)} — this record predates purchase-date evaluation.` : "";
+      h += `<p class="locked">Entry snapshot frozen ${esc(frozenD)} under
+        ${esc(sp.name)} v${esc(sp.version)} — it read <b>${esc(word)}</b> then.${caveat} The snapshot is never
+        recomputed, so restatements and profile changes cannot rewrite it.</p>`;
+    }
   }
   if (snap && snapLegacy) {
     h += `<p class="locked">Entry snapshot frozen ${esc(String(snap.frozen).slice(0, 10))} under the
@@ -1204,6 +1251,26 @@ function dataView() {
         <button class="btn" data-act="test-key" ${sec.key_configured ? "" : "disabled"}>Test key</button>
         <button class="btn danger" data-act="remove-key" ${sec.key_configured ? "" : "disabled"}>Remove key</button></div></div>
 
+    <div class="panel"><h3>Valuation defaults</h3><div class="sub">Set once · prefills every expected-value calculation</div>
+      <p class="hint" style="margin-top:0">These are standing assumptions, not per-stock levers. Changing one moves
+      every valuation at once — which is the point: a rate tuned for a single stock is a rationalisation, not a
+      requirement. Each calculation can still override, and the record says so when it does.</p>
+      <div class="field"><label for="vd_dr">Discount rate %</label>
+        <input id="vd_dr" type="number" step="any" value="${esc(S.settings.discount_rate ?? "")}">
+        <div class="help">Your required annual return. Derive it once: start from the 10-year Treasury yield — the
+        return for taking no risk — and add 4 to 6 points for owning a business instead. Most long-term investors
+        land between 8 and 12.</div></div>
+      <div class="field"><label for="vd_tg">Terminal growth %</label>
+        <input id="vd_tg" type="number" step="any" value="${esc(S.settings.terminal_growth ?? "")}">
+        <div class="help">Long-run growth after the forecast years. Inflation plus a little — 2 to 3 — is the
+        defensible range. Above about 3 you are claiming the company outgrows the economy forever.</div></div>
+      <div class="field"><label for="vd_mos">Margin of safety %</label>
+        <input id="vd_mos" type="number" step="any" value="${esc(S.settings.margin_of_safety ?? "")}">
+        <div class="help">Graham's traditional number is 30. It is room to be wrong, not a return target — the wider
+        your uncertainty, the wider it should be.</div></div>
+      <div class="toolbar" style="justify-content:flex-start;margin-top:8px">
+        <button class="btn primary" data-act="save-valuation">Save defaults</button></div></div>
+
     <div class="panel"><h3>Back up</h3><div class="sub">Export to a folder you control</div>
       <p class="hint" style="margin-top:0">Writes one timestamped file containing your positions, notes,
       profiles and their version history. Put it wherever you keep backups. Nothing is uploaded anywhere.</p>
@@ -1358,27 +1425,41 @@ function dlgNote(s) {
   });
 }
 
-async function dlgBuy(s) {
-  const p = await api("preview_purchase", s.ticker, lens);
+/* The purchase dialog evaluates for the DATE being recorded, not for today.
+   A past date reconstructs the verdict from the data available by then —
+   filings filed by that day, that day's close — and says so, visibly:
+   asserting "on <date> this evaluated to X" about an evaluation that ran
+   today would be claiming a fact never computed. Changing the date re-runs
+   the preview for the new date, keeping whatever was already typed. */
+async function dlgBuy(s, dateChosen, keep) {
+  const today = new Date().toISOString().slice(0, 10);
+  const when = dateChosen || today;
+  const p = await api("preview_purchase", s.ticker, lens, when);
   if (!p) return;
+  const recon = p.basis === "reconstructed";
   const grey = p.verdict === "cant_say", red = p.verdict === "no_buy";
   const bad = red || grey;
   const causeLabels = (p.causes || [])
     .flatMap((c) => c.metrics.map(labelOf)).join(", ");
+  const reconBox = recon
+    ? `<div class="notice quiet" style="margin:0 0 12px"><h4>Reconstructed — not seen live</h4>
+       <p>${esc(when)} is in the past, so the verdict below is rebuilt from what was observable then:
+       ${esc(p.note || "")}. It is recorded as a reconstruction, distinct everywhere from a verdict
+       you saw at the time.</p></div>` : "";
   const warn = red
-    ? `<div class="dlg-err">${esc(p.profile_name)} says <strong>No buy</strong>. ${esc(causeLabels)} failed.
+    ? `<div class="dlg-err">${esc(p.profile_name)} ${recon ? `reads <strong>No buy</strong> for ${esc(p.as_of)}, reconstructed from the data available by then` : "says <strong>No buy</strong>"}. ${esc(causeLabels)} failed.
        Nothing here stops you. The purchase and this reason both go into the journal, so that in a year you can
        see what you ignored and what it cost or earned you.</div>`
     : grey
-    ? `<div class="dlg-err">${esc(p.profile_name)} can't call this — ${esc(causeLabels)} could not be evaluated.
+    ? `<div class="dlg-err">${esc(p.profile_name)} can't call ${recon ? `${esc(p.as_of)} — ${esc(causeLabels)} could not be evaluated from the data available by then` : `this — ${esc(causeLabels)} could not be evaluated`}.
        Grey is not a pass. Buying without a signal is allowed and gets logged with your reason, exactly like
        buying against one.</div>` : "";
   dialog({
     title: `Record a purchase · ${s.ticker}`,
     blurb: `Recorded under ${p.profile_name} v${p.profile_version} — the lens you are looking through. This records what you already did; the tool cannot place trades.`,
-    body: warn + `<div class="grid2">${field("shares", "Shares", "", "", "number")}${field("cost", "Cost per share", "", "", "number")}</div>`
-      + field("opened", "Date", new Date().toISOString().slice(0, 10), "", "date")
-      + (bad ? area("override_reason", red ? "Why are you buying anyway?" : "Why are you buying without a signal?", "",
+    body: reconBox + warn + `<div class="grid2">${field("shares", "Shares", (keep && keep.shares) || "", "", "number")}${field("cost", "Cost per share", (keep && keep.cost) || "", "", "number")}</div>`
+      + field("opened", "Date", when, recon ? "" : "A past date is evaluated with the data of that day, and the preview updates when you change this.", "date")
+      + (bad ? area("override_reason", red ? "Why are you buying anyway?" : "Why are you buying without a signal?", (keep && keep.override_reason) || "",
         "Required. One sentence. You will read this again later.") : ""),
     confirm: bad ? "Record anyway" : "Record purchase", danger: bad,
     onConfirm: async (d) => {
@@ -1395,6 +1476,14 @@ async function dlgBuy(s) {
       tab = "holdings";
     },
   });
+  const dateEl = $("f_opened");
+  if (dateEl) dateEl.onchange = () => {
+    if ((dateEl.value || today) === when) return;
+    const keepNow = { shares: $("f_shares").value, cost: $("f_cost").value,
+      override_reason: ($("f_override_reason") || {}).value || "" };
+    $("dlg").close();
+    dlgBuy(s, dateEl.value, keepNow);
+  };
 }
 
 function dlgSell(s) {
@@ -1433,21 +1522,66 @@ function dlgSell(s) {
   });
 }
 
-function dlgEV(s, methodOverride) {
+/* The expected-value dialog computes what it can and asks only for
+   judgement. Price, FCF and shares arrive prefilled from fetched data with
+   their provenance and as-of date, locked until deliberately overridden —
+   a typo must not become a stored assumption. Where nothing computes, the
+   field is plain and carries the reason. Judgement inputs carry derivation
+   guidance, and the rate-like ones prefill from the journal's valuation
+   defaults (Data tab): set once, calmly, not per stock. */
+function dlgEV(s, methodOverride, pf) {
+  if (pf === undefined) {   /* fetch the prefills once, then reopen */
+    api("ev_prefill", s.ticker).then((r) => dlgEV(s, methodOverride, r || null));
+    return;
+  }
   const cur = methodOverride || (s.ev ? s.ev.method : S.settings.default_ev_method);
   const meth = S.ev_methods[cur];
+  const prefill = (pf && pf.prefill) || {};
+  const refs = (pf && pf.references) || {};
   const opts = Object.keys(S.ev_methods).map((k) =>
     `<option value="${k}" ${k === cur ? "selected" : ""}>${esc(S.ev_methods[k].label)}</option>`).join("");
+  const DEFAULT_KEYS = ["discount_rate", "terminal_growth", "margin_of_safety"];
+  const SOURCE_WORDS = { fetched: "Fetched", computed: "Computed from filings", manual: "Hand-entered metric" };
+  const sourcesInit = {};      /* key -> provenance of what was offered */
   const inputs = meth.inputs.map(([key, label, help]) => {
-    let v = s.ev && s.ev.method === cur ? s.ev.inputs[key] : "";
-    if (v === "" || v === undefined) {
-      if (key === "price") v = s.price ?? "";
-      if (key === "discount_rate") v = S.settings.discount_rate;
-      if (key === "terminal_growth") v = S.settings.terminal_growth;
-      if (key === "margin_of_safety") v = S.settings.margin_of_safety;
+    const pre = prefill[key];
+    const refLines = (((meth.references || {})[key]) || []).map(([rid, rlabel]) => {
+      const r = refs[rid];
+      if (!r) return "";
+      return r.status === "computed"
+        ? `<div class="help refline">${esc(rlabel)}: <b>$${Number(r.value).toLocaleString()}M</b>${r.asof ? ` · through ${esc(r.asof)}` : ""}${(r.provenance || []).length ? ` <span class="dim">— ${(r.provenance || []).map(esc).join("; ")}</span>` : ""}</div>`
+        : `<div class="help refline">${esc(rlabel)}: not computed — ${esc(r.reason)}</div>`;
+    }).join("");
+    if (pre && pre.status === "computed") {
+      sourcesInit[key] = { used: pre.source, provenance: (pre.provenance || []).join("; "),
+        asof: pre.asof || null, offered: String(pre.value) };
+      const prov = (pre.provenance || []).map(esc).join(" · ")
+        + ((pre.cautions || []).length ? " · ⚠ " + (pre.cautions || []).map(esc).join(" · ") : "");
+      return `<div class="field"><label for="f_${key}">${esc(label)}</label>
+        <div class="prefill-row">
+          <input id="f_${key}" name="${key}" type="number" step="any" value="${esc(pre.value)}" readonly>
+          <button type="button" class="btn" data-unlock="${key}">Override</button>
+        </div>
+        <div class="help" id="prov_${key}"><b>${esc(SOURCE_WORDS[pre.source] || pre.source)}</b> — ${prov}.${pre.source === "manual" ? "" : " Computed, never typed; override only when you have reason to disagree."}</div>
+        <div class="help">${esc(help)}</div>${refLines}</div>`;
     }
-    return field(key, label, v, help, "number");
+    let v = s.ev && s.ev.method === cur ? s.ev.inputs[key] : "";
+    let extra = "";
+    if (pre && pre.status === "absent") {
+      sourcesInit[key] = { used: "typed", provenance: "entered by hand — " + pre.reason, asof: null };
+      extra = `<div class="help">Not computed — ${esc(pre.reason)}. A number typed here is your own; the record will say so.</div>`;
+    }
+    if (v === "" || v === undefined) {
+      if (DEFAULT_KEYS.includes(key) && S.settings[key] !== undefined && S.settings[key] !== null) {
+        v = S.settings[key];
+        extra = `<div class="help">From your valuation defaults (Data tab) — set once, used everywhere.</div>`;
+      }
+    }
+    return `<div class="field"><label for="f_${key}">${esc(label)}</label>
+      <input id="f_${key}" name="${key}" type="number" step="any" value="${esc(v ?? "")}">
+      ${extra}<div class="help">${esc(help)}</div>${refLines}</div>`;
   }).join("");
+  const unlocked = new Set();
   dialog({
     title: `Expected value · ${s.ticker}`,
     blurb: meth.blurb + "  ·  " + meth.who,
@@ -1457,12 +1591,34 @@ function dlgEV(s, methodOverride) {
     confirm: "Compute",
     onConfirm: async (d) => {
       if (d.method !== cur) { $("dlg").close(); dlgEV(find(s.ticker), d.method); return true; }
-      const inputsObj = {};
-      meth.inputs.forEach(([k]) => { inputsObj[k] = d[k]; });
-      const r = await api("compute_ev", s.ticker, d.method, inputsObj);
+      const inputsObj = {}, sources = {};
+      meth.inputs.forEach(([k]) => {
+        inputsObj[k] = d[k];
+        const si = sourcesInit[k];
+        if (!si) return;
+        if (unlocked.has(k) && String(d[k]) !== si.offered) {
+          sources[k] = { used: "overridden", instead_of: si.used,
+            provenance: si.provenance, asof: si.asof, offered: si.offered };
+        } else {
+          sources[k] = { used: si.used, provenance: si.provenance, asof: si.asof };
+        }
+      });
+      const r = await api("compute_ev", s.ticker, d.method, inputsObj, sources);
       if (!r) return " ";
       toast(`${r.result.label}: ${r.result.display}`);
     },
+  });
+  $("dlgbody").querySelectorAll("[data-unlock]").forEach((b) => {
+    b.onclick = () => {
+      const k = b.dataset.unlock;
+      const el = $("f_" + k);
+      el.readOnly = false;
+      el.focus();
+      unlocked.add(k);
+      b.remove();
+      const pl = $("prov_" + k);
+      if (pl) pl.innerHTML = `<b>Overriding by hand.</b> The record will keep what this replaced: ` + pl.innerHTML;
+    };
   });
 }
 
@@ -1558,6 +1714,12 @@ document.addEventListener("click", async (ev) => {
         render();
         startFetchPoll(s.ticker);
       }
+      return;
+    }
+    case "save-valuation": {
+      const r = await api("save_valuation_defaults",
+        $("vd_dr").value, $("vd_tg").value, $("vd_mos").value);
+      if (r) { toast("Valuation defaults saved — they prefill every new calculation."); await refresh(); }
       return;
     }
     case "save-identity": {

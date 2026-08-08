@@ -273,22 +273,67 @@ def _fcf_per_year(ctx, n):
             "points": cfo["points"] + capex["points"]}
 
 
-def _market_cap_result(ctx):
-    """Market cap = shares outstanding (cover) × as-traded price, summed per
-    class for multi-class filers because each class has its own price."""
+def _cover_shares(ctx):
+    """The newest cover-fact shares resolution, falling back through earlier
+    filings — some 10-Qs omit the cover fact. Absent with the reason when no
+    stored filing answers."""
     fi = ctx.sb.latest_fi()
     if fi is None:
         return absent("no filings are stored, so shares outstanding is unknown")
     shares = cm.resolve_cover_shares(fi)
     if shares is None:
-        # fall back through earlier filings — some 10-Qs omit the cover fact
         for older in reversed(ctx.sb.indices[:-1]):
             shares = cm.resolve_cover_shares(older)
             if shares is not None:
                 break
     if shares is None:
         return absent("no stored filing carries a shares-outstanding cover "
-                      "fact, so market capitalization cannot be computed")
+                      "fact")
+    return shares
+
+
+def shares_outstanding_result(ctx):
+    """Total shares outstanding from the newest cover fact, as a plain
+    count — the divisor a per-share valuation needs. Multi-class filers are
+    summed here, which is right for dividing a whole-company value and wrong
+    for market cap (each class has its own price; see _market_cap_result)."""
+    shares = _cover_shares(ctx)
+    if is_absent(shares):
+        return _absent_result(shares)
+    cautions = list(shares.get("cautions") or [])
+    if shares.get("classes") and len(shares["classes"]) > 1:
+        cautions.append(f"{len(shares['classes'])} share classes summed to "
+                        "one count")
+    r = computed(shares["total"],
+                 [f"shares outstanding from {shares['source']}, filing "
+                  f"{shares['accession']}"], cautions)
+    if shares.get("filed"):
+        r["asof"] = str(shares["filed"])[:10]
+    return r
+
+
+def ttm_flow_result(ctx, input_id):
+    """One flow input over the trailing twelve months as a bank-style result
+    — a reference figure with provenance, computed exactly as the entries
+    above compute it, never typed."""
+    r = _ttm(ctx, input_id)
+    if is_absent(r):
+        return _absent_result(r)
+    out = computed(r["value"], [_prov_point(r)], _cautions_of(r))
+    if r.get("end"):
+        out["asof"] = str(r["end"])[:10]
+    return out
+
+
+def _market_cap_result(ctx):
+    """Market cap = shares outstanding (cover) × as-traded price, summed per
+    class for multi-class filers because each class has its own price."""
+    shares = _cover_shares(ctx)
+    if is_absent(shares):
+        if "cover" in shares["reason"]:
+            return absent(shares["reason"]
+                          + ", so market capitalization cannot be computed")
+        return shares
 
     cautions = list(shares.get("cautions") or [])
     prov = [f"shares outstanding from {shares['source']}, filing "

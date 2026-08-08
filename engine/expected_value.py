@@ -149,7 +149,29 @@ def compute(method: str, inputs: dict) -> dict:
 
 
 # What each method is, in plain language. Each assumption is an input the
-# user supplies; the result is always computed, never typed.
+# user supplies; the result is always computed, never typed. Inputs the tool
+# can compute itself (price, FCF, shares) arrive prefilled with provenance —
+# the guidance below is for the judgement inputs no filing reports, written
+# for someone who has never derived one.
+#
+# `references`, per input key, names computed figures shown beside that
+# input as derivation guidance — ingredients for a judgement, never a value
+# typed for the user.
+
+_DISCOUNT_RATE_HELP = (
+    "Your required annual return, as a percent. Derive it once: start from "
+    "the 10-year Treasury yield — the return for taking no risk — and add "
+    "4 to 6 points for owning a business instead. Most long-term investors "
+    "land between 8 and 12. Set it in the valuation defaults on the Data "
+    "tab and leave it alone; moving it per stock is how a DCF becomes a "
+    "rationalisation.")
+
+_SHARES_HELP = (
+    "In millions. Prefills with the share count from the newest filing's "
+    "cover page — actual shares outstanding. If options or convertibles "
+    "are material, raise it toward the diluted count; more shares means a "
+    "lower value per share, which is the conservative direction.")
+
 EV_METHODS = {
     "reverse_dcf": {
         "label": "Reverse DCF",
@@ -158,12 +180,14 @@ EV_METHODS = {
         "who": "Mauboussin · Rappaport",
         "inputs": [
             ("price", "Current price", "The market's number. Everything else is solved against it."),
-            ("fcf_ttm", "Free cash flow (TTM)", "Trailing twelve months of free cash flow, in millions."),
-            ("shares", "Shares outstanding", "Diluted, in millions."),
-            ("discount_rate", "Discount rate %", "Your required return. Set it once and leave it alone. "
-                                                 "Moving it per stock is how a DCF becomes a rationalisation."),
-            ("terminal_growth", "Terminal growth %", "Long-run growth after year 10. Above about 3% you're "
-                                                     "claiming the company outgrows the economy forever."),
+            ("fcf_ttm", "Free cash flow (TTM)", "Trailing twelve months of free cash flow, in millions: "
+                                                "cash from operations minus capital expenditure."),
+            ("shares", "Shares outstanding", _SHARES_HELP),
+            ("discount_rate", "Discount rate %", _DISCOUNT_RATE_HELP),
+            ("terminal_growth", "Terminal growth %", "Long-run growth after year 10, as a percent. Inflation "
+                                                     "plus a little — 2 to 3 — is the defensible range. Above "
+                                                     "about 3% you're claiming the company outgrows the "
+                                                     "economy forever."),
         ],
         "output": ("implied_growth", "Implied growth"),
     },
@@ -173,9 +197,12 @@ EV_METHODS = {
                  "first, by rule, so downside gets estimated before upside.",
         "who": "Klarman · Greenblatt",
         "inputs": [
-            ("bear_value", "Bear value per share", "What it's worth if the thing you're worried about happens."),
+            ("bear_value", "Bear value per share", "What it's worth if the thing you're worried about "
+                                                   "happens. Derive it, don't feel it: that world's earnings "
+                                                   "at a trough multiple, or liquidation value."),
             ("bear_prob", "Bear probability %", "Entered first. Probabilities must total 100%."),
-            ("base_value", "Base value per share", "No recovery, no further deterioration."),
+            ("base_value", "Base value per share", "No recovery, no further deterioration — roughly today's "
+                                                   "earnings at a middling multiple."),
             ("base_prob", "Base probability %", "The boring outcome, which is usually the likeliest."),
             ("bull_value", "Bull value per share", "The thesis works."),
             ("bull_prob", "Bull probability %", "Whatever is left after bear and base."),
@@ -189,13 +216,29 @@ EV_METHODS = {
                  "It's protection against your own estimation error.",
         "who": "Buffett · Graham",
         "inputs": [
-            ("owner_earnings", "Owner earnings", "Net income + depreciation − maintenance capex, in millions."),
-            ("shares", "Shares outstanding", "Diluted, in millions."),
-            ("growth", "Sustainable growth %", "What the business can grow at without extra capital."),
-            ("discount_rate", "Discount rate %", "Your required return."),
+            ("owner_earnings", "Owner earnings", "Net income + depreciation & amortisation − maintenance "
+                                                 "capex, in millions. The filings supply the first two and "
+                                                 "total capex — shown beside this field when fetched. "
+                                                 "Maintenance capex, the part needed just to stay in place, "
+                                                 "is reported by no filer: it is your judgement. For a "
+                                                 "business that isn't growing, all of capex is the honest "
+                                                 "start."),
+            ("shares", "Shares outstanding", _SHARES_HELP),
+            ("growth", "Sustainable growth %", "What the business can grow at without extra capital, as a "
+                                               "percent. Recent revenue growth is a ceiling, not an answer; "
+                                               "most durable businesses manage low single digits."),
+            ("discount_rate", "Discount rate %", _DISCOUNT_RATE_HELP),
             ("margin_of_safety", "Margin of safety %", "Graham's traditional number is 30%. The wider your "
-                                                       "uncertainty, the wider this should be."),
+                                                       "uncertainty, the wider this should be — it is room "
+                                                       "to be wrong, not a return target."),
         ],
+        "references": {
+            "owner_earnings": [
+                ["net_income_ttm", "Net income (TTM)"],
+                ["dda_ttm", "Depreciation & amortisation (TTM)"],
+                ["capex_ttm", "Capital expenditure (TTM)"],
+            ],
+        },
         "output": ("buy_below", "Buy below"),
     },
 }

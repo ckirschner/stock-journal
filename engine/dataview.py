@@ -73,6 +73,84 @@ def invalidate(cik: int | None = None) -> None:
         _cache.pop(cik, None)
 
 
+# -- as-of observation -------------------------------------------------------
+# One reconstruction rule, shared with sell confirmation: an as-of reading
+# sees only filings filed by that day and prices at or before that day's
+# close. compute.Ctx enforces it; everything here just builds the pinned
+# context and caches it inside the same per-CIK bundle, so a fetch
+# invalidates reconstructions and live values together.
+
+def _asof_slot(b: dict, as_of: str) -> dict:
+    slots = b.setdefault("asof", {})
+    if as_of not in slots:
+        dated = [f for f in b["filings"]
+                 if str(f.get("filed") or "")[:10]
+                 and str(f.get("filed") or "")[:10] <= as_of]
+        ctx = compute.Ctx(dated, b["prices"], list(b["tickers"]),
+                          today=as_of, price_cutoff=as_of)
+        slots[as_of] = {"ctx": ctx, "filings": dated, "results": {}}
+    return slots[as_of]
+
+
+def asof_results(cik: int, tickers: list[str], entry_ids,
+                 as_of: str) -> dict:
+    """{entry_id: result} recomputed from only what was observable on
+    `as_of`: filings filed by then, the close on or shortly before it.
+    Later restatements are invisible, exactly as in confirmation readings."""
+    b = _bundle(cik, tickers)
+    slot = _asof_slot(b, as_of)
+    out = {}
+    for eid in entry_ids:
+        if eid not in compute.REGISTRY:
+            continue
+        if eid not in slot["results"]:
+            try:
+                slot["results"][eid] = slot["ctx"].entry(eid)
+            except Exception as e:                      # noqa: BLE001
+                slot["results"][eid] = {"status": "absent",
+                                        "reason": f"computation failed: "
+                                                  f"{type(e).__name__}: {e}"}
+        out[eid] = slot["results"][eid]
+    return out
+
+
+def asof_availability(cik: int, tickers: list[str], as_of: str) -> dict:
+    """What the stores can honestly say about `as_of`: how many stored
+    filings had been filed by then (and the newest), and whether a close
+    exists on or shortly before that day. The reconstruction's basis, for
+    the record and the screen."""
+    b = _bundle(cik, tickers)
+    slot = _asof_slot(b, as_of)
+    newest = max((str(f.get("filed") or "")[:10] for f in slot["filings"]),
+                 default=None)
+    price = price_view_asof(cik, tickers, as_of)
+    return {"as_of": as_of,
+            "filings_by_then": len(slot["filings"]),
+            "filings_held": len(b["filings"]),
+            "newest_filed": newest,
+            "price": price}
+
+
+def price_view_asof(cik: int, tickers: list[str], as_of: str) -> dict:
+    """The close that belongs to `as_of`: that day or the nearest earlier
+    trading day within the stale window, labelled with the date actually
+    used. A hand-entered price never appears here — it is a statement about
+    now, and reaching it into the past would invent a value."""
+    b = _bundle(cik, tickers)
+    best = None
+    for t in b["tickers"]:
+        got = price_store.close_on(b["prices"], t, as_of,
+                                   max_lookback_days=compute.STALE_PRICE_DAYS)
+        if got and (best is None or got[0] > best[0]):
+            best = (got[0], got[1], t)
+    if best:
+        return {"value": best[1], "source": "fetched", "date": best[0],
+                "ticker": best[2]}
+    return {"value": None, "source": None, "date": None,
+            "reason": f"no close is stored on or shortly before {as_of} for "
+                      + (", ".join(b["tickers"]) or "this security")}
+
+
 # -- parameterized entries ---------------------------------------------------
 
 def parameterized_entry_ids() -> set:
@@ -160,21 +238,25 @@ def profile_params_for(profile: dict) -> dict:
 
 def overlay_for_profile(cik: int, tickers: list[str], base_values: dict,
                         sources: dict, profile: dict,
-                        param_ids: set) -> tuple[dict, dict]:
+                        param_ids: set, as_of: str | None = None
+                        ) -> tuple[dict, dict]:
     """Per-profile values: parameterized entries computed with the profile's
-    own supplied parameters, unless a hand-entered value already answers."""
+    own supplied parameters, unless a hand-entered value already answers.
+    With `as_of`, the computation runs on the pinned context — same
+    parameters, only the data of that day."""
     params = profile_params_for(profile)
     if not params:
         return base_values, sources
     values, srcs = dict(base_values), dict(sources)
     b = _bundle(cik, tickers)
+    ctx = _asof_slot(b, as_of)["ctx"] if as_of else b["ctx"]
     for eid, supplied in params.items():
         if eid not in param_ids or srcs.get(eid) == "manual":
             continue
         if eid not in compute.REGISTRY:
             continue
         try:
-            r = compute.compute_entry_with_params(b["ctx"], eid, supplied)
+            r = compute.compute_entry_with_params(ctx, eid, supplied)
         except Exception:                               # noqa: BLE001
             continue
         if r.get("status") == "computed":
@@ -200,6 +282,34 @@ def price_view(security: dict, cik: int | None, tickers: list[str]) -> dict:
             return {"value": best[1], "source": "fetched", "date": best[0],
                     "ticker": best[2]}
     return {"value": None, "source": None, "date": None}
+
+
+def ev_reference(cik: int, tickers: list[str]) -> dict:
+    """The computed figures an expected-value dialog may prefill or cite:
+    free cash flow TTM, shares outstanding, and the owner-earnings
+    ingredients (net income, depreciation & amortisation, capex — all TTM).
+    Every result carries provenance and, where the source states one, the
+    date it is as of. Raw dollars and raw counts; presentation converts."""
+    b = _bundle(cik, tickers)
+    out = {"fcf_ttm": computed_results(cik, tickers,
+                                       ["fcf_ttm"]).get("fcf_ttm")}
+    for key, fn in (("shares", compute.shares_outstanding_result),):
+        try:
+            out[key] = fn(b["ctx"])
+        except Exception as e:                          # noqa: BLE001
+            out[key] = {"status": "absent",
+                        "reason": f"computation failed: "
+                                  f"{type(e).__name__}: {e}"}
+    for key, input_id in (("net_income_ttm", "net_income"),
+                          ("dda_ttm", "dda"),
+                          ("capex_ttm", "capex")):
+        try:
+            out[key] = compute.ttm_flow_result(b["ctx"], input_id)
+        except Exception as e:                          # noqa: BLE001
+            out[key] = {"status": "absent",
+                        "reason": f"computation failed: "
+                                  f"{type(e).__name__}: {e}"}
+    return out
 
 
 def data_status(cik: int | None) -> dict | None:

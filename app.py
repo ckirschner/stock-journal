@@ -511,20 +511,128 @@ class Api:
                                             param_ids, tickers)
         return pv, psrc, price
 
+    def _purchase_date(self, opened):
+        """(iso date or None, is_past). The future is refused outright: the
+        data that belongs to a day that hasn't happened does not exist, so
+        no honest evaluation of it can be recorded."""
+        if not opened:
+            return None, False
+        try:
+            d = date.fromisoformat(str(opened)[:10])
+        except ValueError:
+            raise ValueError("The purchase date must be a real date "
+                             "(YYYY-MM-DD).")
+        if d > date.today():
+            raise ValueError("A purchase cannot be dated in the future — "
+                             "the data belonging to that day does not "
+                             "exist yet.")
+        return d.isoformat(), d < date.today()
+
+    def _profile_values_asof(self, s, prof, as_of):
+        """(values, sources, price, evaluation record) rebuilt from what was
+        observable on `as_of`: filings filed by then, the close on or
+        shortly before it — the same as-of rule sell confirmation uses.
+
+        Hand-entered values still sit on top, exactly as in the live merge:
+        they are the user's standing assertions and carry no date, so the
+        record names them as undated rather than either trusting them into
+        the past silently or fabricating a grey verdict (and with it a
+        "bought without a signal" override) on securities the user maintains
+        by hand. The evaluation record says all of this in plain language,
+        and it is frozen with the snapshot.
+        """
+        used = {}
+        for tier in prof.get("tiers", []):
+            for e in tier.get("entries", []):
+                ids = [e.get("metric")]
+                for block in (e.get("sell"), e.get("flag")):
+                    if isinstance(block, dict) and block.get("measured_on"):
+                        ids.append(str(block["measured_on"]))
+                for mid in ids:
+                    if mid:
+                        used.setdefault(mid, [])
+        for mid in (s.get("metrics") or {}):
+            used.setdefault(mid, [])
+
+        cik = s.get("cik")
+        parts = []
+        if cik:
+            tickers = self._tickers_of(s)
+            computed = dataview.asof_results(cik, tickers, list(used), as_of)
+            avail = dataview.asof_availability(cik, tickers, as_of)
+            price = avail["price"]
+            if avail["filings_by_then"]:
+                parts.append(f'{avail["filings_by_then"]} of the '
+                             f'{avail["filings_held"]} stored filings had '
+                             f'been filed by {as_of} (newest '
+                             f'{avail["newest_filed"]})')
+            else:
+                parts.append(f"none of the {avail['filings_held']} stored "
+                             f"filings had been filed by {as_of}")
+            if price.get("value") is not None:
+                parts.append(f'priced at the {price["date"]} close')
+            else:
+                parts.append(price.get("reason")
+                             or f"no close is stored for {as_of}")
+        else:
+            computed, tickers = {}, [s["ticker"]]
+            avail = None
+            price = {"value": None, "source": None, "date": None,
+                     "reason": "no company is linked to this ticker, so no "
+                               "filings or prices are stored for it"}
+            parts.append("no company is linked to this ticker, so no stored "
+                         f"filing or price from {as_of} could be consulted")
+
+        values, sources = dataview.merged_values(s, computed)
+        param_ids = dataview.parameterized_entry_ids()
+        if cik:
+            try:
+                values, sources = dataview.overlay_for_profile(
+                    cik, tickers, values, sources, prof, param_ids,
+                    as_of=as_of)
+            except Exception:                           # noqa: BLE001
+                pass
+        manual = sorted(mid for mid, side in sources.items()
+                        if side == "manual")
+        if manual:
+            parts.append(f"{len(manual)} hand-entered value"
+                         f"{'s' if len(manual) != 1 else ''} entered as "
+                         "recorded — hand-entered values carry no date")
+        evaluation = {
+            "basis": "reconstructed",
+            "as_of": as_of,
+            "filings_by_then": (avail or {}).get("filings_by_then", 0),
+            "newest_filed": (avail or {}).get("newest_filed"),
+            "priced": price.get("date"),
+            "manual_undated": manual,
+            "note": "; ".join(parts),
+        }
+        return values, sources, price, evaluation
+
     @guarded
-    def preview_purchase(self, ticker, profile_file):
-        """What the chosen lens would say right now, before anything is
-        committed."""
+    def preview_purchase(self, ticker, profile_file, opened=None):
+        """What the chosen lens says for the chosen date, before anything is
+        committed. Today's date evaluates live; a past date is reconstructed
+        from the data available by then, and says so."""
         _, resolved, _, _ = self._resolved_profiles()
         prof = resolved.get(profile_file)
         if prof is None:
             return err(f"{profile_file} is not a profile on disk.")
         doc = self._securities_doc()
         s = self._find(doc.get("securities", []), ticker)
-        values, _, _ = self._profile_values(s, prof)
+        opened_iso, is_past = self._purchase_date(opened)
+        if is_past:
+            values, _, _, evaluation = self._profile_values_asof(
+                s, prof, opened_iso)
+        else:
+            values, _, _ = self._profile_values(s, prof)
+            evaluation = {"basis": "live",
+                          "as_of": date.today().isoformat()}
         result = evaluate_buy(values, prof)
         return ok(verdict=result["verdict"], causes=result["causes"],
-                  profile_name=prof["name"], profile_version=prof["version"])
+                  profile_name=prof["name"], profile_version=prof["version"],
+                  basis=evaluation["basis"], as_of=evaluation["as_of"],
+                  note=evaluation.get("note"))
 
     @guarded
     @locked
@@ -538,11 +646,19 @@ class Api:
                        "this purchase is recorded against.")
         doc = self._securities_doc()
         s = self._find(doc.get("securities", []), ticker)
-        values, sources, price = self._profile_values(s, prof)
+        opened_iso, is_past = self._purchase_date(opened)
+        if is_past:
+            values, sources, price, evaluation = self._profile_values_asof(
+                s, prof, opened_iso)
+        else:
+            values, sources, price = self._profile_values(s, prof)
+            evaluation = {"basis": "live",
+                          "as_of": date.today().isoformat()}
         portfolio.open_position(s, prof, prof["version"],
-                                float(shares), float(cost), opened or None,
+                                float(shares), float(cost), opened_iso,
                                 override_reason, values=values,
-                                value_sources=sources, price_seen=price)
+                                value_sources=sources, price_seen=price,
+                                evaluation=evaluation)
         self._write_securities_doc(doc)
         verdict = ((s.get("entry_snapshot") or {}).get("result") or {}) \
             .get("verdict")
@@ -708,14 +824,118 @@ class Api:
         return ok(valid=bool(v.get("ok")), message=str(v.get("message") or ""))
 
     # -- expected value --------------------------------------------------
+    def _ev_item(self, r, scale=1.0, digits=3):
+        """One computed reference for the EV dialog: scaled to the unit the
+        dialog speaks (millions), with provenance and as-of carried, or
+        absent with its reason. Three decimals of a million keep a small
+        filer's real figure from rounding to a confident zero."""
+        if not isinstance(r, dict) or r.get("status") != "computed":
+            return {"status": "absent",
+                    "reason": (r or {}).get("reason")
+                    or "this could not be computed from the stored filings"}
+        return {"status": "computed", "source": "computed",
+                "value": round(float(r["value"]) / scale, digits),
+                "provenance": list(r.get("provenance") or []),
+                "cautions": list(r.get("cautions") or []),
+                "asof": r.get("asof")}
+
+    @guarded
+    def ev_prefill(self, ticker):
+        """What the expected-value dialog may prefill or cite, per input key:
+        computed figures with provenance and as-of dates, or absence with the
+        reason. Hand-entered values win where both exist, as everywhere."""
+        s = self._find(self._securities_doc().get("securities", []), ticker)
+        cik = s.get("cik")
+        tickers = self._tickers_of(s)
+
+        price = dataview.price_view(s, cik, tickers)
+        if price["value"] is None:
+            price_item = {"status": "absent",
+                          "reason": "no price is stored — fetch prices, or "
+                                    "enter one in Edit metrics"}
+        elif price["source"] == "manual":
+            price_item = {"status": "computed", "source": "manual",
+                          "value": float(price["value"]), "asof": None,
+                          "provenance": ["hand-entered price from Edit "
+                                         "metrics (undated)"],
+                          "cautions": []}
+        else:
+            price_item = {"status": "computed", "source": "fetched",
+                          "value": float(price["value"]),
+                          "asof": price["date"],
+                          "provenance": [f'{price.get("ticker") or s["ticker"]} '
+                                         f'close on {price["date"]}'],
+                          "cautions": []}
+
+        never = ("nothing has been fetched for this security yet — Fetch "
+                 "data stores its filings and prices")
+        ref = {}
+        if cik:
+            ref = dataview.ev_reference(cik, tickers)
+        fcf = self._ev_item(ref.get("fcf_ttm")
+                            or {"status": "absent", "reason": never}, 1e6)
+        manual_fcf = (s.get("metrics") or {}).get("fcf_ttm")
+        if manual_fcf is not None:
+            prov = ["hand-entered in Edit metrics (undated)"]
+            if fcf["status"] == "computed":
+                prov.append(f"overrides the computed ${fcf['value']:,.1f}M "
+                            "from filings — clear the hand-entered value in "
+                            "Edit metrics to use it")
+            fcf = {"status": "computed", "source": "manual",
+                   "value": round(float(manual_fcf) / 1e6, 3),
+                   "asof": None, "provenance": prov, "cautions": []}
+        shares = self._ev_item(ref.get("shares")
+                               or {"status": "absent", "reason": never}, 1e6)
+        references = {}
+        for rid in ("net_income_ttm", "dda_ttm", "capex_ttm"):
+            references[rid] = self._ev_item(
+                ref.get(rid) or {"status": "absent", "reason": never}, 1e6)
+        return ok(prefill={"price": price_item, "fcf_ttm": fcf,
+                           "shares": shares},
+                  references=references)
+
+    @guarded
+    def save_valuation_defaults(self, discount_rate, terminal_growth,
+                                margin_of_safety):
+        """The journal's set-once valuation assumptions. One place, on
+        purpose: moving a discount rate per stock is how a DCF becomes a
+        rationalisation, so the default moves every valuation at once."""
+        try:
+            dr = float(discount_rate)
+            tg = float(terminal_growth)
+            mos = float(margin_of_safety)
+        except (TypeError, ValueError):
+            return err("Each default must be a number, as a percentage.")
+        if dr <= tg:
+            return err("The discount rate must exceed terminal growth, or "
+                       "every DCF value becomes infinite.")
+        if not (0 <= mos < 100):
+            return err("The margin of safety must be between 0 and 100 "
+                       "percent.")
+        with self._doc_lock:
+            settings = store.load("settings.json")
+            settings["discount_rate"] = dr
+            settings["terminal_growth"] = tg
+            settings["margin_of_safety"] = mos
+            store.save("settings.json", settings)
+        return ok()
+
     @guarded
     @locked
-    def compute_ev(self, ticker, method, inputs):
+    def compute_ev(self, ticker, method, inputs, sources=None):
         result = compute_ev(method, inputs or {})
         doc = self._securities_doc()
         s = self._find(doc.get("securities", []), ticker)
-        s["ev"] = {"method": method, "inputs": inputs,
-                   "computed": date.today().isoformat()}
+        record = {"method": method, "inputs": inputs,
+                  "computed": date.today().isoformat()}
+        # Where each prefillable input came from — fetched, overridden, or
+        # typed against absence — so the stored assumptions stay traceable.
+        if isinstance(sources, dict):
+            keys = {k for k, _l, _h in EV_METHODS.get(method, {})
+                    .get("inputs", [])}
+            record["sources"] = {k: v for k, v in sources.items()
+                                 if k in keys and isinstance(v, dict)}
+        s["ev"] = record
         self._write_securities_doc(doc)
         return ok(result=result)
 

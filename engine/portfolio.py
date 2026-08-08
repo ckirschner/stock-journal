@@ -76,7 +76,8 @@ def open_position(security: dict, profile: dict, profile_version,
                   shares: float, cost: float, opened: str | None = None,
                   override_reason: str = "", values: dict | None = None,
                   value_sources: dict | None = None,
-                  price_seen: dict | None = None) -> dict:
+                  price_seen: dict | None = None,
+                  evaluation: dict | None = None) -> dict:
     """Record a purchase under a profile and freeze what the lens showed.
 
     A failing or indeterminate verdict does not block anything. It gets
@@ -88,9 +89,19 @@ def open_position(security: dict, profile: dict, profile_version,
     over computed. They are what the snapshot freezes, because the snapshot's
     job is to record what was seen, and `value_sources` records where each
     one came from so the frozen record can say so forever.
+
+    `evaluation` says which moment the values belong to: basis "live" (the
+    data on screen right now) or "reconstructed" (rebuilt from what was
+    observable on a past purchase date), with `as_of` naming the day. The
+    record must never claim a verdict was seen live when it was rebuilt
+    later — that distinction is frozen here and travels with both the
+    snapshot and any override. Without it, the honest default is "live" as
+    of today: that is what evaluating the caller's values now actually is.
     """
     values = values if values is not None else (security.get("metrics") or {})
     result = evaluate_buy(values, profile)
+    evaluation = copy.deepcopy(evaluation) if evaluation \
+        else {"basis": "live", "as_of": _today()}
 
     security["bucket"] = "holdings"
     security["position"] = {
@@ -110,6 +121,7 @@ def open_position(security: dict, profile: dict, profile_version,
         "price_source": (price_seen or {}).get("source"),
         "price_date": (price_seen or {}).get("date"),
         "result": result,
+        "evaluation": evaluation,
     }
 
     if result["verdict"] != "buy":
@@ -121,6 +133,8 @@ def open_position(security: dict, profile: dict, profile_version,
         security["override"] = {
             "date": security["position"]["opened"],
             "verdict": word,
+            "basis": evaluation["basis"],
+            "as_of": evaluation["as_of"],
             "profile": security["entry_snapshot"]["profile"],
             "failed": failed,
             "missing": missing,
@@ -128,8 +142,11 @@ def open_position(security: dict, profile: dict, profile_version,
         }
         what = ("against signal" if result["verdict"] == "no_buy"
                 else "without a signal")
+        how = (f", reconstructed for {evaluation['as_of']} from the data "
+               "available by then"
+               if evaluation["basis"] == "reconstructed" else "")
         add_note(security, f"Bought {what} ({word} under "
-                           f"{profile.get('name')}). Stated reason: "
+                           f"{profile.get('name')}{how}). Stated reason: "
                            f"{security['override']['reason']}")
     else:
         security["override"] = None
