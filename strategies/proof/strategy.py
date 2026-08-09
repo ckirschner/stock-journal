@@ -19,13 +19,16 @@ STRATEGY = {
     "summary": "A scaffold that proves the host/strategy boundary carries "
                "data both ways. It reads one measure and always holds; it "
                "is not investment logic and never will be.",
-    "version": 2,
+    "version": 3,
     "contract": 4,
     "changelog": {
         1: "First version: reads free cash flow and the clock, and holds.",
         2: "Asks for free cash so the account figures can be proved end to "
            "end, and cites the weight and the account the host works out "
            "from it. Still holds, always.",
+        3: "Cites the latest price, so the boundary is proved to carry a "
+           "figure's day and its symbol and not just its number. Still "
+           "holds, always.",
     },
     "states": [
         {"id": "scaffold-hold", "name": "Nothing to do", "render": "hold",
@@ -98,6 +101,10 @@ def decide(ctx):
         # scaffold has no sentence of its own to offer about it.
         {"fact": "portfolio.cash"},
         {"fact": "portfolio.account_value"},
+        # A price is a figure about one instrument on one day, and citing it
+        # has to carry both — a company's share classes trade at different
+        # prices, so a number with no symbol behind it cannot be checked.
+        {"fact": "price.latest"},
     ]
     if ctx["position"]["held"]:
         evidence.append({"fact": "position.weight"})

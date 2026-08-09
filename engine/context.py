@@ -20,8 +20,8 @@ The shape, in full::
                                             "accession", "value", "reason",
                                             "cautions", "provenance"}],
                      "note", "truncated"}}},
-      "price":    {"latest": {"status": "known", "value", "date", "ticker",
-                              "source"}
+      "price":    {"latest": {"status": "known", "value", "source",
+                              "cautions", "provenance", "date", "ticker"}
                             | {"status": "absent", "reason"},
                    "closes": [[date, close], ...],   # as traded, ascending
                    "events": [[date, "split"|"dividend", amount], ...]},
@@ -361,6 +361,21 @@ def _measures(security, cik, tickers, as_of, today) -> dict:
 
 # -- price -------------------------------------------------------------------
 
+def _price_basis(view, ticker) -> str:
+    """Where a price came from, in a sentence — the instrument and the day,
+    or that it was typed in.
+
+    One sentence, one home. Market value says "20 shares at the ACME close of
+    2026-08-01" and the price itself says the same thing about the same
+    figure; two versions of it drift, and the half that goes missing is
+    always the half naming which share class was priced.
+    """
+    if view.get("source") == "manual":
+        return "the price entered by hand, which carries no date"
+    return (f'the {view.get("ticker") or ticker} close of {view["date"]}'
+            if view.get("date") else "the recorded close")
+
+
 def _price(security, cik, ticker, as_of, today) -> dict:
     """This security's price and its own close history.
 
@@ -371,6 +386,14 @@ def _price(security, cik, ticker, as_of, today) -> dict:
     Where this instrument has no rows the history is empty, because another
     class's history is not a fallback for it; it is a different price series
     for a different thing.
+
+    `latest` is built like every other figure the host reports, through
+    `_known`, so a strategy citing it gets the day and the symbol behind it
+    rather than a bare number. It was the one node that was not: the value
+    was right and its provenance was missing, which is cite-don't-quote
+    failing at the node where the symbol had just become load-bearing. The
+    same close reported through `position.market_value` named the instrument;
+    reported as itself it did not.
     """
     if as_of:
         # A hand-entered price is a statement about now; it never reaches
@@ -387,9 +410,15 @@ def _price(security, cik, ticker, as_of, today) -> dict:
                          or "no price is stored for this security — fetch "
                             "prices, or enter one by hand")
     else:
-        latest = {"status": "known", "value": float(view["value"]),
-                  "date": view.get("date"), "ticker": view.get("ticker"),
-                  "source": view.get("source")}
+        # `source` means here exactly what it means on every other figure:
+        # which side the value came from. Fetched or hand-entered, never a
+        # word invented for this node.
+        latest = _known(float(view["value"]), view.get("source") or "price",
+                        provenance=[_price_basis(view, ticker)])
+        # Kept beside the provenance sentence rather than only inside it: a
+        # rule that wants the close's own date wants a date, not prose.
+        latest["date"] = view.get("date")
+        latest["ticker"] = view.get("ticker")
     closes, events = dataview.price_series(cik, ticker, until=today)
     return {"latest": latest, "closes": closes, "events": events}
 
@@ -425,13 +454,9 @@ def _market_value(sec, shares, as_of=None):
         return _absent(view.get("reason")
                        or "no price is stored for this security, so its "
                           "market value cannot be computed")
-    if view.get("source") == "manual":
-        basis = "the price entered by hand"
-    else:
-        basis = (f'the {view.get("ticker") or ticker} close of {view["date"]}'
-                 if view.get("date") else "the recorded close")
     return _known(float(view["value"]) * shares, "computed",
-                  provenance=[f"{shares:g} shares at {basis}"])
+                  provenance=[f"{shares:g} shares at "
+                              f"{_price_basis(view, ticker)}"])
 
 
 _NO_CASH_ROLE = ("no strategy in this journal asks for your free cash, so "

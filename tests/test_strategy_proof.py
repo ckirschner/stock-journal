@@ -82,6 +82,42 @@ class TestTheProof:
         # names the field, rather than the scaffold inventing a sentence.
         assert by_id["portfolio.cash"]["observed"]["status"] == "absent"
         assert "Free cash" in by_id["portfolio.cash"]["observed"]["reason"]
+        # Nothing is stored to price this company, so the price is absent with
+        # its own reason rather than a bare dash.
+        assert by_id["price.latest"]["observed"]["status"] == "absent"
+
+    def test_a_cited_price_says_which_instrument_and_which_day(self):
+        """A company's share classes trade at different prices, so a price
+        with no symbol behind it cannot be checked against anything. This
+        was the one host fact not built like the others: the number was
+        right and its provenance was silently dropped."""
+        from engine import price_store
+        store_company(cik=998)
+        doc = price_store.load(998)
+        price_store.merge_series(doc, "SYNB", "test",
+                                 [["2026-08-03", 12.5, 100]], [])
+        price_store.save(998, doc)
+
+        rec = proof_record()
+        sec = {"ticker": "SYNB", "name": "Synthetic Co B", "cik": 998,
+               "metrics": {}, "lots": []}
+        ctx = context.build_context(sec, [sec],
+                                    strategy_values.resolve(rec)["values"],
+                                    {}, record=rec)
+        # Read directly, the node says which side the figure came from and
+        # which instrument and day it belongs to.
+        latest = ctx["price"]["latest"]
+        assert (latest["value"], latest["source"]) == (12.5, "fetched")
+        assert (latest["ticker"], latest["date"]) == ("SYNB", "2026-08-03")
+
+        # Cited, the same two facts reach the screen and the frozen record,
+        # in the host's own sentence rather than one the strategy wrote.
+        result = contract.evaluate(rec, ctx)
+        cited = next(e for e in result["reason"]["evidence"]
+                     if e["subject"]["id"] == "price.latest")
+        assert cited["observed"]["value"] == 12.5
+        [where] = cited["observed"]["provenance"]
+        assert "SYNB" in where and "2026-08-03" in where
 
     def test_the_account_figures_resolve_once_the_journal_answers(self):
         """The other half: a declared role turns an answer into a figure the
