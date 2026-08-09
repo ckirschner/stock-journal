@@ -1,19 +1,20 @@
-/* The view layer knows nothing about which metrics exist. Everything it draws
-   comes from the resolved profiles, the bank metadata and the evaluations
-   Python sends over. Adding a metric to the bank, or an entry to a profile,
-   changes no code here. */
+/* The view layer knows nothing about which measures or strategies exist.
+   Every verdict on every screen is one decision, produced by the strategy the
+   open journal is stamped with and handed over as plain data: a state the
+   strategy declared, a payload shaped by that state's render type, and a
+   reason carrying the figures behind it. Adding a measure to the bank, or
+   writing a whole new strategy, changes no code here. */
 
 let S = null;                 // last state from Python
 let tab = "holdings";
 let openTicker = null;
 let tipOpen = null;
-let lens = null;              // profile file currently viewed through
 
 const TABS = [
   ["holdings", "Current holdings"],
   ["previous", "Previous holdings"],
   ["ideas", "Ideas"],
-  ["profiles", "Profiles"],
+  ["strategy", "Strategy"],
   ["metrics", "Metrics"],
   ["data", "Data"],
 ];
@@ -22,7 +23,6 @@ const BUCKETS = ["holdings", "previous", "ideas"];
 /* Config pages keep their own lazy state. Selection lives in memory only,
    like the open tab — nothing is persisted browser-side. */
 let C = {
-  selected: null,             // profiles page selection
   bank: null, bankErr: null, loadingBank: false,
   search: "",
   coverage: null, coverageFor: null, loadingCoverage: false,
@@ -30,24 +30,19 @@ let C = {
 let FETCH_POLLS = {};         // ticker -> true while a poll loop runs
 
 /* ------------------------------------------------------------------ words */
-/* Semantic verdicts arrive from Python; the words are a view concern. */
-const BUY_WORDS = {
-  ideas: { buy: "Buy", no_buy: "No buy", cant_say: "Can't say" },
-  holdings: { buy: "Qualifies", no_buy: "Not now", cant_say: "Can't say" },
-  previous: { buy: "Would buy", no_buy: "Would not buy", cant_say: "Can't say" },
+/* Colour is semantic and never decorative, and every state carries its own
+   text label besides — the label is the strategy's declared name for it, so
+   colour is only ever the second signal. Keyed on the host's six render
+   types, which is the one permanent list; a strategy cannot add one. */
+const RENDER_TONE = {
+  commit: "pass", hold: "pass", reduce: "watch",
+  close: "fail", blocked: "watch", unknown: "none",
 };
-const BUY_TONES = { buy: "pass", no_buy: "fail", cant_say: "none" };
-const POS_WORDS = { fired: "Sell signal", breached: "Unconfirmed breach",
-  clear: "Hold", unwatched: "Unwatched" };
-const POS_TONES = { fired: "fail", breached: "watch", clear: "pass", unwatched: "none" };
-const SELL_STATUS = {
-  fired: ["Fired", "s-fail"], breached: ["Breached — unconfirmed", "s-watch"],
-  clear: ["Clear", "s-pass"], unevaluable: ["Can't check", "s-none"],
-  no_threshold: ["No threshold, by choice", "blank"],
-};
-const FLAG_STATUS = {
-  flagged: ["Flagged", "s-watch"], clear: ["Clear", "s-pass"],
-  unevaluable: ["Can't check", "s-none"],
+const OUTCOME = {
+  pass: ["meets it", "s-pass"],
+  fail: ["misses it", "s-fail"],
+  unknown: ["can't say", "s-none"],
+  noted: ["read", "blank"],
 };
 
 /* ------------------------------------------------------------------ utils */
@@ -55,19 +50,8 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g,
   (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-/* Formatter for the retired metric set, used only on frozen legacy records. */
-function fmtLegacy(v, f) {
-  if (v === null || v === undefined || v === "") return "—";
-  const n = Number(v);
-  if (f === "pct") return n.toFixed(1) + "%";
-  if (f === "pctd") return (n >= 0 ? "+" : "") + n.toFixed(1) + "%";
-  if (f === "ppt") return (n >= 0 ? "+" : "") + n.toFixed(1) + "pp";
-  if (f === "x") return n.toFixed(2) + "×";
-  return String(n);
-}
-
 /* The bank's format strings: "0.0%", "0.00x", "$0,0", "+0.0 pp", "0 of 10",
-   "+0,0 sh", "0 yrs", "0.00", "0". Parsed generically — no metric named. */
+   "+0,0 sh", "0 yrs", "0.00", "0". Parsed generically — no measure named. */
 function fmtBank(v, format) {
   if (v === null || v === undefined || v === "") return "—";
   const n = Number(v);
@@ -86,18 +70,52 @@ function fmtBank(v, format) {
   if (suffix) s += " " + suffix;
   return s;
 }
+
+/* The contract's own unit list, for figures that are not bank measures — a
+   declared setting, a host fact, something a strategy worked out itself. A
+   strategy picks the rendering from this list; it never invents one. */
+const num = (n, d) => Number(n).toLocaleString(undefined,
+  { minimumFractionDigits: d, maximumFractionDigits: d });
+const EV_UNIT = {
+  percent: (n) => num(n, 1) + "%",
+  percentage_points: (n) => (n >= 0 ? "+" : "−") + num(Math.abs(n), 1) + " pp",
+  times: (n) => num(n, 2) + "×",
+  times_own_median: (n) => num(n, 2) + "× its own median",
+  ratio: (n) => num(n, 2),
+  score: (n) => num(n, 2),
+  usd: (n) => (n < 0 ? "−$" : "$") + num(Math.abs(n), 0),
+  shares: (n) => num(n, 0) + " shares",
+  years: (n) => num(n, 1) + " yrs",
+  days: (n) => num(n, 0) + " days",
+  count: (n) => num(n, 0),
+  yes_no: (v) => (v ? "Yes" : "No"),
+  date: (v) => String(v),
+  text: (v) => String(v),
+  none: (v) => String(v),
+};
+function fmtUnit(v, unit) {
+  if (v === null || v === undefined) return "—";
+  const f = EV_UNIT[unit];
+  if (!f) return String(v);
+  if (["yes_no", "date", "text", "none"].includes(unit)) return f(v);
+  return Number.isFinite(Number(v)) ? f(Number(v)) : String(v);
+}
+/* A cited figure renders through its bank format where the bank has one, so
+   a measure reads the same in a strategy's reason as it does anywhere else,
+   and through the contract's unit list otherwise. */
+function fmtSubject(subj, v) {
+  const b = subj.kind === "measure" ? bankMeta(subj.id) : null;
+  return b && b.format ? fmtBank(v, b.format) : fmtUnit(v, subj.unit);
+}
+
 const bankMeta = (id) => (S.bank_meta || {})[id] || null;
 const labelOf = (id) => {
   const b = bankMeta(id);
-  if (b && b.label) return b.label;
-  const l = (S.legacy_labels || {})[id];
-  return l ? l.label + " (retired)" : id;
+  return b && b.label ? b.label : id;
 };
 const fmtMetric = (id, v) => {
   const b = bankMeta(id);
-  if (b) return fmtBank(v, b.format);
-  const l = (S.legacy_labels || {})[id];
-  return l ? fmtLegacy(v, l.fmt) : String(v);
+  return b ? fmtBank(v, b.format) : String(v);
 };
 
 const money = (n) => (n === null || n === undefined) ? "—" : "$" + Number(n).toFixed(2);
@@ -115,8 +133,6 @@ const dayGap = (a, b) => Math.round((Date.parse(a) - Date.parse(b)) / 86400000);
 /* Effective price: hand-entered wins; otherwise the newest fetched close.
    The source and date travel with it so a stale quote is visibly stale. */
 const px = (s) => (s._price && s._price.value != null) ? s._price.value : s.price;
-/* A close's age must be readable at a glance: a year-old close shown as
-   MM-DD reads as days old, which is the display lying about staleness. */
 function fmtCloseDate(d) {
   if (!d) return "";
   const s = String(d).slice(0, 10);
@@ -133,6 +149,11 @@ function dataFact(s) {
   if (s._fetch && s._fetch.running) return "fetching…";
   const d = s._data;
   if (!d) return "never fetched";
+  /* The host contains a broken data layer rather than crashing, and hands
+     the sentence over. Reading counts off that object would print
+     "undefined filings · fetched never" — a confident, wrong answer where
+     the honest one was already available. */
+  if (d.error) return d.error;
   const when = d.last_fetch ? String(d.last_fetch.at).slice(0, 10) : "never";
   return `${d.filings_held} filings · fetched ${when}`;
 }
@@ -172,158 +193,233 @@ async function apiRaw(method, ...args) {
 }
 async function refresh() {
   const r = await api("get_state");
-  if (r) {
-    S = r;
-    if (!lens || !S.profiles[lens]) {
-      lens = (S.settings.active_profile && S.profiles[S.settings.active_profile])
-        ? S.settings.active_profile : (S.profile_order[0] || null);
-    }
-    if (!C.selected || !S.profiles[C.selected]) C.selected = lens;
-    render();
-  }
+  if (r) { S = r; render(); }
 }
 
-const inBucket = (b) => S.securities.filter((s) => s.bucket === b);
-const find = (t) => S.securities.find((s) => s.ticker === t);
-const lensProfile = () => (lens && S.profiles[lens]) || null;
-const evalFor = (s) => (lens && s._eval && s._eval[lens]) || null;
-const profLabel = (p) => p ? `${p.name} v${p.version ?? "?"}` : "—";
+const inBucket = (b) => (S.securities || []).filter((s) => s.bucket === b);
+const find = (t) => (S.securities || []).find((s) => s.ticker === t);
+const decisionOf = (s) => s._decision || null;
+const renderOf = (d) => (d && d.render) || "unknown";
+const needsAttention = (d) =>
+  !!(d && (S.render_types || {})[d.render] || {}).attention;
+
+/* A position is its lots. Everything below reads them; nothing recomputes a
+   total the backend already derived, because two answers to "how many
+   shares" is one answer too many. */
+const buyLots = (s) => s._lots || [];
+const sales = (s) => s._sales || [];
+const overrideLots = (s) => buyLots(s).filter((l) => l.override);
+
+/* A security is not held once. It is bought, closed, and — when the strategy
+   says so again — bought back, and each of those is its own round trip with
+   its own answer to "how did that go". The backend derives the periods from
+   the lots; nothing here recomputes a boundary, and nothing here asks a
+   per-period question of the security as a whole. */
+const periods = (s) => s._cycles || [];
+const openPeriod = (s) => periods(s).find((c) => c.open) || null;
+const closedPeriods = (s) => periods(s).filter((c) => !c.open);
+const lotById = (s) => {
+  const m = {};
+  buyLots(s).concat(sales(s)).forEach((l) => { m[l.id] = l; });
+  return m;
+};
+const periodLots = (s, c) => {
+  const by = lotById(s);
+  return c.buys.concat(c.sells).map((id) => by[id]).filter(Boolean)
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)) || (a.seq - b.seq));
+};
+/* Every closed period in the journal, newest first — the unit the Previous
+   holdings tab is about. A name held twice closed twice, and one row
+   covering both would describe neither. */
+const allClosedPeriods = () => (S.securities || [])
+  .flatMap((s) => closedPeriods(s).map((c) => ({ s, c })))
+  .sort((a, b) => String(b.c.closed).localeCompare(String(a.c.closed)));
+
+const ORDINALS = ["", "First", "Second", "Third", "Fourth", "Fifth", "Sixth"];
+/* Words while there are words, then digits with the right suffix. "21th" is
+   the kind of small wrongness that makes a reader trust the numbers less. */
+const ordinal = (n) => ORDINALS[n]
+  || `${n}${["th", "st", "nd", "rd"][(n % 100 - n % 10 !== 10) && n % 10 < 4 ? n % 10 : 0]}`;
+/* Named only where it disambiguates. One holding needs no ordinal, and
+   adding one everywhere would spend legibility to say nothing. */
+const periodName = (s, c) =>
+  periods(s).length > 1 ? `${ordinal(c.seq)} holding` : "Holding";
+
+const lotCount = (s) => {
+  /* Lots you still hold shares from — not lots this ticker ever had, and not
+     ones a trim has already emptied. Either of those reads on a holdings row
+     as shares you own. */
+  const n = buyLots(s).filter((l) => l.open).length;
+  return n > 1 ? ` <span class="dim">· ${n} lots</span>` : "";
+};
 
 /* ---------------------------------------------------------------- chrome */
 function renderMast() {
+  const j = S.journal;
   const h = inBucket("holdings");
   /* A holding without a price must never enter these sums as zero — that
      would render a confident, wrong loss in the most prominent numbers in
      the app. Absence propagates: any unpriced holding makes the totals
      honestly unknown. */
   const unpriced = h.filter((s) => px(s) == null).length;
-  const mv = h.reduce((a, s) => a + (px(s) || 0) * (s.position ? s.position.shares : 0), 0);
-  const cb = h.reduce((a, s) => a + (s.position ? s.position.cost_basis * s.position.shares : 0), 0);
+  const mv = h.reduce((a, s) => a + (px(s) || 0) * (s._shares || 0), 0);
+  const cb = h.reduce((a, s) => a + (s._cost_basis || 0) * (s._shares || 0), 0);
   const mvTxt = unpriced ? "—" : "$" + mv.toLocaleString(undefined, { maximumFractionDigits: 0 });
   const unrealTxt = (unpriced || !cb) ? "—" : (mv >= cb ? "+" : "") + ((mv / cb - 1) * 100).toFixed(1) + "%";
   const unpricedNote = unpriced ? ` title="${unpriced} of ${h.length} position${h.length === 1 ? "" : "s"} ha${unpriced === 1 ? "s" : "ve"} no price — fetch data or enter one"` : "";
-  /* The header counts signals under each position's own profile — the rules
-     it was bought under — so the count doesn't change when the lens does. */
-  const fired = h.filter((s) => s._own && s._own.state && s._own.state.overall === "fired").length;
-  $("maststats").innerHTML = !h.length ? "" :
+  const attention = h.filter((s) => needsAttention(decisionOf(s))).length;
+  $("maststats").innerHTML = (!j || !h.length) ? "" :
     `<div><i>Market value${unpriced ? ` · ${unpriced} unpriced` : ""}</i><b${unpricedNote}>${mvTxt}</b></div>
      <div><i>Unrealised</i><b class="${unpriced || !cb ? "" : mv >= cb ? "pos" : "neg"}"${unpricedNote}>${unrealTxt}</b></div>
      <div><i>Positions</i><b>${h.length}</b></div>
-     <div><i>Sell signals</i><b class="${fired ? "neg" : ""}" title="Counted under each position's own profile">${fired}</b></div>`;
-  const p = lensProfile();
-  $("subtitle").textContent = "Portfolio journal" + (p ? ` · viewing through ${profLabel(p)}` : "");
+     <div><i>Need a look</i><b class="${attention ? "neg" : ""}" title="Positions whose state asks something of you">${attention}</b></div>`;
+  $("subtitle").textContent = j
+    ? `${j.name} · ${(j.strategy || {}).name || "no strategy"}`
+    : "Portfolio journal";
   $("foot").innerHTML = `This tool never places a trade and holds no broker credentials. `
-    + `It checks what you tell it against profiles you configured.<br>Data stored at ${esc(S.data_dir)}, never inside the project folder.`;
+    + `A journal has one strategy, chosen when it is created.<br>Data stored at ${esc(S.data_dir)}, never inside the project folder.`;
 }
 function renderTabs() {
+  if (!S.journal) { $("tabs").innerHTML = ""; return; }
   $("tabs").innerHTML = TABS.map(([id, label]) => {
-    const n = BUCKETS.includes(id) ? `<em>${inBucket(id).length}</em>` : "";
+    /* Previous holdings counts closed periods, not securities: a name held
+       and closed twice is two things that happened, and counting it once
+       hides the second. The other two count securities, because a security
+       is either held now or it is not. */
+    const n = id === "previous" ? `<em>${allClosedPeriods().length}</em>`
+      : BUCKETS.includes(id) ? `<em>${inBucket(id).length}</em>` : "";
     return `<button class="tab" role="tab" aria-selected="${tab === id}" data-tab="${id}">${label}${n}</button>`;
   }).join("");
 }
 
-function lensBar() {
-  if (!S.profile_order.length) return "";
-  return `<span class="lenslabel">Lens</span><span class="seg">${
-    S.profile_order.map((f) => `<button type="button" data-lens="${esc(f)}"
-      aria-pressed="${f === lens}">${esc(S.profiles[f].name)}</button>`).join("")}</span>`;
-}
-
-/* Profile edits made outside the app are already on the record; what is
-   still owed is the reason. Loud until written. */
-function pendingBanner() {
-  const pend = S.pending_changes || [];
-  if (!pend.length) return "";
-  return `<div class="pending"><h4>Profile changes without a written reason</h4>
-    ${pend.map((c) => `<div class="pendrow">
-      <b>${esc(c.file)} v${c.version}</b>
-      <ul>${(c.changes || []).map((l) => `<li>${esc(l)}</li>`).join("")}</ul>
-      <button class="btn" data-act="explain" data-file="${esc(c.file)}" data-version="${c.version}">Write the reason</button>
-    </div>`).join("")}
-    <p class="hint" style="margin-top:10px">The change itself is recorded either way — with a timestamp and the
-    exact lines that moved. The reason is the part only you can supply, and it is written once.</p></div>`;
+function journalBar() {
+  const j = S.journal;
+  const others = (S.journals || []).filter((x) => x.id !== (j && j.id));
+  return `<div class="jbar">
+    <span class="lenslabel">Journal</span>
+    <span class="seg">${(S.journals || []).map((x) => `<button type="button"
+      data-journal="${esc(x.id)}" aria-pressed="${j && x.id === j.id}"
+      ${x.problem ? `disabled title="${esc(x.problem)}"` : ""}>${esc(x.name)}</button>`).join("")}</span>
+    <button class="btn" data-act="newjournal">New journal</button>
+    ${others.length ? "" : '<span class="dim">One strategy per journal. A second strategy means a second journal.</span>'}
+  </div>`;
 }
 
 const cfgErrorBox = (errs) => !errs.length ? "" :
   `<div class="notice"><h4>Configuration problem</h4>
    ${errs.map((e) => `<p>${esc(e)}</p>`).join("")}</div>`;
 
-/* ----------------------------------------------------------------- lists */
-function buyPill(b) {
-  if (!b) return '<span class="score s-none">—</span>';
-  const ko = b.tiers.find((t) => t.requires === "all_green" && t.outcome === "fail");
-  if (ko) return `<span class="score s-fail">${esc((ko.key || "").toUpperCase())} ✗</span>`;
-  const core = b.tiers.filter((t) => t.requires === "at_least");
-  if (!core.length) return "";
-  const g = core.reduce((a, t) => a + t.greens, 0);
-  const n = core.reduce((a, t) => a + t.count, 0);
-  const keys = core.map((t) => t.key).join(" + ");
-  return `<span class="score s-${BUY_TONES[b.verdict]}" title="${esc(keys)} entries green">${g}/${n}</span>`;
+/* One side of a change is empty when the strategy gained or dropped the
+   setting entirely. That is not a value, and it never renders as one — a
+   literal "null" on screen reads as a number somebody chose. */
+const movedLine = (m) =>
+  m.from === null || m.from === undefined
+    ? `${m.label}: now ${m.to} — the strategy did not have this setting before`
+    : m.to === null || m.to === undefined
+    ? `${m.label}: was ${m.from} — the strategy no longer has this setting`
+    : `${m.label}: ${m.from} → ${m.to}`;
+
+/* A change to what the strategy demands is already on the record. What is
+   still owed is the reason — and only where the user is the one who moved a
+   number. An author's new version already says what changed. */
+function pendingBanner() {
+  const pend = S.pending_changes || [];
+  if (!pend.length) return "";
+  return `<div class="pending"><h4>Rule changes without a written reason</h4>
+    ${pend.map((c) => `<div class="pendrow">
+      <b>Change ${c.seq} · ${esc(String(c.seen).slice(0, 10))}</b>
+      <ul>${(c.moved || []).map((m) => `<li>${esc(movedLine(m))}</li>`).join("")}</ul>
+      ${(c.notes || []).map((n) => `<p class="hint">${esc(n)}</p>`).join("")}
+      <button class="btn" data-act="explain" data-seq="${c.seq}">Write the reason</button>
+    </div>`).join("")}
+    <p class="hint" style="margin-top:10px">The change itself is recorded either way — timestamped, with the
+    numbers that moved. The reason is the part only you can supply, and it is written once.</p></div>`;
 }
-function verdictCell(s) {
-  const ev = evalFor(s);
-  if (!ev) return '<span class="stamp v-none">—</span>';
-  if (s.bucket === "holdings" && ev.position) {
-    const o = ev.position.overall;
-    return `<span class="stamp v-${POS_TONES[o]}">${POS_WORDS[o]}</span>`;
-  }
-  const v = ev.buy.verdict;
-  return `<span class="stamp v-${BUY_TONES[v]}">${BUY_WORDS[s.bucket][v]}</span>`;
+
+function missingStrategyBanner() {
+  if (!S.strategy_missing) return "";
+  const m = S.strategy_missing;
+  return `<div class="notice"><h4>${esc(m.name || m.id)} is not installed here</h4>
+    <p>This journal is stamped with it, so everything already recorded stays readable exactly as written —
+    but no new verdict can be produced until the strategy is back on this machine. Install it and the
+    journal picks up where it left off, including anything its rules changed while it was away.</p></div>`;
+}
+
+/* ----------------------------------------------------------------- lists */
+function stateStamp(d, big) {
+  if (!d) return `<span class="stamp${big ? " big" : ""} v-none">—</span>`;
+  const tone = RENDER_TONE[renderOf(d)] || "none";
+  return `<span class="stamp${big ? " big" : ""} v-${tone}"
+    title="${esc((d.state || {}).description || "")}">${esc((d.state || {}).name || "—")}</span>`;
+}
+
+/* What happened after a sale, with the window it rests on named. "Up 40%
+   since you sold" and "up 40% between selling and buying again" are different
+   claims, and only one of them is true once the user went back in. */
+function sinceExitCell(x) {
+  if (!x) return '<span class="dim">—</span>';
+  if (x.pct === null || x.pct === undefined)
+    return `<span class="dim" title="${esc(x.reason || "")}">—</span>`;
+  return x.until === "purchase"
+    ? `${pctCell(x.pct)} <span class="dim" title="Measured to the ${esc(x.date)} purchase, not to today — once you owned it again, the move was yours rather than evidence about the sale.">·&nbsp;to&nbsp;next&nbsp;buy</span>`
+    : pctCell(x.pct);
 }
 
 function listView() {
-  const rows = inBucket(tab);
+  const rows = tab === "previous" ? allClosedPeriods() : inBucket(tab);
   const addBtn = tab === "previous" ? ""
     : `<button class="btn primary" data-act="add">${tab === "ideas" ? "Add a candidate" : "Add a security"}</button>`;
-  let html = pendingBanner();
+  let html = missingStrategyBanner() + pendingBanner();
   html += `<div class="toolbar" style="justify-content:space-between;align-items:center">
-    <div class="lensbar">${lensBar()}</div><div>${addBtn}</div></div>`;
-  if (!lens) return html + cfgErrorBox(S.profile_errors.length ? S.profile_errors
-    : ["No profiles found on disk. Profiles live as .yaml files in the profiles folder inside your data directory."]);
+    ${journalBar()}<div>${addBtn}</div></div>`;
 
   if (!rows.length) {
     const msg = {
-      holdings: "No open positions. Add a security, enter its metrics, then record a purchase.",
-      previous: "Nothing closed yet. When you exit a position it stays here so you can see what happened next.",
-      ideas: "No candidates yet. Add one and the profile will tell you where it stands.",
+      holdings: "No open positions. Add a security, then record a purchase — the strategy tells you what it makes of it first.",
+      previous: "Nothing closed yet. When you exit a position it stays here so you can see what happened next — and it stays buyable, so coming back to a name is one more entry.",
+      ideas: "No candidates yet. Add one and the strategy will tell you where it stands.",
     }[tab];
-    return html + `<div class="sheet"><div class="empty"><p>${msg}</p>
+    html += `<div class="sheet"><div class="empty"><p>${msg}</p>
       ${tab !== "previous" ? '<button class="btn primary" data-act="add">Add a security</button>' : ""}</div></div>`;
+    /* An empty list is not a reason to withhold the analytics. They summarise
+       every purchase and sale in the journal, and hiding them because this
+       one list has no rows is how a re-purchase used to make a whole
+       journal's evidence disappear. */
+    return html + (tab === "previous" ? scorecards() : "");
   }
+
+  /* Sorted by the host's own render order, so whatever asks most of you sits
+     at the top. The view never learns which states exist. */
+  const order = (s) => ((S.render_types || {})[renderOf(decisionOf(s))] || {}).order ?? 9;
 
   let head, body;
   if (tab === "holdings") {
-    head = '<th class="l">Position</th><th>Price</th><th>Cost</th><th>Since buy</th><th class="hide-sm">Score</th><th>Verdict</th>';
-    body = rows.map((s) => {
-      const ownFired = s._own && s._own.state && s._own.state.overall === "fired";
-      const ownName = s._own && s._own.profile ? s._own.profile.name : "";
-      return `<tr data-t="${s.ticker}"><td class="l"><span class="tick">${esc(s.ticker)}</span>
-      ${s.override ? '<span class="flagdot" title="Bought against or without the signal"></span>' : ""}
-      ${ownFired ? `<span class="flagdot" title="Sell signal under ${esc(ownName)}, the profile it was bought under"></span>` : ""}
-      <div class="coname">${esc(s.name)}</div></td>
-      <td>${priceCell(s)}</td><td class="dim">${money(s.position && s.position.cost_basis)}</td>
-      <td>${pctCell(s._realised)}</td>
-      <td class="hide-sm">${buyPill(evalFor(s) && evalFor(s).buy)}</td>
-      <td>${verdictCell(s)}</td></tr>`;
-    }).join("");
+    const sorted = rows.slice().sort((a, b) => order(a) - order(b));
+    head = '<th class="l">Position</th><th>Price</th><th>Avg cost</th><th>Since buy</th><th>State</th>';
+    body = sorted.map((s) => `<tr data-t="${s.ticker}"><td class="l"><span class="tick">${esc(s.ticker)}</span>
+      ${(openPeriod(s) ? periodLots(s, openPeriod(s)) : []).some((l) => l.override) ? '<span class="flagdot" title="This position holds shares bought against or without the signal"></span>' : ""}
+      <div class="coname">${esc(s.name)}${lotCount(s)}</div></td>
+      <td>${priceCell(s)}</td><td class="dim">${money(s._cost_basis)}</td>
+      <td title="What the position you hold now has returned. An earlier holding of the same name is its own row under Previous holdings.">${pctCell(s._return)}</td>
+      <td>${stateStamp(decisionOf(s))}</td></tr>`).join("");
   } else if (tab === "previous") {
-    head = '<th class="l">Position</th><th>Return held</th><th>Since exit</th><th class="hide-sm">Exit reason</th><th class="hide-sm">Score</th><th>Today</th>';
-    body = rows.map((s) => {
-      const ex = s.exit || {};
-      return `<tr data-t="${s.ticker}"><td class="l"><span class="tick">${esc(s.ticker)}</span>
-        <div class="coname">${esc(s.name)}</div></td>
-        <td>${pctCell(ex.return_pct)}</td><td>${pctCell(s._since_exit)}</td>
-        <td class="hide-sm"><span class="chip s-none">${esc(ex.reason || "")}</span></td>
-        <td class="hide-sm">${buyPill(evalFor(s) && evalFor(s).buy)}</td>
-        <td>${verdictCell(s)}</td></tr>`;
-    }).join("");
+    /* One row per closed holding period, newest first. A name held twice is
+       two round trips, and one row averaging them would describe neither. */
+    head = '<th class="l">Holding</th><th>Return held</th><th>Since exit</th><th class="hide-sm">Exit reason</th><th>Today</th>';
+    body = rows.map(({ s, c }) => `<tr data-t="${s.ticker}"><td class="l"><span class="tick">${esc(s.ticker)}</span>
+        ${openPeriod(s) ? '<span class="chip s-none" title="This name is held again — the open position is under Current holdings.">held again</span>' : ""}
+        <div class="coname">${esc(s.name)}</div>
+        <div class="dim">${periods(s).length > 1 ? esc(periodName(s, c)) + " · " : ""}${esc(c.opened)} → ${esc(c.closed)}</div></td>
+        <td>${pctCell(c.return)}</td><td>${sinceExitCell(c.since_exit)}</td>
+        <td class="hide-sm"><span class="chip s-none">${esc(c.reason || "")}</span></td>
+        <td>${stateStamp(decisionOf(s))}</td></tr>`).join("");
   } else {
-    head = '<th class="l">Candidate</th><th>Price</th><th class="hide-sm">Added</th><th class="hide-sm">Score</th><th>Verdict</th>';
-    body = rows.map((s) => `<tr data-t="${s.ticker}"><td class="l"><span class="tick">${esc(s.ticker)}</span>
+    const sorted = rows.slice().sort((a, b) => order(a) - order(b));
+    head = '<th class="l">Candidate</th><th>Price</th><th class="hide-sm">Added</th><th>State</th>';
+    body = sorted.map((s) => `<tr data-t="${s.ticker}"><td class="l"><span class="tick">${esc(s.ticker)}</span>
       <div class="coname">${esc(s.name)}</div></td>
       <td>${priceCell(s)}</td><td class="dim hide-sm">${esc(s.added)}</td>
-      <td class="hide-sm">${buyPill(evalFor(s) && evalFor(s).buy)}</td>
-      <td>${verdictCell(s)}</td></tr>`).join("");
+      <td>${stateStamp(decisionOf(s))}</td></tr>`).join("");
   }
   html += `<div class="sheet"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
   if (tab === "previous") html += scorecards();
@@ -333,102 +429,204 @@ function listView() {
 function scorecards() {
   const o = S.override_scorecard, x = S.exit_scorecard;
   const line = (k, v) => `<div class="kv"><span>${esc(k)}</span><b>${v}</b></div>`;
+  /* Counted per purchase, not per name and not per round trip: one buy can
+     be a compliant entry and the next in the same name an override, and
+     collapsing them loses exactly the comparison this exists to make. */
   const summ = (d) => d.n
-    ? line("Trades", d.n) + line("Win rate", d.win_rate + "%") + line("Average return", (d.avg >= 0 ? "+" : "") + d.avg + "%")
+    ? line("Purchases", d.n) + line("Win rate", d.win_rate + "%") + line("Average return", (d.avg >= 0 ? "+" : "") + d.avg + "%")
     : '<p class="hint">Nothing to compare yet.</p>';
 
-  let perRule = "";
   const keys = Object.keys(o.per_rule || {});
-  if (keys.length) {
-    perRule = keys.map((id) => {
-      const b = o.per_rule[id];
-      return line(labelOf(id), `${b.wins}/${b.n} · ${b.avg >= 0 ? "+" : ""}${b.avg}%`);
-    }).join("");
-  }
+  const perRule = keys.map((id) => {
+    const b = o.per_rule[id];
+    return line(b.label, `${b.wins}/${b.n} · ${b.avg >= 0 ? "+" : ""}${b.avg}%`);
+  }).join("");
 
   const exRows = Object.keys(x).map((reason) => {
     const b = x[reason];
     return line(reason + ` (${b.n})`,
       `held ${b.avg_held === null ? "—" : (b.avg_held >= 0 ? "+" : "") + b.avg_held + "%"}`
       + ` · after ${b.avg_after === null ? "—" : (b.avg_after >= 0 ? "+" : "") + b.avg_after + "%"}`);
-  }).join("") || '<p class="hint">No closed positions yet.</p>';
+  }).join("") || '<p class="hint">No sales recorded yet.</p>';
+  /* "After" measures to today, except where the name was bought again — there
+     it stops at that purchase. Saying so matters: an average that silently
+     mixes two window lengths is a different number from the one it claims to
+     be, and this one is the sell-rule evidence. Bought *again*, not bought
+     *back*: adding after a trim ends the window for the same reason, and the
+     position was never closed. */
+  const again = Object.keys(x).reduce((a, r) => a + (x[r].bought_again || 0), 0);
+  const backNote = again
+    ? `<p class="hint">${again} of these sales ${again === 1 ? "was" : "were"} followed by buying the name again.
+       Those measure to that purchase rather than to today — once you owned it again, the move was yours rather than
+       evidence about the sale.</p>` : "";
 
+  /* Two kinds of override, counted apart on purpose. Going ahead in the face
+     of a verdict and going ahead where there was no verdict to face are not
+     the same decision, and averaging them makes a data gap look like
+     defiance. */
+  const k = o.kinds || {};
+  const kindNote = (k.against || k.without)
+    ? `<p class="hint">${k.against || 0} against a verdict · ${k.without || 0} where there was no verdict to go against.</p>` : "";
   const reconNote = o.reconstructed_overrides
     ? `<p class="hint">${o.reconstructed_overrides} of these ${o.reconstructed_overrides === 1 ? "is a" : "are"} reconstructed
        backfill${o.reconstructed_overrides === 1 ? "" : "s"} — the verdict was rebuilt for the purchase date, not seen at the time.</p>` : "";
   return `<div class="cards">
-    <div class="panel"><h3>Overrides</h3><div class="sub">Bought against or without the signal</div>${summ(o.override)}${reconNote}</div>
-    <div class="panel"><h3>Compliant</h3><div class="sub">Bought with the signal</div>${summ(o.compliant)}</div>
+    <div class="panel"><h3>Overrides</h3><div class="sub">Bought against or without the signal</div>${summ(o.override)}${kindNote}${reconNote}</div>
+    <div class="panel"><h3>Compliant</h3><div class="sub">Bought when the strategy said so</div>${summ(o.compliant)}</div>
     <div class="panel"><h3>By exit reason</h3><div class="sub">Return while held · return since</div>${exRows}
-      <p class="hint">If one reason keeps showing a strong return <em>after</em> you sold, that is the sell rule to look at.</p></div>
+      <p class="hint">If one reason keeps showing a strong return <em>after</em> you sold, that is the rule to look at.</p>${backNote}</div>
     ${perRule ? `<div class="panel"><h3>Rules you overrode</h3><div class="sub">Wins / times · average</div>${perRule}
-      <p class="hint">If overriding a rule keeps working, the rule is miscalibrated, not you. That is a reason to change the profile, written down.</p></div>` : ""}
+      <p class="hint">If overriding a rule keeps working, the rule is miscalibrated, not you. That is a reason to change the
+      strategy's settings, written down.</p></div>` : ""}
   </div>`;
 }
 
-/* ---------------------------------------------------------------- detail */
-function causeText(buy) {
-  if (!buy || !buy.causes.length) {
-    if (!buy) return "";
-    const core = buy.tiers.filter((t) => t.requires === "at_least");
-    const g = core.reduce((a, t) => a + t.greens, 0), n = core.reduce((a, t) => a + t.count, 0);
-    const keys = core.map((t) => t.key).join(" + ");
-    return core.length ? `${g} of ${n} ${keys} entries green` : "all tiers clear";
+/* ------------------------------------------------------- the decision ---- */
+/* A verdict without the figures that produced it teaches nothing. Every
+   conclusion is traceable to its cause, in place: the rule inside the
+   strategy that produced it, the sentence saying why, and each figure it
+   cited with what was required and how the comparison came out. */
+
+function payloadText(d) {
+  const p = d.payload || {};
+  if (d.render === "commit") {
+    const size = p.size || {};
+    const how = size.unit === "weight" ? `${size.value}% of the account`
+      : size.unit === "usd" ? "$" + Number(size.value).toLocaleString()
+      : `${Number(size.value).toLocaleString()} shares`;
+    return p.condition
+      ? `Commit ${how} — once ${esc(p.condition.summary)}`
+      : `Commit ${how}, now`;
   }
-  return buy.causes.map((c) => c.text).join(" · ");
-}
-function positionNote(pos) {
-  if (!pos) return "";
-  if (pos.overall === "fired") {
-    const which = pos.signals.filter((x) => x.status === "fired").map((x) => labelOf(x.metric));
-    if (pos.clock && pos.clock.expired) which.push(`position clock expired ${pos.clock.due}`);
-    return which.join(" · ");
+  if (d.render === "reduce") {
+    const t = p.to || {};
+    return `Reduce to ${t.unit === "weight" ? t.value + "% of the account"
+      : Number(t.value).toLocaleString() + " shares"}`;
   }
-  if (pos.overall === "breached")
-    return pos.signals.filter((x) => x.status === "breached").map((x) => {
-      const c = x.confirmation;
-      return labelOf(x.metric) + (c ? ` (${c.observed} of ${c.required})` : "");
-    }).join(" · ") + " — awaiting confirmation";
-  if (pos.overall === "unwatched") return "sell thresholds exist but none can currently be checked";
-  return pos.watchable ? `${pos.watchable - pos.unevaluable} of ${pos.watchable} sell checks running` : "no sell thresholds";
+  if (d.render === "close") return `Exit due ${esc(p.when)}`;
+  if (d.render === "blocked") {
+    return `<ul class="pe-nmw">${(p.needs || []).map((n) => `<li>${esc(n)}</li>`).join("")}</ul>`;
+  }
+  return "";
 }
 
+function evidenceRow(item, i) {
+  const subj = item.subject || {};
+  const obs = item.observed || {};
+  const [word, cls] = OUTCOME[item.outcome] || [item.outcome, "s-none"];
+  const known = obs.status === "known";
+  const val = known
+    ? `<b>${esc(fmtSubject(subj, obs.value))}</b>`
+    : `<span class="chip blank">not known</span>`;
+
+  let test = "";
+  if (item.test) {
+    const t = item.test;
+    const thr = esc(fmtSubject(subj, t.threshold));
+    const from = t.threshold_from
+      ? ` <span class="dim">— your ${esc(t.threshold_from.label)}</span>` : "";
+    test = ` <span class="dim">${esc(t.phrase)}</span> ${thr}${from}`;
+  }
+  const at = subj.at ? ` <span class="dim">as at ${esc(subj.at)}</span>` : "";
+  const why = !known ? `<div class="greynote">${esc(obs.reason)}</div>` : "";
+  const prov = (obs.provenance || []).map((p) => `<div class="greynote">${esc(p)}</div>`).join("");
+  const warn = (obs.cautions || []).map((c) => `<div class="greynote">⚠ ${esc(c)}</div>`).join("");
+
+  const explain = subj.explain
+    || (subj.kind === "measure" && bankMeta(subj.id) ? bankMeta(subj.id).plain : null);
+  const tipId = "ev:" + i;
+  const tip = explain
+    ? `<button class="tip" data-tip="${esc(tipId)}" aria-expanded="${tipOpen === tipId}"
+        aria-label="What is ${esc(subj.label)}?">?</button>` : "";
+  const tipBox = (explain && tipOpen === tipId)
+    ? `<div class="tipbox">${prose(explain)}
+       <span class="who">${subj.kind === "measure" ? `Bank entry <code>${esc(subj.id)}</code> — full definition on the Metrics tab`
+         : subj.kind === "value" ? "A setting this strategy ships and you can change"
+         : subj.kind === "input" ? "Something you told this journal at setup"
+         : subj.kind === "fact" ? "A figure the journal reports about your position"
+         : "A figure the strategy worked out itself"}</span></div>` : "";
+
+  return `<div class="srow"><div class="sname">${esc(subj.label)}${at}${tip}</div>
+    <div class="scond">${val}${test}${why}${prov}${warn}${tipBox}</div>
+    <div class="sstate"><span class="chip ${cls}">${esc(word)}</span></div></div>`;
+}
+
+/* A blocked verdict with nothing to click is a dead end, and the state that
+   says "the strategy needs an answer you have not given" is exactly the one
+   a user must be able to escape. The host names the screen that resolves
+   each of its own states; the view is told, and never recognises an id. */
+const FIX_LABEL = { settings: "Fix this journal's settings" };
+function fixButton(d) {
+  const fix = ((d || {}).state || {}).fix;
+  if (!fix || !FIX_LABEL[fix]) return "";
+  return `<div class="toolbar" style="justify-content:flex-start;margin:12px 0 0">
+    <button class="btn primary" data-act="${esc(fix)}">${esc(FIX_LABEL[fix])}</button></div>`;
+}
+
+function decisionSection(d, title) {
+  if (!d) return "";
+  const r = d.reason || {};
+  const ev = r.evidence || [];
+  const payload = payloadText(d);
+  const host = d.produced_by === "host";
+  return `<section class="group"><div class="ghead"><h3>${esc(title || "The verdict")}</h3>
+      <span>${esc((d.state || {}).name || "")}</span></div>
+    <p class="hint" style="margin:8px 0 0">${esc((d.state || {}).description || "")}</p>
+    <div class="rollup" style="margin-top:12px">
+      <div class="pe-head"><b>${esc(r.summary || "")}</b></div>
+      <div class="pe-sub" style="margin-top:6px">${host
+        ? "Produced by the journal itself, not by the strategy — no verdict exists to show."
+        : `Rule <code>${esc(r.rule)}</code> inside ${esc((d.strategy || {}).name || "the strategy")}
+           v${esc((d.strategy || {}).version)}${(d.strategy || {}).values_version != null
+             ? ` · settings v${esc((d.strategy || {}).values_version)}` : ""}`}</div>
+      ${payload ? `<div class="pe-th" style="margin-top:10px">${payload}</div>` : ""}
+      ${r.note ? `<div class="pe-why">${prose(r.note)}</div>` : ""}
+      ${fixButton(d)}
+    </div>
+    ${ev.length ? `<div class="slist" style="margin-top:14px">${ev.map(evidenceRow).join("")}</div>`
+      : '<p class="hint" style="margin-top:12px">No figures were cited — nothing about the security was read.</p>'}
+  </section>`;
+}
+
+/* ---------------------------------------------------------------- detail */
 function detailView(s) {
   const isHold = s.bucket === "holdings", isPrev = s.bucket === "previous";
-  const prof = lensProfile();
-  const ev = evalFor(s);
-  let h = pendingBanner();
+  const d = decisionOf(s);
+  const open = openPeriod(s), closed = closedPeriods(s);
+  const last = closed[closed.length - 1] || null;   // the holding that ended
+  const many = periods(s).length > 1;
+  let h = missingStrategyBanner() + pendingBanner();
   h += `<button class="backlink" data-act="back">← ${TABS.find((t) => t[0] === tab)[1]}</button>`;
-  if (!prof || !ev) {
-    return h + `<div class="dhead"><div class="dtitle"><h1>${esc(s.ticker)}</h1><p>${esc(s.name)}</p></div></div>`
-      + cfgErrorBox(["No profile is available to score this security. Check the Profiles tab."]);
-  }
 
-  const snap = s.entry_snapshot;
-  const snapLegacy = snap && "ruleset_version" in snap;
-  const cmp = !!snap && !snapLegacy;
-  const stamp = isHold && ev.position
-    ? { word: POS_WORDS[ev.position.overall], tone: POS_TONES[ev.position.overall], note: positionNote(ev.position) }
-    : { word: BUY_WORDS[s.bucket][ev.buy.verdict], tone: BUY_TONES[ev.buy.verdict], note: causeText(ev.buy) };
-
+  /* The header says which holding you are looking at, by name, whenever
+     there is more than one. Everything above the lot history describes a
+     single period — the open one, or the one that ended most recently — and
+     the Previous holdings tab has a row per period, so a reader arriving
+     from the older row must be told at once which one they are reading.
+     "Held since" or "Closed" alone reads as the whole story of the ticker. */
+  const meta = isHold
+    ? (many ? `${esc(periodName(s, open))} · held since ` : "Held since ")
+      + esc(open.opened)
+    : isPrev
+    ? (many ? `${esc(periodName(s, last))} of ${closed.length} · closed `
+        : "Closed ") + esc(last.closed)
+      + " · " + esc(last.reason || "no reason recorded")
+    : "Added " + esc(s.added);
   h += `<div class="dhead"><div class="dtitle"><h1>${esc(s.ticker)}</h1><p>${esc(s.name)}</p>
-    <div class="meta">${isHold ? "Opened " + esc(s.position.opened)
-      : isPrev ? "Closed " + esc(s.exit.date) + " · " + esc(s.exit.reason)
-      : "Added " + esc(s.added)} · viewed through ${esc(profLabel(prof))}</div></div>
-    <div style="text-align:right"><span class="stamp big v-${stamp.tone}">${esc(stamp.word)}</span>
-    <div class="stamp-note">${esc(stamp.note)}</div></div></div>`;
+    <div class="meta">${meta} · judged by ${esc((S.journal.strategy || {}).name || "no strategy")}</div></div>
+    <div style="text-align:right">${stateStamp(d, true)}
+    <div class="stamp-note">${esc((d && (d.reason || {}).summary) || "")}</div></div></div>`;
 
   const fetching = s._fetch && s._fetch.running;
-  h += `<div class="toolbar" style="margin-top:16px;justify-content:space-between;align-items:center">
-    <div class="lensbar">${lensBar()}</div><div>
+  h += `<div class="toolbar" style="margin-top:16px;justify-content:flex-end;align-items:center"><div>
     <button class="btn" data-act="fetchdata" ${fetching ? "disabled" : ""}>${fetching ? "Fetching…" : "Fetch data"}</button>
-    <button class="btn" data-act="metrics">Edit metrics</button>
+    <button class="btn" data-act="metrics">Edit values</button>
     <button class="btn" data-act="ev">Expected value</button>
     <button class="btn" data-act="falsifier">Falsifier</button>
     <button class="btn" data-act="note">Add note</button>
-    ${!isHold && !isPrev ? '<button class="btn primary" data-act="buy">Record a purchase</button>' : ""}
+    ${!isHold ? `<button class="btn primary" data-act="buy">${isPrev ? "Record a purchase — buying it back" : "Record a purchase"}</button>` : ""}
     ${!isHold && !isPrev ? '<button class="btn danger" data-act="remove">Remove</button>' : ""}
-    ${isHold ? '<button class="btn danger" data-act="sell">Close position</button>' : ""}
+    ${isHold ? '<button class="btn danger" data-act="sell">Record a sale</button>' : ""}
     </div></div>`;
   if (fetching) {
     h += `<p class="hint" id="fetchstate" style="margin:8px 0 0">${esc(fetchStateText(s._fetch))}</p>`;
@@ -438,95 +636,94 @@ function detailView(s) {
   /* facts */
   const priceLabel = (s._price && s._price.source === "fetched")
     ? `Price · close ${String(s._price.date).slice(0, 10)}` : "Price";
+  const pctText = (v) => v === null || v === undefined ? "—" : (v >= 0 ? "+" : "") + v + "%";
+  /* Every fact on this strip describes one holding — the one open, or the one
+     that ended. The lifetime figure is the single exception and appears only
+     when there is more than one holding to span, named so it can never be
+     read as the position in front of you. */
+  const sinceExitText = (x) => !x || x.pct === null || x.pct === undefined
+    ? "—"
+    : pctText(x.pct) + (x.until === "purchase" ? ` to the ${x.date} buy` : "");
+  /* An absent figure carries the host's reason for being absent, here as
+     well as in the list. A bare dash that drops the reason is a value failing
+     to explain itself at exactly the moment there is something to explain. */
+  const sinceExitWhy = (x) =>
+    !x ? "What the price has done since you sold."
+    : x.reason ? `Not known: ${x.reason}.`
+    : x.until === "purchase"
+    ? `Measured from the sale to the ${x.date} purchase. Once you owned it again the move was yours, and carrying the window on to today would credit the sell rule with a stretch you spent holding.`
+    : "What the price has done since you sold. A closed position keeps being priced, which is the only way to find out whether a sell rule works.";
   let facts = [];
   if (isHold) {
-    facts = [[priceLabel, money(px(s))], ["Cost basis", money(s.position.cost_basis)],
-      ["Shares", s.position.shares], ["Since buy", s._realised === null ? "—" : (s._realised >= 0 ? "+" : "") + s._realised + "%"],
-      ["Value", px(s) ? "$" + (px(s) * s.position.shares).toLocaleString(undefined, { maximumFractionDigits: 0 }) : "—"]];
+    facts = [[priceLabel, money(px(s))], ["Average cost", money(s._cost_basis)],
+      ["Shares", s._shares],
+      ["Since buy", pctText(s._return),
+        "What this holding has returned so far, against what its purchases cost"
+        + " — counting shares you have already sold out of it at the price they got."
+        + (many ? " This holding only; the earlier one is its own row under Previous holdings." : "")],
+      ["Value", px(s) ? "$" + (px(s) * s._shares).toLocaleString(undefined, { maximumFractionDigits: 0 }) : "—"]];
   } else if (isPrev) {
-    facts = [["Exit price", money(s.exit.price)],
-      ["Return held", s.exit.return_pct === null || s.exit.return_pct === undefined
-        ? "—" : (s.exit.return_pct >= 0 ? "+" : "") + s.exit.return_pct + "%"],
-      ["Since exit", s._since_exit === null ? "—" : (s._since_exit >= 0 ? "+" : "") + s._since_exit + "%"],
-      ["Reason", s.exit.reason]];
+    facts = [["Exit price", money(last.exit_price)],
+      ["Return held", pctText(last.return),
+        `What this holding returned over its life: bought ${last.opened}, closed ${last.closed}.`],
+      ["Since exit", sinceExitText(last.since_exit), sinceExitWhy(last.since_exit)],
+      ["Reason", last.reason || "not stated"]];
   } else {
     facts = [[priceLabel, money(px(s))], ["Added", s.added],
-      ["Values entered", Object.keys(s.metrics || {}).length + " of " + S.input_metrics.length]];
+      ["Values read", (s._cited || []).length + " cited by the strategy"]];
+  }
+  if (many) {
+    facts.push(["All holdings", pctText(s._lifetime_return),
+      `Every share of ${s.ticker} this journal ever bought, across all `
+      + `${periods(s).length} holdings, weighted by what each cost. A lifetime `
+      + "figure — it is not what any one of them returned."]);
   }
   facts.push(["Filing data", dataFact(s)]);
   h += '<div class="facts">' + facts.map((f) =>
-    `<div class="fact"><i>${esc(f[0])}</i><b>${esc(f[1])}</b></div>`).join("") + "</div>";
+    `<div class="fact"${f[2] ? ` title="${esc(f[2])}"` : ""}><i>${esc(f[0])}</i><b>${esc(f[1])}</b></div>`).join("") + "</div>";
 
   /* notices */
-  if (s.override) {
-    const failed = (s.override.failed || []).map(labelOf).join(", ");
-    const missing = (s.override.missing || []).map(labelOf).join(", ");
-    const under = s.override.profile ? ` under ${esc(s.override.profile.name)} v${s.override.profile.version}` : "";
-    /* The lead sentence must say when the verdict was actually computed.
-       basis "live": seen on screen when recorded. basis "reconstructed":
-       rebuilt later from the data of the purchase date. No basis: the
-       record predates purchase-date evaluation — if it was backdated, its
-       verdict was computed on the recording day, and the honest move is to
-       say so, never to restate the record. */
-    const basis = s.override.basis;
-    const snapEval = (s.entry_snapshot && s.entry_snapshot.evaluation) || null;
-    const frozen = String((s.entry_snapshot || {}).frozen || "").slice(0, 10);
-    let lead, basisNote = "";
-    if (basis === "reconstructed") {
-      lead = `This purchase is dated ${esc(s.override.date)}; the verdict — <strong>${esc(s.override.verdict)}</strong>${under} —
-        was <strong>reconstructed</strong> from the data available by that day, not seen live at the time.`;
-      if (snapEval && snapEval.note) basisNote = `<p class="hint" style="margin:6px 0 0">Reconstructed from: ${esc(snapEval.note)}.</p>`;
-    } else if (!basis && frozen && dayGap(frozen, s.override.date) >= 2) {
-      lead = `This purchase is dated ${esc(s.override.date)}, but its verdict — <strong>${esc(s.override.verdict)}</strong>${under} —
-        was evaluated when it was recorded, around ${esc(frozen)}, with the data current then. The record
-        predates purchase-date evaluation and is preserved as written.`;
-    } else {
-      lead = `On ${esc(s.override.date)} this evaluated to <strong>${esc(s.override.verdict)}</strong>${under}.`;
+  /* Overrides on shares you still hold come first and in full — they are
+     about the position in front of you. An override inside a holding that is
+     over is history, and it is told inside that holding's own section below
+     rather than shouted at the top of a page about a different one. */
+  (open ? periodLots(s, open) : []).filter((l) => l.kind === "buy" && l.override)
+    .forEach((l) => { h += overrideNotice(s, l); });
+
+  /* An exit nobody's rule called for is the panic-sell learning loop, and it
+     belongs to the holding it ended — every closed one, not just the last,
+     because a name bought back would otherwise bury the exit that taught the
+     most. */
+  const by = lotById(s);
+  closed.forEach((c) => {
+    const ex = by[c.sells[c.sells.length - 1]];
+    if (!ex) return;
+    const which = many ? ` (${periodName(s, c).toLowerCase()})` : "";
+    const x = c.since_exit || {};
+    const after = x.pct === null || x.pct === undefined ? ""
+      : `It went ${x.pct >= 0 ? "up" : "down"} ${Math.abs(x.pct).toFixed(1)}% `
+        + (x.until === "purchase"
+          ? `between that sale and buying it again on ${esc(x.date)}.`
+          : "since it was closed.");
+    if (ex.rule_triggered === false) {
+      h += `<div class="notice"><h4>No rule triggered this exit${which}</h4>
+        <p>The signal read <strong>${esc(ex.signal_at_exit)}</strong> under
+        ${esc((ex.strategy || {}).name || "the strategy")} on ${esc(ex.date)}. ${after}</p></div>`;
+    } else if (ex.rule_triggered === null) {
+      h += `<div class="notice quiet"><h4>Closed without its rules${which}</h4>
+        <p>The strategy this journal is stamped with was not installed when this position was closed on
+        ${esc(ex.date)}, so no signal could be evaluated. That absence is on the record, not papered over.</p></div>`;
     }
-    h += `<div class="notice"><h4>${failed ? "Bought against signal" : "Bought without a signal"}${basis === "reconstructed" ? " · reconstructed" : ""}</h4>
-      <p>${lead}
-      ${failed ? esc(failed) + " failed." : ""}${missing ? " " + esc(missing) + " could not be evaluated." : ""}
-      The purchase was recorded anyway.${s._realised !== null ? ` Position is ${s._realised >= 0 ? "up" : "down"} ${Math.abs(s._realised).toFixed(1)}% since.` : ""}</p>
-      ${basisNote}
-      <q>${esc(s.override.reason)}</q></div>`;
-  }
-  if (isPrev && s.exit && s.exit.rule_triggered === false) {
-    const exProf = s.exit.profile ? ` under ${esc(s.exit.profile.name)} v${s.exit.profile.version}`
-      + (s.exit.governing ? " (the profile it was bought under)" : " (the lens in use at close — the position had no governing profile)")
-      : ` under ruleset v${esc(s.exit.ruleset_version ?? "?")}, before profiles`;
-    h += `<div class="notice"><h4>No rule triggered this exit</h4>
-      <p>The signal read <strong>${esc(s.exit.signal_at_exit)}</strong>${exProf} on ${esc(s.exit.date)}.
-      ${s._since_exit !== null ? `The position is ${s._since_exit >= 0 ? "up" : "down"} ${Math.abs(s._since_exit).toFixed(1)}% since it was closed.` : ""}</p></div>`;
-  }
-  if (isPrev && s.exit && s.exit.rule_triggered === null && s.exit.profile) {
-    h += `<div class="notice quiet"><h4>Closed without its rules</h4>
-      <p>This position was governed by ${esc(s.exit.profile.name)} v${esc(s.exit.profile.version)}, but that
-      profile was not on disk when the position was closed on ${esc(s.exit.date)}, so no signal could be
-      evaluated. That absence is on the record, not papered over.</p></div>`;
-  }
+  });
   if (isHold && !(s.falsifier || "").trim()) {
     h += `<div class="notice quiet"><h4>No falsifier on record</h4>
       <p>This position is open without a written answer to "what would make me wrong?".
       That is the field you will want when it drops 25% and you are deciding whether to add or exit.</p></div>`;
   }
-  if (s.legacy_metrics && Object.keys(s.legacy_metrics).length) {
-    const whys = {};
-    ((S.migration || {}).preserved || []).forEach((p) => { whys[p.id] = p.why; });
-    h += `<div class="notice quiet"><h4>Values from the retired metric set</h4>
-      <p>These were recorded before the metric bank and have no bank equivalent. They are preserved
-      exactly as entered and are not scored — rescoring them against a different definition would be
-      pretending they measure something they don't.</p>
-      <ul class="pe-nmw" style="margin-top:8px">${Object.entries(s.legacy_metrics).map(([id, v]) => {
-        const l = (S.legacy_labels || {})[id] || { label: id, fmt: null };
-        return `<li><b>${esc(l.label)}</b>: ${esc(fmtLegacy(v, l.fmt))}${whys[id] ? ` <span class="dim">— ${esc(whys[id])}</span>` : ""}</li>`;
-      }).join("")}</ul></div>`;
-  }
 
-  /* sell watch — under the profile the position was bought under */
-  if (isHold) h += sellWatch(s, ev);
-
-  /* buy tiers under the lens */
-  h += tierSections(s, prof, ev.buy, cmp ? snap : null);
+  /* the decision, then the lots it was built from beside it */
+  h += decisionSection(d, isPrev ? "Where it stands now" : "The verdict");
+  h += lotHistory(s);
 
   /* where the numbers come from */
   h += coverageSection(s);
@@ -543,7 +740,7 @@ function detailView(s) {
       if (!src) return "";
       if (src.used === "fetched") return ` <span class="dim">· fetched${src.asof ? ", as of " + esc(src.asof) : ""}</span>`;
       if (src.used === "computed") return ' <span class="dim">· computed from filings</span>';
-      if (src.used === "manual") return ' <span class="dim">· hand-entered metric</span>';
+      if (src.used === "manual") return ' <span class="dim">· hand-entered value</span>';
       if (src.used === "overridden") {
         const was = { fetched: "fetched", manual: "hand-entered", computed: "computed" }[src.instead_of] || "offered";
         return ` <span class="dim">· overridden by hand — replaced the ${esc(was)} ${esc(src.offered ?? "value")}</span>`;
@@ -558,7 +755,7 @@ function detailView(s) {
     h += `</div><div class="evout" id="evout"><div><div class="lbl">Computing…</div><div class="big">—</div></div></div>`;
     h += `<p class="locked">Computed ${esc(s.ev.computed)} from the assumptions above. There is no field anywhere that accepts a target price.</p>`;
   } else {
-    h += `<p class="fals">${esc(S.ev_methods[S.settings.default_ev_method].blurb)}</p>
+    h += `<p class="fals">${esc(S.ev_methods[S.journal.settings.default_ev_method].blurb)}</p>
       <p class="locked">You enter assumptions; the value is solved for. That way, when the estimate is wrong, you can see which assumption was wrong.</p>`;
   }
   h += "</div>";
@@ -568,219 +765,152 @@ function detailView(s) {
     <em>Notes</em></div>
     <ul class="notelist">${(s.notes || []).slice().reverse().map((n) =>
       `<li><time>${esc(String(n.date).slice(0, 10))}</time><p>${esc(n.text)}</p></li>`).join("")
-      || '<li><p class="dim">No entries yet.</p></li>'}</ul>`;
-  if (snap && !snapLegacy) {
-    const sp = snap.profile || {};
-    const word = BUY_WORDS.ideas[(snap.result || {}).verdict] || "—";
-    const sev = snap.evaluation || null;
-    const frozenD = String(snap.frozen).slice(0, 10);
-    const openedD = String((s.position || {}).opened || "").slice(0, 10);
-    if (sev && sev.basis === "reconstructed") {
-      h += `<p class="locked">Entry snapshot frozen ${esc(frozenD)} under
-        ${esc(sp.name)} v${esc(sp.version)} — <b>reconstructed</b> for ${esc(sev.as_of)} from the data
-        available by that day (${esc(sev.note || "")}), it read <b>${esc(word)}</b>. The snapshot is never
-        recomputed, so restatements and profile changes cannot rewrite it.</p>`;
-    } else {
-      const caveat = (!sev && openedD && dayGap(frozenD, openedD) >= 2)
-        ? ` The verdict was evaluated when the snapshot was frozen, around ${esc(frozenD)}, with the data
-           current then, though the purchase is dated ${esc(openedD)} — this record predates purchase-date
-           evaluation.` : "";
-      h += `<p class="locked">Entry snapshot frozen ${esc(frozenD)} under
-        ${esc(sp.name)} v${esc(sp.version)} — it read <b>${esc(word)}</b> then.${caveat} The snapshot is never
-        recomputed, so restatements and profile changes cannot rewrite it.</p>`;
-    }
-  }
-  if (snap && snapLegacy) {
-    h += `<p class="locked">Entry snapshot frozen ${esc(String(snap.frozen).slice(0, 10))} under the
-      retired ruleset system (v${esc(snap.ruleset_version)}) — it read <b>${esc((snap.result || {}).verdict || "—")}</b> then.
-      It is preserved as recorded and never re-scored.</p>
-      <details class="whybox"><summary>Values at entry, retired metric set</summary>
-      <ul class="pe-nmw" style="margin-top:8px">${Object.entries(snap.metrics || {}).map(([id, v]) => {
-        const l = (S.legacy_labels || {})[id] || { label: id, fmt: null };
-        return `<li>${esc(l.label)}: ${esc(fmtLegacy(v, l.fmt))}</li>`;
-      }).join("") || "<li>No values were recorded.</li>"}</ul></details>`;
-  }
-  h += "</div></div>";
+      || '<li><p class="dim">No entries yet.</p></li>'}</ul></div>`;
+  h += "</div>";
   return h;
 }
 
-function cadenceWords(c, n) {
-  const one = c === "annual" ? "annual report" : c === "quarterly" ? "quarterly report" : "filing";
-  return n === 1 ? one : one + "s";
-}
-
-/* Per-filing confirmation trace for one sell signal. Every row names the
-   report it read, so a count is always traceable to the filings behind it;
-   runs of unreadable reports collapse to one line — accurate without being a
-   wall of failure rows. */
-function confirmationDetail(sig) {
-  const c = sig.confirmation;
-  const rs = (c && c.readings) || [];
-  if (!rs.length) return "";
-  const w = cadenceWords(c.unit_mismatch && c.cadence === "quarterly" ? "annual" : c.cadence, c.required);
-  const mid = sig.measured_on || sig.metric;
-  const rows = [];
-  for (let i = 0; i < rs.length; i++) {
-    if (rs[i].state === "unobserved") {
-      let j = i;
-      while (j + 1 < rs.length && rs[j + 1].state === "unobserved") j++;
-      if (j > i) {
-        rows.push(`<li>${j - i + 1} reports (${esc(rs[j].period_end)} to ${esc(rs[i].period_end)}) could not be read — a gap neither advances nor resets the count</li>`);
-        i = j;
-        continue;
-      }
-      rows.push(`<li>${esc(rs[i].form)} for ${esc(rs[i].period_end)} — could not be read: ${esc(rs[i].reason || "no reason recorded")} — a gap neither advances nor resets the count</li>`);
-      continue;
-    }
-    const r = rs[i];
-    const word = r.state === "breached" ? "breached"
-      : r.state === "clear" ? "clear"
-      : r.state === "undecided" ? "could not be judged against this threshold"
-      : r.state === "not_counted" ? "not counted — this rule counts annual reports"
-      : "filed before this position opened — not counted";
-    const val = r.value === null || r.value === undefined ? "—" : fmtMetric(mid, r.value);
-    rows.push(`<li>${esc(r.form)} for ${esc(r.period_end)} · filed ${esc(r.filed)} — ${esc(val)}, ${esc(word)}${
-      r.priced ? " · priced at the " + esc(r.priced) + " close" : ""}</li>`);
-  }
-  const runWord = c.required === 1 ? "" : " with no clear reading in between";
-  return `<details class="whybox"><summary>Confirmation — ${c.observed} of ${c.required} ${esc(w)}</summary>
-    <p class="hint" style="margin:6px 0">A sell threshold fires only once its breach has appeared on ${c.required} ${esc(w)}${runWord}.
-    One bad quarter or a one-day price move is noise, not a decision — that is what the run guards against.
-    A report that cannot be read neither advances nor resets the count.
-    Only the report that first brought each period's numbers counts; a re-filing of a period already counted adds nothing.</p>
-    <ul class="pe-nmw">${rows.join("")}</ul>
-    ${rs[0] ? `<p class="hint" style="margin:6px 0 0">Based on stored filings through the ${esc(rs[0].form)} for ${esc(rs[0].period_end)}.</p>` : ""}</details>`;
-}
-
-function sellWatch(s, lensEv) {
-  const own = s._own || {};
-  let intro, state;
-  if (own.legacy) {
-    intro = `This position was recorded before profiles, so no profile governs it.
-      The signals below are read through the current lens, ${esc(profLabel(lensProfile()))} — a view, not a contract.`;
-    state = lensEv.position;
-  } else if (own.problem) {
-    return `<section class="group"><div class="ghead"><h3>Sell watch</h3></div>
-      ${cfgErrorBox([own.problem])}</section>`;
+function overrideNotice(s, lot) {
+  const ov = lot.override;
+  const failed = (ov.failed || []).map((c) => c.label).join(", ");
+  const missing = (ov.missing || []).map((c) => c.label).join(", ");
+  const under = ov.strategy ? ` under ${esc(ov.strategy.name)} v${esc(ov.strategy.version)}` : "";
+  /* The lead sentence must say when the verdict was actually computed.
+     basis "live": seen on screen when recorded. basis "reconstructed":
+     rebuilt later from the data of the purchase date. */
+  const snapEval = (lot.snapshot && lot.snapshot.evaluation) || null;
+  const frozen = String((lot.snapshot || {}).frozen || "").slice(0, 10);
+  /* Named by size only where the holding it belongs to has more than one
+     purchase in it. Counting every lot the ticker ever had would qualify a
+     single-lot position because of a holding that ended years ago. */
+  const own = periods(s).find((c) => c.buys.includes(lot.id));
+  const many = (own && own.buys.length > 1) ? ` of ${lot.shares} shares` : "";
+  let lead, basisNote = "";
+  if (ov.basis === "reconstructed") {
+    lead = `This purchase${many} is dated ${esc(ov.date)}; the state — <strong>${esc(ov.state)}</strong>${under} —
+      was <strong>reconstructed</strong> from the data available by that day, not seen live at the time.`;
+    if (snapEval && snapEval.note) basisNote = `<p class="hint" style="margin:6px 0 0">Reconstructed from: ${esc(snapEval.note)}.</p>`;
+  } else if (!ov.basis && frozen && dayGap(frozen, ov.date) >= 2) {
+    lead = `This purchase${many} is dated ${esc(ov.date)}, but its state — <strong>${esc(ov.state)}</strong>${under} —
+      was evaluated when it was recorded, around ${esc(frozen)}, with the data current then.`;
   } else {
-    intro = `Governed by ${esc(profLabel(own.profile))}, the profile it was bought under`
-      + (own.bought_version != null && own.profile && own.bought_version !== own.profile.version
-        ? ` (bought at v${esc(own.bought_version)} — the profile has changed since, and its current rules are what runs)` : "")
-      + "."
-      + (own.profile && own.profile.file !== lens
-        ? ` The lens above changes how the tiers below are read; it does not change these sell rules.` : "");
-    state = own.state;
+    lead = `On ${esc(ov.date)} this${many ? " purchase" + many : ""} read <strong>${esc(ov.state)}</strong>${under}.`;
   }
-  if (!state) return "";
-
-  let rows = "";
-  if (state.clock) {
-    const c = state.clock;
-    const [txt, cls] = c.expired ? ["Expired", "s-fail"] : ["Running", "s-pass"];
-    rows += `<div class="srow"><div class="sname">Position clock</div>
-      <div class="scond">${c.due ? `sell after ${c.months} months — due ${esc(c.due)}` : esc(c.problem || "")}</div>
-      <div class="sstate"><span class="chip ${c.due ? cls : "s-none"}">${c.due ? txt : "Can't run"}</span></div></div>`;
-  }
-  state.signals.forEach((sig) => {
-    const [txt, cls] = SELL_STATUS[sig.status] || [sig.status, "s-none"];
-    const cond = sig.status === "no_threshold" ? "" : condText(sig.condition) || "";
-    const measured = sig.measured_on && sig.measured_on !== sig.metric
-      ? `<span class="dim"> — measured on ${esc(labelOf(sig.measured_on))}</span>` : "";
-    const val = sig.status === "no_threshold" ? ""
-      : ` <span class="dim">now ${esc(fmtMetric(sig.measured_on || sig.metric, sig.value))}${
-        sig.entry_value !== null && sig.entry_value !== undefined
-          ? ", at entry " + esc(fmtMetric(sig.measured_on || sig.metric, sig.entry_value)) : ""}</span>`;
-    const firedNote = sig.status === "fired" && sig.confirmation && sig.confirmation.note
-      ? `<div class="greynote">${esc(sig.confirmation.note)}</div>` : "";
-    rows += `<div class="srow"><div class="sname">${esc(labelOf(sig.metric))}${measured}</div>
-      <div class="scond">${cond ? esc0(cond) : '<span class="dim">no sell threshold, by choice</span>'}${val}
-      ${sig.needs ? `<div class="greynote">${esc(sig.needs)}</div>` : ""}${firedNote}${confirmationDetail(sig)}</div>
-      <div class="sstate"><span class="chip ${cls}">${esc(txt)}</span></div></div>`;
-  });
-  state.flags.forEach((f) => {
-    const [txt, cls] = FLAG_STATUS[f.status] || [f.status, "s-none"];
-    const measured = f.measured_on && f.measured_on !== f.metric
-      ? `<span class="dim"> — measured on ${esc(labelOf(f.measured_on))}</span>` : "";
-    rows += `<div class="srow"><div class="sname">${esc(labelOf(f.metric))}${measured} <span class="req">Flag</span></div>
-      <div class="scond">${esc0(condText(f.condition) || "")} <span class="dim">— surfaces only, never blocks</span>
-      ${f.needs ? `<div class="greynote">${esc(f.needs)}</div>` : ""}</div>
-      <div class="sstate"><span class="chip ${cls}">${esc(txt)}</span></div></div>`;
-  });
-
-  const unmon = state.unevaluable
-    ? `<p class="hint">${state.unevaluable} of ${state.watchable} sell checks cannot currently run —
-       each says why on its row. A check that cannot run is reported, never assumed clear.</p>` : "";
-  return `<section class="group"><div class="ghead"><h3>Sell watch</h3>
-    <span>${POS_WORDS[state.overall]}</span></div>
-    <p class="hint" style="margin:8px 0 0">${intro}</p>
-    <div class="slist">${rows || '<p class="hint">This profile defines no sell conditions.</p>'}</div>${unmon}</section>`;
+  const head = ov.kind === "without"
+    ? "Bought without a signal" : "Bought against the signal";
+  const why = ov.kind === "without"
+    ? "There was no verdict to go against — the strategy could not reach one."
+    : "The strategy did not say to commit capital.";
+  const r = (s._lot_returns || {})[lot.id];
+  return `<div class="notice"><h4>${head}${ov.basis === "reconstructed" ? " · reconstructed" : ""}</h4>
+    <p>${lead} ${esc(why)}
+    ${failed ? " " + esc(failed) + " missed its threshold." : ""}${missing ? " " + esc(missing) + " could not be read." : ""}
+    The purchase was recorded anyway.${r === null || r === undefined ? ""
+      : lot.open ? ` These shares are ${r >= 0 ? "up" : "down"} ${Math.abs(r).toFixed(1)}% since.`
+      : ` These shares ${r >= 0 ? "returned" : "lost"} ${Math.abs(r).toFixed(1)}% before they were sold.`}</p>
+    ${ov.rule ? `<p class="hint">Rule at the time: <code>${esc(ov.rule)}</code> — ${esc(ov.summary || "")}</p>` : ""}
+    ${basisNote}
+    <q>${esc(ov.reason)}</q></div>`;
 }
-/* condText output contains entities (≤, ≥) built from trusted profile config
-   already escaped piecewise; pass through. */
-const esc0 = (s) => s;
 
-function tierSections(s, prof, buy, snap) {
-  const snapProf = snap && snap.profile ? snap.profile : null;
-  let h = "";
-  prof.tiers.forEach((tier, i) => {
-    const evTier = buy.tiers[i] || { entries: [] };
-    const outcome = { pass: ["met", "s-pass"], fail: ["not met", "s-fail"],
-      indeterminate: ["can't say", "s-none"], score: [`score ${evTier.greens}/${evTier.count}`, "s-none"] }[evTier.outcome] || ["", "s-none"];
-    h += `<section class="group"><div class="ghead"><h3>${esc((tier.key || "").toUpperCase())}</h3>
-      <span>${esc(tierRuleText(tier))} · <span class="chip ${outcome[1]}">${esc(outcome[0])}</span></span></div>`;
-    if (snap) h += `<div class="cmphead">At entry (under ${esc(profLabel(snapProf))}) → now (through ${esc(profLabel(prof))})</div>`;
-    tier.entries.forEach((e, j) => {
-      const st = (evTier.entries[j] || {});
-      const meta = bankMeta(e.metric) || {};
-      const vNow = st.value;
-      const vEntry = snap ? (snap.metrics || {})[e.metric] : undefined;
-      const d = (snap && vEntry !== undefined && vEntry !== null && vNow !== null && vNow !== undefined)
-        ? Number(vNow) - Number(vEntry) : null;
-      const dGood = d === null ? null
-        : meta.polarity === "higher_is_better" ? d >= 0
-        : meta.polarity === "lower_is_better" ? d <= 0 : null;
-      /* Where the merged value came from, and why a grey one is grey. The
-         reason a value is absent lives with the computed layer; it beats the
-         generic "no value recorded". */
-      const src = (s._value_sources || {})[e.metric];
-      const comp = (s._computed || {})[e.metric];
-      let reason = st.reason;
-      if (reason === "no value recorded" && comp && comp.status === "absent" && comp.reason)
-        reason = comp.reason;
-      let srcMark = "";
-      if (vNow !== null && vNow !== undefined) {
-        if (src === "computed") srcMark = '<span class="delta dim" title="Computed from stored filings and prices">filings</span>';
-        else if (src === "manual" && comp && comp.status === "computed")
-          srcMark = `<span class="delta dim" title="Hand-entered; overrides the computed ${fmtBank(comp.value, meta.format)}">by hand*</span>`;
-        else if (src === "manual") srcMark = '<span class="delta dim" title="Hand-entered">by hand</span>';
-      }
-      h += `<div class="mrow"><div class="mname">${esc(e.label || e.metric)}
-        <button class="tip" data-tip="${esc(e.metric)}:${i}" aria-expanded="${tipOpen === e.metric + ":" + i}" aria-label="What is ${esc(e.label || e.metric)}?">?</button>
-        ${reason ? `<div class="greynote">${esc(reason)}</div>` : ""}</div>
-        ${snap ? `<div class="mval entry">${fmtBank(vEntry, meta.format)}<span class="delta dim">at entry</span></div>` : '<div class="mval entry"></div>'}
-        <div class="mval">${fmtBank(vNow, meta.format)}${d !== null
-          ? `<span class="delta ${dGood === null ? "dim" : dGood ? "pos" : "neg"}">${d >= 0 ? "+" : "−"}${Math.abs(d) < 0.05 && d !== 0 ? Math.abs(d).toFixed(2) : Math.abs(d).toFixed(1)}</span>` : ""}${srcMark}</div>
-        <div class="mthresh">${esc0(condText(e.buy) || "—")}</div>
-        <div class="mstate"><span class="chip s-${st.state === "green" ? "pass" : st.state === "red" ? "fail" : "none"}">${esc(st.state || "—")}</span></div>`;
-      if (tipOpen === e.metric + ":" + i) {
-        const provenance = (src === "computed" && comp && comp.provenance && comp.provenance.length)
-          ? `<div class="pe-why"><b>Computed from:</b> ${comp.provenance.map(oneline).join("; ")}</div>` : "";
-        const cautions = (src === "computed" && comp && comp.cautions && comp.cautions.length)
-          ? `<div class="pe-why"><b>Cautions:</b> ${comp.cautions.map(oneline).join("; ")}</div>` : "";
-        const overridden = (src === "manual" && comp && comp.status === "computed")
-          ? `<div class="pe-why"><b>Hand-entered value in force.</b> The computed value from filings reads ${fmtBank(comp.value, meta.format)}; clear the hand-entered value in Edit metrics to use it.</div>` : "";
-        h += `<div class="tipbox">${prose(e.description)}
-          ${e.buy && e.buy.why ? `<div class="pe-why"><b>Why this level:</b> ${prose(e.buy.why)}</div>` : ""}
-          ${provenance}${cautions}${overridden}
-          ${e.not_meaningful_when && e.not_meaningful_when.length
-            ? `<div class="pe-why"><b>Not meaningful when:</b> ${e.not_meaningful_when.map((t) => oneline(t.test)).join("; ")}</div>` : ""}
-          <span class="who">Bank entry <code>${esc(e.metric)}</code> — full definition on the Metrics tab</span></div>`;
-      }
-      h += "</div>";
-    });
-    h += "</section>";
-  });
-  return h;
+/* Lot history. Every purchase and every sale, in order, each with the
+   decision that was frozen for it — written once and never recomputed, so a
+   restatement or a retuned strategy cannot rewrite what was seen. A position
+   is not a running total that gets updated; it is these entries, and the
+   totals above are derived from them on every read. */
+function lotHistory(s) {
+  const all = periods(s);
+  const events = buyLots(s).concat(sales(s))
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)) || (a.seq - b.seq));
+  if (!events.length) return "";
+  const nowState = ((decisionOf(s) || {}).state || {}).id;
+  const row = (lot) => {
+    const buy = lot.kind === "buy";
+    const snap = lot.snapshot || {};
+    const d = snap.decision;
+    const st = snap.strategy || {};
+    const ev = snap.evaluation || {};
+    const frozenD = String(snap.frozen || "").slice(0, 10);
+    const r = buy ? (s._lot_returns || {})[lot.id] : null;
+
+    let how = "";
+    if (ev.basis === "reconstructed") {
+      how = ` · <b>reconstructed</b> for ${esc(ev.as_of)} from the data available by that day`;
+    } else if (!ev.basis && frozenD && dayGap(frozenD, String(lot.date).slice(0, 10)) >= 2) {
+      how = ` · evaluated when it was recorded, around ${esc(frozenD)}, not on the day itself`;
+    } else if (frozenD) {
+      how = ` · frozen ${esc(frozenD)}`;
+    }
+    const left = buy
+      ? (lot.open ? `${lot.remaining} of ${lot.shares} shares still held`
+        : `all ${lot.shares} shares sold`)
+      : `${lot.shares} shares, drawn from ${(lot.against || []).length} lot${(lot.against || []).length === 1 ? "" : "s"}`;
+    const moved = buy && d && nowState && (d.state || {}).id !== nowState
+      ? `<p class="hint">It reads <b>${esc(((decisionOf(s) || {}).state || {}).name)}</b> today. The snapshot is not
+         updated to match — that difference is the thesis holding or decaying, and erasing it would erase the only
+         thing worth reading.</p>` : "";
+    const diff = (st.version != null && (S.journal.strategy || {}).version != null
+      && st.version !== (S.journal.strategy || {}).version)
+      ? `<p class="hint">Recorded under v${esc(st.version)}; the strategy is at v${esc((S.journal.strategy || {}).version)} now.
+         Every change between them is on the Strategy tab.</p>` : "";
+
+    return `<div class="lot">
+      <div class="lothead">
+        <b>${buy ? "Bought" : "Sold"} ${esc(lot.shares)} at ${money(lot.price)}</b>
+        <time>${esc(String(lot.date).slice(0, 10))}</time>
+        ${buy ? "" : `<span class="chip s-none">${esc(lot.reason || "no reason recorded")}</span>`}
+        ${r !== null && r !== undefined ? `<span class="chip ${r >= 0 ? "s-pass" : "s-fail"}"
+          title="What these shares have returned: the price each sale got on the ones that are gone, today's price on the ones still held, against what this lot cost.">${r >= 0 ? "+" : ""}${r}%</span>` : ""}
+      </div>
+      <div class="pe-sub">${left}${how}${st.name ? ` · under ${esc(st.name)} v${esc(st.version)}` : ""}</div>
+      ${moved}${diff}
+      ${d ? `<div class="rollup" style="margin-top:10px">
+          <div class="pe-head"><b>${esc((d.reason || {}).summary || "")}</b>
+            <span class="chip s-none">${esc((d.state || {}).name || "")}</span></div>
+          <div class="pe-sub" style="margin-top:6px">Rule <code>${esc((d.reason || {}).rule || "")}</code></div></div>
+        <div class="slist" style="margin-top:12px">${((d.reason || {}).evidence || []).map(
+          /* Keyed on the lot's own id, not its position in the list: grouped
+             by holding, two entries would otherwise share an index and one
+             "what is this?" would open two boxes on different periods. */
+          (item, j) => evidenceRow(item, "lot" + lot.id + ":" + j)).join("")}</div>`
+        : `<p class="hint">No verdict was recorded with this entry.</p>`}
+    </div>`;
+  };
+
+  /* One holding: the plain chronological list, exactly as it always was. The
+     grouping below appears only when there is a second holding to tell apart
+     — a heading over a single group is complexity charged for nothing. */
+  let body;
+  if (all.length < 2) {
+    body = `<div class="lots">${events.map(row).join("")}</div>`;
+  } else {
+    /* Several holdings: newest first, so the position in front of you is at
+       the top, and each group headed by what that round trip was and how it
+       came out. Inside a group the entries stay chronological, because a
+       holding reads as a story — bought, trimmed, closed. Someone looking at
+       a name held twice must never have to work out which entry belongs to
+       which period, and this is the whole of that answer. */
+    body = all.slice().reverse().map((c) => {
+      const rows = periodLots(s, c).map(row).join("");
+      const ret = c.return === null || c.return === undefined ? ""
+        : `<span class="chip ${c.return >= 0 ? "s-pass" : "s-fail"}">${c.return >= 0 ? "+" : ""}${c.return}%</span>`;
+      const span = c.open
+        ? `bought ${esc(c.opened)} · ${c.shares} shares still held`
+        : `${esc(c.opened)} → ${esc(c.closed)} · closed: ${esc(c.reason || "no reason recorded")}`;
+      return `<div class="cyc"><div class="cychead">
+          <b>${esc(periodName(s, c))}</b><span class="dim">${span}</span>${ret}</div>
+        <div class="lots">${rows}</div></div>`;
+    }).join("");
+  }
+
+  return `<section class="group"><div class="ghead"><h3>Lot history</h3>
+      <span>${events.length} entr${events.length === 1 ? "y" : "ies"}${all.length > 1 ? ` · ${all.length} holdings` : ""}</span></div>
+    <p class="hint" style="margin:8px 0 0">Every purchase and sale, in the order they happened, with the verdict
+    that was on screen for each. Nothing here is ever edited or recomputed: a sale is a new entry naming the lots
+    it drew on, never a change to what was bought.${all.length > 1
+      ? " This name has been held more than once, so the entries are grouped by holding — each one its own round trip,"
+        + " newest first." : ""}</p>
+    ${body}</section>`;
 }
 
 /* ------------------------------------------------------------ data layer */
@@ -833,7 +963,10 @@ async function loadCoverage(ticker) {
   C.loadingCoverage = false;
   C.coverageFor = ticker;
   C.coverage = r.ok === false ? { error: r.error } : r;
-  if (openTicker === ticker) render();
+  /* Re-render whichever security is open, not only the one this load was
+     for. Opening another mid-flight would otherwise leave that page with no
+     pending load and nothing to trigger one, stuck on "Reading…" forever. */
+  if (openTicker) render();
 }
 
 function coverageSection(s) {
@@ -841,7 +974,7 @@ function coverageSection(s) {
   if (!s.cik) {
     inner = `<p class="hint">Nothing fetched yet. “Fetch data” pulls this company's full filing
       history from SEC EDGAR and its price history from Tiingo, stores the raw reported figures,
-      and computes every metric it can. Hand-entered values always win where both exist.</p>`;
+      and computes every measure it can. Hand-entered values always win where both exist.</p>`;
   } else if (C.coverageFor !== s.ticker || !C.coverage) {
     loadCoverage(s.ticker);
     inner = '<p class="hint">Reading the stored filings…</p>';
@@ -857,9 +990,6 @@ function coverageSection(s) {
       · prices through ${esc(st.price_through || "none stored")}
       · last fetch ${st.last_fetch ? esc(String(st.last_fetch.at).slice(0, 10)) : "never"}.
       Every value below is recomputed from raw stored figures on each read; nothing derived is saved.</p>`;
-    /* Problems from the last fetch stay readable here — a toast is not a
-       record, and an entry absent because filings failed to extract must
-       not read like a fact about the company. */
     const fetchErrs = (st.last_fetch && st.last_fetch.errors) || [];
     const extractErrs = st.extraction_error_detail || [];
     if (fetchErrs.length || extractErrs.length) {
@@ -919,201 +1049,144 @@ const prose = (t) => !t ? "" : String(t).trim().split(/\n{2,}/)
   .map((p) => `<p>${esc(p).replace(/\n/g, " ")}</p>`).join("");
 const oneline = (t) => esc(String(t == null ? "" : t).trim().replace(/\s+/g, " "));
 
-const CMP = { at_most: "≤", at_least: "≥", less_than: "<", greater_than: ">" };
-const UNIT_SUFFIX = {
-  percent: "%", percentage_points: " pp", times: "×",
-  times_own_median: "× own median", percent_of_entry_value: "% of entry value",
-  years: " yrs", shares: " sh", ratio: "", score: "", count: "",
-};
-
-function unitVal(v, unit, of) {
-  if (v === null || v === undefined) return "—";
-  const n = Number(v);
-  const num = Number.isFinite(n)
-    ? n.toLocaleString(undefined, { maximumFractionDigits: 4 }) : esc(String(v));
-  let s;
-  if (unit === "usd") s = "$" + num;
-  else {
-    const suf = UNIT_SUFFIX[unit];
-    s = num + (suf !== undefined ? suf : (unit ? " " + esc(unit) : ""));
+/* ------------------------------------------------- config: strategy page */
+/* Read-only, on purpose. A strategy is edited where it lives — as code and a
+   values file beside it — and every change is caught and recorded here
+   whether or not it came through this app. */
+function strategyView() {
+  const st = S.strategy;
+  let h = pendingBanner();
+  if (!st) {
+    const m = S.strategy_missing || {};
+    return h + missingStrategyBanner() + `<div class="sheet"><div class="empty">
+      <p>This journal is stamped with <b>${esc(m.name || m.id)}</b> v${esc(m.version)}, which is not installed
+      on this machine. Put the bundle back in the strategies folder and it will be picked up.</p></div></div>`
+      + ruleChangeHistory();
   }
-  if (of !== undefined && of !== null) s += " of " + esc(of);
-  return s;
-}
-
-/* One threshold block to text. Generic over the forms the profile schema
-   defines — nothing here knows any particular metric. */
-function condText(b) {
-  if (!b || b.form === "none") return null;
-  if (b.form === "abs") {
-    if (b.comparator === "between")
-      return `between ${unitVal(b.min, b.unit)} and ${unitVal(b.max, b.unit)}`;
-    return `${CMP[b.comparator] || esc(b.comparator)} ${unitVal(b.value, b.unit, b.of)}`;
-  }
-  if (b.form === "delta_entry") {
-    if (b.comparator === "falls_by_at_least")
-      return `falls ≥ ${unitVal(b.value, "percent")} below its value at entry`;
-    if (b.comparator === "falls_below_entry_value")
-      return "falls below its value at entry";
-    return `${esc(b.comparator)} ${unitVal(b.value, b.unit)} versus entry`;
-  }
-  if (b.form === "delta_median") {
-    let s = `${CMP[b.comparator] || esc(b.comparator)} ${unitVal(b.value, b.unit)}`;
-    if (b.basis && b.unit !== "times_own_median")
-      s += ` (versus ${esc(String(b.basis).replace(/_/g, " "))})`;
-    return s;
-  }
-  if (b.form === "compound") {
-    const parts = (b.conditions || []).map(condText).filter(Boolean);
-    return parts.join(b.require === "any" ? " — or — " : " — and — ");
-  }
-  return esc(b.form);
-}
-
-/* ------------------------------------------------- config: profiles page */
-function profilesView() {
-  let h = pendingBanner() + cfgErrorBox(S.profile_errors || []);
-  if (!S.profile_order.length) {
-    return h + `<div class="sheet"><div class="empty">
-      <p>No profiles found on disk. Profiles live as .yaml files in the
-      profiles folder inside your data directory.</p></div></div>`;
-  }
-  if (!C.selected || !S.profiles[C.selected]) C.selected = S.profile_order[0];
-  h += `<div class="toolbar" style="justify-content:flex-start"><span class="seg">${
-    S.profile_order.map((f) => `<button type="button" data-profile="${esc(f)}"
-      aria-pressed="${f === C.selected}">${esc(S.profiles[f].name)}</button>`).join("")}</span></div>`;
-  return h + profileDetail(S.profiles[C.selected]);
-}
-
-function tierRuleText(g) {
-  const n = g.entries.length;
-  if (g.requires === "all_green") return `all ${n} must be green`;
-  if (g.requires === "at_least") {
-    if (g.min_green === null || g.min_green === undefined)
-      return `at least ? of ${n} — no min_green declared, cannot be evaluated`;
-    return `at least ${g.min_green} of ${n} must be green`;
-  }
-  if (g.requires === "none") return `${n} ${n === 1 ? "entry" : "entries"} · score only, never blocks`;
-  return `rollup "${g.requires ?? "not declared"}" — cannot be evaluated`;
-}
-
-function profileDetail(p) {
-  let h = cfgErrorBox(p.errors || []);
-
-  const hpe = p.holding_period_exit;
-  const conf = p.sell_confirmation;
-  h += `<div class="rollup">
-    <h3>${esc(p.name)} <span class="dim" style="font-family:var(--mono);font-size:11px">v${esc(p.version ?? "?")}</span></h3>
-    <div class="pe-desc">${prose(p.summary)}</div>
-    <div class="tierline">${p.tiers.map((g) =>
-      `<span class="chip s-none">${esc(g.key.toUpperCase())} · ${esc(tierRuleText(g))}</span>`).join(" ")}</div>
-    <div class="pe-desc">${prose(p.rollup.rule)}</div>
-    ${p.rollup.grey ? `<div class="pe-sub-block"><i>When a value is grey</i>${prose(p.rollup.grey)}</div>` : ""}
-    ${hpe && hpe.form === "fixed_period" ? `<div class="pe-sub-block"><i>Position clock</i>
-      <p>Sell after ${esc(hpe.value)} ${esc(hpe.unit)}, regardless of the metrics.</p>
-      ${hpe.why ? `<details class="whybox"><summary>Why</summary>${prose(hpe.why)}</details>` : ""}</div>` : ""}
-    ${hpe && hpe.form === "none" ? `<div class="pe-sub-block"><i>Position clock</i>
-      <p>None — exits here are event-driven, not calendar-driven.</p>
-      ${hpe.why ? `<details class="whybox"><summary>Why</summary>${prose(hpe.why)}</details>` : ""}</div>` : ""}
-    ${conf ? `<div class="pe-sub-block"><i>Sell confirmation</i>
-      <p>${esc(conf.applies_to || "Every sell threshold")} needs the breach on
-      ${esc(conf.count)} ${esc(String(conf.unit || "").replace(/_/g, " "))} before it counts.</p>
-      ${conf.why ? `<details class="whybox"><summary>Why</summary>${prose(conf.why)}</details>` : ""}</div>` : ""}
+  h += cfgErrorBox(st.value_errors || []);
+  const stamp = S.journal.strategy || {};
+  h += `<div class="rollup"><h3>${esc(st.name)}
+      <span class="dim" style="font-family:var(--mono);font-size:11px">v${esc(st.version)}${
+        st.values_version != null ? ` · settings v${esc(st.values_version)}` : ""} · contract ${esc(st.contract)}</span></h3>
+    <div class="pe-desc">${prose(st.summary)}</div>
+    <div class="pe-sub-block"><i>This journal</i><p>Created ${esc(String(S.journal.created).slice(0, 10))} against
+      ${esc(stamp.name)} v${esc(stamp.version)} · settings v${esc(stamp.values_version)}. It cannot be changed —
+      a second strategy means a second journal, the way it would mean a second account.</p></div>
+    <div class="pe-sub-block"><i>Bundle</i><p><code>${esc(st.bundle)}</code>${
+      (st.reference || []).length ? ` · ships ${st.reference.map((r) => `<code>${esc(r)}</code>`).join(", ")}` : ""}</p></div>
   </div>`;
 
-  if (p.notice) h += `<div class="notice quiet" style="margin-top:20px">
-    <h4>Before you use this profile</h4>${prose(p.notice)}</div>`;
+  h += `<section class="group" style="margin-top:26px"><div class="ghead"><h3>What it can say</h3>
+    <span>${st.states.length} state${st.states.length === 1 ? "" : "s"}</span></div>
+    <p class="hint" style="margin:8px 0 0">Every verdict this journal produces is one of these, and only one.
+    Buying, holding, adding, trimming and exiting are outcomes of a single decision, not separate systems that
+    each reach their own conclusion.</p>
+    <div class="slist" style="margin-top:12px">${st.states.map((s) => `<div class="srow">
+      <div class="sname">${esc(s.name)}</div>
+      <div class="scond">${esc(s.description)}</div>
+      <div class="sstate"><span class="chip s-${RENDER_TONE[s.render] || "none"}">${
+        esc(((S.render_types || {})[s.render] || {}).meaning || "")}</span></div>
+    </div>`).join("")}</div></section>`;
 
-  p.tiers.forEach((g) => {
-    h += `<section class="group" style="margin-top:26px"><div class="ghead">
-      <h3>${esc(g.key.toUpperCase())}</h3><span>${esc(tierRuleText(g))}</span></div>`;
-    if (g.meaning) h += `<p class="hint" style="margin:8px 0 0">${oneline(g.meaning)}</p>`;
-    h += `<div class="plist" style="margin-top:12px">${
-      g.entries.map(profileEntry).join("") ||
-      '<div class="pentry"><p class="pe-desc" style="margin:0">No entries in this tier.</p></div>'
-    }</div></section>`;
-  });
+  if ((st.inputs || []).length) {
+    const problems = st.input_problems || [];
+    h += `<section class="group" style="margin-top:26px"><div class="ghead"><h3>What it asked you</h3>
+      <span>${problems.length ? "something is still owed" : "answered in this journal"}</span></div>
+      <p class="hint" style="margin:8px 0 0">Things no strategy could ship a sensible default for, because they
+      are facts about your account rather than opinions about investing. They can be changed whenever they change
+      — a figure like your free cash is expected to move — and every edit is dated on the record below.</p>
+      ${problems.length ? `<div class="notice"><h4>Answers still needed</h4>
+        ${problems.map((p) => `<p>${esc(p)}</p>`).join("")}
+        <p class="hint">Until these are answered this journal produces no verdicts, only a note saying what is
+        missing. Nothing already recorded is affected, and recording a decision is never blocked by it.</p></div>` : ""}
+      <div class="plist" style="margin-top:12px">${st.inputs.map((f) => `<div class="pentry">
+        <div class="pe-head"><b>${esc(f.label)}</b><code>${esc(f.id)}</code>
+          ${f.required ? '<span class="req">required</span>' : ""}
+          ${f.role ? `<span class="req" title="${esc(((st.roles || {})[f.role] || {}).means || "")}">the journal reports this</span>` : ""}</div>
+        <div class="pe-desc">${prose(f.explain)}</div>
+        ${f.inactive
+          ? `<div class="pe-param"><span class="chip blank">not asked</span>
+             <span class="dim">${esc(f.inactive)}</span></div>`
+          : `<div class="pe-param">${f.value === null || f.value === undefined
+              ? '<span class="chip blank">not answered</span>'
+              : `<b>${esc(declaredText(f, f.value))}</b>`}</div>`}
+      </div>`).join("")}</div>
+      <div class="toolbar" style="justify-content:flex-start;margin-top:12px">
+        <button class="btn primary" data-act="settings">Change these answers</button></div></section>`;
+  }
 
-  /* version history — the append-only record of every change to this file */
-  const hist = (p.history || []).slice().reverse();
-  h += `<div class="rollup" style="margin-top:26px"><h3>Version history</h3>
-    <p>Profiles are edited by hand, so changes happen outside the app. Every change is recorded
-    here the moment it is seen — timestamped, with the exact lines that moved — and asks for a
-    written reason. The record is append-only: versions are never edited or removed.</p>
-    <ul class="histlist">${hist.map((v) => `<li><b>v${v.version}</b>
-      <span>${v.reason ? esc(v.reason)
-        : `<span class="neg">No reason recorded yet.</span>
-           <button class="btn" data-act="explain" data-file="${esc(p.file)}" data-version="${v.version}">Write the reason</button>`}
-        ${(v.changes || []).length ? `<div class="histchanges">${v.changes.map((c) => esc(c)).join("<br>")}</div>` : ""}</span>
-      <time>${esc(String(v.recorded).slice(0, 10))}</time></li>`).join("")
-      || "<li><span>No history recorded yet.</span></li>"}</ul></div>`;
+  if ((st.values || []).length) {
+    h += `<section class="group" style="margin-top:26px"><div class="ghead"><h3>Its settings</h3>
+      <span>shipped defaults, and what this journal uses</span></div>
+      <p class="hint" style="margin:8px 0 0">Numbers the strategy has an opinion about and ships a default for.
+      Changing one changes what every future verdict in this journal means, so a change is recorded with the
+      before and after and asks you to say why.</p>
+      <div class="plist" style="margin-top:12px">${st.values.map((v) => `<div class="pentry">
+        <div class="pe-head"><b>${esc(v.label)}</b><code>${esc(v.id)}</code>
+          <span class="req">${esc(v.unit || v.type)}</span></div>
+        <div class="pe-desc">${prose(v.explain)}</div>
+        <div class="pe-param"><b>${esc(fmtUnit(v.value, v.unit || (v.type === "boolean" ? "yes_no" : "none")))}</b>
+          <span class="dim">${v.source === "shipped default" ? "shipped default"
+            : `set by ${esc(v.source)} — shipped default ${esc(String(v.shipped))}`}</span></div>
+      </div>`).join("")}</div>
+      <div class="toolbar" style="justify-content:flex-start;margin-top:12px">
+        <button class="btn" data-act="settings">Change these settings</button></div></section>`;
+  }
+
+  h += ruleChangeHistory() + inputChangeHistory();
+  if ((S.refused || []).length) {
+    h += `<div class="rollup" style="margin-top:26px"><h3>Strategies that would not load</h3>
+      <p>These bundles are on this machine and were refused. A refused strategy is skipped with its reason and
+      never prevents another from loading.</p>
+      <ul class="pe-nmw">${S.refused.map((r) => `<li><code>${esc(r.bundle)}</code>
+        ${(r.errors || []).map((e) => `<div class="greynote">${esc(e)}</div>`).join("")}</li>`).join("")}</ul></div>`;
+  }
   return h;
 }
 
-function profileEntry(e) {
-  let h = `<div class="pentry">
-    <div class="pe-head"><b>${esc(e.label || e.metric || "(unnamed)")}</b>
-      <code>${esc(e.metric)}</code></div>`;
-  if (e.errors && e.errors.length)
-    h += `<div class="dlg-err" style="margin-top:10px">${e.errors.map(esc).join("<br>")}</div>`;
-  if (e.description) h += `<div class="pe-desc">${prose(e.description)}</div>`;
+/* One declared field's answer, as words. A choice reads as its label, never
+   as the value the strategy stores — "Building positions" beats "building". */
+function declaredText(spec, value) {
+  const opt = (spec.options || []).find((o) => o.value === value);
+  if (opt) return opt.label;
+  if (spec.type === "boolean") return value ? "Yes" : "No";
+  return fmtUnit(value, spec.unit || (spec.type === "text" ? "text" : "none"));
+}
 
-  if (e.buy || e.sell) {
-    h += '<div class="pe-cols">';
-    if (e.buy) {
-      h += `<div class="pe-col"><i>Buy when</i>
-        <div class="pe-th">${condText(e.buy) || "—"}</div>
-        ${e.buy.sustained_for ? `<div class="pe-sub">sustained for ${esc(e.buy.sustained_for.count)}
-          ${esc(String(e.buy.sustained_for.unit).replace(/_/g, " "))}</div>` : ""}
-        ${e.buy.why ? `<div class="pe-why">${prose(e.buy.why)}</div>` : ""}</div>`;
-    }
-    const s = e.sell;
-    if (!s || s.form === "none") {
-      /* A blank sell is a decision, not missing data. It renders as one. */
-      h += `<div class="pe-col"><i>Sell when</i>
-        <div class="pe-th"><span class="chip blank">Blank — no sell threshold, by choice</span></div>
-        ${s && s.why ? `<div class="pe-why">${prose(s.why)}</div>` : ""}</div>`;
-    } else {
-      h += `<div class="pe-col"><i>Sell when</i>
-        ${s.measured_on ? `<div class="pe-sub" style="margin:0 0 6px">measured on
-          ${esc(s.measured_on_label || s.measured_on)} <code>${esc(s.measured_on)}</code></div>` : ""}
-        <div class="pe-th">${condText(s) || "—"}</div>
-        ${s.sustained_for ? `<div class="pe-sub">sustained for ${esc(s.sustained_for.count)}
-          ${esc(String(s.sustained_for.unit).replace(/_/g, " "))}</div>` : ""}
-        ${s.sell_confirmation ? `<div class="pe-sub">confirmation: ${esc(s.sell_confirmation.form)}${
-          s.sell_confirmation.why ? " — " + oneline(s.sell_confirmation.why) : ""}</div>` : ""}
-        ${s.why ? `<div class="pe-why">${prose(s.why)}</div>` : ""}</div>`;
-    }
-    h += "</div>";
-  }
+/* Answers are not rules, so they get their own record: dated, before and
+   after, and nothing owed. They are here because they feed figures a
+   strategy binds on, and an answer that could be quietly adjusted the day
+   before a purchase is worth being able to see afterwards. */
+function inputChangeHistory() {
+  const hist = (S.input_changes || []).slice().reverse();
+  if (!hist.length) return "";
+  return `<div class="rollup" style="margin-top:26px"><h3>Answers you changed</h3>
+    <p>What you told this journal, and when it moved. These are facts about your account rather than rules, so no
+    reason is asked for — but the verdicts that used the old answer are frozen in the record beside the purchases
+    they belong to, and are never rewritten to match.</p>
+    <ul class="histlist">${hist.map((c) => `<li><b>#${c.seq}</b>
+      <span><div class="histchanges">${(c.moved || []).map((m) => esc(movedLine(m))).join("<br>")}</div></span>
+      <time>${esc(String(c.seen).slice(0, 10))}</time></li>`).join("")}</ul></div>`;
+}
 
-  if (e.flag) {
-    h += `<div class="pe-flag"><span class="chip s-watch">Flag</span>
-      <div><b class="pe-flag-b">${condText(e.flag) || esc(e.flag.comparator || "")}</b>
-      — surfaces a flag only; it never blocks anything.
-      ${e.flag.why ? `<div class="pe-why">${prose(e.flag.why)}</div>` : ""}</div></div>`;
-  }
-
-  if (e.parameters && e.parameters.length) {
-    h += `<div class="pe-block"><i>Parameters this profile supplies</i>${
-      e.parameters.map((pm) => `<div class="pe-param">
-        <code>${esc(pm.id)}</code>
-        ${!pm.supplied ? '<span class="chip s-fail">Not supplied — required</span>'
-          : (pm.value === null || pm.value === undefined || pm.value === ""
-            ? '<span class="chip blank">Not set</span>'
-            : `<b>${unitVal(pm.value, pm.unit)}</b>`)}
-        ${pm.means ? `<div class="pe-why" style="flex-basis:100%">${prose(pm.means)}</div>` : ""}
-      </div>`).join("")}</div>`;
-  }
-
-  if (e.not_meaningful_when && e.not_meaningful_when.length) {
-    h += `<div class="pe-block"><i>Not meaningful when</i><ul class="pe-nmw">${
-      e.not_meaningful_when.map((t) => `<li>${oneline(t.test)}${
-        t.because ? ` <span class="dim">— ${oneline(t.because)}</span>` : ""}</li>`).join("")}</ul></div>`;
-  }
-
-  if (e.note) h += `<div class="pe-block"><i>Note</i><div class="pe-why" style="margin-top:0">${prose(e.note)}</div></div>`;
-  return h + "</div>";
+function ruleChangeHistory() {
+  const hist = (S.rule_changes || []).slice().reverse();
+  return `<div class="rollup" style="margin-top:26px"><h3>Rule changes</h3>
+    <p>A strategy is edited where it lives, so changes happen outside this app. Every one is recorded the moment
+    it is seen — what moved, and when. A change to a setting is recorded as a before and after, because the
+    number means something on its own; a change to the logic cannot be, so what is recorded is the author's own
+    account of it. The record is append-only: entries are never edited or removed.</p>
+    <ul class="histlist">${hist.map((c) => `<li><b>#${c.seq}</b>
+      <span>${(c.moved || []).length
+        ? `<div class="histchanges">${c.moved.map((m) => esc(movedLine(m))).join("<br>")}</div>` : ""}
+        ${(c.changelog || []).length ? `<div class="histchanges">${c.changelog.map(esc).join("<br>")}</div>` : ""}
+        ${(c.notes || []).map((n) => `<div class="greynote">${esc(n)}</div>`).join("")}
+        ${c.reason ? esc(c.reason) : c.reason_owed
+          ? `<span class="neg">No reason recorded yet.</span>
+             <button class="btn" data-act="explain" data-seq="${c.seq}">Write the reason</button>`
+          : '<span class="dim">Recorded from the strategy\'s own changelog — nothing is owed from you.</span>'}</span>
+      <time>${esc(String(c.seen).slice(0, 10))}</time></li>`).join("")
+      || "<li><span>Nothing has changed since this journal was created.</span></li>"}</ul></div>`;
 }
 
 /* -------------------------------------------------- config: metrics page */
@@ -1135,11 +1208,11 @@ function metricsView() {
   }
   return `<div class="toolbar" style="justify-content:space-between;align-items:center">
       <input id="banksearch" class="search" type="search" value="${esc(C.search)}"
-        placeholder="Search ${C.bank.entries.length} metrics…" aria-label="Search metrics">
+        placeholder="Search ${C.bank.entries.length} measures…" aria-label="Search measures">
       <span class="dim" id="bankcount" style="font-family:var(--mono);font-size:11px">${bankCountText()}</span>
     </div>
     <p class="hint" style="margin:0 0 14px">The bank defines what each value <em>is</em>.
-    No thresholds appear here because none exist here — every level lives in a profile.</p>
+    No thresholds appear here because none exist here — every level belongs to a strategy.</p>
     <div id="banklist">${bankListHTML()}</div>`;
 }
 
@@ -1162,7 +1235,7 @@ function bankFiltered() {
 function bankListHTML() {
   const list = bankFiltered();
   if (!list.length) return `<div class="sheet"><div class="empty">
-    <p>No metric matches “${esc(C.search)}”. Try part of a name or an id.</p></div></div>`;
+    <p>No measure matches “${esc(C.search)}”. Try part of a name or an id.</p></div></div>`;
   return `<div class="plist">${list.map(bankCard).join("")}</div>`;
 }
 
@@ -1193,10 +1266,11 @@ function bankCard(e) {
         unmarked = ${esc(e.response.unmarked)}</div>` : ""}</div>`;
   }
   if (e.parameters && e.parameters.length) {
-    h += `<div class="pe-block"><i>Declared parameters — supplied by a profile, never set here</i>${
+    h += `<div class="pe-block"><i>Declared parameters — no strategy can supply one yet</i>${
       e.parameters.map((p) => `<div class="pe-param"><code>${esc(p.id)}</code>
         ${p.unit ? `<span class="dim">${esc(p.unit)}</span>` : ""}
-        ${p.means ? `<div class="pe-why" style="flex-basis:100%">${prose(p.means)}</div>` : ""}</div>`).join("")}</div>`;
+        ${p.means ? `<div class="pe-why" style="flex-basis:100%">${prose(p.means)}</div>` : ""}</div>`).join("")}
+      <p class="hint">This measure reports absent everywhere until the contract gains a way to hand one in.</p></div>`;
   }
   if (e.not_meaningful_when && e.not_meaningful_when.length) {
     h += `<div class="pe-block"><i>Not meaningful when</i><ul class="pe-nmw">${
@@ -1213,45 +1287,26 @@ function bankCard(e) {
 
 /* ------------------------------------------------------------------ data */
 function dataView() {
-  let mig = "";
-  const m = S.migration;
-  if (m) {
-    mig = `<div class="panel"><h3>Migration record</h3><div class="sub">Old metric set → the bank</div>
-      <p class="hint" style="margin-top:0">On ${esc(String(m.migrated).slice(0, 10))} the journal's values were
-      migrated to the metric bank. The original file was backed up first
-      (<code>${esc(m.backup || "—")}</code>)${m.rules_archived ? `, and the retired ruleset history was archived as
-      <code>${esc(m.rules_archived)}</code>` : ""}. Entry snapshots were not touched — they are recorded history.</p>
-      ${(m.renamed || []).length ? `<div class="fals"><em>Renamed — same measure, bank id</em></div>
-        <ul class="pe-nmw">${m.renamed.map((r) => `<li><code>${esc(r.from)}</code> → <code>${esc(r.to)}</code>
-          (${r.values} values)${r.note ? ` <span class="dim">— ${esc(r.note)}</span>` : ""}</li>`).join("")}</ul>` : ""}
-      ${(m.preserved || []).length ? `<div class="fals"><em>No bank equivalent — preserved, not scored</em></div>
-        <ul class="pe-nmw">${m.preserved.map((p) => `<li><b>${esc(p.label)}</b> (${p.count} values)
-          <span class="dim">— ${esc(p.why)}</span></li>`).join("")}</ul>` : ""}
-    </div>`;
-  }
   const sec = S.data_security || {};
   const storage = sec.storage || {};
   const keyStatus = sec.key_configured
-    ? `A key is configured — stored in ${esc(storage.where || "the OS credential store")}. It is never shown again, never exported, and never written to settings.`
-    : "No key is stored. Filing metrics still compute; price-dependent entries say why they can't.";
+    ? `A key is configured — stored in ${esc(storage.where || "the OS credential store")}. It is never shown again, never exported, and never written to a journal.`
+    : "No key is stored. Filing measures still compute; price-dependent ones say why they can't.";
   const unencryptedNote = storage.unencrypted
     ? `<p class="hint"><b>This platform offers no credential vault</b>, so the key is stored <b>unencrypted</b> at
        <code>${esc(storage.where)}</code> with owner-only file permissions. That is an honest fallback, not protection
        against someone using this account.</p>` : "";
-  const rotateNotice = sec.rotate_notice
-    ? `<div class="notice"><h4>Rotate this key</h4><p>It previously sat in plain text inside settings — and inside any
-       export made while it did. It has been moved to ${esc(storage.where || "the credential store")}, but copies that
-       already left this machine can't be recalled. Generate a new key at tiingo.com/account/api/token and save it
-       here; saving a new key clears this notice.</p></div>` : "";
   const secProblem = sec.problem
     ? `<div class="notice"><h4>Credential store problem</h4><p>${esc(sec.problem)}</p></div>` : "";
+  const set = S.journal.settings || {};
   return `<div class="cards">
     <div class="panel"><h3>Data sources</h3><div class="sub">SEC EDGAR filings · Tiingo prices</div>
       <p class="hint" style="margin-top:0">Filings come straight from SEC EDGAR — free, no key, but the SEC
       requires every automated tool to identify itself with a name and a monitored email, and blocks the
       anonymous ones. Prices come from Tiingo under your own free API key (tiingo.com). Fetching happens only
-      when you press Fetch data, and hand-entered values are never overwritten by anything fetched.</p>
-      ${secProblem}${rotateNotice}
+      when you press Fetch data, and hand-entered values are never overwritten by anything fetched. Filings and
+      prices are shared by every journal — they are public facts about a company, not part of any record.</p>
+      ${secProblem}
       <div class="field"><label for="ds_ident">SEC identity — name and email</label>
         <input id="ds_ident" type="text" value="${esc(sec.sec_identity || "")}" placeholder="Jane Doe jane@example.com">
         <div class="help">Sent as the User-Agent on every EDGAR request. Kept on this machine only — it is personal
@@ -1269,29 +1324,30 @@ function dataView() {
         <button class="btn" data-act="test-key" ${sec.key_configured ? "" : "disabled"}>Test key</button>
         <button class="btn danger" data-act="remove-key" ${sec.key_configured ? "" : "disabled"}>Remove key</button></div></div>
 
-    <div class="panel"><h3>Valuation defaults</h3><div class="sub">Set once · prefills every expected-value calculation</div>
+    <div class="panel"><h3>Valuation defaults</h3><div class="sub">Set once · prefills every expected-value calculation in this journal</div>
       <p class="hint" style="margin-top:0">These are standing assumptions, not per-stock levers. Changing one moves
       every valuation at once — which is the point: a rate tuned for a single stock is a rationalisation, not a
       requirement. Each calculation can still override, and the record says so when it does.</p>
       <div class="field"><label for="vd_dr">Discount rate %</label>
-        <input id="vd_dr" type="number" step="any" value="${esc(S.settings.discount_rate ?? "")}">
+        <input id="vd_dr" type="number" step="any" value="${esc(set.discount_rate ?? "")}">
         <div class="help">Your required annual return. Derive it once: start from the 10-year Treasury yield — the
         return for taking no risk — and add 4 to 6 points for owning a business instead. Most long-term investors
         land between 8 and 12.</div></div>
       <div class="field"><label for="vd_tg">Terminal growth %</label>
-        <input id="vd_tg" type="number" step="any" value="${esc(S.settings.terminal_growth ?? "")}">
+        <input id="vd_tg" type="number" step="any" value="${esc(set.terminal_growth ?? "")}">
         <div class="help">Long-run growth after the forecast years. Inflation plus a little — 2 to 3 — is the
         defensible range. Above about 3 you are claiming the company outgrows the economy forever.</div></div>
       <div class="field"><label for="vd_mos">Margin of safety %</label>
-        <input id="vd_mos" type="number" step="any" value="${esc(S.settings.margin_of_safety ?? "")}">
+        <input id="vd_mos" type="number" step="any" value="${esc(set.margin_of_safety ?? "")}">
         <div class="help">Graham's traditional number is 30. It is room to be wrong, not a return target — the wider
         your uncertainty, the wider it should be.</div></div>
       <div class="toolbar" style="justify-content:flex-start;margin-top:8px">
         <button class="btn primary" data-act="save-valuation">Save defaults</button></div></div>
 
     <div class="panel"><h3>Back up</h3><div class="sub">Export to a folder you control</div>
-      <p class="hint" style="margin-top:0">Writes one timestamped file containing your positions, notes,
-      profiles and their version history. Put it wherever you keep backups. Nothing is uploaded anywhere.</p>
+      <p class="hint" style="margin-top:0">Writes one timestamped file containing every journal — positions, notes,
+      snapshots, the strategy each is stamped with and its rule-change record. Put it wherever you keep backups.
+      Nothing is uploaded anywhere. Your API key and SEC contact are not in it, and cannot be.</p>
       <div class="toolbar" style="justify-content:flex-start;margin-top:16px">
         <button class="btn primary" data-act="export">Export</button>
         <button class="btn" data-act="import">Import</button></div></div>
@@ -1299,18 +1355,39 @@ function dataView() {
     <div class="panel"><h3>Where your data lives</h3><div class="sub">Outside the project folder</div>
       <p class="hint" style="margin-top:0"><code>${esc(S.data_dir)}</code></p>
       <p class="hint">Deliberately not inside the repository. Cloning or pushing the code can never carry your
-      positions, notes or ideas with it. Only an empty template ships with the app.</p>
-      <p class="hint">Set the <code>LEDGER_DATA</code> environment variable to move it, for instance onto a synced drive.</p></div>
-
-    <div class="panel"><h3>Sample data</h3><div class="sub">Invented companies and figures</div>
-      <p class="hint" style="margin-top:0">Twelve fictional securities covering the cases worth seeing: an
-      expired position clock, a breach awaiting confirmation, purchases recorded against and without the
-      signal, a panic sell that kept rising, and candidates the four profiles disagree about.</p>
+      positions, notes or ideas with it.</p>
+      <p class="hint">Set the <code>LEDGER_DATA</code> environment variable to move it, for instance onto a synced drive.</p>
       <div class="toolbar" style="justify-content:flex-start;margin-top:16px">
-        <button class="btn" data-act="sample">Load sample data</button>
-        <button class="btn danger" data-act="clear">Clear everything</button></div></div>
-    ${mig}
+        <button class="btn danger" data-act="clear">Empty this journal</button></div></div>
   </div>`;
+}
+
+/* ------------------------------------------------------------ no journal */
+function welcomeView() {
+  const n = (S.strategies || []).length;
+  /* A journal that could not be read never leaves the window blank: the list
+     is still here, so the way out is to open a different one. */
+  let h = S.journal_problem
+    ? `<div class="notice"><h4>That journal could not be read</h4>
+       <p>${esc(S.journal_problem)}</p>
+       <p>Nothing has been written to it. Open another journal below, or fix
+       the file and reopen this one.</p></div>` : "";
+  h += `<div class="sheet"><div class="empty">
+    <h2 style="margin:0 0 8px">${S.journal_problem ? "Or start a new one" : "Start a journal"}</h2>
+    <p>A journal is created against one strategy and stays there. It is what every decision in it will be
+    judged by, chosen now while you are calm rather than in the moment you want to act.</p>
+    ${n ? `<button class="btn primary" data-act="newjournal">Create a journal</button>`
+      : `<p class="neg">No strategy would load, so there is nothing to create a journal against.</p>`}
+  </div></div>`;
+  if ((S.refused || []).length) {
+    h += `<div class="rollup" style="margin-top:26px"><h3>Strategies that would not load</h3>
+      <ul class="pe-nmw">${S.refused.map((r) => `<li><code>${esc(r.bundle)}</code>
+        ${(r.errors || []).map((e) => `<div class="greynote">${esc(e)}</div>`).join("")}</li>`).join("")}</ul></div>`;
+  }
+  if ((S.journals || []).length) {
+    h += `<div class="toolbar" style="margin-top:20px">${journalBar()}</div>`;
+  }
+  return h;
 }
 
 /* ---------------------------------------------------------------- render */
@@ -1318,12 +1395,13 @@ function render() {
   if (!S) return;
   renderMast(); renderTabs();
   const v = $("view");
+  if (!S.journal) { v.innerHTML = welcomeView(); return; }
   if (openTicker) {
     const s = find(openTicker);
     if (!s) { openTicker = null; return render(); }
     v.innerHTML = detailView(s);
     if (s.ev) paintEV(s.ticker);
-  } else if (tab === "profiles") v.innerHTML = profilesView();
+  } else if (tab === "strategy") v.innerHTML = strategyView();
   else if (tab === "metrics") v.innerHTML = metricsView();
   else if (tab === "data") v.innerHTML = dataView();
   else v.innerHTML = listView();
@@ -1374,9 +1452,149 @@ const area = (name, label, value, help) =>
    <textarea id="f_${name}" name="${name}">${esc(value ?? "")}</textarea>
    ${help ? `<div class="help">${esc(help)}</div>` : ""}</div>`;
 
+/* ------------------------------------------------- declaration-built forms */
+/* Every field below comes from a strategy's own declaration and nothing
+   else. There is no list of known settings anywhere in this file: a journal
+   shows the fields its own strategy uses, and a strategy that gains one
+   gains a form field with no view code changed. */
+
+/* `help` is inserted as markup so a caller can bold a shipped default;
+   every caller escapes what it interpolates. Everything else here is
+   escaped in place. */
+function declaredField(spec, value, prefix, help) {
+  const name = prefix + spec.id;
+  const id = "f_" + name;
+  const gate = spec.when
+    ? ` data-gate="${esc(prefix + spec.when.input)}" data-gate-is="${esc(JSON.stringify(spec.when.is))}"` : "";
+  const label = `<label for="${id}">${esc(spec.label)}${spec.required ? "" : " (optional)"}</label>`;
+  const notes = `${help ? `<div class="help">${help}</div>` : ""}
+    <div class="help">${esc(spec.explain)}</div>`;
+  let control;
+  if ((spec.options || []).length) {
+    control = `<select id="${id}" name="${name}">
+      ${spec.required ? "" : '<option value="">Not answered</option>'}
+      ${spec.options.map((o) => `<option value="${esc(o.value)}" ${o.value === value ? "selected" : ""}>${esc(o.label)}</option>`).join("")}</select>`;
+  } else if (spec.type === "boolean") {
+    control = `<select id="${id}" name="${name}">
+      ${spec.required ? "" : '<option value="">Not answered</option>'}
+      <option value="false" ${value === false ? "selected" : ""}>No</option>
+      <option value="true" ${value === true ? "selected" : ""}>Yes</option></select>`;
+  } else if (spec.type === "number" || spec.type === "integer") {
+    const bounds = (spec.min !== undefined ? ` min="${esc(spec.min)}"` : "")
+      + (spec.max !== undefined ? ` max="${esc(spec.max)}"` : "");
+    control = `<input id="${id}" name="${name}" type="number"
+      step="${spec.type === "integer" ? "1" : "any"}"${bounds} value="${esc(value ?? "")}">`;
+  } else {
+    control = `<input id="${id}" name="${name}" type="text" value="${esc(value ?? "")}">`;
+  }
+  return `<div class="field"${gate}>${label}${control}${notes}</div>`;
+}
+
+/* A question whose gate is unmet is hidden rather than asked: a field that
+   cannot mean anything teaches the wrong thing. Its answer is still sent —
+   the backend is the authority on which answers apply, and it keeps a stale
+   one rather than destroying it in case the gate swings back. */
+function applyGates(root) {
+  root.querySelectorAll("[data-gate]").forEach((el) => {
+    const on = root.querySelector(`[name="${el.dataset.gate}"]`);
+    let want;
+    try { want = JSON.parse(el.dataset.gateIs); } catch (e) { want = null; }
+    const raw = on ? on.value : "";
+    const got = raw === "" ? null : (raw === "true" ? true : raw === "false" ? false : raw);
+    el.hidden = !(on && got === want);
+  });
+}
+
+/* Everything this journal tells its strategy, on one screen: the answers it
+   asked for and the override of the numbers it ships. They differ in where
+   the default comes from, not in how they are set. */
+function dlgSettings() {
+  const st = S.strategy;
+  if (!st) { toast("This journal's strategy is not installed here.", true); return; }
+  const cfg = S.journal.config || {};
+  const inputs = (st.inputs || []).map((f) =>
+    declaredField(f, f.value, "in_",
+      f.role ? `This journal reports it back to you as a figure: ${esc(((st.roles || {})[f.role] || {}).means || "")}.` : "")).join("");
+  const values = (st.values || []).map((v) =>
+    declaredField({ ...v, required: false }, cfg[v.id], "cfg_",
+      `${esc(st.name)} ships <b>${esc(declaredText(v, v.shipped))}</b>. Leave blank to use it.`)).join("");
+  dialog({
+    title: "Journal settings",
+    blurb: `${st.name} · everything ${S.journal.name} tells it.`,
+    body: (inputs ? `<p class="hint" style="margin:0 0 10px">What it asked you. Facts about your account, which
+        change for ordinary reasons — each edit is dated on the record, and nothing is owed for it.</p>${inputs}` : "")
+      + (values ? `<p class="hint" style="margin:18px 0 10px">Its settings. Changing one changes what every future
+        verdict in this journal means, so it goes on the rule-change record and asks you to write down why.</p>${values}` : ""),
+    confirm: "Save",
+    onConfirm: async (d) => {
+      const ins = {}, conf = {};
+      Object.keys(d).forEach((k) => {
+        if (k.startsWith("in_")) ins[k.slice(3)] = d[k];
+        else if (k.startsWith("cfg_")) conf[k.slice(4)] = d[k];
+      });
+      const r = await api("save_journal_settings", ins, conf);
+      if (!r) return " ";
+      if (r.pending) toast("Saved. A setting moved, so the rule-change record is waiting for you to write down why.");
+      else toast("Saved.");
+    },
+  });
+  const body = $("dlgbody");
+  applyGates(body);
+  body.querySelectorAll("select").forEach((el) => {
+    el.addEventListener("change", () => applyGates(body));
+  });
+}
+
+/* Creating a journal is where the strategy is chosen, and the only time. The
+   setup fields below are generated from the chosen strategy's declaration,
+   so a journal only ever asks for what its own strategy uses. */
+function dlgNewJournal(chosenId) {
+  const list = S.strategies || [];
+  if (!list.length) { toast("No strategy would load, so there is nothing to create a journal against.", true); return; }
+  const cur = list.find((x) => x.id === chosenId) || list[0];
+  const opts = list.map((x) => `<option value="${esc(x.id)}" ${x.id === cur.id ? "selected" : ""}>${esc(x.name)}</option>`).join("");
+  const setup = (cur.inputs || []).map(
+    (f) => declaredField(f, undefined, "in_")).join("");
+  dialog({
+    title: "New journal",
+    blurb: "One journal, one strategy, chosen now and not changed later. Trading two strategies means two journals, the way it would mean two accounts.",
+    body: field("name", "Name this journal", "", "How you will tell it apart from another. “Retirement”, “Small caps”.")
+      + `<div class="field"><label for="f_strategy">Strategy</label>
+         <select id="f_strategy" name="strategy">${opts}</select>
+         <div class="help">${esc(cur.summary)}</div>
+         <div class="help">v${esc(cur.version)} · settings v${esc(cur.values_version)} · speaks contract ${esc(cur.contract)} ·
+         can return: ${cur.states.map((s) => esc(s.name)).join(", ")}</div></div>`
+      + (setup ? `<p class="hint" style="margin:4px 0 10px">${esc(cur.name)} asks for the following. These are things no
+          strategy could ship a default for, because they are facts about you rather than opinions about investing.</p>${setup}` : ""),
+    confirm: "Create journal",
+    onConfirm: async (d) => {
+      if (!(d.name || "").trim()) return "Give the journal a name.";
+      const inputs = {};
+      Object.keys(d).forEach((k) => { if (k.startsWith("in_")) inputs[k.slice(3)] = d[k]; });
+      const r = await api("create_journal", d.name, d.strategy, inputs);
+      if (!r) return " ";
+      tab = "holdings"; openTicker = null;
+      toast(`${r.name} created. Every decision in it will be judged by ${cur.name}.`);
+    },
+  });
+  const body = $("dlgbody");
+  applyGates(body);
+  const sel = $("f_strategy");
+  body.querySelectorAll("select").forEach((el) => {
+    if (el === sel) return;
+    el.addEventListener("change", () => applyGates(body));
+  });
+  if (sel) sel.onchange = () => {
+    const name = $("f_name").value;
+    $("dlg").close();
+    dlgNewJournal(sel.value);
+    if (name) $("f_name").value = name;
+  };
+}
+
 function dlgAdd() {
   dialog({
-    title: "Add a security", blurb: "It starts in Ideas. Enter metrics next, then the profile will score it.",
+    title: "Add a security", blurb: "It starts in Ideas. The strategy scores it from whatever data is available, and says what is missing.",
     body: field("ticker", "Ticker", "") + field("name", "Company name", ""),
     confirm: "Add",
     onConfirm: async (d) => {
@@ -1387,14 +1605,19 @@ function dlgAdd() {
   });
 }
 
+/* The values offered are the ones the strategy actually read for this
+   security, plus anything already recorded — never the whole bank. */
 function dlgMetrics(s) {
   const priceHelp = (s._price && s._price.source === "fetched")
     ? `Blank uses the fetched close (${money(s._price.value)}, ${s._price.date}). A value typed here overrides it.`
     : "Leave blank if you don't have it.";
   let body = field("price", "Price", s.price ?? "", priceHelp, "number");
-  S.input_metrics.forEach((m) => {
-    const users = m.used_by.length ? "Used by " + m.used_by.join(" · ")
-      : "No profile currently uses this — kept because a value was recorded";
+  const list = s._inputs || [];
+  if (!list.length) {
+    body += `<p class="hint">The strategy read no measure for this security, and none is recorded by hand.
+      Fetch data, and whatever it reads will appear here.</p>`;
+  }
+  list.forEach((m) => {
     const comp = (s._computed || {})[m.id];
     let compNote = "";
     if (comp && comp.status === "computed") {
@@ -1403,12 +1626,13 @@ function dlgMetrics(s) {
       compNote = `<div class="u">Not computed — ${esc(comp.reason)}</div>`;
     }
     body += `<div class="metric-input"><div>${esc(m.label)}
-      <div class="u">${esc(m.unit || "")} · ${esc(users)}</div>${compNote}</div>
+      <div class="u">${esc(m.unit || "")} · ${m.cited ? "read by the strategy for this security"
+        : "not currently read — kept because a value was recorded"}</div>${compNote}</div>
       <input name="m_${m.id}" type="number" step="any" value="${s.metrics[m.id] ?? ""}"></div>`;
   });
   dialog({
-    title: `Metrics · ${s.ticker}`,
-    blurb: "Only what your profiles use is listed. Hand-entered values always beat fetched ones, visibly. Leave a field blank to use the computed value, or to show grey where none computes — a zero would read as a confident failure.",
+    title: `Values · ${s.ticker}`,
+    blurb: "Hand-entered values always beat fetched ones, visibly. Leave a field blank to use the computed value, or to show absent where none computes — a zero would read as a confident failure.",
     body, confirm: "Save",
     onConfirm: async (d) => {
       const metrics = {};
@@ -1444,59 +1668,70 @@ function dlgNote(s) {
 }
 
 /* The purchase dialog evaluates for the DATE being recorded, not for today.
-   A past date reconstructs the verdict from the data available by then —
+   A past date reconstructs the state from the data available by then —
    filings filed by that day, that day's close — and says so, visibly:
-   asserting "on <date> this evaluated to X" about an evaluation that ran
-   today would be claiming a fact never computed. Changing the date re-runs
-   the preview for the new date, keeping whatever was already typed. */
+   asserting "on <date> this read X" about an evaluation that ran today would
+   be claiming a fact never computed. Changing the date re-runs the preview
+   for the new date, keeping whatever was already typed. */
 async function dlgBuy(s, dateChosen, keep, fallbackDate) {
   const today = localToday();
   const when = dateChosen || today;
-  const p = await api("preview_purchase", s.ticker, lens, when);
+  const p = await api("preview_purchase", s.ticker, when);
   if (!p) {
     /* The chosen date was refused (future, unparseable). Reopen on the last
        date that worked rather than eating everything already typed. */
     if (fallbackDate) dlgBuy(s, fallbackDate, keep);
     return;
   }
+  const d = p.decision;
+  const commit = d.render === "commit";
+  const noVerdict = d.tier === "evaluation";
+  const bad = !commit;
+  const cited = ((d.reason || {}).evidence || []);
+  const failed = cited.filter((e) => e.outcome === "fail").map((e) => e.subject.label);
+  const unknown = cited.filter((e) => e.outcome === "unknown").map((e) => e.subject.label);
+  const who = (d.strategy || {}).name || "The strategy";
   const recon = p.basis === "reconstructed";
-  const grey = p.verdict === "cant_say", red = p.verdict === "no_buy";
-  const bad = red || grey;
-  const causeLabels = (p.causes || [])
-    .flatMap((c) => c.metrics.map(labelOf)).join(", ");
   const reconBox = recon
     ? `<div class="notice quiet" style="margin:0 0 12px"><h4>Reconstructed — not seen live</h4>
-       <p>${esc(when)} is in the past, so the verdict below is rebuilt from what was observable then:
-       ${esc(p.note || "")}. It is recorded as a reconstruction, distinct everywhere from a verdict
+       <p>${esc(when)} is in the past, so the state below is rebuilt from what was observable then:
+       ${esc(p.note || "")}. It is recorded as a reconstruction, distinct everywhere from a state
        you saw at the time.</p></div>` : "";
-  const warn = red
-    ? `<div class="dlg-err">${esc(p.profile_name)} ${recon ? `reads <strong>No buy</strong> for ${esc(p.as_of)}, reconstructed from the data available by then` : "says <strong>No buy</strong>"}. ${esc(causeLabels)} failed.
+  const warn = bad
+    ? `<div class="dlg-err"><strong>${esc(who)}</strong> ${recon ? `reads <strong>${esc(d.state.name)}</strong> for ${esc(p.as_of)}, reconstructed from the data available by then`
+        : `says <strong>${esc(d.state.name)}</strong>`}. ${esc((d.reason || {}).summary || "")}
+       ${failed.length ? esc(failed.join(", ")) + " missed its threshold." : ""}
+       ${unknown.length ? esc(unknown.join(", ")) + " could not be read." : ""}
+       ${noVerdict ? "There is no verdict here to go against — which is its own kind of override, and is recorded as one." : ""}
        Nothing here stops you. The purchase and this reason both go into the journal, so that in a year you can
-       see what you ignored and what it cost or earned you.</div>`
-    : grey
-    ? `<div class="dlg-err">${esc(p.profile_name)} can't call ${recon ? `${esc(p.as_of)} — ${esc(causeLabels)} could not be evaluated from the data available by then` : `this — ${esc(causeLabels)} could not be evaluated`}.
-       Grey is not a pass. Buying without a signal is allowed and gets logged with your reason, exactly like
-       buying against one.</div>` : "";
+       see what you ignored and what it cost or earned you.</div>` : "";
+  /* Buying a name back is one more purchase, judged the same way — not a
+     resumption of the holding that ended. Saying so is the whole difference
+     between a fresh decision and averaging into an old one. */
+  const back = s.bucket === "previous";
   dialog({
     title: `Record a purchase · ${s.ticker}`,
-    blurb: `Recorded under ${p.profile_name} v${p.profile_version} — the lens you are looking through. This records what you already did; the tool cannot place trades.`,
+    blurb: (back
+      ? `You held ${s.ticker} before and closed it. This starts a new holding, judged from scratch by ${who}`
+      : `Judged by ${who}`)
+      + ", the strategy this journal is stamped with. This records what you already did; the tool cannot place trades.",
     body: reconBox + warn + `<div class="grid2">${field("shares", "Shares", (keep && keep.shares) || "", "", "number")}${field("cost", "Cost per share", (keep && keep.cost) || "", "", "number")}</div>`
       + `<div class="field"><label for="f_opened">Date</label>
          <input id="f_opened" name="opened" type="date" value="${esc(when)}" max="${esc(today)}">
          ${recon ? "" : '<div class="help">A past date is evaluated with the data of that day, and the preview updates when you change this. The future is not offered — its data does not exist yet.</div>'}</div>`
-      + (bad ? area("override_reason", red ? "Why are you buying anyway?" : "Why are you buying without a signal?", (keep && keep.override_reason) || "",
+      + (bad ? area("override_reason", noVerdict ? "Why are you buying without a signal?" : "Why are you buying anyway?", (keep && keep.override_reason) || "",
         "Required. One sentence. You will read this again later.") : ""),
     confirm: bad ? "Record anyway" : "Record purchase", danger: bad,
-    onConfirm: async (d) => {
-      if (!d.shares || !d.cost) return "Shares and cost per share are required.";
-      if (bad && !(d.override_reason || "").trim()) return "A reason is required when the signal doesn't say buy.";
-      const r = await api("open_position", s.ticker, d.shares, d.cost, d.opened, d.override_reason || "", lens, p.verdict);
+    onConfirm: async (dd) => {
+      if (!dd.shares || !dd.cost) return "Shares and cost per share are required.";
+      if (bad && !(dd.override_reason || "").trim()) return "A reason is required when the strategy doesn't say to commit.";
+      const r = await api("open_position", s.ticker, dd.shares, dd.cost, dd.opened, dd.override_reason || "", d.state.id);
       if (!r) return " ";
-      /* The verdict is re-evaluated at commit; if it moved while the dialog
-         was open (a fetch completed, a profile changed), the record differs
-         from what the user was shown — say so, loudly. */
-      if (r.verdict_changed) {
-        toast(`The verdict changed to ${r.verdict === "no_buy" ? "No buy" : r.verdict === "cant_say" ? "Can't say" : "Buy"} between preview and commit (data or profiles moved). The purchase is recorded under the new verdict${r.override ? " as an override — add a note with your reasoning" : ""}.`, r.verdict !== "buy");
+      /* The state is re-evaluated at commit; if it moved while the dialog
+         was open (a fetch completed, the strategy changed), the record
+         differs from what the user was shown — say so, loudly. */
+      if (r.state_changed) {
+        toast(`The state changed to ${r.state} between preview and commit (data or the strategy moved). The purchase is recorded under the new state${r.override ? " as an override — add a note with your reasoning" : ""}.`, !r.commit);
       }
       tab = "holdings";
     },
@@ -1511,6 +1746,11 @@ async function dlgBuy(s, dateChosen, keep, fallbackDate) {
   };
 }
 
+/* A sale is one more appended entry, not an edit. Selling part of a position
+   leaves the remaining lots exactly as they were bought — which is what makes
+   a trim recordable at all, and what a `reduce` verdict has been asking for
+   with nowhere to go. Shares default to everything held, so closing out is
+   still one field away. */
 function dlgSell(s) {
   const opts = S.exit_reasons.map((r) => `<option value="${esc(r)}">${esc(r)}</option>`).join("");
   /* The exit price enters an append-only record. A stale fetched close must
@@ -1525,24 +1765,32 @@ function dlgSell(s) {
       ? `Left blank on purpose: the newest fetched close is ${fetchedAge} days old (${p.date}). Enter the price you actually sold at.`
       : `Prefilled from the fetched close of ${p.date} — replace it with the price you actually sold at.`)
     : "The price you actually sold at.";
+  const lots = buyLots(s).filter((l) => l.open);
+  const lotHelp = lots.length > 1
+    ? `Oldest shares go first, across ${lots.length} open lots (${lots.map((l) => `${l.remaining} from ${l.date}`).join(", ")}).`
+    : "";
   dialog({
-    title: `Close position · ${s.ticker}`,
+    title: `Record a sale · ${s.ticker}`,
     blurb: "It stays in the journal and keeps being priced, so you can see what happened after you sold.",
     body: `<div class="field"><label for="f_reason">Why are you selling?</label>
         <select id="f_reason" name="reason">${opts}</select>
         <div class="help">Answer honestly. The Previous holdings tab groups outcomes by this, and it is the only way to find out whether your sell rules work.</div></div>`
-      + field("price", "Exit price per share", prefill, priceHelp, "number")
+      + field("shares", "Shares sold", s._shares, `You hold ${s._shares}. Sell fewer to trim; the rest stays open, priced from what it actually cost. ${lotHelp}`, "number")
+      + field("price", "Sale price per share", prefill, priceHelp, "number")
       + field("exited", "Date", localToday(), "", "date"),
-    confirm: "Close position", danger: true,
+    confirm: "Record the sale", danger: true,
     onConfirm: async (d) => {
-      if (!d.price) return "An exit price is required.";
-      const r = await api("close_position", s.ticker, d.reason, d.price, d.exited, lens);
+      if (!d.price) return "A sale price is required.";
+      if (!d.shares) return "How many shares were sold?";
+      const r = await api("sell_shares", s.ticker, d.reason, d.price, d.exited, d.shares);
       if (!r) return " ";
-      tab = "previous";
+      tab = r.remaining > 0 ? "holdings" : "previous";
+      if (r.remaining > 0)
+        toast(`Recorded. ${r.remaining} shares still held; the lots they came from are unchanged.`);
       if (r.rule_triggered === false)
-        toast(`Recorded. ${r.signal} under ${r.profile_name} — no rule triggered this exit. That is now on the record.`);
+        toast(`Recorded. ${r.signal} under ${r.strategy_name} — no rule triggered this sale. That is now on the record.`);
       if (r.rule_triggered === null)
-        toast("Recorded. This position had no governing profile, which is itself on the record.");
+        toast("Recorded. The strategy was not installed, so no signal could be evaluated — which is itself on the record.");
     },
   });
 }
@@ -1550,16 +1798,13 @@ function dlgSell(s) {
 /* The expected-value dialog computes what it can and asks only for
    judgement. Price, FCF and shares arrive prefilled from fetched data with
    their provenance and as-of date, locked until deliberately overridden —
-   a typo must not become a stored assumption. Where nothing computes, the
-   field is plain and carries the reason. Judgement inputs carry derivation
-   guidance, and the rate-like ones prefill from the journal's valuation
-   defaults (Data tab): set once, calmly, not per stock. */
+   a typo must not become a stored assumption. */
 function dlgEV(s, methodOverride, pf) {
   if (pf === undefined) {   /* fetch the prefills once, then reopen */
     api("ev_prefill", s.ticker).then((r) => dlgEV(s, methodOverride, r || null));
     return;
   }
-  const cur = methodOverride || (s.ev ? s.ev.method : S.settings.default_ev_method);
+  const cur = methodOverride || (s.ev ? s.ev.method : S.journal.settings.default_ev_method);
   const meth = S.ev_methods[cur];
   const prefill = (pf && pf.prefill) || {};
   const refs = (pf && pf.references) || {};
@@ -1571,7 +1816,7 @@ function dlgEV(s, methodOverride, pf) {
   const opts = Object.keys(S.ev_methods).map((k) =>
     `<option value="${k}" ${k === cur ? "selected" : ""}>${esc(S.ev_methods[k].label)}</option>`).join("");
   const DEFAULT_KEYS = ["discount_rate", "terminal_growth", "margin_of_safety"];
-  const SOURCE_WORDS = { fetched: "Fetched", computed: "Computed from filings", manual: "Hand-entered metric" };
+  const SOURCE_WORDS = { fetched: "Fetched", computed: "Computed from filings", manual: "Hand-entered value" };
   const sourcesInit = {};      /* key -> provenance of what was offered */
   const inputs = meth.inputs.map(([key, label, help]) => {
     const pre = prefill[key];
@@ -1587,9 +1832,6 @@ function dlgEV(s, methodOverride, pf) {
         asof: pre.asof || null, offered: String(pre.value) };
       const prov = (pre.provenance || []).map(esc).join(" · ")
         + ((pre.cautions || []).length ? " · ⚠ " + (pre.cautions || []).map(esc).join(" · ") : "");
-      /* A fresh computed value replaces the stored one on reopen — that is
-         the fix working. But if the last computation deliberately overrode
-         this key, that fact is acknowledged, not silently dropped. */
       const priorSrc = (s.ev && s.ev.method === cur && s.ev.sources) ? s.ev.sources[key] : null;
       const prior = (priorSrc && priorSrc.used === "overridden"
         && String(s.ev.inputs[key]) !== String(pre.value))
@@ -1609,9 +1851,9 @@ function dlgEV(s, methodOverride, pf) {
       extra = `<div class="help">Not computed — ${esc(pre.reason)}. A number typed here is your own; the record will say so.</div>`;
     }
     if (v === "" || v === undefined) {
-      if (DEFAULT_KEYS.includes(key) && S.settings[key] !== undefined && S.settings[key] !== null) {
-        v = S.settings[key];
-        extra = `<div class="help">From your valuation defaults (Data tab) — set once, used everywhere.</div>`;
+      if (DEFAULT_KEYS.includes(key) && S.journal.settings[key] !== undefined && S.journal.settings[key] !== null) {
+        v = S.journal.settings[key];
+        extra = `<div class="help">From this journal's valuation defaults (Data tab) — set once, used everywhere.</div>`;
       }
     }
     return `<div class="field"><label for="f_${key}">${esc(label)}</label>
@@ -1659,22 +1901,22 @@ function dlgEV(s, methodOverride, pf) {
   });
 }
 
-function dlgExplain(file, version) {
-  const pend = (S.pending_changes || []).find((c) => c.file === file && c.version === Number(version));
-  const changes = pend ? pend.changes : [];
+function dlgExplain(seq) {
+  const c = (S.rule_changes || []).find((x) => x.seq === Number(seq));
+  const moved = c ? (c.moved || []) : [];
   dialog({
-    title: `${file} — v${version}`,
-    blurb: "This change is already on the record. Write down why it was made — in two years this line will be the most useful thing in the file.",
-    body: (changes.length ? `<div class="dlg-err" style="background:var(--card-2);border-left-color:var(--ink);color:var(--ink-2)">
-        ${changes.map(esc).join("<br>")}</div>` : "")
+    title: `Rule change ${seq}`,
+    blurb: "This change is already on the record. Write down why it was made — in two years this line will be the most useful thing here.",
+    body: (moved.length ? `<div class="dlg-err" style="background:var(--card-2);border-left-color:var(--ink);color:var(--ink-2)">
+        ${moved.map((m) => esc(movedLine(m))).join("<br>")}</div>` : "")
       + area("reason", "Why was this changed?", "",
-        "For example: “Overrides on the leverage entry kept working, so widening from 2.5× to 3.0×.” Written once; it cannot be edited later."),
+        "For example: “Overrides on the leverage limit kept working out, so widening it from 2.5× to 3.0×.” Written once; it cannot be edited later."),
     confirm: "Record the reason",
     onConfirm: async (d) => {
       if (!(d.reason || "").trim()) return "A reason is required.";
-      const r = await api("explain_profile_change", file, Number(version), d.reason);
+      const r = await api("explain_rule_change", Number(seq), d.reason);
       if (!r) return " ";
-      toast(`Recorded the reason for ${file} v${version}.`);
+      toast(`Recorded the reason for change ${seq}.`);
     },
   });
 }
@@ -1690,19 +1932,14 @@ document.addEventListener("click", async (ev) => {
   const tb = t.closest("[data-tab]");
   if (tb) { tab = tb.dataset.tab; openTicker = null; tipOpen = null; return render(); }
 
-  const ln = t.closest("[data-lens]");
-  if (ln) {
-    if (ln.dataset.lens !== lens) {
-      lens = ln.dataset.lens;
-      S.settings.active_profile = lens;
-      api("set_active_profile", lens);   /* persisted in Python; the switch itself is local */
-      render();
+  const jb = t.closest("[data-journal]");
+  if (jb) {
+    if (!S.journal || jb.dataset.journal !== S.journal.id) {
+      const r = await api("open_journal", jb.dataset.journal);
+      if (r) { openTicker = null; tipOpen = null; tab = "holdings"; await refresh(); }
     }
     return;
   }
-
-  const psel = t.closest("[data-profile]");
-  if (psel) { C.selected = psel.dataset.profile; return render(); }
 
   const act = t.closest("[data-act]");
   if (!act) {
@@ -1714,6 +1951,7 @@ document.addEventListener("click", async (ev) => {
   const s = openTicker ? find(openTicker) : null;
   switch (act.dataset.act) {
     case "back": openTicker = null; tipOpen = null; return render();
+    case "newjournal": return dlgNewJournal();
     case "add": return dlgAdd();
     case "remove": {
       if (!s) return;
@@ -1738,7 +1976,7 @@ document.addEventListener("click", async (ev) => {
           if (!r) return " ";
           openTicker = null;
           tab = "ideas";
-          toast(`${r.removed} removed from the journal.`);
+          toast(`${r.removed} removed from this journal.`);
         },
       });
       return;
@@ -1756,7 +1994,7 @@ document.addEventListener("click", async (ev) => {
     case "save-valuation": {
       const r = await api("save_valuation_defaults",
         $("vd_dr").value, $("vd_tg").value, $("vd_mos").value);
-      if (r) { toast("Valuation defaults saved — they prefill every new calculation."); await refresh(); }
+      if (r) { toast("Valuation defaults saved — they prefill every new calculation in this journal."); await refresh(); }
       return;
     }
     case "save-identity": {
@@ -1783,7 +2021,7 @@ document.addEventListener("click", async (ev) => {
       dialog({
         title: "Remove the API key",
         blurb: "Prices stop fetching until a new key is saved; everything already stored stays.",
-        body: '<p class="hint">Filing data is unaffected. Price-dependent metrics will show why they can\'t compute.</p>',
+        body: '<p class="hint">Filing data is unaffected. Price-dependent measures will show why they can\'t compute.</p>',
         confirm: "Remove key", danger: true,
         onConfirm: async () => {
           if (!(await api("remove_api_key"))) return " ";
@@ -1798,44 +2036,46 @@ document.addEventListener("click", async (ev) => {
     case "buy": return dlgBuy(s);
     case "sell": return dlgSell(s);
     case "ev": return dlgEV(s);
-    case "explain": return dlgExplain(act.dataset.file, act.dataset.version);
+    case "settings": return dlgSettings();
+    case "explain": return dlgExplain(act.dataset.seq);
     case "export": {
       const r = await api("export_data");
       if (r && !r.cancelled) toast("Exported to " + r.path);
       return;
     }
     case "import": {
-      const r = await api("import_data");
-      if (r && !r.cancelled) {
-        toast(`Imported ${r.summary.securities} securities.` + (r.summary.note ? " " + r.summary.note : ""));
-        await refresh();
-      }
-      return;
-    }
-    case "sample": {
-      const held = S.securities.length;
+      const have = (S.journals || []).length;
       dialog({
-        title: "Load sample data",
-        blurb: held
-          ? `This replaces the ${held} securit${held === 1 ? "y" : "ies"} currently in the journal — snapshots, notes and exit records included.`
-          : "Twelve invented companies, covering the cases worth seeing.",
-        body: held ? '<p class="hint">Export first if you might want any of it back. Your profiles and their history stay.</p>'
-                   : '<p class="hint">Nothing currently in the journal will be affected, because there is nothing in it.</p>',
-        confirm: "Load sample", danger: held > 0,
+        title: "Import a backup",
+        blurb: "This replaces the journals on this machine with the ones in the backup file.",
+        body: `<p class="hint">${have
+          ? `Any of your ${have} journal${have === 1 ? "" : "s"} the backup does not contain is removed.
+             Everything here is exported beside your data first, so an import can be undone.`
+          : "There is nothing here to replace."}
+          Filings, prices and your API key are untouched.</p>`,
+        confirm: "Choose a file…", danger: have > 0,
         onConfirm: async () => {
-          const r = await api("load_sample");
+          const r = await api("import_data");
           if (!r) return " ";
-          toast(`Loaded ${r.n} sample securities.`);
-          tab = "holdings"; openTicker = null;
+          if (r.cancelled) return;
+          const s = r.summary;
+          const gone = (s.removed || []).length
+            ? ` ${s.removed.length} journal${s.removed.length === 1 ? " was" : "s were"} removed.` : "";
+          const kept = (s.kept_unreadable || []).length
+            ? ` ${s.kept_unreadable.length} unreadable journal${s.kept_unreadable.length === 1 ? " was" : "s were"} left untouched.` : "";
+          toast(`Imported ${s.journals} journal${s.journals === 1 ? "" : "s"}, `
+            + `${s.securities} securities.${gone}${kept}`);
+          openTicker = null;
         },
       });
       return;
     }
     case "clear": {
       dialog({
-        title: "Clear everything", blurb: "This removes every security from the journal. Your profiles and their history stay.",
-        body: '<p class="hint">Export first if you might want any of it back.</p>',
-        confirm: "Clear", danger: true,
+        title: "Empty this journal",
+        blurb: `This removes every security from ${S.journal.name}. Its strategy, its settings and its rule-change record stay.`,
+        body: '<p class="hint">Export first if you might want any of it back. Other journals are untouched.</p>',
+        confirm: "Empty it", danger: true,
         onConfirm: async () => { if (!(await api("clear_all"))) return " "; openTicker = null; },
       });
       return;

@@ -15,10 +15,12 @@ filings are a few dozen JSON files — so results are cached in memory against a
 fingerprint of the stores (file count + newest mtime + concept-map mtime).
 A fetch changes the fingerprint and the cache falls away by itself.
 
-Entries whose bank definition declares parameters (the risk-free rate) cannot
-have a single computed value — the parameter is supplied per profile. Those
-are computed per profile at evaluation time and overlaid, unless a
-hand-entered value already answers them.
+Entries whose bank definition declares parameters (the risk-free rate) have
+no computed value at all here, and no caller supplies one. Those entries
+resolve to absent with their own reason, which is honest: nothing in this
+host is entitled to invent a rate. Giving a strategy a way to supply one is a
+change to the contract and a request against the host, not something to route
+around here.
 """
 
 from __future__ import annotations
@@ -26,7 +28,6 @@ from __future__ import annotations
 from pathlib import Path
 
 from . import compute, concept_map, crosscheck, facts_store, price_store
-from . import profiles as profiles_mod
 
 _cache: dict = {}
 
@@ -151,16 +152,6 @@ def price_view_asof(cik: int, tickers: list[str], as_of: str) -> dict:
                       + (", ".join(b["tickers"]) or "this security")}
 
 
-# -- parameterized entries ---------------------------------------------------
-
-def parameterized_entry_ids() -> set:
-    """Bank entries that declare parameters — their value depends on what a
-    profile supplies, so they have no single computed value."""
-    doc = profiles_mod.load_bank("metric-bank")
-    return {str(e.get("id")) for e in (doc.get("entries") or [])
-            if e.get("parameters")}
-
-
 # -- the public joins --------------------------------------------------------
 
 def computed_results(cik: int, tickers: list[str], entry_ids) -> dict:
@@ -220,49 +211,6 @@ def merged_values(security: dict, computed: dict) -> tuple[dict, dict]:
         values[eid] = v
         sources[eid] = "manual"
     return values, sources
-
-
-def profile_params_for(profile: dict) -> dict:
-    """{entry_id: {param_id: value}} for every parameterized entry this
-    resolved profile supplies values for."""
-    out = {}
-    for tier in profile.get("tiers", []):
-        for e in tier.get("entries", []):
-            supplied = {p["id"]: p.get("value")
-                        for p in (e.get("parameters") or [])
-                        if p.get("supplied") and p.get("value") not in (None, "")}
-            if supplied:
-                out[str(e.get("metric"))] = supplied
-    return out
-
-
-def overlay_for_profile(cik: int, tickers: list[str], base_values: dict,
-                        sources: dict, profile: dict,
-                        param_ids: set, as_of: str | None = None
-                        ) -> tuple[dict, dict]:
-    """Per-profile values: parameterized entries computed with the profile's
-    own supplied parameters, unless a hand-entered value already answers.
-    With `as_of`, the computation runs on the pinned context — same
-    parameters, only the data of that day."""
-    params = profile_params_for(profile)
-    if not params:
-        return base_values, sources
-    values, srcs = dict(base_values), dict(sources)
-    b = _bundle(cik, tickers)
-    ctx = _asof_slot(b, as_of)["ctx"] if as_of else b["ctx"]
-    for eid, supplied in params.items():
-        if eid not in param_ids or srcs.get(eid) == "manual":
-            continue
-        if eid not in compute.REGISTRY:
-            continue
-        try:
-            r = compute.compute_entry_with_params(ctx, eid, supplied)
-        except Exception:                               # noqa: BLE001
-            continue
-        if r.get("status") == "computed":
-            values[eid] = r["value"]
-            srcs[eid] = "computed"
-    return values, srcs
 
 
 def price_view(security: dict, cik: int | None, tickers: list[str]) -> dict:

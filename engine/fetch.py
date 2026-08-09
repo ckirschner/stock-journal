@@ -67,17 +67,15 @@ def _set_status(ticker: str, **kw):
         s.update(kw)
 
 
-def identity_from_settings(settings: dict) -> str:
-    """The SEC identity contact. Machine-local (it is an email address and
-    must not ride along in export bundles); the settings doc is only
-    consulted as a legacy fallback for a not-yet-migrated install."""
-    ident = str(secrets.local_get("sec_identity") or "").strip()
-    if ident:
-        return ident
-    return str((settings or {}).get("sec_identity") or "").strip()
+def identity() -> str:
+    """The SEC identity contact. Machine-local and nowhere else: it is an
+    email address, so it must not ride along in an export bundle. There is
+    no fallback to a settings document, because a document that could hold
+    one is a document that could export one."""
+    return str(secrets.local_get("sec_identity") or "").strip()
 
 
-def start_fetch(ticker: str, settings: dict, known_cik=None,
+def start_fetch(ticker: str, known_cik=None,
                 on_resolved=None) -> dict:
     """Kick off a background fetch. Returns immediately with either
     {"started": True} or {"error": ...} for preconditions that fail fast.
@@ -88,8 +86,8 @@ def start_fetch(ticker: str, settings: dict, known_cik=None,
     protection against a reassigned symbol must not depend on a poll loop
     surviving."""
     t = str(ticker).upper().strip()
-    identity = identity_from_settings(settings)
-    if not identity or "@" not in identity:
+    who = identity()
+    if not who or "@" not in who:
         return {"error": "Set your SEC identity first (Data tab): your name "
                          "and a real email address. The SEC requires it on "
                          "every request and blocks anonymous tools."}
@@ -99,20 +97,20 @@ def start_fetch(ticker: str, settings: dict, known_cik=None,
         _status[t] = {"running": True, "stage": "starting", "errors": [],
                       "started": _stamp(), "done": 0, "total": 0}
     thread = threading.Thread(
-        target=_run_fetch, args=(t, settings, known_cik, on_resolved),
+        target=_run_fetch, args=(t, known_cik, on_resolved),
         daemon=True)
     thread.start()
     return {"started": True}
 
 
-def _run_fetch(ticker: str, settings: dict, known_cik, on_resolved=None):
+def _run_fetch(ticker: str, known_cik, on_resolved=None):
     try:
         got_gate = _fetch_gate.acquire(blocking=False)
         if not got_gate:
             _set_status(ticker, stage="waiting for another fetch to finish")
             _fetch_gate.acquire()
         try:
-            report = fetch_ticker(ticker, settings, known_cik,
+            report = fetch_ticker(ticker, known_cik,
                                   progress=lambda **kw: _set_status(ticker, **kw),
                                   on_resolved=on_resolved)
         finally:
@@ -125,11 +123,11 @@ def _run_fetch(ticker: str, settings: dict, known_cik, on_resolved=None):
                     error=f"{type(e).__name__}: {e}")
 
 
-def fetch_ticker(ticker: str, settings: dict, known_cik=None,
+def fetch_ticker(ticker: str, known_cik=None,
                  progress=lambda **kw: None, on_resolved=None) -> dict:
     """The synchronous fetch. Returns a report dict; raises only for
     preconditions (identity), never for per-item failures."""
-    identity = identity_from_settings(settings)
+    who = identity()
     errors: list[str] = []
     report = {"ticker": ticker, "at": _stamp(), "errors": errors}
 
@@ -138,7 +136,7 @@ def fetch_ticker(ticker: str, settings: dict, known_cik=None,
     tmap = None
     resolved_cik = None
     try:
-        tmap = tickermap.refresh(identity)
+        tmap = tickermap.refresh(who)
         hit = tickermap.resolve(tmap, ticker)
         resolved_cik = hit["cik"] if hit else None
         report["sec_title"] = hit["title"] if hit else None
@@ -187,13 +185,13 @@ def fetch_ticker(ticker: str, settings: dict, known_cik=None,
             "finish and fetch again")
         return report
     try:
-        return _fetch_company(ticker, settings, identity, cik, tmap,
+        return _fetch_company(ticker, who, cik, tmap,
                               resolved_cik, report, errors, progress)
     finally:
         lock.release()
 
 
-def _fetch_company(ticker, settings, identity, cik, tmap, resolved_cik,
+def _fetch_company(ticker, identity, cik, tmap, resolved_cik,
                    report, errors, progress):
     data_dir = store.data_dir()
     gateway.configure(str(data_dir / "cache" / "edgar"), identity)

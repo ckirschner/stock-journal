@@ -36,9 +36,9 @@ class TestTheProof:
         resolved = strategy_values.resolve(rec, [])
         assert resolved["errors"] == []
         sec = {"ticker": "SYN", "name": "Synthetic Co", "cik": 999,
-               "bucket": "ideas", "metrics": {}}
+               "metrics": {}, "lots": []}
         ctx = context.build_context(sec, [sec], resolved["values"],
-                                    {"journal-note": "present"})
+                                    {"journal-note": "present"}, record=rec)
         result = contract.evaluate(rec, ctx)
         assert result["render"] == "hold"
         assert result["produced_by"] == "strategy"
@@ -46,7 +46,16 @@ class TestTheProof:
         # The escape hatch carried the one thing that is genuinely prose.
         assert result["reason"]["note"] == "present"
 
-        tested, value_cited, stated, dated = result["reason"]["evidence"]
+        cited = result["reason"]["evidence"]
+        by_id = {e["subject"]["id"]: e for e in cited}
+        # The same measure is cited twice — once as a test against a level,
+        # once pinned to a past period end — so these are picked by what
+        # they are rather than by where they happen to sit in the list.
+        tested = next(e for e in cited if e["subject"]["id"] == "fcf_ttm"
+                      and e["test"])
+        dated = next(e for e in cited if e["subject"].get("at"))
+        value_cited = by_id["patience"]
+        stated = next(e for e in cited if e["subject"]["kind"] == "stated")
         # The host answered the citation: label and unit from the bank, the
         # value from the context, the outcome from the arithmetic.
         assert tested["subject"]["label"] == \
@@ -68,6 +77,27 @@ class TestTheProof:
         # A past reading of the same measure, cited by its period end.
         assert dated["subject"]["at"] == "2023-12-31"
         assert dated["observed"]["value"] == 150.0
+        # The account figures the host can only reach once a journal answers
+        # for them. Unanswered here, so they are absent — and the absence
+        # names the field, rather than the scaffold inventing a sentence.
+        assert by_id["portfolio.cash"]["observed"]["status"] == "absent"
+        assert "Free cash" in by_id["portfolio.cash"]["observed"]["reason"]
+
+    def test_the_account_figures_resolve_once_the_journal_answers(self):
+        """The other half: a declared role turns an answer into a figure the
+        host reports, with no strategy restating it."""
+        store_company()
+        rec = proof_record()
+        sec = {"ticker": "SYN", "name": "Synthetic Co", "cik": 999,
+               "metrics": {}, "lots": []}
+        ctx = context.build_context(sec, [sec],
+                                    strategy_values.resolve(rec)["values"],
+                                    {"free-cash": 25_000.0}, record=rec)
+        result = contract.evaluate(rec, ctx)
+        by_id = {e["subject"]["id"]: e for e in result["reason"]["evidence"]}
+        assert by_id["portfolio.cash"]["observed"]["value"] == 25_000.0
+        assert by_id["portfolio.account_value"]["observed"]["value"] == \
+            25_000.0      # nothing held, so the account is the cash
 
     def test_an_override_reaches_the_decision(self):
         store_company()
@@ -75,8 +105,9 @@ class TestTheProof:
         resolved = strategy_values.resolve(
             rec, [("journal override", {"patience": 1})])
         sec = {"ticker": "SYN", "name": "Synthetic Co", "cik": 999,
-               "bucket": "ideas", "metrics": {}}
-        ctx = context.build_context(sec, [sec], resolved["values"], {})
+               "metrics": {}, "lots": []}
+        ctx = context.build_context(sec, [sec], resolved["values"], {},
+                                    record=rec)
         result = contract.evaluate(rec, ctx)
         cited = next(e for e in result["reason"]["evidence"]
                      if e["subject"]["id"] == "patience")
@@ -88,10 +119,10 @@ class TestTheProof:
         state carrying the host's reason — never a zero, never a crash."""
         rec = proof_record()
         sec = {"ticker": "NOPE", "name": "Never Fetched Co",
-               "bucket": "ideas", "metrics": {}}
+               "metrics": {}, "lots": []}
         ctx = context.build_context(sec, [sec],
                                     strategy_values.resolve(rec)["values"],
-                                    {})
+                                    {}, record=rec)
         result = contract.evaluate(rec, ctx)
         assert result["render"] == "unknown"
         assert result["tier"] == "evaluation"

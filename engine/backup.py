@@ -1,14 +1,26 @@
 """Export and import.
 
-Your positions, notes and ideas are yours. They never enter the repository.
-Export writes one timestamped file you can drop wherever you keep backups —
-the journal, the settings, the profiles and their version history. Import
-reads it back.
+Your journals are yours. They never enter the repository. Export writes one
+timestamped file you can drop wherever you keep backups; import reads it
+back.
 
-Version-1 bundles predate the profile system. Importing one restores the
-journal and settings; the retired ruleset history it carries is archived
-beside the data rather than discarded, because it is recorded history, and
-the securities are migrated to the bank vocabulary on the next load.
+What travels is exactly the journals directory: each journal entire, with its
+positions, notes, snapshots, declared inputs, valuation settings, its rule
+change record and the strategy it is stamped with. That last part is what
+makes a restored journal still mean something — it names the rules every
+decision in it was taken under, and the versions they were at.
+
+What does not travel, by construction rather than by care: the API key and
+the SEC contact. They live under <data>/local/, and the exportable set is the
+journals directory, so no future field added to a journal can carry one out.
+Fetched filings and prices do not travel either — they are a cache of public
+data, re-fetchable, and shipping a few hundred megabytes of them inside a
+backup would make the backup something people stop taking.
+
+Bundles from before journals existed are refused, not converted. They
+describe a program that evaluated securities under several profiles at once,
+and there is no honest way to say which of those verdicts a restored journal
+would be stamped with.
 """
 
 from __future__ import annotations
@@ -17,98 +29,138 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from . import store
-from .profiles import ensure_profiles
+from . import journals, portfolio, store
 
-BUNDLE_VERSION = 2
+# 4: journals hold lot history rather than one position per security, and
+#    carry the answers a strategy asked for. Nothing converts an older
+#    bundle — the positions in one describe a shape this app no longer has.
+BUNDLE_VERSION = 4
 
 
 def export_bundle(dest: str | Path) -> Path:
-    """Write every data file into one portable JSON bundle."""
+    """Write every journal into one portable JSON bundle."""
     dest = Path(dest).expanduser()
     if dest.is_dir():
         stamp = datetime.now().strftime("%Y-%m-%d")
         dest = dest / f"ledger-backup-{stamp}.json"
 
+    docs = []
+    for listed in journals.list_journals():
+        if listed.get("problem"):
+            continue        # an unreadable journal is reported, never guessed
+        docs.append(journals.load(listed["id"]))
+
     bundle = {
         "bundle_version": BUNDLE_VERSION,
         "exported": datetime.now().isoformat(timespec="seconds"),
-        "files": {name: store.load(name) for name in store.FILES},
-        "profiles": {p.name: p.read_text(encoding="utf-8")
-                     for p in sorted(ensure_profiles().glob("*.yaml"))},
+        "journals": docs,
     }
     dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(json.dumps(bundle, indent=2, ensure_ascii=False), encoding="utf-8")
+    dest.write_text(json.dumps(bundle, indent=2, ensure_ascii=False),
+                    encoding="utf-8")
     return dest
+
+
+def _read(src: Path) -> dict:
+    try:
+        data = json.loads(src.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        raise ValueError(f"{src.name} is not readable as JSON "
+                         f"(line {e.lineno}: {e.msg}).") from e
+    version = data.get("bundle_version")
+    if version != BUNDLE_VERSION:
+        raise ValueError(
+            f"This backup is version {version}; this app writes and reads "
+            f"version {BUNDLE_VERSION}. Older bundles record a position as "
+            "one running total per security rather than the lots it was "
+            "built from, and there is no honest way to invent the lots that "
+            "were never written down. Nothing was imported, and the file is "
+            "untouched.")
+    if not isinstance(data.get("journals"), list):
+        raise ValueError("This backup carries no journals. Nothing was "
+                         "imported.")
+    return data
 
 
 def inspect_bundle(src: str | Path) -> dict:
     """Read a bundle without applying it, so the user can confirm first."""
-    data = json.loads(Path(src).expanduser().read_text(encoding="utf-8"))
-    version = data.get("bundle_version")
-    if version not in (1, BUNDLE_VERSION):
-        raise ValueError(
-            f"Bundle version {version} is not supported "
-            f"(expected 1 or {BUNDLE_VERSION})."
-        )
-    secs = (data["files"].get("securities.json") or {}).get("securities", [])
-    out = {
-        "bundle_version": version,
+    data = _read(Path(src).expanduser())
+    docs = data["journals"]
+    return {
+        "bundle_version": data.get("bundle_version"),
         "exported": data.get("exported"),
-        "securities": len(secs),
-        "holdings": len([s for s in secs if s.get("bucket") == "holdings"]),
-        "profiles": len(data.get("profiles") or {}),
+        "journals": len(docs),
+        "securities": sum(len(d.get("securities") or []) for d in docs),
+        "holdings": sum(len([s for s in (d.get("securities") or [])
+                             if portfolio.bucket_of(s) == "holdings"])
+                        for d in docs),
+        "names": [str(d.get("name") or d.get("id")) for d in docs],
     }
-    if version == 1:
-        out["note"] = ("This backup predates profiles. Its securities will "
-                       "be migrated on the next load, and the retired "
-                       "ruleset history it carries is archived, not lost.")
-    return out
 
 
 def import_bundle(src: str | Path, keep_backup: bool = True) -> dict:
-    """Replace local data with a bundle. The current data is backed up first."""
+    """Replace the journals on this machine with a bundle's.
+
+    Everything is validated before anything is written: a bundle that would
+    fail halfway fails before the first write instead. The current journals
+    are exported beside the data first, so an import can always be undone.
+    """
     src = Path(src).expanduser()
+    data = _read(src)
     summary = inspect_bundle(src)
 
-    # Validate everything before touching anything: a bundle that would fail
-    # halfway must fail before the first write instead.
-    data = json.loads(src.read_text(encoding="utf-8"))
-    for name in (data.get("profiles") or {}):
-        if (not name or Path(name).name != name
-                or not name.endswith(".yaml")):
+    seen = set()
+    for doc in data["journals"]:
+        if not isinstance(doc, dict):
+            raise ValueError("A journal in this backup is not a journal. "
+                             "Nothing was imported.")
+        jid = str(doc.get("id") or "")
+        if not jid or Path(jid).name != jid or jid.startswith("."):
             raise ValueError(
-                f'The bundle names a profile "{name}", which is not a plain '
-                ".yaml file name. Nothing was imported.")
+                f'This backup names a journal "{jid}", which is not a plain '
+                "folder name. Nothing was imported.")
+        if doc.get("schema") != journals.SCHEMA:
+            raise ValueError(
+                f'The journal "{jid}" declares schema '
+                f'{doc.get("schema")!r}, which this app cannot read. '
+                "Nothing was imported.")
+        if jid in seen:
+            raise ValueError(f'This backup carries two journals called '
+                             f'"{jid}". Nothing was imported.')
+        seen.add(jid)
 
-    if keep_backup:
+    here = journals.list_journals()
+    rescue = None
+    if keep_backup and here:
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        export_bundle(store.data_dir() / f"pre-import-{stamp}.json")
+        rescue = export_bundle(store.data_dir() / f"pre-import-{stamp}.json")
 
-    for name, payload in data["files"].items():
-        if name in store.FILES:
-            store.save(name, payload)
-
-    # A bundle exported before secrets moved out of settings may still carry
-    # a plaintext key or contact — clean it on arrival rather than letting an
-    # import resurrect the problem. (Fresh exports cannot contain either:
-    # secrets and machine-local settings live outside store.FILES entirely.)
-    from . import secrets
-    settings = store.load("settings.json")
-    if secrets.migrate_from_settings(settings):
-        store.save("settings.json", settings)
-
-    if data.get("bundle_version") == 1:
-        rules = data["files"].get("rules.json")
-        if rules:
-            stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-            store.save(f"rules.legacy.import-{stamp}.json", rules)
-    else:
-        profiles_dir = ensure_profiles()
-        bundled = data.get("profiles") or {}
-        for existing in profiles_dir.glob("*.yaml"):
-            if existing.name not in bundled:
-                existing.unlink()
-        for name, text in bundled.items():  # names validated above
-            (profiles_dir / name).write_text(text, encoding="utf-8")
+    # A journal whose file will not parse was skipped by the rescue copy
+    # above, so removing it here would destroy the only copy there is — and
+    # read_json has already promised its owner that an unreadable file is
+    # left exactly where it is. It keeps listing with its problem until they
+    # repair it.
+    unreadable = {j["id"] for j in here if j.get("problem")}
+    removed = []
+    d = journals.journals_dir()
+    if d.is_dir():
+        for sub in sorted(d.iterdir()):
+            if not sub.is_dir() or sub.name in seen \
+                    or sub.name in unreadable:
+                continue
+            path = sub / journals.FILENAME
+            if path.exists():
+                path.unlink()
+                removed.append(sub.name)
+            try:
+                sub.rmdir()
+            except OSError:
+                pass            # something else is in there; leave it alone
+    for doc in data["journals"]:
+        journals.save(doc)
+    # What the import cost, so the screen can say it rather than leave the
+    # user to notice a journal is gone.
+    summary["removed"] = removed
+    summary["kept_unreadable"] = sorted(unreadable)
+    summary["rescue"] = str(rescue) if rescue else None
     return summary

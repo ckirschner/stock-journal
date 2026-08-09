@@ -21,6 +21,15 @@ it is what lets the same evidence be compared across securities and counted
 over time. Prose that genuinely will not fit goes in `reason.note`, which is
 one string and deliberately harder to reach for.
 
+A strategy also declares what it needs *from the user*. Declared values are
+numbers it has an opinion about and ships a default for; declared inputs are
+facts about the account that no strategy could guess. Inputs build the setup
+screen without any logic running, which is what lets a journal be validated
+before a decision is ever made, and an input may carry a `role` — a name from
+the host's own short list — saying what the figure is, so the host can report
+position weight and free cash without ever having decided that a journal
+must collect them.
+
 Nothing in this module holds an opinion about investing. Whether 15 is a good
 P/E is a strategy's business; that a decision must name its rule is the
 host's. Deciding that 18.9 is at least 15 is arithmetic, not an opinion, which
@@ -29,6 +38,7 @@ is why the host does it.
 
 from __future__ import annotations
 
+import copy
 import traceback
 from datetime import date
 from types import MappingProxyType
@@ -37,7 +47,14 @@ from types import MappingProxyType
 # the host refuses any other. Bumped only when the shape of what a strategy
 # receives or returns changes incompatibly — adding a key to the context is
 # not a bump, because strategies must tolerate keys they don't read.
-CONTRACT_VERSION = 1
+#
+# 2: `position` gained real lot history and lost every cost figure. A v1
+#    strategy was written when `lots` held exactly one synthesised buy and
+#    could reasonably read `lots[0]` as the whole position; under real lots
+#    that reading is wrong and wrong *quietly*, which is the case the
+#    version exists to refuse. Cost basis left the context entirely — see
+#    HOST_FACTS.
+CONTRACT_VERSION = 2
 
 # A strategy may declare at most this many states. The cap is deliberate:
 # states are user-facing vocabulary, and complexity must not creep back in
@@ -89,27 +106,39 @@ RENDER_TYPES = MappingProxyType({
 # are machinery, not opinion — "we could not ask the strategy" is a fact
 # about the evaluation, and the host is allowed to know it. The "host:"
 # prefix is reserved; a strategy declaring a state with it is refused.
+#
+# `fix` names the screen that resolves the state, or None where nothing in
+# the app can. A blocked verdict with nothing to click is a dead end, and a
+# strategy version that adds a required input would put every journal
+# stamped with it into exactly that trap. The view reads this rather than
+# recognising state ids, so a new host state arrives with its own way out.
 HOST_STATES = MappingProxyType({
     "host:inputs-missing": MappingProxyType({
-        "render": "blocked", "name": "Waiting on setup",
+        "render": "blocked", "name": "Waiting on setup", "fix": "settings",
         "description": "The strategy needs information from you before it "
                        "can produce a verdict."}),
     "host:strategy-missing": MappingProxyType({
-        "render": "blocked", "name": "Strategy not installed",
+        "render": "blocked", "name": "Strategy not installed", "fix": None,
         "description": "The strategy this journal is stamped with is not on "
                        "this machine. History remains readable; new verdicts "
                        "need the strategy present."}),
     "host:values-unresolved": MappingProxyType({
-        "render": "blocked", "name": "Settings need fixing",
+        "render": "blocked", "name": "Settings need fixing", "fix": "settings",
         "description": "The strategy's declared values could not be "
                        "resolved, so no verdict can honestly be produced."}),
     "host:strategy-error": MappingProxyType({
-        "render": "unknown", "name": "Strategy failed",
+        "render": "unknown", "name": "Strategy failed", "fix": None,
         "description": "The strategy's own logic failed while deciding. "
                        "This is a problem with the strategy, not with your "
                        "data or your decision."}),
+    "host:data-unreadable": MappingProxyType({
+        "render": "unknown", "name": "Data could not be read", "fix": None,
+        "description": "The stored filings or prices could not be read, so "
+                       "the strategy could not be given anything to decide "
+                       "on. Nothing you recorded is affected, and recording "
+                       "a decision is never blocked by this."}),
     "host:invalid-decision": MappingProxyType({
-        "render": "unknown", "name": "Strategy failed",
+        "render": "unknown", "name": "Strategy failed", "fix": None,
         "description": "The strategy returned something outside the "
                        "contract, so its verdict cannot be trusted or "
                        "shown."}),
@@ -182,10 +211,20 @@ def _fact(label, unit, path, bare=False, when_missing=None):
 
 
 # Host-provided facts a strategy may cite by name. These are the figures the
-# host reports and does not interpret — the ticket's "shares, cost, price,
-# market value, market value as a fraction of the account". Citing one is
-# always more honest than restating it: where the host cannot answer, the
-# host's own reason is what the user reads.
+# host reports and does not interpret — shares, price, market value, market
+# value as a fraction of the account. Citing one is always more honest than
+# restating it: where the host cannot answer, the host's own reason is what
+# the user reads.
+#
+# What is deliberately NOT here: anything about what a position cost. Cost
+# basis is reporting — it belongs on screen, in the record and in the
+# scorecards — and it is kept out of the context entirely rather than merely
+# discouraged, because "structurally incapable of reaching a verdict" is the
+# only version of that promise worth making. A rule that fires on the
+# distance from your own purchase price is anchoring: it makes the same
+# company a buy for one person and a sell for another on the same day, and
+# averaging down is that bias in its purest form. Market value and weight
+# survive because they are price × shares, which is a fact about today.
 HOST_FACTS = MappingProxyType({
     "position.weight": _fact("Position weight", "percent",
                              ("position", "weight")),
@@ -193,9 +232,9 @@ HOST_FACTS = MappingProxyType({
                                    ("position", "market_value")),
     "position.shares": _fact("Shares held", "shares",
                              ("position", "shares"), bare=True),
-    "position.cost_basis": _fact("Cost basis", "usd",
-                                 ("position", "cost_basis"), bare=True,
-                                 when_missing="no position is held"),
+    "position.opened": _fact("Held since", "date",
+                             ("position", "opened"), bare=True,
+                             when_missing="no position is held"),
     "portfolio.cash": _fact("Free cash", "usd", ("portfolio", "cash")),
     "portfolio.account_value": _fact("Account value", "usd",
                                      ("portfolio", "account_value")),
@@ -203,6 +242,47 @@ HOST_FACTS = MappingProxyType({
                                       ("portfolio", "slots", "occupied"),
                                       bare=True),
     "price.latest": _fact("Latest price", "usd", ("price", "latest")),
+})
+
+
+# ---------------------------------------------------------------------------
+# Input roles — how a declared input becomes a fact the host can report.
+#
+# The host has no journal-level fields of its own. It does not ask anyone for
+# an account value, a cash balance, a slot count or a position cap, because
+# deciding which of those a journal collects would be the host deciding how
+# strategies work: a rank-based strategy wants slots, a scale-down strategy
+# wants a cash reserve, and a strategy that sizes nothing wants neither.
+#
+# But some figures the host reports cannot be computed without one of those
+# answers. Position weight is market value over the account, and the account
+# is not something the host can observe. So an input may carry a `role`: a
+# name from this closed, host-owned list saying what the number *is*. The
+# host then reports the facts that role unlocks, and nothing else changes —
+# a strategy that declares no role simply gets those facts absent, with the
+# reason saying which question was never asked.
+#
+# Free cash is the only role, and deliberately so. Account value is NOT a
+# role: it is free cash plus the market value of every holding, which the
+# host can derive, and a field that accepts a figure the tool could reach
+# itself teaches nothing when it turns out wrong. Position cap, slot count
+# and target weight are not roles either — a strategy can ship a default for
+# each, which makes them declared values, not questions for the user.
+#
+# Adding a role is a host change in this one table. `type` and `unit` are
+# enforced against the declaration, because a role that arrived as a percent
+# would be reported as dollars.
+# ---------------------------------------------------------------------------
+
+INPUT_ROLES = MappingProxyType({
+    "cash": MappingProxyType({
+        "means": "free cash in the account this journal covers — money that "
+                 "is not in any position",
+        "type": "number",
+        "unit": "usd",
+        "reports": ("portfolio.cash", "portfolio.account_value",
+                    "position.weight"),
+    }),
 })
 
 # Exactly one of these names the subject of an evidence item.
@@ -254,6 +334,31 @@ def _is_scalar(v) -> bool:
     return isinstance(v, (bool, int, float, str))
 
 
+def _same(a, b) -> bool:
+    """Equality that does not let true equal 1. Python's does, and a `when`
+    gate comparing a yes/no answer against a number would then fire on the
+    wrong thing."""
+    if isinstance(a, bool) != isinstance(b, bool):
+        return False
+    return a == b
+
+
+def _options_of(spec: dict) -> list:
+    opts = spec.get("options")
+    return opts if isinstance(opts, list) else []
+
+
+def option_label(spec: dict, value) -> str:
+    """How one choice reads in a sentence. Falls back to the value itself,
+    so a message is never worse than the raw answer."""
+    for o in _options_of(spec):
+        if isinstance(o, dict) and _same(o.get("value"), value):
+            return str(o.get("label") or o.get("value"))
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    return str(value)
+
+
 def check_typed_value(spec: dict, value) -> str | None:
     """Does `value` fit a declared input or value? None, or one legible
     sentence saying what was expected and what arrived."""
@@ -274,6 +379,15 @@ def check_typed_value(spec: dict, value) -> str | None:
     if not ok:
         got = "nothing" if value is None else f"{value!r}"
         return f"{label} expects {expected}, not {got}."
+    options = _options_of(spec)
+    if options:
+        if not any(isinstance(o, dict) and _same(o.get("value"), value)
+                   for o in options):
+            offered = ", ".join(str(o.get("label") or o.get("value"))
+                                for o in options if isinstance(o, dict))
+            return (f"{label} must be one of: {offered}. {value!r} is not "
+                    "one of them.")
+        return None
     if t in ("integer", "number"):
         lo, hi = spec.get("min"), spec.get("max")
         if lo is not None and value < lo:
@@ -291,13 +405,65 @@ _DECL_KEYS = {"id", "name", "summary", "version", "contract", "changelog",
               "states", "inputs", "values", "reference"}
 _STATE_KEYS = {"id", "name", "description", "render"}
 _FIELD_KEYS = {"id", "label", "type", "unit", "required", "min", "max",
-               "explain"}
+               "explain", "options", "role", "when", "min_from", "max_from"}
+# Keys only an input may carry. A value ships a default and is always in
+# force, so none of them can mean anything on one: a role is a fact about
+# the user, and a value that only sometimes applies is a value the strategy
+# can simply ignore.
+_INPUT_ONLY_KEYS = ("required", "role", "when", "min_from", "max_from")
+_WHEN_KEYS = {"input", "is"}
+_NUMERIC_TYPES = ("integer", "number")
+
+
+def _check_options(where: str, f: dict, errors: list) -> None:
+    """A fixed set of answers. It earns its place because the alternative is
+    free text validated inside decide(), which fails at evaluation instead
+    of at setup — and the whole point of validating a declaration without
+    running its logic is that a setup screen can refuse a bad answer while
+    the user is looking at the field."""
+    options = f["options"]
+    if not isinstance(options, list) or not options:
+        errors.append(f"{where}: `options` must be a non-empty list of "
+                      "{value, label} choices.")
+        return
+    if f.get("type") not in ("text", "integer", "number"):
+        errors.append(f"{where}: `options` only mean something for text and "
+                      "numbers — a yes/no answer is already a boolean.")
+        return
+    if "min" in f or "max" in f:
+        errors.append(f"{where}: `options` already say exactly what is "
+                      "allowed, so min/max cannot also apply.")
+    if "role" in f:
+        errors.append(f"{where}: a role names a figure the host reports, "
+                      "which cannot come from a fixed list of choices.")
+    seen = []
+    for o in options:
+        if not isinstance(o, dict) or set(o) != {"value", "label"}:
+            errors.append(f"{where}: each option must be exactly "
+                          "{value, label}.")
+            continue
+        if not _is_text(o.get("label")):
+            errors.append(f"{where}: each option needs a user-facing "
+                          "`label`.")
+        issue = check_typed_value({"id": f.get("id"), "type": f["type"]},
+                                  o.get("value"))
+        if issue:
+            errors.append(f"{where}: an option's value {issue.split(' ', 1)[1]}")
+        elif any(_same(v, o["value"]) for v in seen):
+            errors.append(f"{where}: two options offer {o['value']!r}.")
+        else:
+            seen.append(o["value"])
 
 
 def _check_fields(kind: str, fields, errors: list) -> None:
     """Shared validation for declared inputs and declared values. `kind` is
     "input" or "value" — values never carry `required`, because every value
-    ships a default; a value the user must supply is an input."""
+    ships a default; a value the user must supply is an input.
+
+    Everything here is checked field by field. Anything naming another field
+    — `when`, `min_from`, `max_from`, and one role per strategy — is settled
+    in _check_field_graph once every id is known.
+    """
     if not isinstance(fields, list):
         errors.append(f"`{kind}s` must be a list.")
         return
@@ -319,9 +485,17 @@ def _check_fields(kind: str, fields, errors: list) -> None:
         if unknown:
             errors.append(f"{where} has keys this contract does not know: "
                           f"{', '.join(sorted(map(str, unknown)))}.")
-        if kind == "value" and "required" in f:
-            errors.append(f"{where} declares `required`, which no value can "
-                          "be: every value ships a default. " + SPLIT_TEST)
+        if kind == "value":
+            if "required" in f:
+                errors.append(f"{where} declares `required`, which no value "
+                              "can be: every value ships a default. "
+                              + SPLIT_TEST)
+            for key in _INPUT_ONLY_KEYS[1:]:
+                if key in f:
+                    errors.append(
+                        f"{where} declares `{key}`, which only an input can. "
+                        "A value ships a default and is always in force. "
+                        + SPLIT_TEST)
         if not _is_text(f.get("label")):
             errors.append(f"{where} needs a user-facing `label`.")
         if f.get("type") not in VALUE_TYPES:
@@ -338,6 +512,123 @@ def _check_fields(kind: str, fields, errors: list) -> None:
         if ("min" in f or "max" in f) and f.get("type") in ("boolean", "text"):
             errors.append(f"{where}: min/max only mean something for "
                           "numbers.")
+        if "options" in f:
+            _check_options(where, f, errors)
+        if "role" in f and kind == "input":
+            _check_role(where, f, errors)
+        if "when" in f and kind == "input" and \
+                not (isinstance(f["when"], dict)
+                     and set(f["when"]) == _WHEN_KEYS):
+            errors.append(f"{where}: `when` must be exactly "
+                          "{input: another input's id, is: the answer that "
+                          "makes this one apply}.")
+        for bound in ("min_from", "max_from"):
+            if bound in f and kind == "input":
+                if not isinstance(f[bound], str):
+                    errors.append(f"{where}: `{bound}` must name another "
+                                  "declared input or value by id.")
+                elif f.get("type") not in _NUMERIC_TYPES:
+                    errors.append(f"{where}: `{bound}` compares numbers, so "
+                                  "it only means something for a number "
+                                  "field.")
+
+
+def _check_role(where: str, f: dict, errors: list) -> None:
+    role = f["role"]
+    spec = INPUT_ROLES.get(role) if isinstance(role, str) else None
+    if spec is None:
+        errors.append(
+            f"{where}: `role` must be one of {', '.join(INPUT_ROLES)} — the "
+            "figures the host reports and cannot observe for itself. A "
+            "strategy never invents one; anything missing is a request "
+            "against the host.")
+        return
+    if f.get("type") != spec["type"]:
+        errors.append(f'{where}: the "{role}" role is {spec["means"]}, so it '
+                      f'must be declared as `type: {spec["type"]}`.')
+    if f.get("unit") != spec["unit"]:
+        errors.append(f'{where}: the "{role}" role must be declared as '
+                      f'`unit: {spec["unit"]}` — the host reports it in that '
+                      "unit and would otherwise report one number as "
+                      "another.")
+
+
+def _check_field_graph(decl: dict, errors: list) -> None:
+    """Everything that needs the whole declaration at once: fields naming
+    other fields, and roles that may only be claimed once."""
+    inputs = [f for f in decl.get("inputs", []) if isinstance(f, dict)
+              and _is_id(f.get("id"))]
+    values = [f for f in decl.get("values", []) if isinstance(f, dict)
+              and _is_id(f.get("id"))]
+    by_input = {f["id"]: f for f in inputs}
+    numeric = {f["id"]: f for f in inputs + values
+               if f.get("type") in _NUMERIC_TYPES}
+
+    claimed: dict[str, str] = {}
+    for f in inputs:
+        role = f.get("role")
+        if not isinstance(role, str) or role not in INPUT_ROLES:
+            continue
+        if role in claimed:
+            errors.append(
+                f'inputs "{claimed[role]}" and "{f["id"]}" both claim the '
+                f'"{role}" role. The host would have no way to know which '
+                "figure to report, so both are refused.")
+        claimed[role] = f["id"]
+
+    for f in inputs:
+        where = f'input "{f["id"]}"'
+        for bound, word in (("min_from", "at least"), ("max_from", "at most")):
+            other = f.get(bound)
+            if not isinstance(other, str):
+                continue
+            if other == f["id"]:
+                errors.append(f"{where}: `{bound}` names itself.")
+            elif other not in numeric:
+                errors.append(
+                    f'{where}: `{bound}` names "{other}", which this '
+                    "strategy does not declare as a number — a bound has to "
+                    f"be {word} something countable.")
+
+        when = f.get("when")
+        if not (isinstance(when, dict) and set(when) == _WHEN_KEYS):
+            continue
+        other = when.get("input")
+        if other == f["id"]:
+            errors.append(f"{where}: `when` names itself.")
+            continue
+        gate = by_input.get(other) if isinstance(other, str) else None
+        if gate is None:
+            errors.append(
+                f'{where}: `when` names "{other}", which this strategy does '
+                "not declare as an input. A field can only depend on another "
+                "answer from the same setup screen.")
+            continue
+        issue = check_typed_value(gate, when.get("is"))
+        if issue:
+            errors.append(f'{where}: `when.is` must be an answer '
+                          f'"{gate["label"]}" could give — {issue}')
+
+    # A cycle would make the setup screen unresolvable: each field waits on
+    # the other and neither is ever asked. Refused at load, so it can never
+    # be reached at evaluation. Reported once per circle, not once per
+    # member — the same fault stated four times reads as four faults.
+    reported = set()
+    for f in inputs:
+        seen, node = [], f["id"]
+        while node is not None:
+            if node in seen:
+                ring = seen[seen.index(node):]
+                if frozenset(ring) not in reported:
+                    reported.add(frozenset(ring))
+                    errors.append(
+                        "these inputs depend on each other in a circle, so "
+                        "none of them could ever be asked: "
+                        + " → ".join(ring + [node]) + ".")
+                break
+            seen.append(node)
+            when = by_input.get(node, {}).get("when")
+            node = when.get("input") if isinstance(when, dict) else None
 
 
 def validate_declaration(decl) -> list[str]:
@@ -437,6 +728,9 @@ def validate_declaration(decl) -> list[str]:
 
     _check_fields("input", decl.get("inputs", []), errors)
     _check_fields("value", decl.get("values", []), errors)
+    if isinstance(decl.get("inputs", []), list) \
+            and isinstance(decl.get("values", []), list):
+        _check_field_graph(decl, errors)
 
     reference = decl.get("reference", [])
     if not isinstance(reference, list):
@@ -470,21 +764,99 @@ def validate_declaration(decl) -> list[str]:
 # what the user supplied
 # ---------------------------------------------------------------------------
 
-def validate_inputs(record: dict, supplied: dict) -> list[str]:
-    """Problems with the user-supplied inputs, as sentences a novice can
-    act on. Run at journal open ("validate at load, not at evaluation")
-    and again defensively before every decision."""
-    problems = []
-    declared = {f["id"]: f for f in record.get("inputs", [])}
+def input_activity(record: dict, supplied: dict) -> dict:
+    """{input id: None if it applies, else one sentence saying why it does
+    not}.
+
+    A `when` gate is a pure function of the other answers, which is what
+    lets this run identically on a full setup form and on the reduced set a
+    strategy was actually handed. A gate whose own answer is missing leaves
+    everything below it inactive: a question nobody has reached yet cannot
+    make a second question owed.
+    """
+    specs = {f["id"]: f for f in record.get("inputs", [])
+             if isinstance(f, dict) and isinstance(f.get("id"), str)}
+    state: dict = {}
+
+    def resolve(fid, chain):
+        if fid in state:
+            return state[fid]
+        if fid in chain:                    # refused at load; contained here
+            state[fid] = "this setting depends on itself"
+            return state[fid]
+        when = specs[fid].get("when")
+        if not (isinstance(when, dict) and set(when) == _WHEN_KEYS
+                and when.get("input") in specs):
+            state[fid] = None
+            return None
+        other = when["input"]
+        gate = specs[other]
+        why = resolve(other, chain | {fid})
+        if why is not None:
+            state[fid] = (f'it only applies when "{gate["label"]}" does, '
+                          "and that does not")
+        elif supplied.get(other) is None:
+            state[fid] = f'it only applies once "{gate["label"]}" is answered'
+        elif not _same(supplied.get(other), when["is"]):
+            state[fid] = (f'it only applies when "{gate["label"]}" is '
+                          f'{option_label(gate, when["is"])}')
+        else:
+            state[fid] = None
+        return state[fid]
+
+    for fid in specs:
+        resolve(fid, frozenset())
+    return state
+
+
+def _cross_bound(spec: dict, value, pool: dict) -> str | None:
+    """A bound that names another field. Where the other field has no answer
+    the bound simply does not apply — an absent figure is not a failed test,
+    and refusing an answer because a different question is unanswered would
+    be inventing a comparison."""
+    for key, word, fails in (("min_from", "at least",
+                              lambda a, b: a < b),
+                             ("max_from", "at most",
+                              lambda a, b: a > b)):
+        other = spec.get(key)
+        if not isinstance(other, str) or other not in pool:
+            continue
+        limit, label = pool[other]
+        if limit is None or not _is_num(limit) or not fails(value, limit):
+            continue
+        return (f'must be {word} your {label} ({limit:g}); {value:g} is not.')
+    return None
+
+
+def check_inputs(record: dict, supplied: dict,
+                 values: dict | None = None) -> tuple[dict, list[str]]:
+    """(what the strategy is handed, every problem as a sentence).
+
+    Run when a journal's answers are saved — "validate at load, not at
+    evaluation" — and again defensively before every decision, which is safe
+    because the result of the first run is a valid input to the second.
+
+    What comes back is only the inputs that *apply* and have an answer. An
+    input whose `when` gate is unmet is never handed over: a stale answer to
+    a question that no longer applies is worse than no answer, because the
+    strategy has no way to tell the two apart.
+    """
+    declared = {f["id"]: f for f in record.get("inputs", [])
+                if isinstance(f, dict) and isinstance(f.get("id"), str)}
+    problems: list[str] = []
     for key in supplied:
         if key not in declared:
             problems.append(f'The journal supplies "{key}", which '
                             f'{record.get("name", "this strategy")} does '
                             "not ask for.")
+
+    activity = input_activity(record, supplied)
+    candidates: dict = {}
     for fid, spec in declared.items():
         value = supplied.get(fid)
+        inactive = activity.get(fid) is not None
         if value is None:
-            if spec.get("required"):
+            if spec.get("required") and not inactive:
                 problems.append(f'"{spec["label"]}" ({fid}) is needed and '
                                 "the journal does not have it yet. "
                                 + str(spec["explain"]).strip())
@@ -492,7 +864,52 @@ def validate_inputs(record: dict, supplied: dict) -> list[str]:
         issue = check_typed_value(spec, value)
         if issue:
             problems.append(f'"{spec["label"]}": {issue}')
-    return problems
+            continue
+        # A stored answer to a question that does not currently apply is
+        # still checked, so it cannot lie in wait and block everything the
+        # day its gate flips.
+        if not inactive:
+            candidates[fid] = value
+
+    # Bounds that name another field come last, once every plain answer is
+    # known good — otherwise a mistyped figure would be compared against.
+    # Ids are unique across inputs and values, so one pool cannot be
+    # ambiguous.
+    labels = {v["id"]: v.get("label") or v["id"]
+              for v in record.get("values", []) if isinstance(v, dict)
+              and isinstance(v.get("id"), str)}
+    pool = {vid: (value, labels.get(vid, vid))
+            for vid, value in (values or {}).items()}
+    pool.update({fid: (v, declared[fid]["label"])
+                 for fid, v in candidates.items()})
+    for fid in list(candidates):
+        issue = _cross_bound(declared[fid], candidates[fid], pool)
+        if issue:
+            problems.append(f'"{declared[fid]["label"]}" {issue}')
+            candidates.pop(fid)
+    return candidates, problems
+
+
+def input_roles(record: dict, effective: dict) -> dict:
+    """{role: {"id", "label", "value"} | {"id", "label", "reason"}} for every
+    role this strategy claims. The host reports the facts a role unlocks and
+    holds no view about the figure itself; where the question exists but is
+    unanswered, the reason says so by name, so the screen can point at the
+    field rather than at a shrug."""
+    out = {}
+    for f in record.get("inputs", []):
+        role = f.get("role") if isinstance(f, dict) else None
+        if not isinstance(role, str) or role not in INPUT_ROLES or role in out:
+            continue
+        entry = {"id": f["id"], "label": f["label"]}
+        if f["id"] in effective:
+            entry["value"] = effective[f["id"]]
+        else:
+            entry["reason"] = (f'{record.get("name", "this strategy")} asks '
+                               f'for "{f["label"]}" and this journal has no '
+                               "answer yet")
+        out[role] = entry
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -925,8 +1342,8 @@ def _bank_entry(measure_id):
     reads the same in a strategy's reason as it does anywhere else."""
     if not _bank_cache:
         try:
-            from . import profiles
-            doc = profiles.load_bank("metric-bank")
+            from . import bank
+            doc = bank.load_bank()
             for e in (doc.get("entries") or []):
                 _bank_cache[str(e.get("id"))] = {
                     "label": str(e.get("label") or e.get("id")),
@@ -965,8 +1382,12 @@ def _result(state_id, state, payload, reason, produced_by, record):
     return {
         "render": render,
         "tier": RENDER_TYPES[render]["tier"],
+        # `fix` is None for everything a strategy declares: only the host
+        # knows which of its own states has a screen behind it, and a
+        # strategy's blocked state asks for a decision, not for setup.
         "state": {"id": state_id, "name": state["name"],
-                  "description": state["description"]},
+                  "description": state["description"],
+                  "fix": state.get("fix")},
         "payload": payload,
         "reason": reason,
         "produced_by": produced_by,
@@ -1013,7 +1434,8 @@ def evaluate(record: dict, ctx: dict) -> dict:
     as a host-produced result in the same envelope: an error in place, not
     a crashed application, and never a blocked recording.
     """
-    problems = validate_inputs(record, ctx.get("inputs") or {})
+    _, problems = check_inputs(record, ctx.get("inputs") or {},
+                               ctx.get("values") or {})
     if problems:
         return host_result(
             "host:inputs-missing",
@@ -1026,10 +1448,22 @@ def evaluate(record: dict, ctx: dict) -> dict:
     # is never a surprise; frozen, so one evaluation cannot change what the
     # next one sees; attached after the context was copied, because it is
     # shared and must not be copied per security.
-    ctx = {**ctx, "reference": record.get("reference") or _NO_REFERENCE}
+    reference = record.get("reference") or _NO_REFERENCE
+    ctx = {**ctx, "reference": reference}
+
+    # The strategy decides against its own copy, and the host resolves the
+    # citations below against the original. A strategy that edited what it
+    # was handed could otherwise change what the host then reports it looked
+    # at — precisely the restatement the evidence split exists to make
+    # impossible. The context is built per security and thrown away, so one
+    # more copy of it costs nothing that matters; the shipped reference data
+    # is still shared and frozen rather than copied, because that is the one
+    # part that is per strategy and could be large.
+    mine = {k: copy.deepcopy(v) for k, v in ctx.items() if k != "reference"}
+    mine["reference"] = reference
 
     try:
-        decision = record["decide"](ctx)
+        decision = record["decide"](mine)
     # BaseException, not Exception: a strategy calling sys.exit() must be
     # contained exactly like one raising — the host does not let plugin code
     # decide the application ends.

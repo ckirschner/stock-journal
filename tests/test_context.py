@@ -43,18 +43,52 @@ def store_two_years(cik):
 
 
 def security(cik=None, **over):
-    s = {"ticker": "SYN", "name": "Synthetic Co", "bucket": "ideas",
-         "metrics": {}, "position": None}
+    s = {"ticker": "SYN", "name": "Synthetic Co", "metrics": {}, "lots": []}
     if cik:
         s["cik"] = cik
     s.update(over)
     return s
 
 
-def build(sec, journal=None, values=None, inputs=None, as_of=None):
+def lot(lid, kind, date, shares, price=10.0, against=None):
+    """One recorded lot, shaped exactly as portfolio.add_lot writes it. The
+    context reads lots and never writes them, so these are built by hand."""
+    l = {"id": lid, "seq": int(lid[1:]), "kind": kind, "date": date,
+         "recorded": date + "T00:00:00+00:00", "shares": float(shares),
+         "price": float(price), "snapshot": None}
+    if kind == "buy":
+        l["override"] = None
+    else:
+        l["against"] = against or []
+    return l
+
+
+def holding(cik=None, shares=10, price=15.0, opened="2025-02-25", **over):
+    return security(cik, lots=[lot("l1", "buy", opened, shares, price)],
+                    **over)
+
+
+def build(sec, journal=None, values=None, inputs=None, as_of=None,
+          record=None):
     return context.build_context(sec, journal if journal is not None
                                  else [sec], values or {}, inputs or {},
-                                 as_of=as_of)
+                                 as_of=as_of, record=record)
+
+
+def cash_strategy(required=True, **over):
+    """A record shaped like the loader's output, declaring one input that
+    claims the cash role — the only way the host is ever told what the
+    account is."""
+    spec = {"id": "free-cash", "label": "Free cash", "type": "number",
+            "unit": "usd", "role": "cash", "explain": "Money not in a "
+            "position."}
+    if required:
+        spec["required"] = True
+    r = {"id": "sizer", "name": "Sizer", "summary": "s", "version": 1,
+         "contract": contract.CONTRACT_VERSION, "changelog": {1: "f"},
+         "states": [], "inputs": [spec], "values": [], "defaults": {}}
+    r.update(over)
+    return r
 
 
 class TestCompleteness:
@@ -88,6 +122,13 @@ class TestCompleteness:
         assert ctx["portfolio"]["cash"]["status"] == "absent"
         assert ctx["portfolio"]["account_value"]["status"] == "absent"
         assert "free cash" in ctx["portfolio"]["account_value"]["reason"]
+
+    def test_a_strategy_that_never_asks_for_cash_is_told_so_by_name(self):
+        """Absence has to say which question was never asked, not shrug. The
+        host holds no view about whether a journal ought to record cash."""
+        ctx = build(security(), record=cash_strategy(inputs=[]))
+        assert "no strategy in this journal asks for your free cash" in \
+            ctx["portfolio"]["cash"]["reason"]
 
 
 class TestMeasuresAndSeries:
@@ -238,30 +279,60 @@ class TestTheClock:
 
 
 class TestPositionAndPortfolio:
+    def _priced(self, cik, rows):
+        doc = price_store.load(cik)
+        price_store.merge_series(doc, "SYN", "test", rows, [])
+        price_store.save(cik, doc)
+
     def test_a_holding_reports_lots_and_market_value(self):
         store_two_years(906)
-        doc = price_store.load(906)
-        price_store.merge_series(doc, "SYN", "test",
-                                 [["2025-03-01", 20.0, 100]], [])
-        price_store.save(906, doc)
-        sec = security(906, bucket="holdings",
-                       position={"shares": 10, "cost_basis": 15.0,
-                                 "opened": "2025-02-25"})
-        ctx = build(sec)
+        self._priced(906, [["2025-03-01", 20.0, 100]])
+        ctx = build(holding(906))
         pos = ctx["position"]
         assert pos["held"] is True
+        assert pos["shares"] == 10.0
+        assert pos["opened"] == "2025-02-25"
         assert pos["lots"] == [{"date": "2025-02-25", "shares": 10.0,
-                                "price": 15.0, "kind": "buy"}]
+                                "remaining": 10.0, "open": True}]
+        assert pos["disposals"] == []
         assert pos["market_value"]["value"] == 200.0
-        assert pos["weight"]["status"] == "absent"      # no account value yet
+        assert pos["weight"]["status"] == "absent"      # nobody asked for cash
         assert ctx["portfolio"]["slots"]["occupied"] == 1
         assert ctx["portfolio"]["holdings"][0]["ticker"] == "SYN"
 
+    def test_nothing_about_what_a_position_cost_reaches_a_strategy(self):
+        """Structurally incapable of reaching a verdict means the figure is
+        not there, not that citing it is discouraged. A rule fired on the
+        distance from your own purchase price is anchoring — it makes the
+        same company a buy for one person and a sell for another."""
+        store_two_years(916)
+        self._priced(916, [["2025-03-01", 20.0, 100]])
+        sec = holding(916)      # bought at 15.00
+        sec["lots"].append(lot("l2", "sell", "2025-04-01", 4, 30.0,
+                               against=[{"lot": "l1", "shares": 4}]))
+        ctx = build(sec)
+        blob = repr(ctx["position"]) + repr(ctx["portfolio"])
+        for figure in ("15.0", "30.0", "cost", "'price'"):
+            assert figure not in blob, figure
+        # ...and no fact names one either, so it cannot even be cited
+        assert not [f for f in contract.HOST_FACTS if "cost" in f]
+
+    def test_several_lots_report_what_remains_of_each(self):
+        sec = security(lots=[
+            lot("l1", "buy", "2025-01-01", 10, 15.0),
+            lot("l2", "buy", "2025-03-01", 10, 25.0),
+            lot("l3", "sell", "2025-06-01", 14, 30.0,
+                against=[{"lot": "l1", "shares": 10},
+                         {"lot": "l2", "shares": 4}])])
+        pos = build(sec)["position"]
+        assert pos["shares"] == 6.0
+        assert pos["opened"] == "2025-03-01"     # the first lot is all gone
+        assert [(l["date"], l["remaining"], l["open"]) for l in pos["lots"]] \
+            == [("2025-01-01", 0.0, False), ("2025-03-01", 6.0, True)]
+        assert pos["disposals"] == [{"date": "2025-06-01", "shares": 14.0}]
+
     def test_a_position_opened_after_the_pin_did_not_exist_yet(self):
-        sec = security(bucket="holdings",
-                       position={"shares": 10, "cost_basis": 15.0,
-                                 "opened": "2025-02-25"})
-        ctx = build(sec, as_of="2024-06-30")
+        ctx = build(holding(), as_of="2024-06-30")
         assert ctx["position"]["held"] is False
         assert ctx["position"]["lots"] == []
         # ...and the same context must not count it as occupying a slot.
@@ -270,16 +341,18 @@ class TestPositionAndPortfolio:
         assert ctx["portfolio"]["slots"]["occupied"] == 0
         assert ctx["portfolio"]["holdings"] == []
 
+    def test_a_sale_after_the_pin_had_not_reduced_anything_yet(self):
+        sec = holding(opened="2024-01-10")
+        sec["lots"].append(lot("l2", "sell", "2025-01-01", 10, 30.0,
+                               against=[{"lot": "l1", "shares": 10}]))
+        assert build(sec, as_of="2024-06-30")["position"]["shares"] == 10.0
+        assert build(sec)["position"]["shares"] == 0.0
+
     def test_a_position_opened_before_the_pin_is_priced_at_the_pin(self):
         store_two_years(908)
-        doc = price_store.load(908)
-        price_store.merge_series(doc, "SYN", "test",
-                                 [["2024-06-28", 10.0, 100],
-                                  ["2026-01-05", 99.0, 100]], [])
-        price_store.save(908, doc)
-        sec = security(908, bucket="holdings", price="500.00",
-                       position={"shares": 10, "cost_basis": 8.0,
-                                 "opened": "2024-01-10"})
+        self._priced(908, [["2024-06-28", 10.0, 100],
+                           ["2026-01-05", 99.0, 100]])
+        sec = holding(908, price="500.00", opened="2024-01-10")
         ctx = build(sec, as_of="2024-06-30")
         assert ctx["position"]["market_value"]["value"] == 100.0
         assert ctx["portfolio"]["holdings"][0]["market_value"]["value"] \
@@ -287,15 +360,115 @@ class TestPositionAndPortfolio:
         assert ctx["portfolio"]["slots"]["occupied"] == 1
 
     def test_the_portfolio_counts_only_what_the_clock_had(self):
-        old = security(bucket="holdings", ticker="OLD",
-                       position={"shares": 5, "cost_basis": 10.0,
-                                 "opened": "2023-01-01"})
-        new = security(bucket="holdings", ticker="NEW",
-                       position={"shares": 5, "cost_basis": 10.0,
-                                 "opened": "2025-06-01"})
+        old = holding(ticker="OLD", shares=5, opened="2023-01-01")
+        new = holding(ticker="NEW", shares=5, opened="2025-06-01")
         ctx = build(old, [old, new], as_of="2024-06-30")
         assert [h["ticker"] for h in ctx["portfolio"]["holdings"]] == ["OLD"]
         assert ctx["portfolio"]["slots"]["occupied"] == 1
+
+
+class TestTheAccountAndWeight:
+    """Weight is market value over the account, and the account is free cash
+    plus every holding at market. All of it is arithmetic the host owns;
+    whether a weight is too high belongs to a strategy and appears nowhere
+    here."""
+
+    def _priced(self, cik, close):
+        doc = price_store.load(cik)
+        price_store.merge_series(doc, "SYN", "test",
+                                 [["2025-03-01", close, 100]], [])
+        price_store.save(cik, doc)
+
+    def _held(self, cik=920, shares=10, close=20.0):
+        store_two_years(cik)
+        self._priced(cik, close)
+        return holding(cik, shares=shares)
+
+    def test_an_answered_cash_input_makes_weight_a_reported_fact(self):
+        sec = self._held()
+        ctx = build(sec, record=cash_strategy(),
+                    inputs={"free-cash": 800.0})
+        assert ctx["portfolio"]["cash"]["value"] == 800.0
+        # 800 cash plus 10 shares at 20
+        assert ctx["portfolio"]["account_value"]["value"] == 1000.0
+        assert ctx["position"]["weight"]["value"] == 20.0
+        assert ctx["portfolio"]["holdings"][0]["weight"]["value"] == 20.0
+
+    def test_the_account_is_derived_and_says_what_it_rests_on(self):
+        ctx = build(self._held(921), record=cash_strategy(),
+                    inputs={"free-cash": 800.0})
+        prov = " ".join(ctx["portfolio"]["account_value"]["provenance"])
+        assert "free cash" in prov and "1 holding" in prov
+        assert "of an account of" in \
+            " ".join(ctx["position"]["weight"]["provenance"])
+
+    def test_an_unanswered_cash_input_names_the_field_it_wants(self):
+        ctx = build(self._held(922), record=cash_strategy())
+        assert ctx["portfolio"]["cash"]["status"] == "absent"
+        assert "Free cash" in ctx["portfolio"]["cash"]["reason"]
+        assert ctx["position"]["weight"]["status"] == "absent"
+
+    def test_one_unpriced_holding_makes_the_whole_account_absent(self):
+        """Treating a missing price as zero would understate the account and
+        quietly inflate every weight measured against it — a confident wrong
+        answer in the number a sizing rule binds on."""
+        sec = self._held(923)
+        dark = holding(ticker="DARK", shares=5)     # no cik, no price
+        ctx = build(sec, [sec, dark], record=cash_strategy(),
+                    inputs={"free-cash": 800.0})
+        av = ctx["portfolio"]["account_value"]
+        assert av["status"] == "absent"
+        assert "DARK" in av["reason"]
+        assert ctx["position"]["weight"]["status"] == "absent"
+
+    def test_an_account_of_nothing_or_less_has_no_share_to_express(self):
+        """A margin balance is real, and dividing by it produces a confident
+        nonsense figure rather than an honest absence."""
+        sec = self._held(924)
+        ctx = build(sec, record=cash_strategy(), inputs={"free-cash": -500.0})
+        assert ctx["portfolio"]["account_value"]["value"] == -300.0
+        assert ctx["position"]["weight"]["status"] == "absent"
+        assert "nothing or less" in ctx["position"]["weight"]["reason"]
+
+    def test_the_subject_counts_even_when_the_caller_passes_no_list(self):
+        """A portfolio that excluded the holding in front of you would
+        measure its weight against an account it was not part of."""
+        sec = self._held(925)
+        ctx = build(sec, [], record=cash_strategy(),
+                    inputs={"free-cash": 800.0})
+        assert ctx["portfolio"]["account_value"]["value"] == 1000.0
+        assert ctx["position"]["weight"]["value"] == 20.0
+
+    def test_under_a_pin_cash_participates_but_says_it_is_undated(self):
+        """The same rule a hand-entered measure obeys: an answer with no date
+        is the value on record now, never one known to be true then."""
+        sec = self._held(926)
+        ctx = build(sec, record=cash_strategy(), inputs={"free-cash": 800.0},
+                    as_of="2025-03-05")
+        for node in (ctx["portfolio"]["cash"],
+                     ctx["portfolio"]["account_value"],
+                     ctx["position"]["weight"]):
+            assert any("carries no date" in c for c in node["cautions"]), node
+        assert not build(sec, record=cash_strategy(),
+                         inputs={"free-cash": 800.0}
+                         )["portfolio"]["cash"]["cautions"]
+
+    def test_an_answer_to_a_question_that_does_not_apply_is_not_served(self):
+        """A stale answer to a gated-off question is worse than no answer:
+        the strategy has no way to tell the two apart."""
+        rec = cash_strategy(required=False, inputs=[
+            {"id": "sizes-by-cash", "label": "Size by cash?", "type":
+             "boolean", "explain": "e"},
+            {"id": "free-cash", "label": "Free cash", "type": "number",
+             "unit": "usd", "role": "cash", "explain": "e",
+             "when": {"input": "sizes-by-cash", "is": True}}])
+        supplied = {"sizes-by-cash": False, "free-cash": 800.0}
+        ctx = build(self._held(927), record=rec, inputs=supplied)
+        assert "free-cash" not in ctx["inputs"]
+        assert ctx["portfolio"]["cash"]["status"] == "absent"
+        assert build(self._held(928), record=rec,
+                     inputs={"sizes-by-cash": True, "free-cash": 800.0}
+                     )["portfolio"]["cash"]["value"] == 800.0
 
 
 class TestTheBoundary:
@@ -324,13 +497,12 @@ class TestTheBoundary:
         assert inputs == {"note": "as supplied"}
 
     def test_the_journal_securities_list_is_never_reachable(self):
-        sec = security(bucket="holdings",
-                       position={"shares": 10, "cost_basis": 15.0,
-                                 "opened": "2020-01-01"})
+        sec = holding(opened="2020-01-01")
         ctx = context.build_context(sec, [sec], {}, {})
         ctx["portfolio"]["holdings"][0]["shares"] = 10_000
+        ctx["position"]["lots"][0]["remaining"] = 10_000
         ctx["security"]["ticker"] = "HACKED"
-        assert sec["position"]["shares"] == 10
+        assert sec["lots"][0]["shares"] == 10
         assert sec["ticker"] == "SYN"
 
 

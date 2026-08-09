@@ -1211,8 +1211,9 @@ def earnings_yield_to_risk_free_multiple(ctx):
         rate = None
     if rate is None or rate <= 0:
         return _absent_result(absent(
-            "no risk-free rate has been supplied — it is a parameter the "
-            "profile provides, not a figure in any filing"))
+            "no risk-free rate has been supplied, and nothing in this host "
+            "is entitled to invent one — it is not a figure in any filing, "
+            "and no strategy can currently hand one in"))
     pe = ctx.entry("pe_3y_avg_eps")
     if pe["status"] != "computed":
         return _absent_result(absent(
@@ -1221,7 +1222,7 @@ def earnings_yield_to_risk_free_multiple(ctx):
     ey = 1.0 / pe["value"] * 100.0
     return computed(ey / rate,
                     [f"earnings yield {ey:.2f}% ÷ risk-free rate "
-                     f"{rate:.2f}% (supplied by the profile)"],
+                     f"{rate:.2f}% (supplied to the computation)"],
                     pe["cautions"])
 
 

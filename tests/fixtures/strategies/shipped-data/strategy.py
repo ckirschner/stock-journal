@@ -8,7 +8,7 @@ STRATEGY = {
     "summary": "Looks a ticker up in a table it ships. Not investment "
                "logic.",
     "version": 1,
-    "contract": 1,
+    "contract": 2,
     "changelog": {1: "First version."},
     "reference": ["sectors.yaml"],
     "states": [

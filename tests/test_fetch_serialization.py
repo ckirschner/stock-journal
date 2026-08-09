@@ -43,7 +43,7 @@ class TestFetchGate:
         running = []
         overlap = []
 
-        def fake_fetch_ticker(ticker, settings, known_cik=None,
+        def fake_fetch_ticker(ticker, known_cik=None,
                               progress=None, on_resolved=None):
             running.append(ticker)
             if len(running) > 1:
@@ -52,10 +52,11 @@ class TestFetchGate:
             running.remove(ticker)
             return {"ticker": ticker, "errors": []}
 
+        from engine import secrets
+        secrets.local_set("sec_identity", "Jane Doe jane@example.com")
         monkeypatch.setattr(fetch, "fetch_ticker", fake_fetch_ticker)
-        settings = {"sec_identity": "Jane Doe jane@example.com"}
         for t in ("AAA", "BBB", "CCC"):
-            r = fetch.start_fetch(t, settings)
+            r = fetch.start_fetch(t)
             assert r.get("started")
         deadline = time.time() + 5
         while time.time() < deadline:

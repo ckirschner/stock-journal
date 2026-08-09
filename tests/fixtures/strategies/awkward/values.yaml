@@ -1,0 +1,4 @@
+# Shipped defaults for the awkward fixture's declared values.
+version: 1
+values:
+  cap: 8

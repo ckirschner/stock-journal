@@ -5,7 +5,12 @@ lives only in tests/fixtures/groundtruth (hand-read) and fixtures/extracted
 
 from __future__ import annotations
 
+import shutil
+from pathlib import Path
+
 import pytest
+
+STRATEGY_FIXTURES = Path(__file__).parent / "fixtures" / "strategies"
 
 
 @pytest.fixture(autouse=True)
@@ -17,6 +22,44 @@ def _isolated_data_dir(tmp_path, monkeypatch):
     from engine import secrets
     monkeypatch.setattr(secrets, "_DISABLE_KEYRING", True)
     yield
+
+
+@pytest.fixture
+def strategies(tmp_path, monkeypatch):
+    """Install fixture strategy bundles and point discovery at them.
+
+    Copied rather than referenced, so a test can edit a bundle's values.yaml
+    in place — which is exactly the hand-retuning the rule-change record
+    exists to catch, and it cannot be exercised against a read-only fixture.
+    """
+    root = tmp_path / "strategies"
+    root.mkdir(exist_ok=True)
+
+    def install(*names):
+        from engine import strategy_loader
+        for n in names:
+            shutil.copytree(STRATEGY_FIXTURES / n, root / n,
+                            dirs_exist_ok=True)
+        monkeypatch.setattr(strategy_loader, "SHIPPED_DIR", root)
+        return root
+    install.root = root
+    return install
+
+
+def journal_for(strategy_id, name="Test journal", inputs=None, config=None):
+    """A journal stamped with a discovered strategy, saved and opened.
+
+    Returns (journal, record). Tests that only need the engine use this;
+    tests that drive the UI seam go through Api.create_journal, which is the
+    same path with the typing and validation the dialog does.
+    """
+    from engine import journals, strategy_loader
+    strategies, reports = strategy_loader.discover()
+    record = strategies.get(strategy_id)
+    assert record is not None, [r["errors"] for r in reports]
+    journal = journals.create(name, record, config=config, inputs=inputs)
+    journals.set_open(journal["id"])
+    return journal, record
 
 
 def dur(concept, start, end, value, stmt="IncomeStatement", **kw):

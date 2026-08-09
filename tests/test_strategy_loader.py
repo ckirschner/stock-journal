@@ -87,7 +87,7 @@ class TestRefusals:
         bundle.mkdir()
         (bundle / "strategy.py").write_text(
             "STRATEGY = {'id': 'empty-values', 'name': 'E', 'summary': 's',"
-            " 'version': 1, 'contract': 1, 'changelog': {1: 'f'},"
+            " 'version': 1, 'contract': 2, 'changelog': {1: 'f'},"
             " 'states': [{'id': 's', 'name': 'n', 'render': 'hold',"
             " 'description': 'd'}],"
             " 'values': [{'id': 'v', 'label': 'V', 'type': 'number',"
@@ -201,7 +201,7 @@ class TestShippedReferenceData:
         bundle.mkdir()
         (bundle / "strategy.py").write_text(
             "STRATEGY = {'id': 'no-table', 'name': 'N', 'summary': 's',"
-            " 'version': 1, 'contract': 1, 'changelog': {1: 'f'},"
+            " 'version': 1, 'contract': 2, 'changelog': {1: 'f'},"
             " 'reference': ['sectors.yaml'],"
             " 'states': [{'id': 's', 'name': 'n', 'render': 'hold',"
             " 'description': 'd'}]}\ndef decide(ctx): pass\n")

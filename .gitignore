@@ -4,7 +4,12 @@ data/
 *.json.tmp
 ledger-backup-*.json
 pre-import-*.json
-dev_reference_docs/
+
+# Reference material is local only — it vendors a whole repo and a venv.
+# The retired rulesets are the exception: they are the input to authoring
+# the real strategies, so they have to survive a fresh clone.
+dev_reference_docs/*
+!dev_reference_docs/legacy-profiles/
 
 # Agent context — local only.
 claude.md

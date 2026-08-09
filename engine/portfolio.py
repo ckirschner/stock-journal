@@ -1,24 +1,49 @@
-"""Positions, snapshots and the override log.
+"""Positions as lot history, snapshots, and the override log.
 
-The rule that matters here: an entry snapshot is written once, at purchase,
-and never recomputed. If it were recomputed, restated filings and amended
-rules would quietly rewrite history and the journal would lose the only thing
-that makes it a journal.
+A security's position is not a figure that gets updated. It is a list of
+**lots** — one entry per acquisition and one per disposal, appended in the
+order they were recorded and never edited afterwards. Everything anyone wants
+to know about the position is derived from that list on read: how many shares
+are held, which lots are still open, what the average cost was, what a lot
+returned.
 
-A purchase is recorded under a profile — the lens the user was buying
-through. The snapshot freezes that profile's identity and version, every
-metric value on the security, and the verdict the profile produced. Snapshots
-recorded before the profile system carry a ``ruleset_version`` instead; they
-are recognised by that field and rendered as the frozen records they are,
-never re-scored.
+The rule that matters here: a snapshot is written once, at the moment a
+decision is acted on, and never recomputed. If it were recomputed, restated
+filings and an amended strategy would quietly rewrite history and the journal
+would lose the only thing that makes it a journal. Deriving the position from
+appended events rather than storing a running total is the same rule applied
+one level down — a sale that edited the buy lot it drew from would be
+rewriting what was bought.
+
+The shape is designed against the three things that have to work, not against
+what happens to be stored today:
+
+- **several buys.** Each is its own lot with its own date, price, decision
+  and snapshot. Adding to a position is one more append.
+- **partial sells against specific lots.** A sale names how many shares it
+  took from each lot (`against`), because only the user knows what they told
+  their broker. The host defaults that allocation to oldest-first and says
+  so; it never silently decides.
+- **re-entry after a full exit.** A security whose lots are all closed keeps
+  them and can take a new lot dated later. Nothing is deleted, so the second
+  entry reads against the first.
+
+Which bucket a security is in — an idea, a holding, a previous holding — is
+*derived* from its lots and never stored. A stored bucket is a second
+opinion about a fact the lots already settle, and the two fall out of step.
+
+Nothing here evaluates. The caller hands in the decision it just took under
+the journal's stamped strategy, and this module records it. Reading a state's
+*render* to tell a purchase-with-the-signal from a purchase-against-it is not
+an opinion about investing — the render types are the host's own vocabulary
+and `commit` means "capital may go in" by definition. Which securities
+deserve capital is the strategy's business, and this module never asks.
 """
 
 from __future__ import annotations
 
 import copy
 from datetime import date, datetime, timezone
-
-from .evaluate import evaluate_buy, evaluate_position
 
 EXIT_REASONS = [
     "Thesis broke",
@@ -28,13 +53,7 @@ EXIT_REASONS = [
     "Panic",
 ]
 
-VERDICT_WORDS = {"buy": "Buy", "no_buy": "No buy", "cant_say": "Can't say"}
-SIGNAL_WORDS = {
-    "fired": "Sell signal",
-    "breached": "Breach unconfirmed",
-    "clear": "No signal",
-    "unwatched": "Unwatched",
-}
+BUCKETS = ("holdings", "previous", "ideas")
 
 
 def _today():
@@ -45,22 +64,18 @@ def _stamp():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def new_security(ticker: str, name: str, bucket: str = "ideas") -> dict:
+def new_security(ticker: str, name: str) -> dict:
     return {
         "ticker": ticker.upper().strip(),
         "name": name.strip(),
-        "bucket": bucket,
         "added": _today(),
         "price": None,
-        "metrics": {},          # bank id -> value
+        "metrics": {},          # bank id -> hand-entered value
         "history": {},          # bank id -> [[period, value], ...], unfilled
-        "entry_snapshot": None,
-        "override": None,
+        "lots": [],             # append-only; the position is derived from it
         "ev": None,
         "falsifier": "",
-        "notes": [],            # dated entries, appended, never edited in place
-        "position": None,
-        "exit": None,
+        "notes": [],            # dated entries, appended, never edited
     }
 
 
@@ -72,238 +87,791 @@ def add_note(security: dict, text: str) -> dict:
     return security
 
 
-def open_position(security: dict, profile: dict, profile_version,
-                  shares: float, cost: float, opened: str | None = None,
-                  override_reason: str = "", values: dict | None = None,
-                  value_sources: dict | None = None,
-                  price_seen: dict | None = None,
-                  evaluation: dict | None = None) -> dict:
-    """Record a purchase under a profile and freeze what the lens showed.
+# -- reading the lot list ----------------------------------------------------
+# Every one of these is a pure read. They are the only way anything else is
+# allowed to ask what a position is, so there is one answer rather than one
+# per caller.
 
-    A failing or indeterminate verdict does not block anything. It gets
-    recorded alongside the purchase, with the user's stated reason for going
-    ahead — that includes buying on grey, where the profile's own rule is
-    that the user decides and logs an override.
+def lots(security: dict, kind: str | None = None, on_or_before=None) -> list:
+    """The recorded lots, oldest first, optionally of one kind and only
+    those that had happened by a given day.
 
-    `values` are the values the lens actually evaluated — hand-entered merged
-    over computed. They are what the snapshot freezes, because the snapshot's
-    job is to record what was seen, and `value_sources` records where each
-    one came from so the frozen record can say so forever.
-
-    `evaluation` says which moment the values belong to: basis "live" (the
-    data on screen right now) or "reconstructed" (rebuilt from what was
-    observable on a past purchase date), with `as_of` naming the day. The
-    record must never claim a verdict was seen live when it was rebuilt
-    later — that distinction is frozen here and travels with both the
-    snapshot and any override. Without it, the honest default is "live" as
-    of today: that is what evaluating the caller's values now actually is.
+    The date filter is the clock: under a pinned evaluation a purchase made
+    after the pin did not exist yet, and a sale made after it had not
+    reduced anything. Sorting by date and then by the order they were
+    recorded keeps two lots on the same day in the order they were entered.
     """
+    out = [l for l in (security.get("lots") or [])
+           if (kind is None or l.get("kind") == kind)
+           and (on_or_before is None
+                or str(l.get("date") or "")[:10] <= str(on_or_before)[:10])]
+    return sorted(out, key=lambda l: (str(l.get("date") or ""),
+                                      int(l.get("seq") or 0)))
+
+
+def open_lots(security: dict, on_or_before=None) -> list:
+    """Every acquisition with what remains of it, oldest first.
+
+    A lot that has been sold down to nothing stays in the list with
+    `remaining` zero, because "this was bought and then exited" is part of
+    the record and a re-entry only reads against it if the earlier lot is
+    still visible.
+    """
+    remaining = {}
+    buys = lots(security, "buy", on_or_before)
+    for lot in buys:
+        remaining[lot["id"]] = float(lot["shares"])
+    for sale in lots(security, "sell", on_or_before):
+        for alloc in sale.get("against") or []:
+            if alloc.get("lot") in remaining:
+                remaining[alloc["lot"]] -= float(alloc.get("shares") or 0)
+    out = []
+    for lot in buys:
+        left = round(remaining[lot["id"]], 8)
+        out.append({**lot, "remaining": max(left, 0.0), "open": left > 0})
+    return out
+
+
+def cycles(security: dict, on_or_before=None) -> list[dict]:
+    """Every holding period, oldest first.
+
+    A security is not held once. It is bought, closed, and — when the
+    strategy says so again — bought back, and each of those round trips has
+    its own answer to "how did that go". A period opens at the purchase that
+    takes the position up from nothing and closes at the sale that returns it
+    to nothing; a period with shares still in it is open and has no closing
+    date.
+
+    Derived on read, exactly like the bucket, and for the same reason: a
+    stored boundary is a second opinion about a fact the lots already settle.
+    Walking the running total is also what makes a backdated re-entry behave
+    — a purchase dated *before* the exit means the position never reached
+    nothing, so it never was two periods, and no stored marker could have
+    known that in advance.
+    """
+    out: list[dict] = []
+    cur, held = None, 0.0
+    for lot in lots(security, None, on_or_before):
+        if lot.get("kind") == "buy":
+            if cur is None:
+                cur = {"seq": len(out) + 1, "opened": lot["date"],
+                       "closed": None, "open": True, "shares": 0.0,
+                       "buys": [], "sells": []}
+                out.append(cur)
+            cur["buys"].append(lot)
+            held = round(held + float(lot.get("shares") or 0), 8)
+        else:
+            # A sale with nothing open is refused at the door. It is skipped
+            # rather than trusted here, because inventing a period around it
+            # would put a holding on the record that never happened.
+            if cur is None:
+                continue
+            cur["sells"].append(lot)
+            held = round(held - float(lot.get("shares") or 0), 8)
+        cur["shares"] = max(held, 0.0)
+        if held <= 1e-9:
+            cur.update(closed=lot["date"], open=False, shares=0.0)
+            cur, held = None, 0.0
+    return out
+
+
+def open_cycle(security: dict, on_or_before=None) -> dict | None:
+    """The holding period currently in progress, or None when nothing is
+    held. There is at most one: shares are held or they are not."""
+    found = [c for c in cycles(security, on_or_before) if c["open"]]
+    return found[-1] if found else None
+
+
+def shares_held(security: dict, on_or_before=None) -> float:
+    return round(sum(l["remaining"] for l in open_lots(security, on_or_before)),
+                 8)
+
+
+def is_held(security: dict, on_or_before=None) -> bool:
+    return shares_held(security, on_or_before) > 0
+
+
+def cost_basis(security: dict, on_or_before=None):
+    """The average cost per share of what is still held, or None when
+    nothing is. Reporting only — it never reaches a strategy, because a rule
+    that fires on the distance from your own purchase price is anchoring.
+    """
+    left = [l for l in open_lots(security, on_or_before) if l["open"]]
+    total = sum(l["remaining"] for l in left)
+    if not total:
+        return None
+    return sum(l["remaining"] * float(l["price"]) for l in left) / total
+
+
+def opened_on(security: dict, on_or_before=None):
+    """The date of the oldest lot still open — how long this position has
+    been held, with a re-entry after a full exit counting from the re-entry
+    rather than from a lot that no longer exists."""
+    left = [l for l in open_lots(security, on_or_before) if l["open"]]
+    return left[0]["date"] if left else None
+
+
+def bucket_of(security: dict) -> str:
+    """Derived, never stored. No lots is an idea; open lots is a holding;
+    lots that are all closed is a previous holding."""
+    if not (security.get("lots") or []):
+        return "ideas"
+    return "holdings" if is_held(security) else "previous"
+
+
+def last_exit(security: dict) -> dict | None:
+    """The most recent sale, whatever it was.
+
+    Not "the exit" — a trim is a sale too, and a name held twice has ended
+    twice. Anything asking what a *holding* returned or how it ended wants
+    `cycles`, whose closing sale is the one that took the position to
+    nothing. Reading this as the exit is how a position closed in two
+    tranches came to report the smaller tranche's return as the whole.
+    """
+    sales = lots(security, "sell")
+    return sales[-1] if sales else None
+
+
+def has_history(security: dict) -> bool:
+    return bool(security.get("lots"))
+
+
+# -- reading a decision ------------------------------------------------------
+# Three host-owned facts, and nothing more: whether the strategy said capital
+# may go in, which of the figures it cited came out against, and which it
+# could not settle at all. All three are read off the contract's own
+# vocabulary, so this module needs no view about any measure or level.
+
+def _cite(item: dict) -> dict:
+    """How one cited figure is named in the record. A threshold that came
+    from a declared setting is named by that setting, because "your maximum
+    P/E kept being overridden and it kept working out" is the finding worth
+    surfacing; otherwise the subject itself is the name."""
+    test = item.get("test") or {}
+    src = test.get("threshold_from")
+    if src:
+        return {"key": f'{src["kind"]}:{src["id"]}', "label": src["label"]}
+    subj = item.get("subject") or {}
+    kind, sid = subj.get("kind"), subj.get("id")
+    return {"key": f"{kind}:{sid}" if sid else f'stated:{subj.get("label")}',
+            "label": subj.get("label") or sid or "an unnamed figure"}
+
+
+def _by_outcome(decision: dict, outcome: str) -> list[dict]:
+    evidence = ((decision or {}).get("reason") or {}).get("evidence") or []
+    out, seen = [], set()
+    for item in evidence:
+        if item.get("outcome") != outcome:
+            continue
+        c = _cite(item)
+        if c["key"] in seen:
+            continue
+        seen.add(c["key"])
+        out.append(c)
+    return out
+
+
+def is_commit(decision: dict | None) -> bool:
+    return bool(decision) and decision.get("render") == "commit"
+
+
+def override_kind(decision: dict | None) -> str | None:
+    """None when the strategy said commit. Otherwise which of the two kinds
+    of override this is — the distinction the learning loop depends on."""
+    if decision is None:
+        return "unevaluated"
+    if is_commit(decision):
+        return None
+    return "against" if decision.get("tier") == "position" else "without"
+
+
+# -- writing a lot -----------------------------------------------------------
+
+def _next_id(security: dict) -> tuple[str, int]:
+    """A lot id that is never reused, even after everything is closed. Sales
+    point at lots by id, so an id that came round again would silently make
+    an old sale draw on a new purchase."""
+    seq = int(security.get("lot_seq") or 0) + 1
+    security["lot_seq"] = seq
+    return f"l{seq}", seq
+
+
+def _snapshot(decision, values, value_sources, price_seen, evaluation) -> dict:
+    return {
+        "frozen": _stamp(),
+        # The decision, entire. Everything the screen showed — state, payload
+        # and the resolved reason with every figure it cited — is here, so
+        # the record explains itself with no strategy on disk to ask.
+        "decision": copy.deepcopy(decision),
+        "strategy": copy.deepcopy((decision or {}).get("strategy")),
+        "metrics": copy.deepcopy(values or {}),
+        "value_sources": copy.deepcopy(value_sources or {}),
+        # What was SEEN: the effective price (hand-entered over fetched),
+        # with its source and date, not just the hand-entered field.
+        "price": (price_seen or {}).get("value"),
+        "price_source": (price_seen or {}).get("source"),
+        "price_date": (price_seen or {}).get("date"),
+        "evaluation": copy.deepcopy(evaluation),
+    }
+
+
+def add_lot(security: dict, decision: dict, shares: float, price: float,
+            opened: str | None = None, override_reason: str = "",
+            values: dict | None = None,
+            value_sources: dict | None = None,
+            price_seen: dict | None = None,
+            evaluation: dict | None = None) -> dict:
+    """Record a purchase as its own lot, and freeze the decision that was on
+    screen for it.
+
+    A decision that does not say commit does not block anything. It gets
+    recorded alongside the purchase with the user's stated reason for going
+    ahead — including going ahead on a state nobody could evaluate, which is
+    its own kind of override and is kept apart from the other.
+
+    `values` are the merged values behind the decision — hand-entered over
+    computed — and `value_sources` says which side each came from, so the
+    frozen record can say so forever.
+
+    `evaluation` says which moment those belong to: basis "live" (the data on
+    screen right now) or "reconstructed" (rebuilt from what was observable on
+    a past purchase date), with `as_of` naming the day. The record must never
+    claim a verdict was seen live when it was rebuilt later.
+    """
+    shares, price = float(shares), float(price)
+    if shares <= 0:
+        raise ValueError("A purchase has to be more than zero shares.")
     values = values if values is not None else (security.get("metrics") or {})
-    result = evaluate_buy(values, profile)
     evaluation = copy.deepcopy(evaluation) if evaluation \
         else {"basis": "live", "as_of": _today()}
 
-    security["bucket"] = "holdings"
-    security["position"] = {
-        "shares": float(shares),
-        "cost_basis": float(cost),
-        "opened": opened or _today(),
-    }
-    security["entry_snapshot"] = {
-        "frozen": _stamp(),
-        "profile": {"file": profile.get("file"), "id": profile.get("id"),
-                    "name": profile.get("name"), "version": profile_version},
-        "metrics": copy.deepcopy(values),
-        "value_sources": copy.deepcopy(value_sources or {}),
-        # The snapshot records what was SEEN — the effective price (manual
-        # over fetched), with its source and date, not just the manual field.
-        "price": (price_seen or {}).get("value", security.get("price")),
-        "price_source": (price_seen or {}).get("source"),
-        "price_date": (price_seen or {}).get("date"),
-        "result": result,
-        "evaluation": evaluation,
+    lot_id, seq = _next_id(security)
+    lot = {
+        "id": lot_id,
+        "seq": seq,
+        "kind": "buy",
+        "date": opened or _today(),
+        "recorded": _stamp(),
+        "shares": shares,
+        "price": price,
+        "override": None,
+        "snapshot": _snapshot(decision, values, value_sources, price_seen,
+                              evaluation),
     }
 
-    if result["verdict"] != "buy":
-        failed = [m for c in result["causes"]
-                  if c["kind"] == "fail" for m in c["metrics"]]
-        missing = [m for c in result["causes"]
-                   if c["kind"] == "indeterminate" for m in c["metrics"]]
-        word = VERDICT_WORDS[result["verdict"]]
-        security["override"] = {
-            "date": security["position"]["opened"],
-            "verdict": word,
+    kind = override_kind(decision)
+    if kind is not None:
+        state = (decision or {}).get("state") or {}
+        lot["override"] = {
+            "date": lot["date"],
+            "kind": kind,
+            "state": state.get("name") or state.get("id") or "no verdict",
+            "rule": ((decision or {}).get("reason") or {}).get("rule"),
+            "summary": ((decision or {}).get("reason") or {}).get("summary"),
             "basis": evaluation["basis"],
             "as_of": evaluation["as_of"],
-            "profile": security["entry_snapshot"]["profile"],
-            "failed": failed,
-            "missing": missing,
+            "strategy": copy.deepcopy((decision or {}).get("strategy")),
+            "failed": _by_outcome(decision, "fail"),
+            "missing": _by_outcome(decision, "unknown"),
             "reason": (override_reason or "").strip() or "No reason given.",
         }
-        what = ("against signal" if result["verdict"] == "no_buy"
-                else "without a signal")
-        how = (f", reconstructed for {evaluation['as_of']} from the data "
-               "available by then"
-               if evaluation["basis"] == "reconstructed" else "")
-        add_note(security, f"Bought {what} ({word} under "
-                           f"{profile.get('name')}{how}). Stated reason: "
-                           f"{security['override']['reason']}")
-    else:
-        security["override"] = None
-    return security
+
+    security.setdefault("lots", []).append(lot)
+
+    if kind is None:
+        # The state can move between the preview and the commit — a fetch
+        # lands, the strategy is upgraded — and the user may already have
+        # written why they were going ahead against the old one. That
+        # sentence is theirs and is kept, rather than dropped because the
+        # answer improved while they were typing.
+        if (override_reason or "").strip():
+            add_note(security,
+                     "Recorded with the signal. The reason written while the "
+                     "verdict still read otherwise: "
+                     + override_reason.strip())
+        return lot
+
+    what = "against the signal" if kind == "against" else "without a signal"
+    how = (f", reconstructed for {evaluation['as_of']} from the data "
+           "available by then"
+           if evaluation["basis"] == "reconstructed" else "")
+    who = ((decision or {}).get("strategy") or {}).get("name") or "the strategy"
+    add_note(security,
+             f'Bought {what} ({lot["override"]["state"]} under '
+             f"{who}{how}). Stated reason: {lot['override']['reason']}")
+    return lot
 
 
-def close_position(security: dict, profile: dict | None, profile_version,
-                   governing: bool, reason: str, exit_price: float,
-                   exited: str | None = None, today: date | None = None,
-                   missing_profile_ref: dict | None = None,
-                   values: dict | None = None,
-                   histories: dict | None = None) -> dict:
-    """Close a position, keeping the ticker in the journal for tracking.
+# -- exits -------------------------------------------------------------------
 
-    profile is the lens the exit is judged under — the position's own entry
-    profile when it has one (governing=True), otherwise whatever lens the
-    user was looking through, labelled as such. Two absences are recorded
-    distinctly, never conflated: a position from before the profile system
-    has no governing profile at all, while a position whose governing profile
-    file is off disk at close time still names it (missing_profile_ref) and
-    records that no signal could be evaluated.
+def allocate(security: dict, shares: float, on_or_before=None) -> list[dict]:
+    """Which lots a sale of `shares` draws on, oldest first.
+
+    Oldest-first is the host's stated default, not a tax opinion: something
+    has to be proposed, and the alternative is asking a question most people
+    cannot answer about a single-lot position. A caller that knows what was
+    actually sold passes its own allocation instead, and the record keeps
+    whichever arrived.
+
+    Two clocks, deliberately. What a lot has *left* counts every sale ever
+    recorded, so no lot can go negative whichever order things were entered
+    in. What a lot is *eligible* for stops at the sale's own date, so a sale
+    dated in March cannot draw on shares bought in June.
     """
-    pos = security.get("position") or {}
-    cost = pos.get("cost_basis") or 0.0
-    held_pct = ((exit_price / cost) - 1) * 100 if cost else None
+    remaining = {l["id"]: l["remaining"] for l in open_lots(security)}
+    left, out = float(shares), []
+    for lot in lots(security, "buy", on_or_before):
+        if left <= 0:
+            break
+        take = min(remaining.get(lot["id"], 0.0), left)
+        if take <= 0:
+            continue
+        out.append({"lot": lot["id"], "shares": round(take, 8)})
+        left = round(left - take, 8)
+    return out
 
-    if profile is not None:
-        eval_sec = security if values is None else {**security, "metrics": values}
-        # histories carries the per-filing readings for breached thresholds so
-        # the signal frozen here agrees with what the sell watch showed — a
-        # confirmed breach must not read "unconfirmed" in the record merely
-        # because the close path forgot the filings.
-        state = evaluate_position(eval_sec, profile, today, histories=histories)
-        signal = SIGNAL_WORDS[state["overall"]]
-        rule_triggered = state["overall"] == "fired"
-        profile_ref = {"file": profile.get("file"), "id": profile.get("id"),
-                       "name": profile.get("name"), "version": profile_version}
-        is_governing = governing
-    elif missing_profile_ref is not None:
-        signal = "Profile not on disk"
-        rule_triggered = None
-        profile_ref = dict(missing_profile_ref)
-        is_governing = True
+
+def _check_allocation(security: dict, shares: float, against: list) -> None:
+    """Refuse an allocation that does not add up.
+
+    This is not a gate on a decision — nothing here asks whether selling was
+    wise. It is arithmetic: shares that were never recorded as bought cannot
+    be recorded as sold without every derived figure below becoming
+    fiction. The message says which purchase is missing, because that is the
+    fix.
+    """
+    available = {l["id"]: l["remaining"] for l in open_lots(security)}
+    total = 0.0
+    for alloc in against:
+        lot_id, n = alloc.get("lot"), float(alloc.get("shares") or 0)
+        if lot_id not in available:
+            raise ValueError(
+                f'This sale names lot "{lot_id}", which is not a recorded '
+                f"purchase of {security['ticker']}.")
+        if n <= 0:
+            raise ValueError("Each lot in a sale has to give up more than "
+                             "zero shares.")
+        if n > available[lot_id] + 1e-9:
+            raise ValueError(
+                f"That sale takes {n:g} shares from a lot holding "
+                f"{available[lot_id]:g}. Record the purchase those shares "
+                "came from first — the journal cannot sell shares it was "
+                "never told about.")
+        available[lot_id] -= n
+        total += n
+    if abs(total - float(shares)) > 1e-9:
+        raise ValueError(
+            f"The lots named give up {total:g} shares, but the sale is for "
+            f"{float(shares):g}.")
+
+
+def sell_lots(security: dict, decision: dict | None, reason: str,
+              shares: float, exit_price: float, exited: str | None = None,
+              against: list | None = None,
+              values: dict | None = None,
+              price_seen: dict | None = None,
+              evaluation: dict | None = None) -> dict:
+    """Record a sale against specific lots, keeping the ticker in the journal.
+
+    A partial sale leaves the position open and the remaining lots intact; a
+    sale of everything leaves a security with closed lots, which is what
+    makes it a previous holding and what a re-entry later reads against.
+
+    The decision frozen here is the one the journal's own strategy produced
+    at the moment of the sale — there is only ever one, because a journal has
+    one strategy and it does not change. Where the strategy could not be
+    asked at all (it is not installed on this machine), that absence is
+    recorded as itself rather than as a signal that read clear.
+    """
+    shares, exit_price = float(shares), float(exit_price)
+    if shares <= 0:
+        raise ValueError("A sale has to be more than zero shares.")
+    when = exited or _today()
+    held = shares_held(security)
+    if held <= 0:
+        raise ValueError(f"No shares of {security['ticker']} are recorded as "
+                         "held, so none can be sold.")
+    # Both bounds, in this order, because they answer different questions and
+    # the first one is the fix more often. What is *left* counts every sale
+    # ever recorded, so nothing can be sold twice. What was *held on the day*
+    # stops at the sale's own date, which is what a re-entry breaks apart: a
+    # journal holding a hundred shares bought back last year will happily
+    # accept a hundred-share exit backfilled into a period when ten were
+    # held, and every figure derived from that period is then fiction.
+    #
+    # Caught here rather than falling through to the allocation, so the most
+    # common ways to get this wrong get a message that names the fix instead
+    # of one about lots the user never saw.
+    if shares > held + 1e-9:
+        raise ValueError(
+            f"This journal holds {held:g} shares of {security['ticker']} and "
+            f"the sale is for {shares:g}. Record the purchase the extra "
+            "shares came from first — the journal cannot sell shares it was "
+            "never told about.")
+    then = shares_held(security, when)
+    if shares > then + 1e-9:
+        raise ValueError(
+            f"This journal held {then:g} shares of {security['ticker']} on "
+            f"{when} and the sale is for {shares:g}. A sale cannot take more "
+            "than was held on its own date — record the purchase those "
+            "shares came from first, or check the date.")
+    if against:
+        against = list(against)
     else:
-        signal, rule_triggered, profile_ref = "No governing profile", None, None
-        is_governing = False
+        against = allocate(security, shares, when)
+        # The two bounds above can both pass and still leave nothing to draw
+        # on: shares held on the sale's date, already spent by a sale recorded
+        # later. Re-entry is what puts a user in front of this — backfilling
+        # an exit into a period that is already accounted for. Said here, in
+        # terms of dates, rather than left to the allocation check, whose
+        # message is about lot ids nobody has seen.
+        taken = round(sum(a["shares"] for a in against), 8)
+        if taken < shares - 1e-9:
+            raise ValueError(
+                f"On {when} this journal held shares of "
+                f"{security['ticker']} that a later entry has already sold, "
+                f"so only {taken:g} of the {shares:g} can be drawn on. Check "
+                "the date, or record the purchase the rest came from.")
+    _check_allocation(security, shares, against)
+    for alloc in against:
+        bought = next((l for l in lots(security, "buy")
+                       if l["id"] == alloc["lot"]), None)
+        if bought and str(bought["date"])[:10] > str(when)[:10]:
+            raise ValueError(
+                f"This sale is dated {when} and draws on shares bought on "
+                f'{bought["date"]}. A sale cannot take shares that had not '
+                "been bought yet.")
 
-    security["bucket"] = "previous"
-    security["exit"] = {
-        "date": exited or _today(),
+    if decision is None:
+        signal, rule_triggered, strategy = "Strategy not installed", None, None
+    else:
+        state = decision.get("state") or {}
+        signal = state.get("name") or state.get("id") or "no verdict"
+        strategy = copy.deepcopy(decision.get("strategy"))
+        if decision.get("tier") != "position":
+            # No verdict was reached at all — the strategy could not be
+            # asked, or could not answer. That is an absence, and it is
+            # recorded as one. Calling it "no rule triggered this exit"
+            # would claim a signal was read and came back clear, which is
+            # the difference between a fact and a fabrication.
+            rule_triggered = None
+        else:
+            # An exit the strategy called for: it said to leave, in whole or
+            # in part. Everything else is an exit the user reached on their
+            # own, which is what the exit scorecard exists to measure.
+            rule_triggered = decision.get("render") in ("close", "reduce")
+
+    lot_id, seq = _next_id(security)
+    lot = {
+        "id": lot_id,
+        "seq": seq,
+        "kind": "sell",
+        "date": when,
+        "recorded": _stamp(),
+        "shares": shares,
+        "price": exit_price,
+        "against": against,
         "reason": reason,
-        "price": float(exit_price),
-        "return_pct": round(held_pct, 2) if held_pct is not None else None,
-        "profile": profile_ref,
-        "governing": is_governing,
         "signal_at_exit": signal,
         "rule_triggered": rule_triggered,
+        "strategy": strategy,
+        # A sale is always judged against the data on screen at the moment
+        # it is recorded — there is no as-of sell path — so the basis is
+        # stated rather than left out and read as unknown later.
+        "snapshot": _snapshot(
+            decision, values, None, price_seen,
+            copy.deepcopy(evaluation) if evaluation
+            else {"basis": "live", "as_of": _today()}),
     }
+    security.setdefault("lots", []).append(lot)
+
+    # Whether this sale trimmed or closed is a fact about the holding it
+    # ended, so it is read on the sale's own clock. Asking what is held
+    # *now* would call a backfilled exit a trim because the user has since
+    # bought back — putting a sentence in the append-only record that says
+    # the position stayed open when it did not.
+    partial = shares_held(security, when) > 0
     if rule_triggered is False:
-        add_note(security, f"Closed with no rule triggering the exit. "
-                           f"Signal at exit was {signal} under "
-                           f"{profile.get('name')}.")
-    elif rule_triggered is None and missing_profile_ref is not None:
-        add_note(security, f"Closed while its governing profile "
-                           f"({missing_profile_ref.get('name')}) was not on "
-                           "disk, so no signal could be evaluated.")
+        who = (strategy or {}).get("name") or "the strategy"
+        add_note(security, f"{'Trimmed' if partial else 'Closed'} with no "
+                           f"rule triggering it. {who} read {signal} at the "
+                           "time.")
     elif rule_triggered is None:
-        add_note(security, "Closed with no governing profile on record — "
-                           "the position predates the profile system.")
-    return security
+        add_note(security, f"{'Trimmed' if partial else 'Closed'} with no "
+                           f"verdict to go on — {signal}. No signal could be "
+                           "evaluated at the time, and that absence is on "
+                           "the record rather than papered over.")
+    return lot
+
+
+# -- returns -----------------------------------------------------------------
+# Every return says what it rests on, and absence never becomes zero. A lot
+# with shares still open cannot be scored without a current price, and a
+# position that silently returned 0% would be the most confidently wrong
+# number on the screen.
+
+def lot_return(security: dict, lot: dict, price) -> float | None:
+    """One acquisition's return, in percent, or None when it cannot be
+    computed honestly.
+
+    The realised part comes from the sales that drew on this lot, at the
+    price each of them got. The open part is marked at the price passed in.
+    A lot with shares still open and no price has no return.
+    """
+    cost = float(lot["shares"]) * float(lot["price"])
+    if cost <= 0:
+        return None
+    gain, sold = 0.0, 0.0
+    for sale in lots(security, "sell"):
+        for alloc in sale.get("against") or []:
+            if alloc.get("lot") != lot["id"]:
+                continue
+            n = float(alloc.get("shares") or 0)
+            gain += n * (float(sale["price"]) - float(lot["price"]))
+            sold += n
+    left = round(float(lot["shares"]) - sold, 8)
+    if left > 0:
+        if price is None:
+            return None
+        gain += left * (float(price) - float(lot["price"]))
+    return round(gain / cost * 100, 2)
+
+
+def _weighted(security: dict, buys: list[dict], price) -> float | None:
+    """Several acquisitions as one figure, weighted by what each cost.
+    Absent if any of them is, because a subset average presented as the whole
+    is a fabrication."""
+    total_cost, total_gain = 0.0, 0.0
+    for lot in buys:
+        r = lot_return(security, lot, price)
+        if r is None:
+            return None
+        cost = float(lot["shares"]) * float(lot["price"])
+        total_cost += cost
+        total_gain += cost * r / 100
+    if total_cost <= 0:
+        return None
+    return round(total_gain / total_cost * 100, 2)
+
+
+def cycle_return(security: dict, cycle: dict, price) -> float | None:
+    """What one holding period returned, weighted by what each purchase in it
+    cost.
+
+    This is the figure a round trip is judged by, and it is per period rather
+    than per security on purpose: a name bought, closed at a loss and bought
+    back is two trades, and one percentage covering both describes neither. A
+    closed period is entirely realised and needs no price; an open one is
+    marked at the price passed in, and is absent without one.
+    """
+    return _weighted(security, cycle.get("buys") or [], price)
+
+
+def position_return(security: dict, price) -> float | None:
+    """The security's return over its whole life — every lot it ever had,
+    across every holding period, weighted by what each one cost.
+
+    A lifetime figure, and only ever presented as one. Where the question is
+    about the position in front of you, `cycle_return` on the open period is
+    the honest answer; this one blends a finished trade into a live one and
+    would read as the current position's return if it were put in that
+    column.
+    """
+    return _weighted(security, lots(security, "buy"), price)
+
+
+def sale_return(security: dict, sale: dict) -> float | None:
+    """What the shares in one sale returned while they were held, weighted
+    across the lots it drew on."""
+    cost, proceeds = 0.0, 0.0
+    by_id = {l["id"]: l for l in lots(security, "buy")}
+    for alloc in sale.get("against") or []:
+        lot = by_id.get(alloc.get("lot"))
+        if lot is None:
+            return None
+        n = float(alloc.get("shares") or 0)
+        cost += n * float(lot["price"])
+        proceeds += n * float(sale["price"])
+    if cost <= 0:
+        return None
+    return round((proceeds / cost - 1) * 100, 2)
+
+
+def bought_again_after(security: dict, sale: dict) -> dict | None:
+    """The first purchase recorded after a sale, or None if the user never
+    bought the name again. Ordered by date and then by the order things were
+    entered, so a sale and a purchase on the same day read in the order they
+    happened.
+
+    Any purchase, not only one that reopened a closed position. Buying back
+    into a name you exited and adding after a trim are the same fact for this
+    question: from that point the price is moving on shares you chose to own,
+    so it is no longer telling you anything about the sale. What it is *not*
+    is proof that the position had closed — which is why nothing here or
+    downstream may call it "buying it back".
+    """
+    after = (str(sale.get("date") or "")[:10], int(sale.get("seq") or 0))
+    for lot in lots(security, "buy"):
+        if (str(lot.get("date") or "")[:10], int(lot.get("seq") or 0)) > after:
+            return lot
+    return None
+
+
+def since_sale(security: dict, sale: dict, price) -> dict:
+    """What the shares did after they were sold, over the window that is
+    honestly about the sale.
+
+    A closed position keeps being priced, because watching what happened next
+    is the only way to find out whether a sell rule works. But the window has
+    an end. Once the user bought the name again, the move from there belongs
+    to the shares they chose to own — running the window on to today would
+    credit the sell rule with a stretch spent holding, and a rule given the
+    credit for your own later purchase cannot be judged at all.
+
+    A window that ends at a purchase needs no price and no fetch: it ends at
+    what the user actually paid, which is a recorded fact rather than a
+    reconstruction. An open one is marked at the price passed in.
+
+    Every way this can fail to produce a figure produces an absence with its
+    own reason instead — including the two that look like numbers. A sale or a
+    purchase recorded at nothing is a real entry, not a missing one, but it
+    cannot stand for what the price was: a change measured from nothing has no
+    value, and free shares say nothing about the market. Reporting either as
+    -100% would put a fabricated figure into the evidence that judges the sell
+    rules, which is the one place it would be believed.
+
+    Returns the figure with the window it rests on, because "up 40% since you
+    sold" and "up 40% between selling and buying again" are different claims
+    and only one of them is true.
+    """
+    back = bought_again_after(security, sale)
+    end = {"until": "purchase", "date": back["date"],
+           "price": float(back["price"])} if back else \
+        {"until": "today", "date": None,
+         "price": None if price is None else float(price)}
+    sold_at = sale.get("price")
+    if sold_at is None:
+        return {**end, "pct": None,
+                "reason": "no sale price is on the record"}
+    if float(sold_at) <= 0:
+        return {**end, "pct": None,
+                "reason": "the sale is recorded at nothing, so what the price "
+                          "did against it cannot be expressed"}
+    if end["price"] is None:
+        return {**end, "pct": None,
+                "reason": "no current price is known for this security"}
+    if end["price"] <= 0:
+        return {**end, "pct": None,
+                "reason": f'the purchase on {end["date"]} that ends this '
+                          "window is recorded at nothing, so it cannot stand "
+                          "for what the price was that day"}
+    return {**end, "reason": None,
+            "pct": round((end["price"] / float(sold_at) - 1) * 100, 2)}
 
 
 # ------------------------------------------------------------------ analytics
-def override_scorecard(securities: list[dict]) -> dict:
+def override_scorecard(securities: list[dict], price_of) -> dict:
     """Did overriding the tool help or hurt? And is any rule miscalibrated?
 
-    Reconstructed overrides — backfilled purchases whose verdict was rebuilt
-    for the purchase date, never seen live — are counted, because the
-    decision was real, but their number is reported so the aggregate never
-    quietly mixes what the user faced with what was rebuilt later.
-    """
-    overrides, compliant, reconstructed = [], [], 0
-    for s in securities:
-        r = _realised(s)
-        if r is None:
-            continue
-        if s.get("override"):
-            overrides.append(r)
-            if s["override"].get("basis") == "reconstructed":
-                reconstructed += 1
-        else:
-            compliant.append(r)
+    Counted per lot, not per security: with several buys in one name, one
+    can be a compliant entry and the next an override, and collapsing them
+    would lose exactly the comparison the scorecard exists to make.
 
+    Both directions, always. Reporting only the user's error rate builds a
+    guilt machine that punishes being right, so the per-rule breakdown is
+    here at equal weight: if overriding one particular limit keeps working
+    out, that limit is wrong, not the person.
+
+    The two kinds of override are counted apart. "Bought against the signal"
+    is a decision taken in the face of a verdict; "bought without a signal"
+    is a decision taken where there was no verdict to face. Averaging them
+    would make a data gap look like defiance.
+    """
+    overrides, compliant = [], []
+    kinds = {"against": 0, "without": 0, "unevaluated": 0}
+    reconstructed = 0
     per_rule: dict[str, dict] = {}
     for s in securities:
-        ov = s.get("override")
-        r = _realised(s)
-        if not ov or r is None:
-            continue
-        for mid in ov.get("failed", []):
-            bucket = per_rule.setdefault(mid, {"n": 0, "wins": 0, "avg": 0.0, "returns": []})
-            bucket["n"] += 1
-            bucket["returns"].append(r)
-            if r > 0:
-                bucket["wins"] += 1
-    for mid, b in per_rule.items():
+        price = price_of(s)
+        for lot in lots(s, "buy"):
+            r = lot_return(s, lot, price)
+            ov = lot.get("override")
+            if ov:
+                kinds[ov.get("kind", "against")] = \
+                    kinds.get(ov.get("kind", "against"), 0) + 1
+                if ov.get("basis") == "reconstructed":
+                    reconstructed += 1
+            if r is None:
+                continue
+            if not ov:
+                compliant.append(r)
+                continue
+            overrides.append(r)
+            for cite in ov.get("failed", []):
+                b = per_rule.setdefault(
+                    cite["key"], {"label": cite.get("label") or cite["key"],
+                                  "n": 0, "wins": 0, "avg": 0.0,
+                                  "returns": []})
+                b["n"] += 1
+                b["returns"].append(r)
+                if r > 0:
+                    b["wins"] += 1
+    for b in per_rule.values():
         b["avg"] = round(sum(b["returns"]) / len(b["returns"]), 1)
         b.pop("returns")
 
     return {
         "override": _summarise(overrides),
         "compliant": _summarise(compliant),
+        "kinds": kinds,
         "reconstructed_overrides": reconstructed,
-        # If overrides on a specific rule keep working out, the rule is wrong,
-        # not the person. Surfacing this is the difference between a feedback
-        # loop and a guilt machine.
         "per_rule": per_rule,
     }
 
 
-def exit_scorecard(securities: list[dict]) -> dict:
-    """Group closed positions by why they were closed, and what happened after."""
+def exit_scorecard(securities: list[dict], price_of) -> dict:
+    """Group sales by why they were made, and what happened after. If one
+    reason keeps showing a strong return *after* the sale, that is a finding
+    no tool that drops the ticker at exit can ever produce.
+
+    Counted per sale, not per holding period: the reason is given at the
+    sale, and a position trimmed on a risk limit and then closed on a broken
+    thesis gave two different answers that a per-period figure would have to
+    pick between. What happened after is windowed per sale for the same
+    reason — each one is asked about its own aftermath, and a sale the user
+    later bought against is asked only about the stretch before that.
+    """
     out: dict[str, dict] = {}
     for s in securities:
-        ex = s.get("exit")
-        if not ex:
-            continue
-        b = out.setdefault(ex["reason"], {"n": 0, "avg_held": 0.0, "avg_after": 0.0,
-                                          "_held": [], "_after": []})
-        b["n"] += 1
-        if ex.get("return_pct") is not None:
-            b["_held"].append(ex["return_pct"])
-        after = _since_exit(s)
-        if after is not None:
-            b["_after"].append(after)
+        price = price_of(s)
+        for sale in lots(s, "sell"):
+            b = out.setdefault(sale.get("reason") or "Not stated",
+                               {"n": 0, "avg_held": 0.0, "avg_after": 0.0,
+                                "bought_again": 0, "_held": [], "_after": []})
+            b["n"] += 1
+            held = sale_return(s, sale)
+            if held is not None:
+                b["_held"].append(held)
+            after = since_sale(s, sale, price)
+            if after["until"] == "purchase":
+                b["bought_again"] += 1
+            if after["pct"] is not None:
+                b["_after"].append(after["pct"])
     for b in out.values():
-        b["avg_held"] = round(sum(b["_held"]) / len(b["_held"]), 1) if b["_held"] else None
-        b["avg_after"] = round(sum(b["_after"]) / len(b["_after"]), 1) if b["_after"] else None
-        b.pop("_held"); b.pop("_after")
+        # Each average says what it rests on. The group count is a true
+        # figure on its own ("you panicked three times"), but presenting an
+        # average of one beside a count of three would let absence pass for
+        # a settled answer. `bought_again` is on the same footing: it says
+        # how many of these windows ended at a later purchase rather than at
+        # today, because otherwise the average silently changes meaning.
+        b["n_held"], b["n_after"] = len(b["_held"]), len(b["_after"])
+        b["avg_held"] = round(sum(b["_held"]) / len(b["_held"]), 1) \
+            if b["_held"] else None
+        b["avg_after"] = round(sum(b["_after"]) / len(b["_after"]), 1) \
+            if b["_after"] else None
+        b.pop("_held")
+        b.pop("_after")
     return out
-
-
-def _realised(s: dict):
-    ex = s.get("exit")
-    if ex and ex.get("return_pct") is not None:
-        return ex["return_pct"]
-    pos, price = s.get("position"), s.get("price")
-    if pos and price and pos.get("cost_basis"):
-        return round(((price / pos["cost_basis"]) - 1) * 100, 2)
-    return None
-
-
-def _since_exit(s: dict):
-    ex, price = s.get("exit"), s.get("price")
-    if ex and price and ex.get("price"):
-        return round(((price / ex["price"]) - 1) * 100, 2)
-    return None
 
 
 def _summarise(returns: list[float]) -> dict:

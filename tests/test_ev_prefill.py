@@ -8,9 +8,10 @@ nothing has been fetched. A typo in a typed field becoming a stored
 assumption is the failure this whole surface exists to remove.
 """
 
-from conftest import dur, filing, inst, balance_face
+import pytest
+from conftest import balance_face, dur, filing, inst, journal_for
 
-from engine import portfolio, price_store, facts_store, store
+from engine import facts_store, journals, price_store
 from engine.compute import Ctx, shares_outstanding_result, ttm_flow_result
 
 import app as app_mod
@@ -66,20 +67,39 @@ class TestComputeHelpers:
         assert r["status"] == "absent"
 
 
+@pytest.fixture
+def journal(strategies):
+    strategies("verdicts")
+    return journal_for("verdicts", "Valuations")[0]
+
+
+def _open_journal():
+    return journals.load(journals.resolve_open())
+
+
+def _seed_security(cik=None, metrics=None, price=None):
+    """A journal holding one security, through the same Api the UI calls."""
+    api = app_mod.Api()
+    assert api.add_security("SYN", "Synthetic Co")["ok"]
+    doc = _open_journal()
+    s = doc["securities"][0]
+    if cik:
+        s["cik"] = cik
+    if metrics:
+        s["metrics"] = dict(metrics)
+    if price is not None:
+        s["price"] = price
+    journals.save(doc)
+    return api
+
+
 class TestEvPrefillApi:
+    @pytest.fixture(autouse=True)
+    def _journal(self, journal):
+        return journal
+
     def _seed(self, cik, metrics=None, price=None):
-        api = app_mod.Api()
-        s = portfolio.new_security("SYN", "Synthetic Co")
-        if cik:
-            s["cik"] = cik
-        if metrics:
-            s["metrics"] = dict(metrics)
-        if price is not None:
-            s["price"] = price
-        doc = store.load("securities.json")
-        doc["securities"] = [s]
-        store.save("securities.json", doc)
-        return api
+        return _seed_security(cik, metrics, price)
 
     def _company(self, cik):
         facts_store.save_filing(cik, _one_filing())
@@ -140,11 +160,15 @@ class TestEvPrefillApi:
 
 
 class TestValuationDefaults:
+    @pytest.fixture(autouse=True)
+    def _journal(self, journal):
+        return journal
+
     def test_saves_the_three_defaults(self):
         api = app_mod.Api()
         r = api.save_valuation_defaults(10.0, 2.0, 25.0)
         assert r["ok"], r
-        settings = store.load("settings.json")
+        settings = _open_journal()["settings"]
         assert settings["discount_rate"] == 10.0
         assert settings["terminal_growth"] == 2.0
         assert settings["margin_of_safety"] == 25.0
@@ -156,21 +180,35 @@ class TestValuationDefaults:
         assert "exceed" in r["error"]
 
     def test_gibberish_is_refused(self):
+        """Nothing half-written: the journal keeps the defaults it shipped
+        with rather than a partly-applied set."""
         api = app_mod.Api()
-        assert app_mod.Api().save_valuation_defaults("nine", 2.5, 30.0)["ok"] \
-            is False
-        # nothing was half-written
-        settings = store.load("settings.json")
-        assert settings["discount_rate"] == 9.0
+        assert api.save_valuation_defaults(11.0, 2.0, 25.0)["ok"]
+        assert api.save_valuation_defaults("nine", 2.5, 30.0)["ok"] is False
+        settings = _open_journal()["settings"]
+        assert settings["discount_rate"] == 11.0
+
+    def test_two_journals_keep_their_own_assumptions(self, strategies):
+        """A discount rate is a standing assumption of one journal, not of
+        the machine."""
+        from engine import strategy_loader
+        first = journals.resolve_open()
+        app_mod.Api().save_valuation_defaults(10.0, 2.0, 25.0)
+        record = strategy_loader.discover()[0]["verdicts"]
+        second = journals.create("Other", record)
+        journals.set_open(second["id"])
+        app_mod.Api().save_valuation_defaults(14.0, 3.0, 40.0)
+        assert journals.load(first)["settings"]["discount_rate"] == 10.0
+        assert journals.load(second["id"])["settings"]["discount_rate"] == 14.0
 
 
 class TestEvSourcesRecord:
+    @pytest.fixture(autouse=True)
+    def _journal(self, journal):
+        return journal
+
     def test_compute_ev_stores_sources_for_known_inputs_only(self):
-        api = app_mod.Api()
-        s = portfolio.new_security("SYN", "Synthetic Co")
-        doc = store.load("securities.json")
-        doc["securities"] = [s]
-        store.save("securities.json", doc)
+        api = _seed_security()
         inputs = {"price": 100, "fcf_ttm": 150, "shares": 1000,
                   "discount_rate": 9, "terminal_growth": 2.5}
         sources = {"price": {"used": "fetched", "asof": "2026-08-01"},
@@ -178,7 +216,7 @@ class TestEvSourcesRecord:
                    "fcf_ttm": "not-a-dict"}
         r = api.compute_ev("SYN", "reverse_dcf", inputs, sources)
         assert r["ok"], r
-        stored = store.load("securities.json")["securities"][0]["ev"]
+        stored = _open_journal()["securities"][0]["ev"]
         assert stored["sources"] == {"price": {"used": "fetched",
                                                "asof": "2026-08-01"}}
         # recompute still works from the stored record

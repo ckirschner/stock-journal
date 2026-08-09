@@ -1,8 +1,8 @@
 # Ledger
 
-A portfolio journal that checks your holdings against rules you wrote, so the
-decision gets made once, calmly and in advance, instead of every time you look
-at a price.
+An investment journal. You commit to a strategy in advance; the tool tells
+you what that strategy says about a security today, and records what you
+actually did.
 
 It never places a trade and holds no broker credentials.
 
@@ -13,14 +13,290 @@ pip install -r requirements.txt
 python app.py
 ```
 
-On first run the app creates a data directory outside the project and copies an
-empty template into it. Open the **Data** tab and choose *Load sample data* to
-see the thing populated; *Clear everything* when you're done looking.
+On first run there are no journals. Create one, choose the strategy it will
+be judged by, and add a security.
 
 ```
-python app.py --reset     start over from the template
+python app.py --reset     delete every journal and start empty
 python app.py --debug     open the web inspector
 ```
+
+## One journal, one strategy
+
+A journal is created against one strategy and stays there. Trading two
+strategies means two journals, the way it would mean two accounts.
+
+That is not a limitation to be worked around. Choosing a strategy per
+security, or per trade, is picking the rule that endorses what you already
+wanted, and it makes the arithmetic incoherent — a sell rule cannot mean
+anything if the strategy that wrote it can be swapped out at the moment it
+fires.
+
+Each journal owns its own lots, notes, snapshots, valuation assumptions and
+the answers its strategy asked for. Fetched filings and prices are shared by
+every journal, because they are public facts about a company rather than part
+of anyone's record. Your free cash and everything derived from it stay inside
+the journal, which lives outside this repository and is only ever copied out
+by an export you ask for.
+
+## How a verdict works
+
+The host fetches, computes and presents. A strategy consumes what the host
+computed and returns **one state** — buying, holding, adding, trimming and
+exiting are outcomes of a single decision, not separate systems that each
+reach their own conclusion.
+
+Every state a strategy declares maps onto one of six render types the host
+owns, which is how the host can sort, count and present a verdict whose
+meaning it does not know:
+
+| render    | means                                              |
+|-----------|----------------------------------------------------|
+| `commit`  | capital may go in — carries how much               |
+| `reduce`  | partial exit — carries the level to reduce to      |
+| `close`   | full exit — carries the date it is due             |
+| `hold`    | no action                                          |
+| `blocked` | a decision is owed from you before any verdict     |
+| `unknown` | not enough data to say                             |
+
+The last two are about the evaluation, not the security, and are never
+averaged in with the others: "4 of 12 are hold" is a portfolio fact, "4 of 12
+cannot be evaluated" is a data problem.
+
+A verdict arrives with the reasoning attached. The strategy says what it
+looked at and what it required; the **host** answers with the figure, its
+label and unit, whether it was absent and why, and how the comparison came
+out. So a strategy can never misquote the host's own numbers — it never
+quotes them at all — and can never claim a pass on a value that was absent.
+
+## What a journal tells its strategy
+
+Two kinds of thing, and the difference is where the default comes from.
+
+**Settings** are numbers the strategy has an opinion about and ships a default
+for — a position cap, a required return. **Answers** are facts about your
+account that no strategy could guess: how much free cash you have, how you
+are trading right now. The test is whether the strategy can ship a sensible
+default. It has a view about a 5% position cap; it can have none about your
+balance.
+
+A strategy declares the answers it needs, and the setup screen is generated
+from that declaration. A journal only ever asks for the fields its own
+strategy uses; there is no list of known settings anywhere in the interface.
+A declared field can be a number, a fixed set of choices, or a question that
+only appears once another one is answered a particular way, and it can be
+bounded by another field — "the cash you keep back" can never exceed the cash
+you have.
+
+**Both are editable after the journal is created**, on one screen, and both
+are recorded. Changing a setting changes what the strategy demands, so it
+goes on the rule-change record and asks you to write down why. Changing an
+answer updates a fact, so it goes on its own dated record and asks for
+nothing — your cash balance moving is not a rule being retuned.
+
+### The account, and why it is derived
+
+An answer can carry a **role**: a name from the host's own short list saying
+what the figure is. Free cash is the only one. Once a journal has it, the
+host reports free cash, the account value and every position's weight; until
+then those read absent, with the reason naming the question nobody asked.
+
+The account value is *not* something you type. It is free cash plus the
+market value of every holding, because that is a figure the tool can reach —
+and a number you typed would let two answers disagree with nothing to say
+which was wrong. One unpriced holding makes the whole total absent rather
+than understating it, since a missing price treated as zero would quietly
+inflate every weight measured against it.
+
+The host reports the figure and stops there. Whether a weight is too high is
+a strategy's opinion, and appears nowhere in the host.
+
+## Writing a strategy
+
+A strategy is a directory under `strategies/`:
+
+```
+strategies/<name>/
+  strategy.py     STRATEGY (what it declares) and decide(ctx) (what it does)
+  values.yaml     shipped defaults for its declared values, with a version
+  <reference>     any static data it ships — loaded by the host, never by it
+```
+
+Strategies are discovered, not registered: adding one means adding a
+directory. One that fails to load is skipped with a legible reason and does
+not prevent the others from loading.
+
+A strategy declares its identity, the host contract version it speaks, the
+version of its logic, the version of its values, the settings it ships and
+the answers it needs from you. It receives one plain dict and returns one
+plain dict. It never fetches, never reaches the stores, never opens a file,
+and never invents vocabulary — an undeclared state, an unknown payload key,
+a render type or an input role of its own devising is an error in place.
+Anything it needs that the host does not offer is a request against the
+host, not something to work around.
+
+`engine/contract.py` is the full specification and is written to be read.
+
+**`strategies/proof/` is a scaffold, not a strategy.** It proves the boundary
+carries data both ways: it reads one measure, always holds, and holds no view
+about any security. Real strategies are being ported from the rulesets kept
+in `dev_reference_docs/legacy-profiles/`; until they land, the app produces
+only the scaffold's verdicts.
+
+### Changing what a strategy demands
+
+Any change to what a strategy demands is detected and recorded on every
+journal it governs, whether it came through this app or from editing a file
+directly — rules that can be quietly retuned are not rules, and the retuning
+always happens at the moment it is most tempting.
+
+What the record can *say* depends on what changed. A declared value is
+recorded as a before and after, because the number means something on its
+own, and you are asked to write down why. A change to logic cannot be, so the
+record carries the author's own changelog line — which is why the host
+refuses a version that does not say what changed.
+
+A journal's stamp holds the resolved values themselves, not only their
+version number, so a threshold edited in place with the version left alone is
+caught anyway. That case is reported as the louder one it is.
+
+## The parts worth knowing about
+
+### A position is its lots, and nothing else
+
+A position is not a running total that gets updated. It is a list of **lots**
+— one entry per purchase and one per sale, appended in the order they were
+recorded and never edited afterwards. How many shares you hold, what the
+average cost was, what each lot returned, and whether a security is a
+holding, a previous holding or a candidate are all derived from that list
+every time they are read.
+
+That is append-only applied one level down: a sale that reduced the purchase
+it drew from would be rewriting what was bought. Instead a sale names how
+many shares it took from each lot, oldest first by default, and the lot it
+drew on stays exactly as recorded. So several buys, a partial sale that
+leaves the rest untouched, and buying back in after a full exit are all the
+same operation — one more entry.
+
+A sale of shares the journal never saw is refused, with the message naming
+the fix. That is arithmetic, not a gate: nothing here asks whether selling
+was wise, but shares that were never recorded as bought cannot be recorded as
+sold without every figure derived below becoming fiction. Both bounds are
+checked — what is left of the lots, and what was held on the sale's own date
+— because a name bought back last year would otherwise accept an exit
+backfilled into a period when far less was held.
+
+### A security is held more than once, and each time is its own trade
+
+Buy, close, buy again: that is two **holding periods**, and the split matters
+because most questions are about one of them rather than about the ticker.
+What the position in front of you has returned, what a round trip made, how
+long you have held it and what a holding cost are all per period. Periods are
+derived by walking the lots — a period opens at the purchase that takes the
+position up from nothing and closes at the sale that returns it to nothing —
+so a purchase entered later but dated before the exit correctly means the
+position never closed at all, which no marker written at exit time could have
+known.
+
+Two figures deliberately are not per period. **Overrides are counted per
+purchase**, because one buy in a name can be compliant and the next an
+override. **Exits are grouped per sale**, because the reason is given at the
+sale, and a position trimmed on a risk limit and closed on a broken thesis
+gave two different answers.
+
+**Return since exit stops when you buy again.** A closed position keeps being
+priced, because watching what happens next is the only way to find out
+whether a sell rule works — but once you own the name again, the move from
+there is yours. Carrying the window on to today would credit the sell rule
+with a stretch you spent holding, and a rule given credit for your own later
+buy cannot be judged at all. Buying back after an exit and adding after a
+trim end the window for the same reason, so nothing calls it "buying it
+back" — the second one never closed the position. A window that ends at a
+purchase ends at the price you actually paid, so it needs no fetch and is
+exact; every figure says which window it rests on, and a sale or a purchase
+recorded at nothing produces a stated absence rather than a confident −100%.
+
+**Cost basis is reporting only, structurally.** It is on every screen and in
+the scorecards, and it is not in what a strategy receives at all. A rule that
+fires on the distance from your own purchase price is anchoring — it makes
+the same company a buy for one person and a sell for another on the same day,
+and averaging down is that bias in its purest form. Market value and weight
+survive because they are price × shares, which is a fact about today.
+
+### Entry snapshots are frozen
+
+When you record a purchase, the whole decision is written once and never
+recomputed: the state, the payload, the rule that produced it, and every
+figure it cited with what was required and how the comparison came out. If it
+were recomputed, restated filings and a retuned strategy would quietly
+rewrite history, and the journal would lose the only thing that makes it a
+journal. Each lot carries its own, so the detail page shows what was on
+screen at every entry beside today's verdict — you read the thesis holding or
+decaying rather than just a colour.
+
+### Buying against the signal is recorded, not blocked
+
+The tool can't stop you and shouldn't try. It captures the state, the rule
+behind it, which cited figures came out against, and your written reason for
+going ahead.
+
+Two kinds of override are kept apart, because they are different decisions:
+going ahead **against** a verdict, and going ahead **without** one where the
+strategy could not reach a verdict at all. Averaging them would make a gap in
+the data look like defiance.
+
+The per-rule breakdown is the part that earns its keep. If overriding one
+particular limit keeps working out, that limit is miscalibrated, not you.
+
+### Exits are grouped by reason
+
+Closed positions keep getting priced. If *Panic* keeps showing a strong
+return *after* you sold, that is a finding you would never get from a tool
+that drops the ticker the day you exit.
+
+### Expected value is computed, never typed
+
+There is no target price field anywhere. You enter assumptions and the number
+is solved for, so when the estimate turns out wrong you can see *which
+assumption* was wrong.
+
+Reverse DCF is the default. It solves for the growth rate today's price
+already requires, which is a far easier question to answer honestly than
+"what is this worth?". Scenario weighting takes bear, base and bull with
+probabilities that must total 100%, and makes you enter the bear case first.
+Owner earnings capitalises normalised cash flow at your discount rate, then
+takes a required discount off the result.
+
+### Fetched data never outranks you
+
+**Fetch data** on a security pulls the company's full filing history from SEC
+EDGAR (raw reported figures, per filing, stored exactly as tagged) and its
+daily price history from Tiingo (as-traded closes plus split/dividend events
+— never a pre-adjusted series, because sources rewrite adjusted history
+retroactively). Every measure the bank can compute from that is computed on
+the fly; nothing derived is ever saved, and a hand-entered value always wins
+over a computed one, visibly.
+
+A measure that cannot be computed is absent with the reason, in place: source
+doesn't carry it, the mapping is ambiguous, a restatement makes the window
+mix accounting bases, or the data simply hasn't been fetched. Absence is
+never zero. Multi-year windows refuse to mix accounting bases by construction
+— a five-year CAGR spliced across a restatement is arithmetic on two
+different definitions, so it reports why it can't compute instead.
+
+Fetching happens only when you press the button. The SEC requires every
+automated tool to identify itself (name + monitored email — set it on the
+Data tab); prices need your own free Tiingo key. Each 10-K's price × shares
+is cross-checked against the company's own reported public float, which
+catches adjusted-price, split-basis, currency and share-class errors in one
+comparison.
+
+### A purchase is judged by the data of its date
+
+Record a purchase with a past date and the verdict is rebuilt from what was
+observable then — filings filed by that day, that day's close — and is
+labelled a reconstruction everywhere it appears. Hand-entered values carry no
+date, so they participate and the record says they were undated.
 
 ## Where your data lives
 
@@ -34,136 +310,41 @@ Never in the project folder.
 
 Set `LEDGER_DATA` to move it, onto a synced drive for instance.
 
-Cloning or pushing this repository can never carry your positions, notes or
-ideas with it: `.gitignore` excludes every data path, and only the empty
-template ships with the code. Back up with **Data → Export**, which writes one
-timestamped JSON file you can put wherever you like.
+```
+journals/<id>/journal.json   one journal, whole, written atomically
+local/                       the API key and the SEC contact — never exported
+facts/ prices/ cache/        fetched public data, shared by every journal
+```
 
-## How the verdict works
-
-Rules live in **profiles** — YAML files in your data directory, one lens per
-strategy. A profile references entries in the **metric bank**
-(`config/metric-bank.yaml`), which defines what each value *is* and holds no
-thresholds; every level, tier and rollup rule belongs to the profile. Four
-profiles ship as editable defaults. Switching the lens re-reads the same data
-through a different profile, instantly.
-
-The buy verdict is three-valued, per the profile's own rollup:
-
-1. Any **required** entry red → No buy.
-2. Not enough **core** entries green → No buy.
-3. If grey entries — no value recorded, or a value that isn't meaningful for
-   this company — could still change the outcome → Can't say. Grey propagates;
-   it is never a pass and never a failure.
-4. Otherwise → Buy. **Bonus** entries only ever add to a score.
-
-Buy rules and sell rules are not the same thing. A holding is watched against
-its profile's *sell* thresholds, and most sell breaches need the breach on
-consecutive filings before they count — the tool reports a first-reading
-breach as *unconfirmed* rather than firing, because panicking you out on one
-quarter's noise is the exact failure the confirmation exists to prevent.
-Confirmation is checked against the stored filings themselves: the breach must
-appear on the required run of reports that actually brought new numbers for
-that metric (only the report that first delivered each period counts — a
-re-filing of a period already counted adds nothing — and a report that
-can't be read pauses the count: it neither confirms nor resets). A breach in
-progress says how many reports it has, how many it needs, and when it could
-next be confirmed. For metrics built on annual figures that run counts annual
-reports, so confirmation can genuinely take a year or more — the watch says
-so rather than hiding it. The position clocks (Graham and Discount Closure
-sell on a 24-month calendar) need no filing history and fire outright.
-
-## The parts worth knowing about
-
-### Entry snapshots are frozen
-
-When you record a purchase, every metric value, the verdict, and the profile
-(with its version) that produced it are written once and never recomputed. If
-they were recomputed, restated filings and amended rules would quietly rewrite
-history, and the journal would lose the only thing that makes it a journal.
-The detail page shows entry → now for every metric, both sides labelled with
-the profile that produced them, so you read the thesis holding or decaying
-rather than just a colour.
-
-### Buying against the signal is recorded, not blocked
-
-The tool can't stop you and shouldn't try. It captures what the rules said,
-which rules failed, and your written reason for going ahead. Previous holdings
-then compares override trades against compliant ones.
-
-The per-rule breakdown is the part that earns its keep. If overriding one
-particular rule keeps working out, that rule is miscalibrated, not you. Widen
-it, and write down why.
-
-### Exits are grouped by reason
-
-Closed positions keep getting priced. If *Panic* keeps showing a strong return
-*after* you sold, that is a finding you would never get from a tool that drops
-the ticker the day you exit.
-
-### Expected value is computed, never typed
-
-There is no target price field anywhere. You enter assumptions and the number
-is solved for, so when the estimate turns out wrong you can see *which
-assumption* was wrong.
-
-Reverse DCF is the default. It solves for the growth rate today's price already
-requires, which is a far easier question to answer honestly than "what is this
-worth?". Scenario weighting takes bear, base and bull with probabilities that
-must total 100%, and makes you enter the bear case first. Owner earnings
-capitalises normalised cash flow at your discount rate, then takes a required
-discount off the result.
-
-### Fetched data never outranks you
-
-**Fetch data** on a security pulls the company's full filing history from SEC
-EDGAR (raw reported figures, per filing, stored exactly as tagged) and its
-daily price history from Tiingo (as-traded closes plus split/dividend events —
-never a pre-adjusted series, because sources rewrite adjusted history
-retroactively). Every metric the bank can compute from that is computed on the
-fly; nothing derived is ever saved, and a hand-entered value always wins over
-a computed one, visibly — the computed value stays on screen beside it.
-
-An entry that cannot be computed is absent with the reason, in place: source
-doesn't carry it, the mapping is ambiguous, a restatement makes the window
-mix accounting bases, or the data simply hasn't been fetched. Absence is never
-zero. Multi-year windows refuse to mix accounting bases by construction — a
-five-year CAGR spliced across a restatement is arithmetic on two different
-definitions, so it reports why it can't compute instead.
-
-Fetching happens only when you press the button. The SEC requires every
-automated tool to identify itself (name + monitored email — set it on the
-Data tab); prices need your own free Tiingo key. Each 10-K's price × shares is
-cross-checked against the company's own reported public float, which catches
-adjusted-price, split-basis, currency and share-class errors in one
-comparison; the result is on each security's Data coverage section.
-
-### Profile changes are versioned, even hand-edits
-
-Profiles are edited by hand, so changes happen outside the app. On every load
-the app compares each profile against the last version it recorded; any change
-is appended to an append-only history immediately — timestamped, with a full
-snapshot and the exact lines that moved — and the app asks for a written
-reason, loudly, until one is given. Reasons are write-once. Open positions
-record the profile and version they were opened under. Without this you can
-rewrite the rules to justify holding a loser and never notice you did it.
+Cloning or pushing this repository can never carry your journals with it:
+`.gitignore` excludes every data path and nothing personal is written under
+the project root at runtime. Back up with **Data → Export**, which writes one
+timestamped JSON file containing every journal. Your API key and SEC contact
+are not in it and cannot be — the exportable set is the journals directory,
+and neither of them lives there.
 
 ## Layout
 
 ```
 app.py                    pywebview window + the JS-facing API
-config/metric-bank.yaml   what every value IS — no thresholds live here
+config/metric-bank.yaml   what every measure IS — no thresholds live here
 config/concept-map.yaml   how bank inputs resolve onto XBRL concepts — the
                           tag-selection judgement, as reviewable data
+strategies/               one directory per strategy; discovered, not listed
 engine/                   no UI imports live here
-  profiles.py             loads the bank, resolves profiles against it
-  evaluate.py             the verdict: buy tiers, sell watch, clock, flags
-  profile_history.py      append-only version history for hand-edited profiles
-  migrate.py              one-time move from the retired metric set to the bank
-  expected_value.py       the three EV calculators
-  portfolio.py            snapshots, override log, scorecards
-  store.py                JSON persistence, atomic writes
+  contract.py             the host/strategy boundary: what a strategy
+                          declares, receives and must return
+  context.py              what a strategy receives, built per security
+  strategy_loader.py      discovery, loading, and refusing a bad bundle
+  strategy_values.py      the declared-values resolution chain
+  journals.py             the journal collection, the rule-change record and
+                          the record of answers you changed
+  bank.py                 the metric bank
+  portfolio.py            lot history, snapshots, the override log,
+                          scorecards
+  store.py                data paths and the two atomic primitives
   backup.py               export / import
+  expected_value.py       the three EV calculators
   gateway.py              the edgartools boundary — nothing else imports it
   facts_store.py          raw filing facts, append-only, keyed by CIK
   price_store.py          as-traded prices + adjustment events, never adjusted
@@ -171,52 +352,53 @@ engine/                   no UI imports live here
   tickermap.py            SEC ticker→CIK snapshots, diffed for renames/reuse
   concept_map.py          resolves bank inputs from one filing's facts
   periods.py              fiscal years, TTM, basis-consistent windows
-  compute.py              every computed bank entry, from raw facts on the fly
+  compute.py              every computed bank measure, from raw facts
   crosscheck.py           price × shares vs public float
   fetch.py                the explicit-action fetch orchestrator
   dataview.py             computed values joined under hand-entered ones
+  secrets.py              the credential store and machine-local settings
 ui/                       index.html, app.css, app.js
-data.template/            what gets copied on first run, incl. profiles/
 tests/fixtures/           hand-read ground truth + recorded extractions
-tools/make_sample.py      regenerates the sample set
+dev_reference_docs/legacy-profiles/
+                          the retired rulesets, kept as source material for
+                          authoring strategies. Nothing reads them.
 ```
 
-The engine is plain Python over plain dicts and imports nothing from the UI, so
-the screening funnel can `from engine import evaluate` rather than
-reimplementing the scoring.
+The engine is plain Python over plain dicts and imports nothing from the UI,
+so the screening funnel can consume the same contract rather than
+reimplementing scoring.
 
-## Adding a metric
+## Adding a measure
 
 Add an entry to `config/metric-bank.yaml` — id, label, unit, format,
 derivation and the plain-language explanation are all required; a bare number
 with no explanation is incomplete, not a follow-up ticket. The UI renders
-whatever the bank and the profiles hand it; there is no view code to change.
+whatever the bank and the strategy hand it; there is no view code to change.
 
-A bank entry does nothing until a profile references it with a threshold.
-That is the intended behaviour: a new metric shouldn't silently start scoring
-positions you opened before it existed, and the level it should sit at is a
-strategy decision that belongs in the profile, with a written reason.
+A bank entry does nothing until a strategy reads it. That is intended: a new
+measure shouldn't silently start scoring positions you opened before it
+existed, and the level it should sit at is a strategy's decision.
 
-## Data providers
+## Tests
 
-Nothing touches the network yet. Metrics are entered by hand.
+```
+python -m pytest
+```
 
-`engine/providers/base.py` defines the interface. For fundamentals, use SEC
-EDGAR's XBRL `companyfacts` API: free, no key, and authoritative. It only
-reaches back to roughly 2009–2011, when the mandate phased in, so a 15-year
-history sits right at the edge of what's actually available. For prices,
-yfinance is fine. It is an unofficial scrape and will break periodically, which
-is why fundamentals should never depend on it.
+The suite pins the behaviours that would fail *silently* — history
+immutability, evaluation correctness, absence handling, atomic persistence,
+and the rule-change record. A guarantee asserted in prose decays; one with a
+failing test does not.
 
-A provider must **omit** metrics it has no value for rather than returning
-zero. Absent renders grey; a zero renders as a confident failure.
+One test renders every screen under Node with a stub DOM
+(`tests/test_view_smoke.py`); it is skipped where Node is not installed.
 
 ## Packaging to an EXE
 
 ```
 pip install pyinstaller
 pyinstaller --noconfirm --windowed --name Ledger ^
-  --add-data "ui;ui" --add-data "data.template;data.template" app.py
+  --add-data "ui;ui" --add-data "config;config" --add-data "strategies;strategies" app.py
 ```
 
 Use `:` instead of `;` in `--add-data` on macOS and Linux.
@@ -225,17 +407,25 @@ Prefer one-folder over `--onefile`. One-file builds unpack to a temp directory
 at every launch, which Defender and SmartScreen flag constantly on unsigned
 binaries. One-folder trips it far less and starts faster.
 
-On Windows, pywebview renders through the Edge WebView2 runtime that ships with
-Windows 10 and 11, so the build stays around 20 MB rather than the 80–120 MB a
-bundled Qt would cost.
+On Windows, pywebview renders through the Edge WebView2 runtime that ships
+with Windows 10 and 11, so the build stays around 20 MB rather than the
+80–120 MB a bundled Qt would cost.
 
 ## What isn't built yet
 
-- **Risk and position sizing.** No concentration limits, no sizing rules, no
-  sector exposure. For value investing the risk that matters is permanent
-  capital impairment rather than volatility, so this should be balance-sheet
-  and concentration shaped, not beta and Sharpe.
-- **History charts.** `history` exists on every security and nothing fills it.
+- **Real strategies.** Only the contract scaffold ships. The rulesets in
+  `dev_reference_docs/legacy-profiles/` are the input to writing them.
+- **Adding to a position, in the interface.** The lot record and the engine
+  serve several buys and partial sales against named lots, but the screens
+  offer no way to add to a position that is already open — that carries the
+  whole sizing and pre-commitment design. Buying back into a name you closed
+  is offered, and is a separate question.
+- **Choosing which lots a sale draws on.** The record holds whichever
+  allocation it is given; the screens always propose oldest-first.
+- **An allocation view.** Weights are computed and cited, and nothing yet
+  puts them side by side.
+- **History charts.** Per-filing history exists, so there is something to
+  chart.
 - **The screening funnel.** Deliberately later. This is the journal first.
 
 ## License
@@ -243,4 +433,4 @@ bundled Qt would cost.
 MIT. See [LICENSE](LICENSE).
 
 This is a tool for recording and reviewing your own reasoning. It is not
-investment advice, and the sample data uses invented companies.
+investment advice, and demonstration content uses invented companies.

@@ -105,9 +105,60 @@ class TestPriceStore:
         assert price_store.latest_close(doc, "SYN") == ("2024-01-04", 9.0)
 
 
-class TestAtomicJournal:
-    def test_store_save_leaves_no_partial_file(self, tmp_path):
-        store.save("securities.json", {"securities": [], "x": 1})
-        path = store.data_dir() / "securities.json"
+class TestStorePrimitives:
+    """Every journal write goes through these two functions, so what they
+    guarantee is what a journal guarantees."""
+
+    def test_a_write_lands_whole_and_leaves_no_debris(self):
+        path = store.data_dir() / "thing.json"
+        store.write_json(path, {"x": 1})
         assert json.loads(path.read_text())["x"] == 1
-        assert not list(store.data_dir().glob("*.tmp"))
+        assert not list(store.data_dir().rglob("*.tmp"))
+
+    def test_a_failed_write_leaves_the_previous_file_byte_identical(self):
+        """Atomic persistence, tested by breaking it. A crash mid-write must
+        never truncate what was already recorded — and the temp file must not
+        survive to be mistaken for the real one."""
+        path = store.data_dir() / "thing.json"
+        store.write_json(path, {"x": 1})
+        before = path.read_bytes()
+        with pytest.raises(TypeError):
+            store.write_json(path, {"x": {1, 2}})   # a set will not serialise
+        assert path.read_bytes() == before
+        assert not list(store.data_dir().rglob("*.tmp"))
+
+    def test_two_writers_do_not_share_a_temp_file(self):
+        """The journal is irreplaceable, so it gets at least the discipline
+        the re-fetchable filing cache already has: a unique temp per writer,
+        never a shared name two processes can finish for each other."""
+        import os
+        import tempfile
+        seen = []
+        real = tempfile.mkstemp
+
+        def spy(*a, **kw):
+            fd, name = real(*a, **kw)
+            seen.append(os.path.basename(name))
+            return fd, name
+
+        tempfile.mkstemp = spy
+        try:
+            store.write_json(store.data_dir() / "a.json", {"x": 1})
+            store.write_json(store.data_dir() / "a.json", {"x": 2})
+        finally:
+            tempfile.mkstemp = real
+        assert len(seen) == 2 and seen[0] != seen[1]
+
+    def test_a_missing_file_is_absence_not_an_error(self):
+        assert store.read_json(store.data_dir() / "nothing.json") is None
+        assert store.read_json(store.data_dir() / "nothing.json", {}) == {}
+
+    def test_an_unreadable_file_refuses_rather_than_reading_as_empty(self):
+        """A journal that reads as empty looks like a journal with nothing in
+        it, which is a fabricated answer to "what did I record?". The file is
+        left exactly where it is so nothing overwrites it."""
+        path = store.ensure_data() / "broken.json"
+        path.write_text("{ truncated", encoding="utf-8")
+        with pytest.raises(store.StoreError):
+            store.read_json(path)
+        assert path.read_text(encoding="utf-8") == "{ truncated"

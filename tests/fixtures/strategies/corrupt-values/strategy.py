@@ -7,7 +7,7 @@ STRATEGY = {
     "name": "Corrupt values fixture",
     "summary": "Ships a values.yaml that is not YAML.",
     "version": 1,
-    "contract": 1,
+    "contract": 2,
     "changelog": {1: "First version."},
     "states": [
         {"id": "nothing", "name": "Nothing", "render": "hold",

@@ -9,7 +9,8 @@ lands.
 
 What it deliberately touches, so the wiring is exercised and not just
 asserted: one measure's current value and dated series, the clock, the one
-declared value, and the one declared input.
+declared value, the declared inputs, and the figures the host can only
+report once a journal says what the account is.
 """
 
 STRATEGY = {
@@ -18,10 +19,13 @@ STRATEGY = {
     "summary": "A scaffold that proves the host/strategy boundary carries "
                "data both ways. It reads one measure and always holds; it "
                "is not investment logic and never will be.",
-    "version": 1,
-    "contract": 1,
+    "version": 2,
+    "contract": 2,
     "changelog": {
         1: "First version: reads free cash flow and the clock, and holds.",
+        2: "Asks for free cash so the account figures can be proved end to "
+           "end, and cites the weight and the account the host works out "
+           "from it. Still holds, always.",
     },
     "states": [
         {"id": "scaffold-hold", "name": "Nothing to do", "render": "hold",
@@ -40,6 +44,18 @@ STRATEGY = {
          "explain": "Any word. The scaffold echoes it back in its reason to "
                     "prove that what you type in setup reaches a "
                     "decision."},
+        # The role is how the host learns what the account is. Optional on
+        # purpose: a scaffold that blocked every verdict until it was
+        # answered would be proving the trap rather than the boundary, and
+        # leaving it blank proves the other half — free cash and every
+        # weight report absent, with the reason naming this field.
+        {"id": "free-cash", "label": "Free cash", "type": "number",
+         "unit": "usd", "role": "cash", "required": False,
+         "explain": "Money in the account that is not in any position. The "
+                    "journal adds it to what your holdings are worth to get "
+                    "the account total, and reports each position as a share "
+                    "of that. Leave it blank and those figures say they "
+                    "cannot be worked out, rather than guessing."},
     ],
     "values": [
         {"id": "patience", "label": "Readings considered", "type": "integer",
@@ -77,7 +93,15 @@ def decide(ctx):
         {"value": "patience"},
         {"label": "Dated readings considered", "unit": "count",
          "actual": len(considered)},
+        # Cited, never restated. Where the journal cannot say what the
+        # account is, the host's own reason is what the screen reads — the
+        # scaffold has no sentence of its own to offer about it.
+        {"fact": "portfolio.cash"},
+        {"fact": "portfolio.account_value"},
     ]
+    if ctx["position"]["held"]:
+        evidence.append({"fact": "position.weight"})
+        evidence.append({"fact": "position.opened"})
     if considered:
         evidence.append({"measure": "fcf_ttm",
                          "at": considered[0]["period_end"]})

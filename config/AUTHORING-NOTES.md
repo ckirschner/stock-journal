@@ -1,5 +1,13 @@
 # Metric bank and profiles — authoring notes
 
+> **The profile system these notes describe is retired.** The bank is not:
+> everything below about what a measure *is*, and the open questions at the
+> end, still stand. What changed is where thresholds live — a strategy now
+> holds them, as code plus a values file, and there is no `data.template/`.
+> The four profile YAMLs are kept as source material at
+> `dev_reference_docs/legacy-profiles/` and nothing reads them. Read the
+> paths below as history, and the reasoning as still live.
+
 Input to the next task. Nothing here has been acted on.
 
 Files written:

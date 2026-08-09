@@ -24,16 +24,17 @@ The shape, in full::
                             | {"status": "absent", "reason"},
                    "closes": [[date, close], ...],   # as traded, ascending
                    "events": [[date, "split"|"dividend", amount], ...]},
-      "position": {"held", "lots": [{"date", "shares", "price", "kind"}],
-                   "shares", "cost_basis",
+      "position": {"held", "shares", "opened",
+                   "lots":      [{"date", "shares", "remaining", "open"}],
+                   "disposals": [{"date", "shares"}],
                    "market_value": known-or-absent,
                    "weight": known-or-absent},       # percent of the account
       "portfolio": {"cash", "account_value",         # known-or-absent
                     "slots": {"occupied"},
-                    "holdings": [{"ticker", "name", "shares", "cost_basis",
-                                  "opened", "market_value", "weight"}]},
+                    "holdings": [{"ticker", "name", "shares", "opened",
+                                  "market_value", "weight"}]},
       "values": {id: value},        # the resolved declaration chain
-      "inputs": {id: value},        # what the user supplied
+      "inputs": {id: value},        # the answers that apply, with answers
       "reference": {file name: parsed},   # what the bundle ships, frozen
     }
 
@@ -60,12 +61,20 @@ Reading rules a strategy can rely on:
   never reaches into the past at all.
 - **Unknown keys may appear** in future contract versions; a strategy reads
   what it declares an interest in and ignores the rest.
-
-Two things the host cannot yet answer honestly, so it says so rather than
-guessing: free cash and account value are not recorded anywhere in the
-journal, which makes every `weight` absent with that reason. A strategy that
-binds on weight will be blocked until the journal carries them — the right
-failure, and the request that fixes it is against the host.
+- **Nothing here says what a position cost.** Cost basis is reporting and is
+  kept out of the context entirely, so a rule that fires on the distance
+  from your own purchase price cannot be written. See contract.HOST_FACTS.
+- **The account is derived, never declared.** `portfolio.account_value` is
+  free cash plus the market value of every holding the journal knows about,
+  which is why free cash is the one thing a strategy has to ask for. An
+  account value the user typed would be a conclusion the tool could reach
+  itself, and when a weight came out wrong there would be no way to see
+  which input was wrong.
+- **Free cash is only served where a strategy asked for it.** An input
+  carrying the `cash` role is what unlocks cash, the account value and every
+  weight; a strategy that declares no such input gets all of them absent
+  with a reason saying the question was never asked. The host holds no view
+  about whether a journal ought to record cash.
 """
 
 from __future__ import annotations
@@ -73,8 +82,8 @@ from __future__ import annotations
 import copy
 from datetime import date
 
-from . import compute, contract, dataview, facts_store, price_store
-from . import profiles as profiles_mod
+from . import bank as bank_mod
+from . import compute, contract, dataview, facts_store, portfolio, price_store
 from . import tickermap
 
 # Series stop at the same number of filing boundaries the sell-confirmation
@@ -203,7 +212,7 @@ def _no_series(note: str) -> dict:
 
 
 def _measures(security, cik, tickers, as_of, today) -> dict:
-    bank = profiles_mod.load_bank("metric-bank")
+    bank = bank_mod.load_bank()
     entries = [(str(e.get("id")), e) for e in (bank.get("entries") or [])]
     registry_ids = [eid for eid, _ in entries if eid in compute.REGISTRY]
 
@@ -315,62 +324,139 @@ def _market_value(sec, shares, as_of=None):
                   provenance=[f"{shares:g} shares at {basis}"])
 
 
-_NO_ACCOUNT = ("the journal does not yet record free cash, so the account "
-               "value — and any weight against it — cannot be computed")
+_NO_CASH_ROLE = ("no strategy in this journal asks for your free cash, so "
+                 "the journal does not record it and the account it would "
+                 "be measured against cannot be reached")
+_UNDATED_INPUT = ("what you told this journal carries no date, so this is "
+                  "the answer on record now, not one known to be true on "
+                  "{day}")
 
 
-def _lots_of(sec, today) -> list:
-    pos = sec.get("position")
-    if not pos:
-        return []
-    opened = str(pos.get("opened") or "")[:10]
-    if opened and opened > today:
-        return []   # a position opened after the clock did not exist yet
-    return [{"date": opened or None, "shares": float(pos.get("shares") or 0),
-             "price": pos.get("cost_basis"), "kind": "buy"}]
+def _usd(n) -> str:
+    return f"${n:,.0f}"
 
 
-def _position(security, today, as_of) -> dict:
-    lots = _lots_of(security, today)
-    shares = sum(l["shares"] for l in lots if l["kind"] == "buy") \
-        - sum(l["shares"] for l in lots if l["kind"] == "sell")
-    held = security.get("bucket") == "holdings" and bool(lots) and shares > 0
-    out = {"held": held, "lots": lots,
-           "shares": shares if held else 0.0,
-           "cost_basis": (security.get("position") or {}).get("cost_basis")
-           if held else None}
+def _cash(roles, as_of) -> dict:
+    """Free cash, from whichever declared input claims the `cash` role.
+
+    Under a pin it is served with the same caution a hand-entered measure
+    carries: an answer with no date participates, because the journal has no
+    other to offer, but it is never presented as a figure known to have been
+    true on a past day.
+    """
+    entry = (roles or {}).get("cash")
+    if entry is None:
+        return _absent(_NO_CASH_ROLE)
+    if "value" not in entry:
+        return _absent(entry.get("reason")
+                       or "this journal has no answer for it yet")
+    cautions = [_UNDATED_INPUT.format(day=as_of)] if as_of else None
+    return _known(float(entry["value"]), "input", cautions,
+                  [f'"{entry["label"]}", answered in this journal\'s '
+                   "settings"])
+
+
+def _account_value(cash, holdings) -> dict:
+    """Free cash plus every holding at market. Derived rather than asked
+    for: it is a figure the host can reach, and a typed one would let two
+    numbers disagree with nothing to say which was wrong.
+
+    One unpriced holding makes the whole total absent. Treating a missing
+    price as zero would understate the account and quietly inflate every
+    weight measured against it — a confident wrong answer in the number a
+    sizing rule binds on.
+    """
+    if cash["status"] != "known":
+        return _absent("the account is free cash plus the value of every "
+                       "holding, and " + cash["reason"])
+    dark = [h for h in holdings if h["market_value"]["status"] != "known"]
+    if dark:
+        names = ", ".join(str(h["ticker"]) for h in dark)
+        return _absent(
+            f"{len(dark)} of {len(holdings)} holdings have no price "
+            f"({names}), so the account total cannot be reached without "
+            "inventing one")
+    total = cash["value"] + sum(h["market_value"]["value"] for h in holdings)
+    return _known(total, "computed", cash.get("cautions"),
+                  [f'{_usd(cash["value"])} free cash plus {len(holdings)} '
+                   f'holding{"" if len(holdings) == 1 else "s"} at market'])
+
+
+def _weight(market_value, account_value) -> dict:
+    """A holding's share of the account, as a percent number. Arithmetic,
+    not an opinion — whether a weight is too high belongs to a strategy."""
+    if market_value["status"] != "known":
+        return _absent(market_value["reason"])
+    if account_value["status"] != "known":
+        return _absent(account_value["reason"])
+    if account_value["value"] <= 0:
+        return _absent("the account works out to nothing or less once free "
+                       "cash is included, so a share of it cannot be "
+                       "expressed")
+    return _known(market_value["value"] / account_value["value"] * 100,
+                  "computed", account_value.get("cautions"),
+                  [f'{_usd(market_value["value"])} of an account of '
+                   f'{_usd(account_value["value"])}'])
+
+
+def _position(security, today, as_of, account_value) -> dict:
+    """The lot history as a strategy reads it: every acquisition with what
+    remains of it, every disposal, and not one figure about cost."""
+    held_lots = portfolio.open_lots(security, today)
+    shares = round(sum(l["remaining"] for l in held_lots), 8)
+    held = shares > 0
+    out = {
+        "held": held,
+        "shares": shares,
+        "opened": portfolio.opened_on(security, today),
+        "lots": [{"date": l["date"], "shares": float(l["shares"]),
+                  "remaining": l["remaining"], "open": l["open"]}
+                 for l in held_lots],
+        "disposals": [{"date": l["date"], "shares": float(l["shares"])}
+                      for l in portfolio.lots(security, "sell", today)],
+    }
     if held:
         out["market_value"] = _market_value(security, shares, as_of)
-        out["weight"] = _absent(_NO_ACCOUNT)
+        out["weight"] = _weight(out["market_value"], account_value)
     else:
         out["market_value"] = _absent("no position is held")
         out["weight"] = _absent("no position is held")
     return out
 
 
-def _portfolio(journal_securities, today, as_of) -> dict:
+def _portfolio(journal_securities, subject, today, as_of, roles) -> dict:
     holdings = []
-    for sec in journal_securities or []:
-        if sec.get("bucket") != "holdings" or not sec.get("position"):
+    seen = set()
+    # The security being evaluated counts even when the caller passed no
+    # list: a portfolio that excluded the holding in front of you would
+    # measure its weight against an account it was not part of.
+    pool = list(journal_securities or [])
+    if subject is not None:
+        pool.append(subject)
+    for sec in pool:
+        ticker = str(sec.get("ticker") or "")
+        if ticker in seen:
             continue
-        pos = sec["position"]
+        seen.add(ticker)
         # The clock governs the portfolio exactly as it governs the position:
-        # a holding opened after the pin did not occupy a slot then, and
-        # counting it would hand a slot-bound strategy today's portfolio
-        # under yesterday's clock.
-        if not _lots_of(sec, today):
+        # a holding bought after the pin did not occupy a slot then, and a
+        # sale made after it had not reduced anything.
+        shares = portfolio.shares_held(sec, today)
+        if shares <= 0:
             continue
-        shares = float(pos.get("shares") or 0)
         holdings.append({
             "ticker": sec.get("ticker"), "name": sec.get("name"),
-            "shares": shares, "cost_basis": pos.get("cost_basis"),
-            "opened": pos.get("opened"),
+            "shares": shares,
+            "opened": portfolio.opened_on(sec, today),
             "market_value": _market_value(sec, shares, as_of),
-            "weight": _absent(_NO_ACCOUNT),
         })
+    cash = _cash(roles, as_of)
+    account_value = _account_value(cash, holdings)
+    for h in holdings:
+        h["weight"] = _weight(h["market_value"], account_value)
     return {
-        "cash": _absent("the journal does not yet record free cash"),
-        "account_value": _absent(_NO_ACCOUNT),
+        "cash": cash,
+        "account_value": account_value,
         "slots": {"occupied": len(holdings)},
         "holdings": holdings,
     }
@@ -380,18 +466,34 @@ def _portfolio(journal_securities, today, as_of) -> dict:
 
 def build_context(security: dict, journal_securities: list | None,
                   values: dict, inputs: dict,
-                  as_of: str | None = None) -> dict:
+                  as_of: str | None = None, record: dict | None = None) -> dict:
     """The context for one security, live or pinned.
 
     With `as_of`, everything is reconstructed from what was observable on
     that day — filings filed by then, the close on or before it, no
     hand-entered price — exactly as the as-of purchase machinery reads the
     past. Without it, the clock is today and the newest stored data serves.
+
+    `record` is the loaded strategy. It is what turns the journal's raw
+    answers into the ones that currently apply, and what says which of them
+    the host may report as a figure. Without it the answers are passed
+    through as given and no role is served — which is the honest reading of
+    "there is no strategy to ask", not a silent fallback.
     """
     today = str(as_of)[:10] if as_of else date.today().isoformat()
     cik = security.get("cik")
     tickers = _tickers_of(security)
 
+    effective, roles = dict(inputs or {}), {}
+    if record is not None:
+        effective, _ = contract.check_inputs(record, inputs or {},
+                                             values or {})
+        roles = contract.input_roles(record, effective)
+
+    # The portfolio comes first: a position's weight is measured against an
+    # account that includes the position, so the total has to exist before
+    # any share of it can.
+    folio = _portfolio(journal_securities, security, today, as_of, roles)
     ctx = {
         "contract": contract.CONTRACT_VERSION,
         "today": today,
@@ -400,10 +502,11 @@ def build_context(security: dict, journal_securities: list | None,
                      "cik": cik},
         "measures": _measures(security, cik, tickers, as_of, today),
         "price": _price(security, cik, tickers, as_of, today),
-        "position": _position(security, today, as_of),
-        "portfolio": _portfolio(journal_securities, today, as_of),
+        "position": _position(security, today, as_of,
+                              folio["account_value"]),
+        "portfolio": folio,
         "values": values or {},
-        "inputs": inputs or {},
+        "inputs": effective,
     }
     # One deep copy at the boundary: the strategy's dict shares nothing with
     # the journal or the dataview caches, so mutating it can corrupt nothing.

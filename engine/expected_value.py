@@ -158,6 +158,16 @@ def compute(method: str, inputs: dict) -> dict:
 # input as derivation guidance — ingredients for a judgement, never a value
 # typed for the user.
 
+# What a new journal starts its valuation assumptions at. Starting points,
+# explained on screen and set once by the user — not a view about any
+# security, which is why they can live here rather than in a strategy.
+DEFAULT_SETTINGS = {
+    "discount_rate": 9.0,
+    "terminal_growth": 2.5,
+    "margin_of_safety": 30.0,
+    "default_ev_method": "reverse_dcf",
+}
+
 _DISCOUNT_RATE_HELP = (
     "Your required annual return, as a percent. Derive it once: start from "
     "the 10-year Treasury yield — the return for taking no risk — and add "

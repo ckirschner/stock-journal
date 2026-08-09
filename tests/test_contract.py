@@ -124,6 +124,234 @@ class TestDeclarationValidation:
         assert any("both an input and a value" in e for e in errors)
 
 
+def field(fid="f", **over):
+    f = {"id": fid, "label": fid.title(), "type": "number",
+         "explain": "What it means, in plain language."}
+    f.update(over)
+    return f
+
+
+class TestInputRoles:
+    """A role is how a declared input becomes a figure the host reports. The
+    host has no journal-level fields of its own — deciding which ones a
+    journal collects would be the host deciding how strategies work."""
+
+    def test_the_role_list_is_closed_and_says_what_it_offers(self):
+        errors = contract.validate_declaration(decl(inputs=[
+            field("beta", role="volatility", unit="ratio")]))
+        assert any("`role` must be one of" in e and "cash" in e
+                   for e in errors)
+        assert any("request against the host" in e for e in errors)
+
+    def test_the_set_is_closed_by_construction(self):
+        with pytest.raises(TypeError):
+            contract.INPUT_ROLES["leverage"] = {}
+
+    def test_a_role_must_arrive_in_the_unit_the_host_reports_it_in(self):
+        errors = contract.validate_declaration(decl(inputs=[
+            field("c", role="cash", unit="percent")]))
+        assert any("unit: usd" in e for e in errors)
+        errors = contract.validate_declaration(decl(inputs=[
+            field("c", role="cash", unit="usd", type="text")]))
+        assert any("type: number" in e for e in errors)
+
+    def test_two_inputs_cannot_claim_the_same_role(self):
+        errors = contract.validate_declaration(decl(inputs=[
+            field("c1", role="cash", unit="usd"),
+            field("c2", role="cash", unit="usd")]))
+        assert any("both claim" in e and "no way to know" in e
+                   for e in errors)
+
+    def test_a_value_can_never_carry_a_role(self):
+        """A role is a fact about the user's account. A value ships a
+        default, and no strategy can ship a default for someone's cash."""
+        errors = contract.validate_declaration(decl(values=[
+            field("c", role="cash", unit="usd")]))
+        assert any("only an input can" in e for e in errors)
+        assert any("account balance" in e for e in errors)
+
+    def test_a_claimed_role_resolves_to_the_answer_on_record(self):
+        rec = record(inputs=[field("free-cash", role="cash", unit="usd")])
+        roles = contract.input_roles(rec, {"free-cash": 5000.0})
+        assert roles["cash"] == {"id": "free-cash", "label": "Free-Cash",
+                                "value": 5000.0}
+        unanswered = contract.input_roles(rec, {})
+        assert "Free-Cash" in unanswered["cash"]["reason"]
+        assert "value" not in unanswered["cash"]
+
+
+class TestChoices:
+    def test_a_choice_outside_the_offered_set_is_refused(self):
+        spec = field("stance", type="text", options=[
+            {"value": "in", "label": "Building"},
+            {"value": "out", "label": "Paused"}])
+        rec = record(inputs=[spec])
+        _, problems = contract.check_inputs(rec, {"stance": "sideways"})
+        assert any("must be one of: Building, Paused" in p for p in problems)
+        assert contract.check_inputs(rec, {"stance": "out"})[0] == \
+            {"stance": "out"}
+
+    def test_options_must_fit_the_type_they_are_declared_under(self):
+        errors = contract.validate_declaration(decl(inputs=[
+            field("n", type="integer", options=[
+                {"value": "many", "label": "Many"}])]))
+        assert any("a whole number" in e for e in errors)
+
+    def test_options_and_bounds_cannot_both_constrain_one_field(self):
+        errors = contract.validate_declaration(decl(inputs=[
+            field("n", min=1, options=[{"value": 1, "label": "One"}])]))
+        assert any("already say exactly what is allowed" in e for e in errors)
+
+    def test_a_yes_no_answer_is_a_boolean_not_a_two_item_list(self):
+        errors = contract.validate_declaration(decl(inputs=[
+            field("b", type="boolean", options=[
+                {"value": True, "label": "Yes"}])]))
+        assert any("already a boolean" in e for e in errors)
+
+    def test_two_options_offering_the_same_answer_are_refused(self):
+        errors = contract.validate_declaration(decl(inputs=[
+            field("t", type="text", options=[{"value": "a", "label": "A"},
+                                             {"value": "a", "label": "Also A"}])]))
+        assert any("two options offer" in e for e in errors)
+
+
+class TestConditionalFields:
+    """A question that cannot mean anything must not be asked, and must not
+    be answered on the user's behalf either."""
+
+    def gated(self):
+        return record(inputs=[
+            field("keeps-reserve", type="boolean"),
+            field("reserve", required=True,
+                  when={"input": "keeps-reserve", "is": True})])
+
+    def test_an_unmet_gate_makes_a_required_field_not_owed(self):
+        effective, problems = contract.check_inputs(
+            self.gated(), {"keeps-reserve": False})
+        assert problems == []
+        assert effective == {"keeps-reserve": False}
+
+    def test_a_met_gate_makes_it_owed_again(self):
+        _, problems = contract.check_inputs(self.gated(),
+                                            {"keeps-reserve": True})
+        assert any("Reserve" in p for p in problems)
+
+    def test_a_stale_answer_to_a_gated_off_question_is_never_served(self):
+        """Handing over an answer to a question that no longer applies is
+        worse than handing over nothing: the strategy cannot tell them
+        apart."""
+        effective, problems = contract.check_inputs(
+            self.gated(), {"keeps-reserve": False, "reserve": 500})
+        assert problems == []
+        assert "reserve" not in effective
+
+    def test_a_stale_answer_is_still_checked_so_it_cannot_lie_in_wait(self):
+        _, problems = contract.check_inputs(
+            self.gated(), {"keeps-reserve": False, "reserve": "lots"})
+        assert any("expects a number" in p for p in problems)
+
+    def test_an_unanswered_gate_leaves_everything_below_it_unasked(self):
+        effective, problems = contract.check_inputs(self.gated(), {})
+        assert problems == []
+        assert effective == {}
+
+    def test_the_activity_reason_says_what_would_make_it_apply(self):
+        """The screen has to be able to say why a field is not being asked,
+        in terms of the answer that would bring it back."""
+        state = contract.input_activity(self.gated(),
+                                        {"keeps-reserve": False})
+        assert state["keeps-reserve"] is None
+        assert state["reserve"] == \
+            'it only applies when "Keeps-Reserve" is yes'
+        assert contract.input_activity(self.gated(), {})["reserve"] == \
+            'it only applies once "Keeps-Reserve" is answered'
+
+    def test_running_the_check_on_its_own_output_changes_nothing(self):
+        """The defensive pass before every decision runs on what the first
+        pass returned. If the two disagreed, a journal that saved cleanly
+        would then refuse to produce a verdict."""
+        rec = self.gated()
+        first, _ = contract.check_inputs(rec, {"keeps-reserve": False,
+                                               "reserve": 500})
+        second, problems = contract.check_inputs(rec, first)
+        assert (second, problems) == (first, [])
+
+    def test_a_gate_on_a_choice_fires_on_that_choice(self):
+        rec = record(inputs=[
+            field("stance", type="text", options=[
+                {"value": "in", "label": "Building"},
+                {"value": "out", "label": "Paused"}]),
+            field("size", when={"input": "stance", "is": "in"})])
+        assert contract.check_inputs(rec, {"stance": "in", "size": 4})[0] == \
+            {"stance": "in", "size": 4}
+        assert contract.check_inputs(rec, {"stance": "out", "size": 4})[0] == \
+            {"stance": "out"}
+
+    def test_a_gate_naming_something_undeclared_is_refused(self):
+        errors = contract.validate_declaration(decl(inputs=[
+            field("a", when={"input": "nowhere", "is": True})]))
+        assert any("does not declare as an input" in e for e in errors)
+
+    def test_a_gate_on_an_answer_the_other_field_could_never_give(self):
+        errors = contract.validate_declaration(decl(inputs=[
+            field("b", type="boolean"),
+            field("a", when={"input": "b", "is": "maybe"})]))
+        assert any("could give" in e for e in errors)
+
+    def test_a_circle_of_gates_is_refused_once(self):
+        errors = contract.validate_declaration(decl(inputs=[
+            field("a", type="boolean", when={"input": "b", "is": True}),
+            field("b", type="boolean", when={"input": "c", "is": True}),
+            field("c", type="boolean", when={"input": "a", "is": True})]))
+        circles = [e for e in errors if "circle" in e]
+        assert len(circles) == 1, circles
+
+    def test_a_value_can_never_be_conditional(self):
+        errors = contract.validate_declaration(decl(
+            inputs=[field("b", type="boolean")],
+            values=[field("v", when={"input": "b", "is": True})]))
+        assert any("only an input can" in e for e in errors)
+
+
+class TestBoundsThatNameAnotherField:
+    def test_a_bound_reads_the_other_answer_and_names_it(self):
+        rec = record(inputs=[field("free-cash", role="cash", unit="usd"),
+                             field("reserve", max_from="free-cash", min=0)])
+        effective, problems = contract.check_inputs(
+            rec, {"free-cash": 1000.0, "reserve": 5000.0})
+        assert any("at most your Free-Cash (1000)" in p for p in problems)
+        assert "reserve" not in effective
+        assert contract.check_inputs(
+            rec, {"free-cash": 9000.0, "reserve": 5000.0})[1] == []
+
+    def test_a_bound_can_name_a_declared_value(self):
+        rec = record(inputs=[field("first-buy", max_from="cap")],
+                     values=[field("cap")])
+        _, problems = contract.check_inputs(rec, {"first-buy": 20},
+                                            values={"cap": 8})
+        assert any("at most your Cap (8)" in p for p in problems)
+
+    def test_an_absent_other_answer_is_not_a_failed_bound(self):
+        """Absence is never treated as failure. Refusing an answer because a
+        different question is unanswered would be inventing a comparison."""
+        rec = record(inputs=[field("free-cash", role="cash", unit="usd"),
+                             field("reserve", max_from="free-cash")])
+        effective, problems = contract.check_inputs(rec, {"reserve": 5000.0})
+        assert problems == []
+        assert effective == {"reserve": 5000.0}
+
+    def test_a_bound_naming_something_that_is_not_a_number_is_refused(self):
+        errors = contract.validate_declaration(decl(
+            inputs=[field("a", max_from="note"),
+                    field("note", type="text")]))
+        assert any("does not declare as a number" in e for e in errors)
+
+    def test_a_bound_naming_itself_is_refused(self):
+        errors = contract.validate_declaration(decl(inputs=[
+            field("a", max_from="a")]))
+        assert any("names itself" in e for e in errors)
+
+
 class TestDecisionValidation:
     def check(self, states, decision):
         return contract.validate_decision(record(states=states), decision)
@@ -488,8 +716,8 @@ class TestEvidenceUnitsTrackTheBank:
     def test_every_bank_unit_can_be_rendered(self):
         """The bank names units; evidence has to be able to render each of
         them, or a measure becomes uncitable the day it is added."""
-        from engine import profiles
-        bank = profiles.load_bank("metric-bank")
+        from engine import bank as bank_mod
+        bank = bank_mod.load_bank()
         used = {str(e.get("unit")) for e in bank["entries"]
                 if e.get("unit") is not None}
         assert used <= set(contract.EVIDENCE_UNITS)
@@ -508,3 +736,64 @@ class TestHostResults:
         for sid in contract.HOST_STATES:
             r = contract.host_result(sid, "Something is owed.")
             assert r["tier"] == "evaluation"
+
+
+class TestAStrategyCannotRestateTheHostsFigures:
+    """The whole point of the evidence split is that a strategy asks the
+    question and the host answers it, so a strategy cannot misquote the
+    host's own numbers. That only holds if the context the host resolves
+    against is not the same object the strategy just had its hands on."""
+
+    def _record(self):
+        from pathlib import Path
+        from engine import strategy_loader
+        root = Path(__file__).resolve().parent / "fixtures" / "strategies"
+        strategies, reports = strategy_loader.discover([root])
+        assert "tamper" in strategies, [r["errors"] for r in reports]
+        return strategies["tamper"]
+
+    def _ctx(self):
+        return {
+            "contract": contract.CONTRACT_VERSION,
+            "today": "2026-08-08",
+            "security": {"ticker": "SYN", "name": "Synthetic", "cik": 1},
+            "measures": {"fcf_ttm": {
+                "current": {"status": "absent",
+                            "reason": "no filing data is stored"},
+                "series": {"cadence": "annual", "points": [], "note": None,
+                           "truncated": False}}},
+            "price": {"latest": {"status": "absent", "reason": "none"},
+                      "closes": [], "events": []},
+            "position": {"held": True, "lots": [], "shares": 3.0,
+                         "cost_basis": 10.0,
+                         "market_value": {"status": "absent",
+                                          "reason": "none"},
+                         "weight": {"status": "absent", "reason": "none"}},
+            "portfolio": {"cash": {"status": "absent", "reason": "none"},
+                          "account_value": {"status": "absent",
+                                            "reason": "none"},
+                          "slots": {"occupied": 1}, "holdings": []},
+            "values": {}, "inputs": {},
+        }
+
+    def test_what_the_host_reports_is_what_the_host_computed(self):
+        ctx = self._ctx()
+        result = contract.evaluate(self._record(), ctx)
+        assert result["state"]["id"] == "said-so"
+        by_id = {e["subject"]["id"]: e for e in result["reason"]["evidence"]}
+        # the measure the strategy tried to invent a value for is still absent
+        assert by_id["fcf_ttm"]["observed"]["status"] == "absent"
+        assert by_id["fcf_ttm"]["observed"]["reason"] == \
+            "no filing data is stored"
+        # and the host fact it tried to inflate still reads what was recorded
+        assert by_id["position.shares"]["observed"]["value"] == 3.0
+
+    def test_the_caller_gets_its_context_back_unharmed(self):
+        """The journal and the caches are protected by the deep copy on the
+        way in; this is the other half — one evaluation cannot change what
+        the next one sees."""
+        ctx = self._ctx()
+        contract.evaluate(self._record(), ctx)
+        assert ctx["measures"]["fcf_ttm"]["current"]["status"] == "absent"
+        assert ctx["position"]["shares"] == 3.0
+        assert ctx["values"] == {}

@@ -11,7 +11,9 @@ import urllib.error
 
 import pytest
 
-from engine import backup, secrets, store, tiingo
+from conftest import journal_for
+
+from engine import backup, secrets, tiingo
 
 KEY = "sk-test-9f8e7d6c5b4a-SECRET"
 EMAIL = "jane.doe@example.com"
@@ -42,59 +44,27 @@ class TestFileFallback:
             secrets.set_secret("tiingo_api_token", "  ")
 
 
-class TestMigration:
-    def test_plaintext_key_and_identity_move_out_and_old_copies_go(self):
-        settings = {"discount_rate": 9.0, "tiingo_api_token": KEY,
-                    "sec_identity": IDENT}
-        changed = secrets.migrate_from_settings(settings)
-        assert changed
-        assert "tiingo_api_token" not in settings
-        assert "sec_identity" not in settings
-        assert settings["discount_rate"] == 9.0          # prefs untouched
-        assert secrets.get_secret("tiingo_api_token") == KEY
-        assert secrets.local_get("sec_identity") == IDENT
-        # a key that ever sat in plaintext carries a rotate notice…
-        assert secrets.local_get(secrets.ROTATE_FLAG)
-
-    def test_clean_settings_are_left_alone(self):
-        settings = {"discount_rate": 9.0}
-        assert secrets.migrate_from_settings(settings) is False
-
-
 class TestExportNeverCarriesSecrets:
-    def _configure_everything(self):
+    def test_bundle_contains_neither_key_nor_email(self, strategies,
+                                                   tmp_path):
+        """By construction rather than by care: the exportable set is the
+        journals directory, and neither of these is in it. The test is that
+        the arrangement still holds."""
+        strategies("verdicts")
+        journal_for("verdicts")
         secrets.set_secret("tiingo_api_token", KEY)
         secrets.local_set("sec_identity", IDENT)
-        store.save("securities.json", {"securities": []})
-        store.save("settings.json", {"discount_rate": 9.0})
-
-    def test_bundle_contains_neither_key_nor_email(self, tmp_path):
-        self._configure_everything()
         path = backup.export_bundle(tmp_path / "bundle.json")
         text = path.read_text(encoding="utf-8")
         assert KEY not in text
         assert EMAIL not in text
 
-    def test_export_is_clean_even_from_unmigrated_settings_plus_import_cleans(
-            self, tmp_path):
-        """A bundle made BEFORE migration may carry the plaintext key; the
-        import path must strip it on arrival rather than resurrect it."""
-        store.save("securities.json", {"securities": []})
-        store.save("settings.json", {"discount_rate": 9.0,
-                                     "tiingo_api_token": KEY,
-                                     "sec_identity": IDENT})
-        old_bundle = backup.export_bundle(tmp_path / "old.json")
-        assert KEY in old_bundle.read_text()             # the historic hazard
-        backup.import_bundle(old_bundle, keep_backup=False)
-        on_disk = store.load("settings.json")
-        assert "tiingo_api_token" not in on_disk
-        assert "sec_identity" not in on_disk
-        assert secrets.get_secret("tiingo_api_token") == KEY
-        # …and the NEXT export is clean
-        fresh = backup.export_bundle(tmp_path / "fresh.json")
-        text = fresh.read_text()
-        assert KEY not in text
-        assert EMAIL not in text
+    def test_the_open_journal_is_machine_local_not_journal_data(self):
+        """Which journal is open is a fact about this machine, so it lives
+        beside the SEC contact and never travels in an export."""
+        from engine import journals
+        journals.set_open("some-journal")
+        assert secrets.local_get("open_journal") == "some-journal"
 
 
 class TestKeyNeverInUrlOrErrors:

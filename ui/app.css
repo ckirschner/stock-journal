@@ -69,8 +69,6 @@ td.l{text-align:left}
 .empty{padding:52px 24px;text-align:center;color:var(--ink-3)}
 .empty p{margin:0 0 16px;font-size:14px}
 
-.score{display:inline-block;font-family:var(--mono);font-size:12px;font-weight:600;padding:3px 9px;
-  border:1px solid currentColor;min-width:52px;text-align:center}
 .s-pass{color:var(--pass);background:var(--pass-bg)}
 .s-watch{color:var(--watch);background:var(--watch-bg)}
 .s-fail{color:var(--fail);background:var(--fail-bg)}
@@ -117,18 +115,8 @@ td.l{text-align:left}
   border-bottom:1px solid var(--rule-hard);padding-bottom:7px}
 .ghead h3{font-family:var(--slab);font-size:14px;margin:0;letter-spacing:.02em}
 .ghead span{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
-.mrow{display:grid;grid-template-columns:1fr 90px 90px 170px 72px;gap:12px;align-items:center;
-  padding:12px 0;border-bottom:1px solid var(--rule)}
-.mrow:last-child{border-bottom:0}
-.mname{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13.5px}
 .req{font-family:var(--mono);font-size:8.5px;letter-spacing:.1em;padding:2px 5px;
   border:1px solid var(--ink-3);color:var(--ink-2);text-transform:uppercase}
-.req.hard{border-color:var(--fail);color:var(--fail);font-weight:600}
-.mval{font-family:var(--mono);font-size:13.5px;text-align:right}
-.mval.entry{color:var(--ink-3)}
-.mval .delta{display:block;font-size:10px;margin-top:2px}
-.mthresh{font-family:var(--mono);font-size:11px;color:var(--ink-3);text-align:right}
-.mstate{text-align:right}
 .chip{display:inline-block;font-family:var(--mono);font-size:9.5px;font-weight:600;letter-spacing:.1em;
   text-transform:uppercase;padding:4px 8px;border:1px solid currentColor}
 
@@ -163,13 +151,13 @@ td.l{text-align:left}
   letter-spacing:.06em;margin-bottom:3px}
 .notelist p{margin:0;font-size:13.5px;color:var(--ink-2);line-height:1.6}
 
-/* segmented controls (lens, profile selection) */
+/* segmented controls (journal selection) */
 .seg{display:inline-flex;border:1px solid var(--rule-hard)}
 .seg button{appearance:none;background:var(--card);border:0;padding:4px 9px;cursor:pointer;
   font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
 .seg button+button{border-left:1px solid var(--rule-hard)}
 .seg button[aria-pressed="true"]{background:var(--ink);color:var(--card);font-weight:600}
-.lensbar{display:flex;align-items:center;gap:9px}
+.jbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
 .lenslabel{font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;
   text-transform:uppercase;color:var(--ink-3)}
 .rollup{background:var(--card);border:1px solid var(--rule);padding:20px;margin-top:20px}
@@ -200,8 +188,6 @@ td.l{text-align:left}
 .sstate{text-align:right}
 .greynote{flex-basis:100%;font-family:var(--mono);font-size:10.5px;color:var(--ink-3);
   margin-top:3px;line-height:1.5}
-.cmphead{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;
-  color:var(--ink-3);text-align:right;padding:8px 0 0}
 
 /* scorecards */
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px;margin-top:22px}
@@ -222,9 +208,7 @@ td.l{text-align:left}
 .pe-desc{font-size:13px;color:var(--ink-2);line-height:1.6;margin-top:7px;max-width:74ch}
 .pe-desc p,.pe-why p{margin:0 0 8px}
 .pe-desc p:last-child,.pe-why p:last-child{margin-bottom:0}
-.pe-cols{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:13px}
-.pe-col{background:var(--card-2);border:1px solid var(--rule);padding:12px 14px}
-.pe-col>i,.pe-block>i,.pe-sub-block>i{font-style:normal;display:block;font-family:var(--mono);
+.pe-block>i,.pe-sub-block>i{font-style:normal;display:block;font-family:var(--mono);
   font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);margin-bottom:7px}
 .pe-th{font-family:var(--mono);font-size:15px;font-weight:600;letter-spacing:-.01em;line-height:1.5}
 .pe-sub{font-family:var(--mono);font-size:10.5px;color:var(--ink-2);margin-top:5px;line-height:1.6}
@@ -240,13 +224,28 @@ td.l{text-align:left}
 .pe-nmw li{margin-bottom:4px}
 .pe-param{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;padding:5px 0;font-size:12.5px}
 .pe-param b{font-family:var(--mono);font-size:13px}
-.pe-flag{margin-top:13px;display:flex;gap:10px;align-items:flex-start;font-size:12.5px;
-  color:var(--ink-2);line-height:1.6}
-.pe-flag-b{font-family:var(--mono);font-size:12px}
 .pe-formula{font-family:var(--mono);font-size:12px;background:var(--card-2);
   border:1px solid var(--rule);padding:10px 12px;margin:0;white-space:pre-wrap;
   overflow-x:auto;line-height:1.6}
-.tierline{display:flex;gap:8px;flex-wrap:wrap;margin:13px 0}
+/* lot history — one block per purchase or sale, in the order they happened */
+.lots{background:var(--card);border:1px solid var(--rule);margin-top:12px}
+.lot{padding:16px 18px;border-bottom:1px solid var(--rule)}
+.lot:last-child{border-bottom:0}
+.lot .slist{margin-top:10px}
+.lothead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.lothead b{font-family:var(--slab);font-size:14.5px}
+.lothead time{font-family:var(--mono);font-size:10.5px;color:var(--ink-3)}
+/* Grouped by holding, and only when there is more than one. The heading is
+   what tells a reader which entries belong to which period, so it has to be
+   heavier than the entries under it and unmistakably above them. */
+.cyc{margin-top:18px}
+.cyc:first-child{margin-top:12px}
+.cychead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
+  padding-bottom:7px;border-bottom:2px solid var(--ink)}
+.cychead b{font-family:var(--slab);font-size:13px;letter-spacing:.02em}
+.cychead .dim{font-family:var(--mono);font-size:10.5px}
+.cyc .lots{margin-top:0;border-top:0}
+
 .whybox{margin-top:9px}
 .whybox summary{cursor:pointer;font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;
   text-transform:uppercase;color:var(--ink-3)}
@@ -299,10 +298,6 @@ dialog::backdrop{background:rgba(18,23,27,.45)}
 
 @media (max-width:860px){
   .panels{grid-template-columns:1fr}
-  .pe-cols{grid-template-columns:1fr}
-  .mrow{grid-template-columns:1fr 78px 78px;gap:8px 10px}
-  .mthresh{display:none}
-  .mstate{grid-column:3;text-align:right}
   .hide-sm{display:none}
   .srow{grid-template-columns:1fr auto}
   .sstate{grid-column:2;grid-row:1}

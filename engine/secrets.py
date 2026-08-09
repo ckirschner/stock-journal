@@ -1,8 +1,8 @@
 """Secrets and machine-local personal settings. Neither can be exported.
 
 Two kinds of thing live here, both excluded from backups BY CONSTRUCTION —
-the export bundle copies the allowlist in store.FILES, and nothing in this
-module ever writes inside that list:
+an export bundle carries the journals directory, and nothing in this module
+ever writes inside it:
 
 - **Secrets** (the Tiingo API key). Stored in the operating system's own
   credential facility via the `keyring` library — macOS Keychain, Windows
@@ -15,10 +15,12 @@ module ever writes inside that list:
   attacker already controls, any encryption key this app could reach, they
   can reach too.
 
-- **Machine-local settings** (the SEC identity contact — a name and email).
-  Not a secret, but personal information, and a backup bundle dropped on a
-  synced drive shouldn't carry an email address any more than a key. It
-  lives in <data>/local/machine.json, outside the export set.
+- **Machine-local settings** (the SEC identity contact — a name and email;
+  which journal is open on this machine). Not secrets, but personal
+  information or facts about this machine rather than about any journal, and
+  a backup dropped on a synced drive shouldn't carry an email address any
+  more than a key. They live in <data>/local/machine.json, outside the
+  export set.
 
 The threat model is accidental exfiltration and casual disclosure, not a
 determined attacker on this machine. Secrets never appear in URLs (header
@@ -31,7 +33,6 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
 from pathlib import Path
 
 from . import store
@@ -42,10 +43,6 @@ _DISABLE_KEYRING = False           # tests force the file fallback with this
 
 class SecretsError(Exception):
     pass
-
-
-def _stamp() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 # -- backend selection -------------------------------------------------------
@@ -196,43 +193,3 @@ def local_set(key: str, value) -> None:
     else:
         doc[key] = value
     _write_json_private(_machine_path(), doc)
-
-
-# -- migration off plaintext settings ---------------------------------------
-
-LEGACY_KEY_FIELD = "tiingo_api_token"
-LEGACY_IDENTITY_FIELD = "sec_identity"
-ROTATE_FLAG = "plaintext_key_migrated"
-
-
-def migrate_from_settings(settings: dict) -> bool:
-    """Move any secret or personal field out of the exportable settings doc.
-
-    Returns True if the doc changed (caller persists it). The old copies are
-    REMOVED, not duplicated — and a key that ever sat in plaintext gets a
-    standing rotate notice (ROTATE_FLAG in machine.json) until the user
-    replaces it, because files it may already have leaked into (old exports,
-    synced copies) are beyond recall.
-
-    This also runs after every bundle import: an old bundle that still
-    carries a plaintext key gets cleaned on arrival instead of resurrecting
-    the problem.
-    """
-    changed = False
-    key = (settings.pop(LEGACY_KEY_FIELD, "") or "").strip()
-    if key:
-        set_secret("tiingo_api_token", key)
-        local_set(ROTATE_FLAG, _stamp())
-        changed = True
-    elif LEGACY_KEY_FIELD in settings:
-        settings.pop(LEGACY_KEY_FIELD, None)
-        changed = True
-    ident = (settings.pop(LEGACY_IDENTITY_FIELD, "") or "").strip()
-    if ident:
-        if not local_get("sec_identity"):
-            local_set("sec_identity", ident)
-        changed = True
-    elif LEGACY_IDENTITY_FIELD in settings:
-        settings.pop(LEGACY_IDENTITY_FIELD, None)
-        changed = True
-    return changed
