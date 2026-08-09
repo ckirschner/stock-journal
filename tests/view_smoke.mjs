@@ -99,6 +99,39 @@ check("missing-strategy",
   + " const h = strategyView() + listView();"
   + " S.strategy = a; S.strategy_missing = b; return h; })()");
 
+// The gate arithmetic, exercised directly. Everything else here goes through
+// the stub DOM, whose querySelectorAll returns nothing — so applyGates is
+// reached on every dialog and does nothing on any of them. It is the one
+// piece of view logic that decides whether a question is ASKED, and a gate
+// that never opens reads as a question the strategy does not have rather
+// than as a bug. The host's own answer to the same gate is pinned in
+// tests/test_contract.py; these two have to agree or the user is shown a
+// form the save disagrees with.
+run(`__gate = (gateIs, answer) => {
+  const f = { dataset: { gate: "g", gateIs: JSON.stringify(gateIs) },
+              hidden: null };
+  applyGates({ querySelectorAll: () => [f],
+               querySelector: () => ({ value: answer }) });
+  return f.hidden;
+};`);
+for (const [gateIs, answer, hidden, why] of [
+  [["growth", "blend"], "growth", false, "any of several answers opens it"],
+  [["growth", "blend"], "blend", false, "the second answer opens it too"],
+  [["growth", "blend"], "income", true, "an answer outside the list does not"],
+  [[], "growth", true, "a gate listing nothing can never open"],
+  [true, "true", false, "a single yes/no answer still works"],
+  [true, "", true, "an unanswered gate stays shut"],
+  [3, "3", false, "a number gate is not defeated by the form's string"],
+  [3, "4", true, "a different number does not open it"],
+]) {
+  const got = run(`__gate(${JSON.stringify(gateIs)}, ${JSON.stringify(answer)})`);
+  if (got !== hidden) {
+    problems.push(`applyGates(${JSON.stringify(gateIs)}, `
+                  + `${JSON.stringify(answer)}): hidden=${got}, expected `
+                  + `${hidden} — ${why}`);
+  }
+}
+
 // A qualified figure — one that borrowed a share class's close, say — has to
 // render its qualification wherever the number renders. The payload is
 // stamped here, last, rather than built upstream: this harness is about what

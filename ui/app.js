@@ -1618,9 +1618,19 @@ function applyGates(root) {
     const on = root.querySelector(`[name="${el.dataset.gate}"]`);
     let want;
     try { want = JSON.parse(el.dataset.gateIs); } catch (e) { want = null; }
+    /* One answer or several, any of which opens the gate. The backend is
+       the authority on which answers apply; this only decides what to draw,
+       and it has to agree with it or the user is asked a question the save
+       will discard — or worse, never shown one the save demands. */
+    const wants = Array.isArray(want) ? want : [want];
     const raw = on ? on.value : "";
     const got = raw === "" ? null : (raw === "true" ? true : raw === "false" ? false : raw);
-    el.hidden = !(on && got === want);
+    /* Every value off a form is a string. A gate on a number would compare
+       "3" against 3 and hide its field forever, which reads as a question
+       that does not exist rather than as a bug. */
+    const hit = (w) => (typeof w === "number" && raw !== ""
+      ? Number(raw) === w : got === w);
+    el.hidden = !(on && wants.some(hit));
   });
 }
 

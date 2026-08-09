@@ -393,6 +393,30 @@ def option_label(spec: dict, value) -> str:
     return str(value)
 
 
+def gate_answers(is_) -> list | None:
+    """The answers a `when` gate accepts, always as a list — a single answer
+    is a list of one.
+
+    One shape downstream is the point: a membership test written once cannot
+    drift from a membership test written again somewhere else, and the gate
+    is evaluated in three places. None means the gate is malformed; an empty
+    list is a gate nothing could ever satisfy, which would leave a required
+    field permanently un-owed with nothing on screen saying why.
+    """
+    if isinstance(is_, list):
+        return is_ or None
+    return [is_]
+
+
+def answer_phrase(spec: dict, wants) -> str:
+    """How a gate's accepted answers read in a sentence — "growth",
+    "growth or blend", "growth, blend or value"."""
+    labels = [option_label(spec, w) for w in wants]
+    if len(labels) <= 1:
+        return labels[0] if labels else "nothing"
+    return ", ".join(labels[:-1]) + " or " + labels[-1]
+
+
 def check_typed_value(spec: dict, value) -> str | None:
     """Does `value` fit a declared input or value? None, or one legible
     sentence saying what was expected and what arrived."""
@@ -555,7 +579,8 @@ def _check_fields(kind: str, fields, errors: list) -> None:
                      and set(f["when"]) == _WHEN_KEYS):
             errors.append(f"{where}: `when` must be exactly "
                           "{input: another input's id, is: the answer that "
-                          "makes this one apply}.")
+                          "makes this one apply — or a list of answers, any "
+                          "one of which does}.")
         for bound in ("min_from", "max_from"):
             if bound in f and kind == "input":
                 if not isinstance(f[bound], str):
@@ -638,10 +663,28 @@ def _check_field_graph(decl: dict, errors: list) -> None:
                 "not declare as an input. A field can only depend on another "
                 "answer from the same setup screen.")
             continue
-        issue = check_typed_value(gate, when.get("is"))
-        if issue:
-            errors.append(f'{where}: `when.is` must be an answer '
-                          f'"{gate["label"]}" could give — {issue}')
+        # One answer, or several any one of which applies. Every one of them
+        # is checked against the gate's own declaration, so a list cannot
+        # smuggle in an answer the gate could never give — a gate that can
+        # never be met hides its field forever, with nothing on screen to
+        # say a question exists at all.
+        wants = gate_answers(when["is"])
+        if wants is None:
+            errors.append(f"{where}: `when.is` is an empty list, which is a "
+                          "gate no answer could ever meet. Name the answers "
+                          "that make this field apply.")
+            continue
+        seen_answers = []
+        for w in wants:
+            issue = check_typed_value(gate, w)
+            if issue:
+                errors.append(f'{where}: `when.is` must name answers '
+                              f'"{gate["label"]}" could give — {issue}')
+            elif any(_same(w, prior) for prior in seen_answers):
+                errors.append(f'{where}: `when.is` names '
+                              f'{option_label(gate, w)} twice.')
+            else:
+                seen_answers.append(w)
 
     # A cycle would make the setup screen unresolvable: each field waits on
     # the other and neither is ever asked. Refused at load, so it can never
@@ -826,14 +869,19 @@ def input_activity(record: dict, supplied: dict) -> dict:
         other = when["input"]
         gate = specs[other]
         why = resolve(other, chain | {fid})
+        wants = gate_answers(when["is"]) or []
         if why is not None:
             state[fid] = (f'it only applies when "{gate["label"]}" does, '
                           "and that does not")
         elif supplied.get(other) is None:
             state[fid] = f'it only applies once "{gate["label"]}" is answered'
-        elif not _same(supplied.get(other), when["is"]):
+        # Per answer through `_same`, never Python's `in`: `in` compares with
+        # `==`, under which 1 satisfies a gate listing True and 0 satisfies
+        # one listing False. A gate opening on the wrong answer asks a
+        # question that does not apply and hides one that does.
+        elif not any(_same(supplied.get(other), w) for w in wants):
             state[fid] = (f'it only applies when "{gate["label"]}" is '
-                          f'{option_label(gate, when["is"])}')
+                          f'{answer_phrase(gate, wants)}')
         else:
             state[fid] = None
         return state[fid]

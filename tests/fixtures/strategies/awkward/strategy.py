@@ -63,13 +63,18 @@ STRATEGY = {
         {"id": "stance", "label": "How you are trading right now",
          "type": "text", "required": True,
          "options": [{"value": "building", "label": "Building positions"},
+                     {"value": "trimming", "label": "Trimming — selling down"},
                      {"value": "paused", "label": "Paused — not adding"}],
          "explain": "Whether you are putting money to work at the moment. "
                     "Choosing paused stops this fixture proposing anything "
                     "new; it says nothing about what you already hold."},
-        # Gated on the answer above, and itself the gate for the next one.
+        # Gated on ANY of several answers above, and itself the gate for the
+        # next one. A reserve means something whether you are buying or
+        # selling down and nothing at all while paused — which a single
+        # equality test could not say.
         {"id": "keeps-reserve", "label": "Do you keep cash back?",
-         "type": "boolean", "when": {"input": "stance", "is": "building"},
+         "type": "boolean",
+         "when": {"input": "stance", "is": ["building", "trimming"]},
          "explain": "Whether you deliberately hold some cash rather than "
                     "putting all of it into positions. Answer no and "
                     "nothing below is asked."},

@@ -287,6 +287,65 @@ class TestConditionalFields:
         assert contract.check_inputs(rec, {"stance": "out", "size": 4})[0] == \
             {"stance": "out"}
 
+    def several(self):
+        """A field that applies under any of several answers — the shape a
+        single equality test could not express."""
+        return record(inputs=[
+            field("stance", type="text", options=[
+                {"value": "growth", "label": "Growth"},
+                {"value": "blend", "label": "Blend"},
+                {"value": "income", "label": "Income"}]),
+            field("size", when={"input": "stance", "is": ["growth", "blend"]})])
+
+    def test_a_gate_can_accept_any_of_several_answers(self):
+        rec = self.several()
+        for answer in ("growth", "blend"):
+            assert contract.check_inputs(rec, {"stance": answer,
+                                               "size": 4})[0] == \
+                {"stance": answer, "size": 4}
+        assert contract.check_inputs(rec, {"stance": "income", "size": 4})[0] \
+            == {"stance": "income"}
+        assert contract.validate_declaration(
+            decl(inputs=rec["inputs"])) == []
+
+    def test_the_reason_names_every_answer_that_would_apply(self):
+        state = contract.input_activity(self.several(), {"stance": "income"})
+        assert state["size"] == \
+            'it only applies when "Stance" is Growth or Blend'
+
+    def test_a_list_gate_still_runs_the_check_on_its_own_output(self):
+        rec = self.several()
+        first, _ = contract.check_inputs(rec, {"stance": "growth", "size": 4})
+        second, problems = contract.check_inputs(rec, first)
+        assert (second, problems) == (first, [])
+
+    def test_one_bad_answer_in_the_list_refuses_the_whole_gate(self):
+        errors = contract.validate_declaration(decl(inputs=[
+            field("b", type="boolean"),
+            field("a", when={"input": "b", "is": [True, "maybe"]})]))
+        assert any("could give" in e for e in errors)
+
+    def test_an_empty_list_is_a_gate_nothing_could_meet(self):
+        errors = contract.validate_declaration(decl(inputs=[
+            field("b", type="boolean"),
+            field("a", when={"input": "b", "is": []})]))
+        assert any("empty list" in e for e in errors)
+
+    def test_the_same_answer_twice_is_refused(self):
+        errors = contract.validate_declaration(decl(inputs=[
+            field("b", type="boolean"),
+            field("a", when={"input": "b", "is": [True, True]})]))
+        assert any("twice" in e for e in errors)
+
+    def test_a_yes_no_gate_is_not_satisfied_by_a_number(self):
+        """Python's `in` compares with `==`, under which 1 equals True. A
+        gate listing yes would then open on a 1 from somewhere else, asking
+        a question that does not apply."""
+        rec = record(inputs=[
+            field("b", type="boolean"),
+            field("a", when={"input": "b", "is": [True]})])
+        assert contract.input_activity(rec, {"b": 1})["a"] is not None
+
     def test_a_gate_naming_something_undeclared_is_refused(self):
         errors = contract.validate_declaration(decl(inputs=[
             field("a", when={"input": "nowhere", "is": True})]))
