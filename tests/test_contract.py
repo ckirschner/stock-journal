@@ -32,7 +32,9 @@ def record(**over):
               "defaults": {}, "values_version": 1, "dir": "/nowhere",
               "decide": lambda ctx: {
                   "state": "sit", "payload": {},
-                  "reason": {"rule": "always", "summary": "By design."}}})
+                  "reason": {"rule": "always", "summary": "By design.",
+                             "evidence": [{"label": "A stated figure",
+                                           "unit": "count", "actual": 1}]}}})
     r.update(over)
     return r
 
@@ -106,12 +108,13 @@ class TestDeclarationValidation:
         assert any("explain" in e for e in errors)
 
     def test_a_value_may_not_be_required(self):
-        """Every value ships a default; something the user must supply is
-        an input wearing the wrong hat."""
+        """Every value ships a default. The refusal must teach the test
+        that settles it, not merely restate the rule."""
         errors = contract.validate_declaration(decl(values=[
             {"id": "pace", "label": "Pace", "type": "number",
              "required": True, "explain": "A confused declaration."}]))
-        assert any("input, not a value" in e for e in errors)
+        assert any("ship a sensible default" in e for e in errors)
+        assert any("account balance" in e for e in errors)
 
     def test_an_id_shared_by_input_and_value_is_refused(self):
         field = {"id": "pace", "label": "Pace", "type": "number",
@@ -272,6 +275,224 @@ class TestEvaluate:
                                        self.ctx())
             assert result["produced_by"] == "host", bad
             assert result["render"] in ("unknown", "blocked"), bad
+
+
+class TestEvidenceShape:
+    """A citation's own form, before anything is resolved."""
+
+    def cited(self, item, rec=None):
+        return contract.validate_decision(rec or record(), {
+            "state": "sit", "payload": {},
+            "reason": {"rule": "r", "summary": "s", "evidence": [item]}})
+
+    def test_a_verdict_about_the_security_must_cite_something(self):
+        errors = contract.validate_decision(record(), {
+            "state": "sit", "payload": {},
+            "reason": {"rule": "r", "summary": "s", "evidence": []}})
+        assert any("has to say what it rested on" in e for e in errors)
+
+    def test_an_evaluation_tier_state_may_cite_nothing(self):
+        rec = record(states=[{"id": "dark", "name": "Dark",
+                              "render": "unknown", "description": "d"}])
+        assert contract.validate_decision(rec, {
+            "state": "dark", "payload": {},
+            "reason": {"rule": "r", "summary": "s", "evidence": []}}) == []
+
+    def test_exactly_one_subject_is_named(self):
+        assert any("exactly one subject" in e
+                   for e in self.cited({"measure": "fcf_ttm",
+                                        "fact": "position.weight"}))
+        assert any("exactly one subject" in e for e in self.cited({}))
+
+    def test_a_strategy_never_restates_a_figure_the_host_knows(self):
+        errors = self.cited({"measure": "fcf_ttm", "actual": 999})
+        assert any("remove `actual`" in e for e in errors)
+        assert any("a restatement can be wrong" in e for e in errors)
+
+    def test_a_stated_figure_must_carry_a_value_or_say_why_not(self):
+        errors = self.cited({"label": "Days held", "unit": "days"})
+        assert any("exactly one of `actual`" in e for e in errors)
+
+    def test_a_stated_figure_cannot_invent_a_unit(self):
+        errors = self.cited({"label": "Vibe", "unit": "vibes", "actual": 1})
+        assert any("never invents a rendering" in e for e in errors)
+
+    def test_a_comparator_and_threshold_come_together(self):
+        errors = self.cited({"measure": "fcf_ttm", "comparator": "at_least"})
+        assert any("come together or not at all" in e for e in errors)
+
+    def test_an_unknown_comparator_is_refused(self):
+        errors = self.cited({"measure": "fcf_ttm", "comparator": "vibes_with",
+                             "threshold": 1})
+        assert any("`comparator` must be one of" in e for e in errors)
+
+    def test_threshold_from_must_name_a_declared_setting(self):
+        rec = record(values=[{"id": "cap", "label": "Cap", "type": "number",
+                              "explain": "e"}])
+        assert self.cited({"measure": "fcf_ttm", "comparator": "at_most",
+                           "threshold": 5, "threshold_from": "cap"}, rec) == []
+        errors = self.cited({"measure": "fcf_ttm", "comparator": "at_most",
+                             "threshold": 5, "threshold_from": "nope"}, rec)
+        assert any("neither a value nor an input" in e for e in errors)
+
+    def test_at_only_means_something_for_a_measure(self):
+        errors = self.cited({"fact": "position.weight", "at": "2024-12-31"})
+        assert any("only means something alongside `measure`" in e
+                   for e in errors)
+
+
+class TestEvidenceResolution:
+    """What the host answers. The strategy asked; these are the facts."""
+
+    def ctx(self, **over):
+        c = {"contract": 1, "today": "2026-08-08", "inputs": {}, "values": {},
+             "measures": {"fcf_ttm": {
+                 "current": {"status": "known", "value": 150.0,
+                             "source": "computed", "cautions": ["stale"],
+                             "provenance": ["10-K S-1"]},
+                 "series": {"cadence": "quarterly", "truncated": False,
+                            "note": None, "points": [
+                                {"period_end": "2023-12-31",
+                                 "filed": "2024-02-20", "form": "10-K",
+                                 "accession": "S-1", "value": 120.0,
+                                 "reason": None}]}}},
+             "position": {"weight": {"status": "absent",
+                                     "reason": "the journal records no "
+                                               "account value"},
+                          "shares": 10.0},
+             "portfolio": {"slots": {"occupied": 3}}}
+        c.update(over)
+        return c
+
+    def resolve(self, items, rec=None, ctx=None):
+        return contract.resolve_evidence(rec or record(), ctx or self.ctx(),
+                                         items)
+
+    def test_a_measure_resolves_to_the_banks_label_and_unit(self):
+        [item], errors = self.resolve([{"measure": "fcf_ttm"}])
+        assert errors == []
+        assert item["subject"]["label"] == \
+            "Free cash flow, trailing twelve months"
+        assert item["subject"]["unit"] == "usd"
+        assert item["observed"]["value"] == 150.0
+        assert item["observed"]["cautions"] == ["stale"]
+
+    def test_the_outcome_is_derived_never_claimed(self):
+        [passed], _ = self.resolve([{"measure": "fcf_ttm",
+                                     "comparator": "at_least",
+                                     "threshold": 100}])
+        [failed], _ = self.resolve([{"measure": "fcf_ttm",
+                                     "comparator": "at_least",
+                                     "threshold": 200}])
+        assert passed["outcome"] == "pass"
+        assert failed["outcome"] == "fail"
+
+    def test_an_absent_value_can_never_come_out_as_a_pass(self):
+        ctx = self.ctx()
+        ctx["measures"]["fcf_ttm"]["current"] = {
+            "status": "absent", "reason": "no filings are stored"}
+        for threshold in (-1e9, 0, 1e9):
+            [item], _ = self.resolve([{"measure": "fcf_ttm",
+                                       "comparator": "at_least",
+                                       "threshold": threshold}], ctx=ctx)
+            assert item["outcome"] == "unknown"
+            assert item["observed"]["reason"] == "no filings are stored"
+
+    def test_an_item_with_no_test_is_noted_not_passed(self):
+        [item], _ = self.resolve([{"measure": "fcf_ttm"}])
+        assert item["outcome"] == "noted"
+        assert item["test"] is None
+
+    def test_a_past_reading_is_cited_by_its_period_end(self):
+        [item], errors = self.resolve([{"measure": "fcf_ttm",
+                                        "at": "2023-12-31"}])
+        assert errors == []
+        assert item["observed"]["value"] == 120.0
+        assert "10-K" in item["observed"]["provenance"][0]
+
+    def test_a_reading_that_is_not_on_record_says_which_are(self):
+        [item], _ = self.resolve([{"measure": "fcf_ttm", "at": "1999-12-31"}])
+        assert item["observed"]["status"] == "absent"
+        assert "2023-12-31" in item["observed"]["reason"]
+
+    def test_a_host_fact_answers_with_the_hosts_own_reason(self):
+        """The weight gap renders honestly without the strategy inventing a
+        sentence about it."""
+        [item], errors = self.resolve([{"fact": "position.weight"}])
+        assert errors == []
+        assert item["subject"]["label"] == "Position weight"
+        assert item["observed"]["status"] == "absent"
+        assert item["observed"]["reason"] == \
+            "the journal records no account value"
+
+    def test_a_bare_host_fact_resolves_to_its_figure(self):
+        [item], _ = self.resolve([{"fact": "portfolio.slots_occupied"}])
+        assert item["observed"]["value"] == 3
+        assert item["subject"]["unit"] == "count"
+
+    def test_an_unknown_measure_is_a_request_against_the_host(self):
+        _, errors = self.resolve([{"measure": "vibes_5y"}])
+        assert any("not in the metric bank" in e for e in errors)
+        assert any("request against the host" in e for e in errors)
+
+    def test_an_unknown_host_fact_lists_what_is_reported(self):
+        _, errors = self.resolve([{"fact": "portfolio.alpha"}])
+        assert any("does not report" in e for e in errors)
+
+    def test_comparing_a_number_against_a_date_is_refused(self):
+        _, errors = self.resolve([{"measure": "fcf_ttm",
+                                   "comparator": "at_least",
+                                   "threshold": "2024-01-01"}])
+        assert any("same kind of thing" in e for e in errors)
+
+    def test_ordering_comparators_are_refused_for_yes_no(self):
+        _, errors = self.resolve([{"label": "Falsifier fired",
+                                   "unit": "yes_no", "actual": True,
+                                   "comparator": "at_least",
+                                   "threshold": False}])
+        assert any("only means something for numbers and dates"
+                   in e for e in errors)
+
+    def test_dates_compare_chronologically(self):
+        [item], errors = self.resolve([{"label": "Exit due", "unit": "date",
+                                        "actual": "2026-12-01",
+                                        "comparator": "at_most",
+                                        "threshold": "2026-08-08"}])
+        assert errors == []
+        assert item["outcome"] == "fail"     # December is after August
+
+    def test_a_declared_setting_renders_with_its_own_label(self):
+        rec = record(values=[{"id": "cap", "label": "Position cap",
+                              "type": "number", "unit": "percent",
+                              "explain": "How large a position may get."}])
+        [item], errors = self.resolve([{"value": "cap"}], rec=rec,
+                                      ctx=self.ctx(values={"cap": 5}))
+        assert errors == []
+        assert item["subject"]["label"] == "Position cap"
+        assert item["subject"]["unit"] == "percent"
+        assert item["observed"]["value"] == 5
+        assert item["subject"]["explain"]
+
+    def test_a_threshold_says_whose_limit_it_is(self):
+        rec = record(values=[{"id": "cap", "label": "Position cap",
+                              "type": "number", "unit": "percent",
+                              "explain": "e"}])
+        [item], _ = self.resolve([{"fact": "position.weight",
+                                   "comparator": "at_most", "threshold": 5,
+                                   "threshold_from": "cap"}], rec=rec)
+        assert item["test"]["threshold_from"] == {
+            "kind": "value", "id": "cap", "label": "Position cap"}
+
+
+class TestEvidenceUnitsTrackTheBank:
+    def test_every_bank_unit_can_be_rendered(self):
+        """The bank names units; evidence has to be able to render each of
+        them, or a measure becomes uncitable the day it is added."""
+        from engine import profiles
+        bank = profiles.load_bank("metric-bank")
+        used = {str(e.get("unit")) for e in bank["entries"]
+                if e.get("unit") is not None}
+        assert used <= set(contract.EVIDENCE_UNITS)
 
 
 class TestHostResults:

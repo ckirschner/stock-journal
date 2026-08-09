@@ -43,8 +43,31 @@ class TestTheProof:
         assert result["render"] == "hold"
         assert result["produced_by"] == "strategy"
         assert result["state"]["id"] == "scaffold-hold"
-        assert result["reason"]["data"]["journal_note"] == "present"
-        assert result["reason"]["data"]["patience"] == 4  # shipped default
+        # The escape hatch carried the one thing that is genuinely prose.
+        assert result["reason"]["note"] == "present"
+
+        tested, value_cited, stated, dated = result["reason"]["evidence"]
+        # The host answered the citation: label and unit from the bank, the
+        # value from the context, the outcome from the arithmetic.
+        assert tested["subject"]["label"] == \
+            "Free cash flow, trailing twelve months"
+        assert tested["subject"]["unit"] == "usd"
+        assert tested["observed"]["value"] == 150.0
+        assert tested["observed"]["provenance"]      # the bank's, not made up
+        assert tested["test"]["phrase"] == "above"
+        assert tested["outcome"] == "pass"
+        # A declared value cited by id renders with its own declared label
+        # and its explanation, so the number can be understood in place.
+        assert value_cited["subject"]["label"] == "Readings considered"
+        assert value_cited["observed"]["value"] == 4     # shipped default
+        assert value_cited["subject"]["explain"]
+        assert value_cited["outcome"] == "noted"
+        # A figure the strategy worked out itself is stated, and says so.
+        assert stated["subject"]["kind"] == "stated"
+        assert stated["observed"]["source"] == "stated"
+        # A past reading of the same measure, cited by its period end.
+        assert dated["subject"]["at"] == "2023-12-31"
+        assert dated["observed"]["value"] == 150.0
 
     def test_an_override_reaches_the_decision(self):
         store_company()
@@ -55,7 +78,10 @@ class TestTheProof:
                "bucket": "ideas", "metrics": {}}
         ctx = context.build_context(sec, [sec], resolved["values"], {})
         result = contract.evaluate(rec, ctx)
-        assert result["reason"]["data"]["patience"] == 1
+        cited = next(e for e in result["reason"]["evidence"]
+                     if e["subject"]["id"] == "patience")
+        assert cited["observed"]["value"] == 1
+        assert result["reason"]["note"] is None
 
     def test_absence_flows_through_as_its_own_state(self):
         """No stored data: the scaffold must land on its unknown-typed
@@ -70,4 +96,9 @@ class TestTheProof:
         assert result["render"] == "unknown"
         assert result["tier"] == "evaluation"
         assert result["state"]["id"] == "scaffold-dark"
-        assert "fetch" in result["reason"]["summary"]
+        # The strategy cited the measure and said nothing about why it was
+        # absent; the host's own reason is what reaches the screen.
+        [item] = result["reason"]["evidence"]
+        assert item["observed"]["status"] == "absent"
+        assert "fetch" in item["observed"]["reason"]
+        assert item["outcome"] == "noted"

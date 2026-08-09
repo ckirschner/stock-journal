@@ -4,6 +4,8 @@ decision logic, and one bad plugin can never sink the rest."""
 
 from pathlib import Path
 
+import pytest
+
 from engine import contract, strategy_loader
 
 FIXTURES = Path(__file__).parent / "fixtures" / "strategies"
@@ -30,7 +32,7 @@ class TestDiscovery:
         assert {Path(r["dir"]).name for r in reports} >= {
             "sound", "broken-syntax", "wrong-contract", "silent-version",
             "mistyped-values", "eager", "invents", "twin-a", "twin-b",
-            "corrupt-values"}
+            "corrupt-values", "shipped-data"}
 
     def test_a_missing_root_is_simply_empty(self):
         strategies, reports = strategy_loader.discover(
@@ -132,6 +134,90 @@ class TestLogicIsNeverRunAtLoad:
                                    {"inputs": {}, "values": {}})
         assert result["state"]["id"] == "host:invalid-decision"
         assert "moon-shot" in result["reason"]["summary"]
+
+
+class TestShippedReferenceData:
+    """The third channel: static data a bundle ships, which the host loads
+    so a strategy never opens a file itself."""
+
+    def test_declared_files_are_loaded_and_handed_back(self):
+        strategies, _ = load()
+        rec = strategies["shipped-data"]
+        assert set(rec["reference"]) == {"sectors.yaml"}
+        assert rec["reference"]["sectors.yaml"]["sectors"]["SYN"] \
+            == "Industrials"
+
+    def test_reference_data_reaches_the_decision(self):
+        strategies, _ = load()
+        ctx = {"contract": 1, "today": "2026-08-08", "inputs": {},
+               "values": {}, "security": {"ticker": "SYN"}}
+        result = contract.evaluate(strategies["shipped-data"], ctx)
+        assert result["state"]["id"] == "known-sector"
+        assert "Industrials" in result["reason"]["summary"]
+
+    def test_a_strategy_cannot_rewrite_what_it_ships(self):
+        """One evaluation must not change what the next one reads."""
+        strategies, _ = load()
+        rec = strategies["shipped-data"]
+        with pytest.raises(TypeError):
+            rec["reference"]["sectors.yaml"]["sectors"]["SYN"] = "Utilities"
+
+    def test_reference_is_always_present_even_when_none_is_shipped(self):
+        """Reading it is never a surprise, so a strategy that grows a table
+        later does not have to guard the key."""
+        strategies, _ = load()
+        seen = {}
+        rec = dict(strategies["sound"])
+        rec["decide"] = lambda ctx: seen.update(ctx) or {
+            "state": "stage-in",
+            "payload": {"size": {"unit": "weight", "value": 1.0},
+                        "condition": None},
+            "reason": {"rule": "r", "summary": "s",
+                       "evidence": [{"input": "target-weight"}]}}
+        contract.evaluate(rec, {"contract": 1, "today": "2026-08-08",
+                                "inputs": {"target-weight": 10},
+                                "values": {"first-stage": 40}})
+        assert seen["reference"] == {}
+
+    def test_shipped_data_is_shared_not_copied_per_security(self):
+        """A sector map copied for every holding on every refresh would be
+        real cost; frozen data can be handed out by reference instead."""
+        strategies, _ = load()
+        rec = strategies["shipped-data"]
+        seen = []
+        probe = dict(rec)
+        probe["decide"] = lambda ctx: seen.append(ctx["reference"]) or {
+            "state": "unknown-sector", "payload": {},
+            "reason": {"rule": "r", "summary": "s", "evidence": []}}
+        base = {"contract": 1, "today": "2026-08-08", "inputs": {},
+                "values": {}, "security": {"ticker": "NOPE"}}
+        contract.evaluate(probe, dict(base))
+        contract.evaluate(probe, dict(base))
+        assert seen[0] is seen[1] is rec["reference"]
+
+    def test_a_declared_file_that_is_missing_refuses_the_bundle(self,
+                                                                tmp_path):
+        bundle = tmp_path / "no-table"
+        bundle.mkdir()
+        (bundle / "strategy.py").write_text(
+            "STRATEGY = {'id': 'no-table', 'name': 'N', 'summary': 's',"
+            " 'version': 1, 'contract': 1, 'changelog': {1: 'f'},"
+            " 'reference': ['sectors.yaml'],"
+            " 'states': [{'id': 's', 'name': 'n', 'render': 'hold',"
+            " 'description': 'd'}]}\ndef decide(ctx): pass\n")
+        _, reports = strategy_loader.discover([tmp_path])
+        [r] = reports
+        assert not r["ok"]
+        assert any("is not in the bundle" in e for e in r["errors"])
+
+    def test_a_path_out_of_the_bundle_is_refused(self):
+        errors = contract.validate_declaration({
+            "id": "sneaky", "name": "S", "summary": "s", "version": 1,
+            "contract": 1, "changelog": {1: "f"},
+            "reference": ["../../secrets.yaml"],
+            "states": [{"id": "s", "name": "n", "render": "hold",
+                        "description": "d"}]})
+        assert any("plain file name inside the bundle" in e for e in errors)
 
 
 class TestDiscoveryNeverRaises:

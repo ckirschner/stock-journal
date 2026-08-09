@@ -34,7 +34,12 @@ The shape, in full::
                                   "opened", "market_value", "weight"}]},
       "values": {id: value},        # the resolved declaration chain
       "inputs": {id: value},        # what the user supplied
+      "reference": {file name: parsed},   # what the bundle ships, frozen
     }
+
+`reference` is attached by engine/contract.evaluate rather than built here:
+it belongs to the strategy, not the security, and it is shared read-only
+across every evaluation instead of being copied for each one.
 
 Reading rules a strategy can rely on:
 

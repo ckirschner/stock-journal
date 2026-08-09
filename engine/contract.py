@@ -12,9 +12,19 @@ that doesn't conform. A strategy never invents vocabulary: an undeclared
 state, an unknown payload key, or a render type of its own devising is an
 error in place, not a new feature.
 
+A reason carries typed evidence, not prose. The strategy cites what it looked
+at and what it required; the host answers with the figure, its label and unit,
+whether it was absent and why, and how the comparison came out. That is what
+lets a screen write "Return on invested capital, 5-year median — 18.9%, at
+least your minimum of 15%" without the strategy pre-rendering a sentence, and
+it is what lets the same evidence be compared across securities and counted
+over time. Prose that genuinely will not fit goes in `reason.note`, which is
+one string and deliberately harder to reach for.
+
 Nothing in this module holds an opinion about investing. Whether 15 is a good
 P/E is a strategy's business; that a decision must name its rule is the
-host's.
+host's. Deciding that 18.9 is at least 15 is arithmetic, not an opinion, which
+is why the host does it.
 """
 
 from __future__ import annotations
@@ -35,6 +45,8 @@ CONTRACT_VERSION = 1
 MAX_STATES = 12
 
 _ID_CHARS = "abcdefghijklmnopqrstuvwxyz0123456789-"
+
+_NO_REFERENCE = MappingProxyType({})
 
 
 # ---------------------------------------------------------------------------
@@ -106,6 +118,98 @@ HOST_STATES = MappingProxyType({
 VALUE_TYPES = ("number", "integer", "boolean", "text")
 SIZE_UNITS = ("weight", "usd", "shares")   # weight is a percent number
 
+# The one test that decides whether something is a value or an input. It is
+# quoted verbatim wherever the question can come up, because an author who
+# gets this wrong writes a strategy that either cannot ship or asks the user
+# for something it should have an opinion about.
+SPLIT_TEST = (
+    "The test is whether the strategy can ship a sensible default. A "
+    "strategy has an opinion about a 5% position cap, so that is a value. No "
+    "strategy can have an opinion about someone's account balance, so that "
+    "is an input.")
+
+
+# ---------------------------------------------------------------------------
+# Evidence — how a decision says what it looked at.
+#
+# A verdict without the figures that produced it teaches nothing, and a
+# free-text reason teaches only the security in front of you: it cannot be
+# compared across holdings or counted across time. So a strategy cites what
+# it examined and what it required, and the *host* resolves the citation into
+# the rendered fact. That division is deliberate:
+#
+#   - the strategy owns the question — which measure, which threshold, which
+#     direction. Those are opinions and belong to it.
+#   - the host owns the answer — the value, its label, its unit, whether it
+#     was absent and why, and whether the comparison passed. Those are
+#     facts, and a strategy restating them could restate them wrongly.
+#
+# The consequence worth naming: a strategy cannot misquote the host's own
+# numbers, because it never quotes them at all. It cannot claim a pass on an
+# absent value either — absence resolves to `unknown`, never to success.
+# ---------------------------------------------------------------------------
+
+# How a value is rendered. Must remain a superset of the metric bank's own
+# units (tests/test_contract.py pins that), plus the renderings the bank has
+# no need for. A strategy picks from this list; it never invents one.
+EVIDENCE_UNITS = (
+    "percent", "percentage_points", "times", "ratio", "score", "usd",
+    "shares", "years", "days", "count", "times_own_median",
+    "date", "text", "yes_no", "none",
+)
+
+
+def _cmp(phrase, fn, numeric_only):
+    return MappingProxyType({"phrase": phrase, "fn": fn,
+                             "numeric_only": numeric_only})
+
+
+# The comparison vocabulary. `phrase` is how the host says it in a sentence;
+# a strategy supplies only the name.
+COMPARATORS = MappingProxyType({
+    "at_least":   _cmp("at least", lambda a, b: a >= b, True),
+    "at_most":    _cmp("at most", lambda a, b: a <= b, True),
+    "above":      _cmp("above", lambda a, b: a > b, True),
+    "below":      _cmp("below", lambda a, b: a < b, True),
+    "equals":     _cmp("equal to", lambda a, b: a == b, False),
+    "not_equals": _cmp("not equal to", lambda a, b: a != b, False),
+})
+
+
+def _fact(label, unit, path, bare=False, when_missing=None):
+    return MappingProxyType({"label": label, "unit": unit, "path": path,
+                             "bare": bare, "when_missing": when_missing})
+
+
+# Host-provided facts a strategy may cite by name. These are the figures the
+# host reports and does not interpret — the ticket's "shares, cost, price,
+# market value, market value as a fraction of the account". Citing one is
+# always more honest than restating it: where the host cannot answer, the
+# host's own reason is what the user reads.
+HOST_FACTS = MappingProxyType({
+    "position.weight": _fact("Position weight", "percent",
+                             ("position", "weight")),
+    "position.market_value": _fact("Position market value", "usd",
+                                   ("position", "market_value")),
+    "position.shares": _fact("Shares held", "shares",
+                             ("position", "shares"), bare=True),
+    "position.cost_basis": _fact("Cost basis", "usd",
+                                 ("position", "cost_basis"), bare=True,
+                                 when_missing="no position is held"),
+    "portfolio.cash": _fact("Free cash", "usd", ("portfolio", "cash")),
+    "portfolio.account_value": _fact("Account value", "usd",
+                                     ("portfolio", "account_value")),
+    "portfolio.slots_occupied": _fact("Positions held", "count",
+                                      ("portfolio", "slots", "occupied"),
+                                      bare=True),
+    "price.latest": _fact("Latest price", "usd", ("price", "latest")),
+})
+
+# Exactly one of these names the subject of an evidence item.
+_SUBJECT_KEYS = ("measure", "fact", "input", "value", "label")
+_ITEM_KEYS = {"measure", "fact", "input", "value", "label", "unit", "actual",
+              "absent", "at", "comparator", "threshold", "threshold_from"}
+
 
 # ---------------------------------------------------------------------------
 # small checks
@@ -132,6 +236,22 @@ def _is_date(s) -> bool:
         return True
     except ValueError:
         return False
+
+
+def _kind_of(v) -> str:
+    """What kind of thing a figure is, for comparison. Dates are text that
+    sorts chronologically in ISO form, so they compare as dates, not text."""
+    if isinstance(v, bool):
+        return "yes/no"
+    if _is_num(v):
+        return "number"
+    if _is_date(v):
+        return "date"
+    return "text"
+
+
+def _is_scalar(v) -> bool:
+    return isinstance(v, (bool, int, float, str))
 
 
 def check_typed_value(spec: dict, value) -> str | None:
@@ -168,7 +288,7 @@ def check_typed_value(spec: dict, value) -> str | None:
 # ---------------------------------------------------------------------------
 
 _DECL_KEYS = {"id", "name", "summary", "version", "contract", "changelog",
-              "states", "inputs", "values"}
+              "states", "inputs", "values", "reference"}
 _STATE_KEYS = {"id", "name", "description", "render"}
 _FIELD_KEYS = {"id", "label", "type", "unit", "required", "min", "max",
                "explain"}
@@ -200,9 +320,8 @@ def _check_fields(kind: str, fields, errors: list) -> None:
             errors.append(f"{where} has keys this contract does not know: "
                           f"{', '.join(sorted(map(str, unknown)))}.")
         if kind == "value" and "required" in f:
-            errors.append(f"{where} declares `required`, but every value "
-                          "ships a default — something the user must supply "
-                          "is an input, not a value.")
+            errors.append(f"{where} declares `required`, which no value can "
+                          "be: every value ships a default. " + SPLIT_TEST)
         if not _is_text(f.get("label")):
             errors.append(f"{where} needs a user-facing `label`.")
         if f.get("type") not in VALUE_TYPES:
@@ -319,6 +438,23 @@ def validate_declaration(decl) -> list[str]:
     _check_fields("input", decl.get("inputs", []), errors)
     _check_fields("value", decl.get("values", []), errors)
 
+    reference = decl.get("reference", [])
+    if not isinstance(reference, list):
+        errors.append("`reference` must be a list of file names this bundle "
+                      "ships beside its code.")
+    else:
+        for name in reference:
+            if not isinstance(name, str) or not name:
+                errors.append("`reference` entries must be file names.")
+            elif "/" in name or "\\" in name or name.startswith("."):
+                errors.append(f'`reference` entry "{name}" must be a plain '
+                              "file name inside the bundle — a strategy "
+                              "reads its own shipped data and nothing else.")
+            elif not name.endswith((".yaml", ".yml", ".json")):
+                errors.append(f'`reference` entry "{name}" must be .yaml, '
+                              ".yml or .json — the host parses it so the "
+                              "strategy never opens a file itself.")
+
     input_ids = {f.get("id") for f in decl.get("inputs", [])
                  if isinstance(f, dict)}
     value_ids = {f.get("id") for f in decl.get("values", [])
@@ -364,7 +500,7 @@ def validate_inputs(record: dict, supplied: dict) -> list[str]:
 # ---------------------------------------------------------------------------
 
 _DECISION_KEYS = {"state", "payload", "reason"}
-_REASON_KEYS = {"rule", "summary", "data"}
+_REASON_KEYS = {"rule", "summary", "evidence", "note"}
 
 
 def _names(keys) -> str:
@@ -388,7 +524,7 @@ def _check_payload(render: str, payload, errors: list) -> None:
     if extra:
         errors.append(f"a `{render}` state's payload does not know: "
                       f"{_names(extra)}. Extra facts belong in the reason's "
-                      "`data`.")
+                      "`evidence`.")
     if missing or extra:
         return
 
@@ -427,6 +563,94 @@ def _check_payload(render: str, payload, errors: list) -> None:
                 and all(_is_text(n) for n in needs)):
             errors.append("`needs` must be a non-empty list of sentences "
                           "saying what decision is owed from the user.")
+
+
+def _check_evidence_item(record, item, where, errors) -> None:
+    """One citation's own shape, without resolving it. Whether the thing
+    cited exists is a separate question, answered in resolve_evidence."""
+    if not isinstance(item, dict):
+        errors.append(f"{where} must be a mapping.")
+        return
+    unknown = set(item) - _ITEM_KEYS
+    if unknown:
+        errors.append(f"{where} has keys this contract does not know: "
+                      + _names(unknown) + ".")
+
+    named = [k for k in _SUBJECT_KEYS if k in item]
+    if len(named) != 1:
+        errors.append(
+            f"{where} must name exactly one subject — `measure` (a bank "
+            "measure), `fact` (a figure the host reports), `input`, `value`, "
+            "or `label` with `unit` for something the strategy works out "
+            f"itself. It names {_names(named) or 'none'}.")
+        return
+    subject = named[0]
+
+    if subject == "label":
+        if not _is_text(item.get("label")):
+            errors.append(f"{where}: `label` must say what this figure is.")
+        if item.get("unit") not in EVIDENCE_UNITS:
+            errors.append(f"{where}: `unit` must be one of "
+                          f"{', '.join(EVIDENCE_UNITS)}. A strategy chooses "
+                          "how a number reads from the host's list; it never "
+                          "invents a rendering.")
+        has = [k for k in ("actual", "absent") if k in item]
+        if len(has) != 1:
+            errors.append(f"{where} must carry exactly one of `actual` (the "
+                          "figure) or `absent` (one sentence saying why it "
+                          "is unknown). The host cannot supply a figure it "
+                          "did not compute.")
+        elif "absent" in item and not _is_text(item["absent"]):
+            errors.append(f"{where}: `absent` must be a sentence saying why "
+                          "the figure is unknown.")
+        elif "actual" in item and not _is_scalar(item["actual"]):
+            errors.append(f"{where}: `actual` must be a number, a "
+                          "YYYY-MM-DD date, true/false, or text.")
+    else:
+        for banned in ("actual", "absent", "unit"):
+            if banned in item:
+                errors.append(
+                    f"{where} cites `{subject}`, so the host supplies its "
+                    f"value, unit and absence — remove `{banned}`. A figure "
+                    "the host already knows is never restated by a strategy, "
+                    "because a restatement can be wrong.")
+        if not isinstance(item[subject], str):
+            errors.append(f"{where}: `{subject}` must name one by id.")
+
+    if "at" in item:
+        if subject != "measure":
+            errors.append(f"{where}: `at` names a reading in a measure's "
+                          "filing history, so it only means something "
+                          "alongside `measure`.")
+        elif not _is_date(item["at"]):
+            errors.append(f"{where}: `at` must be the YYYY-MM-DD period end "
+                          "of the reading being cited.")
+
+    has_cmp, has_thr = "comparator" in item, "threshold" in item
+    if has_cmp != has_thr:
+        errors.append(f"{where}: `comparator` and `threshold` come together "
+                      "or not at all — an item with neither is an "
+                      "observation, which is a fine thing to cite.")
+    elif has_cmp:
+        if item["comparator"] not in COMPARATORS:
+            errors.append(f"{where}: `comparator` must be one of "
+                          f"{', '.join(COMPARATORS)}.")
+        if not _is_scalar(item["threshold"]):
+            errors.append(f"{where}: `threshold` must be a number, a "
+                          "YYYY-MM-DD date, true/false, or text.")
+    if "threshold_from" in item:
+        if not has_thr:
+            errors.append(f"{where}: `threshold_from` says where a threshold "
+                          "came from, so it needs a `threshold`.")
+        else:
+            known = {f["id"] for f in record.get("values", [])} \
+                | {f["id"] for f in record.get("inputs", [])}
+            if item["threshold_from"] not in known:
+                errors.append(
+                    f'{where}: `threshold_from` names "'
+                    f'{item["threshold_from"]}", which this strategy '
+                    "declares as neither a value nor an input. It exists so "
+                    "the screen can say whose limit this is and link to it.")
 
 
 def validate_decision(record: dict, decision) -> list[str]:
@@ -475,10 +699,252 @@ def validate_decision(record: dict, decision) -> list[str]:
         if not _is_text(reason.get("summary")):
             errors.append("`reason.summary` must say, in one plain "
                           "sentence, why this state and not another.")
-        if "data" in reason and not isinstance(reason["data"], dict):
-            errors.append("`reason.data` must be a mapping of the specific "
-                          "figures that fired the rule.")
+        # None is how a strategy says "nothing to add" when the note is
+        # computed rather than literal; only a non-sentence is a mistake.
+        if reason.get("note") is not None and not _is_text(reason["note"]):
+            errors.append("`reason.note` is the escape hatch for what "
+                          "genuinely will not fit an evidence item. It must "
+                          "be a sentence, None, or be left out.")
+
+        evidence = reason.get("evidence")
+        if not isinstance(evidence, list):
+            errors.append("`reason.evidence` must be a list of the figures "
+                          "this decision rests on. Each one cites what was "
+                          "looked at and what was required; the host fills "
+                          "in what it was.")
+        else:
+            for i, item in enumerate(evidence):
+                _check_evidence_item(record, item, f"evidence {i + 1}",
+                                     errors)
+            # A verdict about the security must say what it looked at. An
+            # evaluation-tier state is allowed to cite nothing, because
+            # "the strategy could not run" is not a claim about the company.
+            if not evidence and state is not None \
+                    and RENDER_TYPES[state["render"]]["tier"] == "position":
+                errors.append(
+                    "`reason.evidence` is empty. A verdict about the "
+                    "security has to say what it rested on — cite the "
+                    "measures, facts or settings you read, even when the "
+                    "answer was that they were absent.")
     return errors
+
+
+# ---------------------------------------------------------------------------
+# resolving evidence — the host answers what the strategy asked
+# ---------------------------------------------------------------------------
+
+def _observed(value, source, cautions=None, provenance=None) -> dict:
+    return {"status": "known", "value": value, "source": source,
+            "cautions": list(cautions or []),
+            "provenance": list(provenance or [])}
+
+
+def _unobserved(reason, source) -> dict:
+    return {"status": "absent", "reason": reason, "source": source}
+
+
+def _measure_observation(ctx, item, where, errors):
+    mid = item["measure"]
+    entry = (ctx.get("measures") or {}).get(mid)
+    if entry is None:
+        errors.append(f'{where} cites the measure "{mid}", which is not in '
+                      "the metric bank. A strategy asks only for measures "
+                      "the host offers; anything missing is a request "
+                      "against the host, not something to work around.")
+        return None
+    if "at" not in item:
+        cur = entry["current"]
+        if cur["status"] == "known":
+            return _observed(cur["value"], "measure", cur.get("cautions"),
+                             cur.get("provenance"))
+        return _unobserved(cur["reason"], "measure")
+
+    points = entry["series"]["points"]
+    hit = next((p for p in points if p["period_end"] == item["at"]), None)
+    if hit is None:
+        held = ", ".join(p["period_end"] for p in points) or "none"
+        return _unobserved(
+            f'no reading of this measure is on record for the period '
+            f'ending {item["at"]} (the periods held are: {held})',
+            "measure")
+    if hit["value"] is None:
+        return _unobserved(hit["reason"], "measure")
+    return _observed(hit["value"], "measure",
+                     provenance=[f'{hit["form"]} for the period ending '
+                                 f'{hit["period_end"]}, filed '
+                                 f'{hit["filed"]}'])
+
+
+def _fact_observation(ctx, item, where, errors):
+    fid = item["fact"]
+    spec = HOST_FACTS.get(fid)
+    if spec is None:
+        errors.append(f'{where} cites the host fact "{fid}", which the host '
+                      f"does not report. It reports: {', '.join(HOST_FACTS)}.")
+        return None
+    node = ctx
+    for step in spec["path"]:
+        node = (node or {}).get(step) if isinstance(node, dict) else None
+    if spec["bare"]:
+        if node is None:
+            return _unobserved(spec["when_missing"]
+                               or "the journal does not record this", "fact")
+        return _observed(node, "fact")
+    if not isinstance(node, dict):
+        return _unobserved("the host did not report this figure", "fact")
+    if node.get("status") == "known":
+        return _observed(node["value"], "fact", node.get("cautions"),
+                         node.get("provenance"))
+    return _unobserved(node.get("reason")
+                       or "the host cannot report this figure", "fact")
+
+
+def _declared_observation(record, ctx, item, subject, where, errors):
+    """An input or a declared value, cited by id. Its label and unit come
+    from the declaration, so a setting always reads on screen the way its
+    author named it."""
+    fid = item[subject]
+    spec = next((f for f in record.get(subject + "s", [])
+                 if f["id"] == fid), None)
+    if spec is None:
+        errors.append(f'{where} cites the {subject} "{fid}", which this '
+                      f"strategy does not declare.")
+        return None, None
+    unit = spec.get("unit") if spec.get("unit") in EVIDENCE_UNITS else (
+        "yes_no" if spec["type"] == "boolean"
+        else "text" if spec["type"] == "text" else "none")
+    subject_view = {"kind": subject, "id": fid, "label": spec["label"],
+                    "unit": unit, "explain": spec["explain"]}
+    pool = ctx.get("values" if subject == "value" else "inputs") or {}
+    if fid not in pool or pool[fid] is None:
+        return subject_view, _unobserved(
+            "this setting has no value yet", subject)
+    return subject_view, _observed(pool[fid], subject)
+
+
+def _outcome(observation, item, where, errors):
+    """pass, fail, unknown, or noted. Derived, never claimed: the strategy
+    chose the question, and arithmetic is not an opinion. An absent value
+    is `unknown` and can never come out as success."""
+    if "comparator" not in item:
+        return "noted"
+    if observation["status"] != "known":
+        return "unknown"
+    actual, threshold = observation["value"], item["threshold"]
+    cmp_ = COMPARATORS[item["comparator"]]
+    if _kind_of(actual) != _kind_of(threshold):
+        errors.append(f"{where} compares {_kind_of(actual)} against "
+                      f"{_kind_of(threshold)}; the two have to be the same "
+                      "kind of thing.")
+        return None
+    if cmp_["numeric_only"] and _kind_of(actual) not in ("number", "date"):
+        errors.append(f'{where}: "{item["comparator"]}" only means something '
+                      "for numbers and dates.")
+        return None
+    return "pass" if cmp_["fn"](actual, threshold) else "fail"
+
+
+def resolve_evidence(record: dict, ctx: dict, items: list):
+    """(rendered, errors) — every citation answered by the host.
+
+    The strategy said what it looked at and what it wanted; this says what
+    was there, whether it was absent and why, and how the comparison came
+    out. The result is renderable with no further joins: a screen can write
+    "Return on invested capital, 5-year median — 18.9%, at least your
+    minimum of 15%" from one item.
+    """
+    rendered, errors = [], []
+    for i, item in enumerate(items):
+        where = f"evidence {i + 1}"
+        subject = next(k for k in _SUBJECT_KEYS if k in item)
+
+        if subject == "measure":
+            observation = _measure_observation(ctx, item, where, errors)
+            entry = (ctx.get("measures") or {}).get(item["measure"]) or {}
+            view = {"kind": "measure", "id": item["measure"],
+                    "label": _bank_label(item["measure"]),
+                    "unit": _bank_unit(item["measure"]),
+                    "explain": None}
+            if "at" in item:
+                view["at"] = item["at"]
+                view["cadence"] = (entry.get("series") or {}).get("cadence")
+        elif subject == "fact":
+            observation = _fact_observation(ctx, item, where, errors)
+            spec = HOST_FACTS.get(item["fact"])
+            view = ({"kind": "fact", "id": item["fact"],
+                     "label": spec["label"], "unit": spec["unit"],
+                     "explain": None} if spec else None)
+        elif subject == "label":
+            view = {"kind": "stated", "id": None, "label": item["label"],
+                    "unit": item["unit"], "explain": None}
+            observation = (_observed(item["actual"], "stated")
+                           if "actual" in item
+                           else _unobserved(item["absent"], "stated"))
+        else:
+            view, observation = _declared_observation(
+                record, ctx, item, subject, where, errors)
+
+        if view is None or observation is None:
+            continue
+
+        test = None
+        if "comparator" in item:
+            test = {"comparator": item["comparator"],
+                    "phrase": COMPARATORS[item["comparator"]]["phrase"]
+                    if item["comparator"] in COMPARATORS else None,
+                    "threshold": item["threshold"],
+                    "threshold_from": _threshold_source(
+                        record, item.get("threshold_from"))}
+        outcome = _outcome(observation, item, where, errors)
+        if outcome is None:
+            continue
+        rendered.append({"subject": view, "observed": observation,
+                         "test": test, "outcome": outcome})
+    return rendered, errors
+
+
+def _threshold_source(record, fid):
+    """Where a threshold came from, so a screen can say "your limit" and
+    link to the setting that holds it — and so analytics can ask whether
+    overriding that particular rule keeps working out."""
+    if fid is None:
+        return None
+    for kind in ("value", "input"):
+        spec = next((f for f in record.get(kind + "s", [])
+                     if f["id"] == fid), None)
+        if spec:
+            return {"kind": kind, "id": fid, "label": spec["label"]}
+    return None
+
+
+_bank_cache: dict = {}
+
+
+def _bank_entry(measure_id):
+    """Label and unit for a bank measure. Read from the bank so a measure
+    reads the same in a strategy's reason as it does anywhere else."""
+    if not _bank_cache:
+        try:
+            from . import profiles
+            doc = profiles.load_bank("metric-bank")
+            for e in (doc.get("entries") or []):
+                _bank_cache[str(e.get("id"))] = {
+                    "label": str(e.get("label") or e.get("id")),
+                    "unit": str(e.get("unit") or "none")}
+        except Exception:  # noqa: BLE001 — rendering must not depend on it
+            _bank_cache["__tried__"] = {"label": "", "unit": "none"}
+    return _bank_cache.get(measure_id)
+
+
+def _bank_label(measure_id):
+    entry = _bank_entry(measure_id)
+    return entry["label"] if entry else measure_id
+
+
+def _bank_unit(measure_id):
+    entry = _bank_entry(measure_id)
+    unit = entry["unit"] if entry else "none"
+    return unit if unit in EVIDENCE_UNITS else "none"
 
 
 # ---------------------------------------------------------------------------
@@ -510,7 +976,7 @@ def _result(state_id, state, payload, reason, produced_by, record):
 
 def host_result(state_id: str, summary: str, record: dict | None = None,
                 needs: list[str] | None = None,
-                data: dict | None = None) -> dict:
+                evidence: list | None = None) -> dict:
     """A result the host produces itself when no strategy verdict exists —
     missing inputs, a missing strategy, a failure. Same envelope as a
     strategy's decision, so one screen renders both, but produced_by says
@@ -518,9 +984,8 @@ def host_result(state_id: str, summary: str, record: dict | None = None,
     state = HOST_STATES[state_id]
     payload = ({"needs": list(needs) if needs else [summary]}
                if state["render"] == "blocked" else {})
-    reason = {"rule": state_id, "summary": summary}
-    if data:
-        reason["data"] = data
+    reason = {"rule": state_id, "summary": summary,
+              "evidence": list(evidence or []), "note": None}
     return _result(state_id, state, payload, reason, "host", record)
 
 
@@ -555,6 +1020,14 @@ def evaluate(record: dict, ctx: dict) -> dict:
             f'{record["name"]} needs information before it can produce a '
             "verdict.", record, needs=problems)
 
+    # Reference data the bundle ships travels with the context rather than
+    # being read off disk inside decide(): a strategy reaches nothing, not
+    # even its own files, once it is running. Always present, so reading it
+    # is never a surprise; frozen, so one evaluation cannot change what the
+    # next one sees; attached after the context was copied, because it is
+    # shared and must not be copied per security.
+    ctx = {**ctx, "reference": record.get("reference") or _NO_REFERENCE}
+
     try:
         decision = record["decide"](ctx)
     # BaseException, not Exception: a strategy calling sys.exit() must be
@@ -580,6 +1053,22 @@ def evaluate(record: dict, ctx: dict) -> dict:
             f'{record["name"]} returned a decision outside the contract: '
             + " ".join(issues), record)
 
+    try:
+        evidence, issues = resolve_evidence(
+            record, ctx, decision["reason"]["evidence"])
+    except Exception as e:  # noqa: BLE001 — answering must not raise either
+        evidence, issues = [], [f"the evidence could not be resolved "
+                                f"({type(e).__name__}: {e})."]
+    if issues:
+        return host_result(
+            "host:invalid-decision",
+            f'{record["name"]} cited evidence the host cannot answer: '
+            + " ".join(issues), record)
+
     state = next(s for s in record["states"] if s["id"] == decision["state"])
+    reason = {"rule": decision["reason"]["rule"],
+              "summary": decision["reason"]["summary"],
+              "evidence": evidence,
+              "note": decision["reason"].get("note")}
     return _result(decision["state"], state, decision["payload"],
-                   decision["reason"], "strategy", record)
+                   reason, "strategy", record)

@@ -46,6 +46,16 @@ def decide(ctx):
             "rule": "always-stage",
             "summary": "The fixture stages its first tranche "
                        "unconditionally, by construction.",
-            "data": {"stage_weight": stage},
+            "evidence": [
+                # A held position's weight against the user's own target —
+                # the case that proves a threshold can cite where it came
+                # from, so the screen can say whose limit it is.
+                {"fact": "position.weight", "comparator": "at_most",
+                 "threshold": ctx["inputs"]["target-weight"],
+                 "threshold_from": "target-weight"},
+                {"input": "target-weight"},
+                {"label": "This tranche", "unit": "percent",
+                 "actual": stage},
+            ],
         },
     }

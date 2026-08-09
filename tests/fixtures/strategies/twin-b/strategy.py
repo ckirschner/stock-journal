@@ -16,4 +16,5 @@ STRATEGY = {
 
 def decide(ctx):
     return {"state": "nothing", "payload": {},
-            "reason": {"rule": "never", "summary": "Never reached."}}
+            "reason": {"rule": "never", "summary": "Never reached.",
+                       "evidence": []}}

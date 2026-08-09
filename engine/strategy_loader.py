@@ -8,8 +8,12 @@ A bundle is a directory holding:
                     (decide, a function of one context dict)
     values.yaml     shipped defaults for the declared values, with their
                     version
-    anything else   reference data the strategy ships; the host never
-                    touches it
+    reference files static data the strategy ships and the host does not
+                    have — a sector map, a lookup table. Declared by name in
+                    STRATEGY["reference"], loaded here, and handed back
+                    through the context frozen. The host parses these files
+                    and holds no opinion about what is in them; loading them
+                    is what keeps a strategy from opening files itself.
 
 Loading is defensive at every step. A bundle that fails to import, declares
 itself badly, speaks the wrong contract version, moves its version without
@@ -28,7 +32,9 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import json
 from pathlib import Path
+from types import MappingProxyType
 
 from ruamel.yaml import YAML
 
@@ -70,6 +76,52 @@ def _read_values_yaml(path: Path):
                       "a `values` mapping holding one default per declared "
                       "value.")
     return doc, None
+
+
+def _freeze(node):
+    """A read-only view of parsed reference data.
+
+    Reference data is read once at load and handed to every evaluation, so
+    it must not be copied per security (a sector map would be copied for
+    every holding on every refresh) and must not be mutable (one strategy
+    call could then change what the next one sees). Freezing answers both:
+    reads work exactly as they do on a dict or list, and writes cannot
+    happen at all.
+    """
+    if isinstance(node, dict):
+        return MappingProxyType({k: _freeze(v) for k, v in node.items()})
+    if isinstance(node, (list, tuple)):
+        return tuple(_freeze(v) for v in node)
+    return node
+
+
+def _read_reference(bundle_dir: Path, names) -> tuple[dict, list]:
+    """(data, errors) — every declared reference file, parsed and frozen.
+
+    A declared file that is missing or unparseable refuses the bundle: a
+    strategy that reads half its lookup table would produce plausible wrong
+    answers, which is worse than not loading.
+    """
+    data, errors = {}, []
+    for name in names:
+        path = bundle_dir / name
+        if not path.exists():
+            errors.append(f"{bundle_dir.name}/{name} is declared in "
+                          "`reference` but is not in the bundle.")
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+            parsed = json.loads(text) if name.endswith(".json") \
+                else _yaml.load(text)
+        except Exception as e:  # noqa: BLE001 — a bad file is a report
+            errors.append(f"{bundle_dir.name}/{name} could not be read: "
+                          f"{type(e).__name__}: {e}")
+            continue
+        if parsed is None:
+            errors.append(f"{bundle_dir.name}/{name} is empty.")
+            continue
+        data[name] = _freeze(_plain(parsed))
+    return data, errors
 
 
 def _import_bundle(py: Path):
@@ -133,10 +185,17 @@ def _load_bundle(bundle_dir: Path) -> dict:
         report["errors"].extend(default_errors)
         return report
 
+    reference, ref_errors = _read_reference(bundle_dir,
+                                            decl.get("reference", []))
+    if ref_errors:
+        report["errors"].extend(ref_errors)
+        return report
+
     record = {k: decl[k] for k in ("id", "name", "summary", "version",
                                    "contract", "changelog", "states")}
     record["inputs"] = decl.get("inputs", [])
     record["values"] = decl.get("values", [])
+    record["reference"] = MappingProxyType(reference)
     record["defaults"] = dict((values_doc or {}).get("values") or {})
     record["values_version"] = (values_doc or {}).get("version")
     record["dir"] = str(bundle_dir)

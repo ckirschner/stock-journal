@@ -1,0 +1,5 @@
+# Invented companies. A strategy ships static data the host does not have;
+# the host parses it and holds no opinion about what is in it.
+sectors:
+  SYN: Industrials
+  NOVA: Utilities

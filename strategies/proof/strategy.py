@@ -33,6 +33,8 @@ STRATEGY = {
                         "right now, so even doing nothing lacks a basis."},
     ],
     "inputs": [
+        # An input rather than a value because no strategy could ship a
+        # sensible default for a word only this user can choose.
         {"id": "journal-note", "label": "A word for the record",
          "type": "text", "required": False,
          "explain": "Any word. The scaffold echoes it back in its reason to "
@@ -54,30 +56,39 @@ def decide(ctx):
     measure = ctx["measures"]["fcf_ttm"]
     current = measure["current"]
     if current["status"] != "known":
+        # The absent measure is cited, not described: the host answers with
+        # its own reason, so the screen never reads a worse sentence than
+        # the one the host already knows.
         return {
             "state": "scaffold-dark",
             "payload": {},
             "reason": {
                 "rule": "needs-a-reading",
-                "summary": "Free cash flow (trailing twelve months) is "
-                           "absent: " + current["reason"],
-                "data": {"as_of": ctx["today"]},
+                "summary": "Free cash flow has no value to read, so even "
+                           "doing nothing has no basis.",
+                "evidence": [{"measure": "fcf_ttm"}],
             },
         }
 
     patience = int(ctx["values"]["patience"])
     considered = measure["series"]["points"][-patience:]
-    note = ctx["inputs"].get("journal-note")
+    evidence = [
+        {"measure": "fcf_ttm", "comparator": "above", "threshold": 0},
+        {"value": "patience"},
+        {"label": "Dated readings considered", "unit": "count",
+         "actual": len(considered)},
+    ]
+    if considered:
+        evidence.append({"measure": "fcf_ttm",
+                         "at": considered[0]["period_end"]})
     return {
         "state": "scaffold-hold",
         "payload": {},
         "reason": {
             "rule": "always-hold",
-            "summary": f"Saw free cash flow of {current['value']:,.0f} and "
-                       f"{len(considered)} dated reading(s) through "
-                       f"{ctx['today']}; the scaffold holds by design.",
-            "data": {"readings_considered": len(considered),
-                     "patience": patience,
-                     **({"journal_note": note} if note else {})},
+            "summary": "The scaffold read the data and holds, which is the "
+                       "only thing it does.",
+            "evidence": evidence,
+            "note": ctx["inputs"].get("journal-note") or None,
         },
     }
