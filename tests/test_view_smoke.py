@@ -110,6 +110,17 @@ def _state(strategies, answers=ANSWERS) -> dict:
     # visible even after the strategy stops asking for it.
     assert api.save_metrics("ACME", {"fcf_ttm": 4_100_000}, None)["ok"]
 
+    # One question answered and one left open, so both renderings of a
+    # judgement have something to draw — and answered twice, because the
+    # earlier assessment is the part of an append-only record worth seeing
+    # and it is invisible if only the newest one is on screen. RVER is held
+    # and unanswered, which is what puts the way-in button on a page.
+    assert api.record_judgement("ACME", "moat_durability", "fail",
+                                "Two credible rivals inside a year.")["ok"]
+    assert api.record_judgement("ACME", "moat_durability", "pass",
+                                "Both rivals withdrew; switching costs "
+                                "held after all.")["ok"]
+
     # Priced by hand: neither has filings, and an unpriced holding rightly
     # makes the account total absent, which would take the weight arithmetic
     # below down with it.

@@ -27,7 +27,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from . import compute, concept_map, crosscheck, facts_store, price_store
+from . import compute, concept_map, crosscheck, facts_store
+from . import judgements, price_store
 
 _cache: dict = {}
 
@@ -288,7 +289,8 @@ def qualified(value, source, cautions=None, provenance=None) -> dict:
 
 def merged_values(security: dict, computed: dict,
                   as_of: str | None = None) -> dict:
-    """{entry id: qualified value} — computed values with hand-entered on top.
+    """{entry id: qualified value} — computed values, hand-entered on top,
+    and the judgements the user assessed.
 
     Each entry says which side it came from and never loses the other: the
     computed result is still in `computed` for a screen to show beside it.
@@ -297,6 +299,16 @@ def merged_values(security: dict, computed: dict,
     the journal has no other value to offer — but it is qualified as undated
     there, exactly as the strategy's own context qualifies it, so a record
     frozen for a past day never claims a present-day number was known then.
+
+    A judgement is dated, so it does better: a pin serves the assessment
+    that stood on that day and nothing at all where none did. It is here
+    rather than only inside the decision's evidence because this is what a
+    purchase freezes as "every value behind the decision", and an assessment
+    the strategy did not happen to cite is still one of them.
+
+    A hand-entered number can never land on a qualitative id — the write
+    refuses it — but the overlay skips them regardless, so a journal written
+    before that refusal existed cannot still read as an assessment.
     """
     values = {}
     for eid, r in computed.items():
@@ -305,7 +317,14 @@ def merged_values(security: dict, computed: dict,
                                     r.get("cautions"), r.get("provenance"))
     undated = [UNDATED_MANUAL.format(day=as_of)] if as_of else None
     for eid, v in (security.get("metrics") or {}).items():
+        if judgements.is_judgement(eid):
+            continue
         values[eid] = qualified(v, "manual", undated, [BY_HAND])
+    for eid, a in judgements.observations(security, as_of=as_of,
+                                          today=as_of).items():
+        if a["status"] == "known":
+            values[eid] = qualified(a["value"], "judgement",
+                                    a.get("cautions"), a.get("provenance"))
     return values
 
 

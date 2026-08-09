@@ -1402,10 +1402,18 @@ def resolve_evidence(record: dict, ctx: dict, items: list):
         if subject == "measure":
             observation = _measure_observation(ctx, item, where, errors)
             entry = (ctx.get("measures") or {}).get(item["measure"]) or {}
-            view = {"kind": "measure", "id": item["measure"],
+            # Whether a figure is something the tool worked out or something
+            # the user assessed is decided HERE, from the bank, and never by
+            # the strategy citing it. Principle 5 says a captured judgement
+            # is recorded as judgement and never disguised as a measurement;
+            # a strategy that could choose the label could disguise it.
+            meta = _bank_entry(item["measure"]) or {}
+            judged = meta.get("kind") == "qualitative"
+            view = {"kind": "judgement" if judged else "measure",
+                    "id": item["measure"],
                     "label": _bank_label(item["measure"]),
                     "unit": _bank_unit(item["measure"]),
-                    "explain": None}
+                    "explain": meta.get("question") if judged else None}
             if "at" in item:
                 view["at"] = item["at"]
                 view["cadence"] = (entry.get("series") or {}).get("cadence")
@@ -1486,21 +1494,34 @@ def _test(record, ctx, item):
 
 
 _bank_cache: dict = {}
+_bank_doc = None
 
 
 def _bank_entry(measure_id):
-    """Label and unit for a bank measure. Read from the bank so a measure
-    reads the same in a strategy's reason as it does anywhere else."""
-    if not _bank_cache:
-        try:
-            from . import bank
-            doc = bank.load_bank()
-            for e in (doc.get("entries") or []):
-                _bank_cache[str(e.get("id"))] = {
-                    "label": str(e.get("label") or e.get("id")),
-                    "unit": str(e.get("unit") or "none")}
-        except Exception:  # noqa: BLE001 — rendering must not depend on it
-            _bank_cache["__tried__"] = {"label": "", "unit": "none"}
+    """Label, unit and kind for a bank measure. Read from the bank so a
+    measure reads the same in a strategy's reason as it does anywhere else.
+
+    Rebuilt when the bank itself changes — `bank.load_bank` caches on the
+    file's mtime and hands back the same document until it moves, so an edit
+    takes effect here too. A cache that outlived its source would report a
+    measure's old label and, worse, its old kind: a judgement rendering as a
+    measurement is the one thing this index must not get wrong.
+    """
+    global _bank_doc
+    try:
+        from . import bank
+        doc = bank.load_bank()
+    except Exception:  # noqa: BLE001 — rendering must not depend on it
+        return _bank_cache.get(measure_id)
+    if doc is not _bank_doc:
+        _bank_doc = doc
+        _bank_cache.clear()
+        for e in (doc.get("entries") or []):
+            _bank_cache[str(e.get("id"))] = {
+                "label": str(e.get("label") or e.get("id")),
+                "unit": str(e.get("unit") or "none"),
+                "kind": str(e.get("kind") or ""),
+                "question": str(e.get("question") or "").strip() or None}
     return _bank_cache.get(measure_id)
 
 

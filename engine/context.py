@@ -84,6 +84,27 @@ Reading rules a strategy can rely on:
   in `source`, and under a pin carries a caution saying it is the value on
   record now rather than one known to be true then. A hand-entered *price*
   never reaches into the past at all.
+- **A qualitative measure is a judgement the user made, and it is dated.**
+  The bank's qualitative entries — a moat read, a management read — are
+  answered per security in prose plus a pass or a fail, and arrive here as
+  an ordinary measure with `source: "judgement"`, a yes/no value and the
+  reasoning in `provenance`. Nothing else about citing one differs: a
+  strategy names it as `{"measure": "<id>"}` and the host answers.
+
+  Two things follow from the record being append-only and dated, and both
+  are the opposite of the hand-entered case above. A reconstruction sees the
+  assessment that stood on its own day and nothing written later, so a
+  backdated purchase never inherits an opinion formed afterwards; and an
+  assessment older than the holding you have now carries a caution saying
+  so, because buying a name back does not renew a judgement made about a
+  different decision.
+
+  An unanswered question is absent with its reason. What to do about that is
+  the strategy's business — the host holds no view on whether a missing moat
+  read should stop a verdict — but absence resolves to `unknown` and can
+  never come out as a pass. A judgement is never served from `metrics`: a
+  number laid over a question about a moat would be an assessment wearing a
+  measurement's clothes.
 - **Unknown keys may appear** in future contract versions; a strategy reads
   what it declares an interest in and ignores the rest.
 - **`position` is the holding you have now, except where it says otherwise.**
@@ -135,8 +156,8 @@ import copy
 from datetime import date
 
 from . import bank as bank_mod
-from . import compute, contract, dataview, facts_store, portfolio, price_store
-from . import tickermap
+from . import compute, contract, dataview, facts_store, judgements, portfolio
+from . import price_store, tickermap
 
 # Series stop at the same number of filing boundaries the sell-confirmation
 # view uses; the truncated flag says when older boundaries exist.
@@ -195,7 +216,15 @@ def _current_values(security, cik, tickers, registry_ids, as_of):
     A hand-entered value has no date. It still participates in a pinned
     reading — the journal has no other value to offer — but it is labelled
     undated there, so a strategy is never told a present-day number was
-    known on a past day."""
+    known on a past day.
+
+    A judgement is not among them. Hand-entered values are numbers, and a
+    number laid over a question about a moat would be an assessment
+    presented as a measurement — the one thing principle 5 says a captured
+    judgement must never be. Judgements are served from their own dated
+    record, in `_measures`, and nothing that lands in `metrics` can reach
+    one: the write refuses the id, and this read would ignore it anyway.
+    """
     out = {}
     if cik:
         if as_of:
@@ -211,6 +240,8 @@ def _current_values(security, cik, tickers, registry_ids, as_of):
                                    or "the value could not be computed")
     cautions = [_UNDATED.format(day=as_of)] if as_of else None
     for eid, value in (security.get("metrics") or {}).items():
+        if judgements.is_judgement(eid):
+            continue
         out[eid] = _known(value, "manual", cautions)
     return out
 
@@ -288,6 +319,12 @@ def _measures(security, cik, tickers, as_of, today) -> dict:
     registry_ids = [eid for eid, _ in entries if eid in compute.REGISTRY]
 
     current = _current_values(security, cik, tickers, registry_ids, as_of)
+    # Answered by the user, per security, from their own dated record. The
+    # clock governs them as it governs everything else: a reconstruction
+    # sees the assessment that stood on its day, and where none did the
+    # measure is absent with the reason rather than inheriting an opinion
+    # formed afterwards.
+    assessed = judgements.observations(security, as_of=as_of, today=today)
     if cik:
         filings = facts_store.load_all_filings(cik)
         prices = price_store.load(cik)
@@ -299,8 +336,8 @@ def _measures(security, cik, tickers, as_of, today) -> dict:
     for eid, entry in entries:
         kind = str(entry.get("kind") or "")
         if kind == "qualitative":
-            cur = current.get(eid) or _absent(
-                "assessed by you, not computed — nothing is recorded in the "
+            cur = assessed.get(eid) or _absent(
+                "assessed by you, not computed — nothing is recorded in this "
                 "journal yet")
             ser = _no_series("assessed by you, not computed — no filing "
                             "series exists")

@@ -625,12 +625,22 @@ function evidenceRow(item, i) {
   const tipBox = (explain && tipOpen === tipId)
     ? `<div class="tipbox">${prose(explain)}
        <span class="who">${subj.kind === "measure" ? `Bank entry <code>${esc(subj.id)}</code> — full definition on the Metrics tab`
+         : subj.kind === "judgement" ? `Your own assessment, not a figure the journal worked out — bank entry <code>${esc(subj.id)}</code>`
          : subj.kind === "value" ? "A setting this strategy ships and you can change"
          : subj.kind === "input" ? "Something you told this journal at setup"
          : subj.kind === "fact" ? "A figure the journal reports about your position"
          : "A figure the strategy worked out itself"}</span></div>` : "";
 
-  return `<div class="srow"><div class="sname">${esc(subj.label)}${at}${tip}</div>
+  /* A verdict resting on a question nobody has answered has to say where to
+     answer it. Without this a strategy that waits on three qualitative reads
+     is a dead end: the reason names them and the page offers nothing to
+     click. The host decides which subjects are judgements, from the bank, so
+     the view never learns which measures exist. */
+  const answer = (subj.kind === "judgement" && !known && openTicker)
+    ? ` <button class="btn" data-act="judge" data-jid="${esc(subj.id)}">Assess this</button>`
+    : "";
+
+  return `<div class="srow"><div class="sname">${esc(subj.label)}${at}${tip}${answer}</div>
     <div class="scond">${val}${test}${why}${noLimit}${prov}${warn}${tipBox}</div>
     <div class="sstate"><span class="chip ${cls}">${esc(word)}</span></div></div>`;
 }
@@ -670,6 +680,68 @@ function decisionSection(d, title) {
     ${ev.length ? `<div class="slist" style="margin-top:14px">${ev.map(evidenceRow).join("")}</div>`
       : '<p class="hint" style="margin-top:12px">No figures were cited — nothing about the security was read.</p>'}
   </section>`;
+}
+
+/* ------------------------------------------------------------ judgements */
+/* The questions no filing answers, asked per security. Rendered from the
+   bank's own qualitative entries by way of the backend — there is no list of
+   them in this file, and a question added to the bank arrives here with no
+   view code changed.
+
+   Shown only where the strategy asked for one or an answer already exists.
+   The union of every question the bank could ask is not this page's
+   business, and asking someone to assess the durability of a business their
+   own rules already rejected is the overwhelm this program exists to avoid. */
+const MARK_CHIP = {
+  pass: ["Passed", "s-pass"],
+  fail: ["Failed", "s-fail"],
+};
+
+function judgementSection(s) {
+  const list = s._judgements || [];
+  if (!list.length) return "";
+  const owed = list.filter((j) => !j.mark && !j.unsupported).length;
+  const rows = list.map((j) => {
+    const [word, cls] = MARK_CHIP[j.mark] || ["Not assessed", "blank"];
+    const when = j.recorded ? String(j.recorded).slice(0, 10) : null;
+    /* Whatever qualifies the answer — an assessment written before the
+       holding you have now, say. The host's own sentences, the same ones the
+       strategy is handed, rendered by the same helper as every other
+       caution. Nothing is worked out again here. */
+    const stale = cautionLines(j.cautions);
+    const older = (j.history || []).slice(1);
+    return `<div class="pentry">
+      <div class="pe-head"><b>${esc(j.label)}</b><code>${esc(j.id)}</code>
+        <span class="chip ${cls}">${esc(word)}</span>
+        ${j.cited ? "" : '<span class="req">not currently asked</span>'}</div>
+      ${j.unsupported
+        ? `<div class="greynote">${esc(j.unsupported)}</div>`
+        : j.mark
+        ? `<div class="pe-why">${prose(j.reasoning)}</div>
+           <div class="pe-sub">Your assessment of ${esc(when)}</div>${stale}`
+        : `<div class="pe-desc">${prose(j.question)}</div>`}
+      <details class="whybox"><summary>What this asks${
+        older.length ? ` · ${older.length} earlier assessment${older.length === 1 ? "" : "s"}` : ""}</summary>
+        ${prose(j.question)}${prose(j.plain)}
+        ${older.map((a) => `<div class="pe-sub" style="margin-top:8px">
+          <b>${esc((MARK_CHIP[a.mark] || ["Marked"])[0])}</b> on
+          ${esc(String(a.recorded).slice(0, 10))}</div>
+          <div class="pe-why" style="margin-top:0">${prose(a.reasoning)}</div>`).join("")}
+      </details>
+      ${j.unsupported ? "" : `<div class="toolbar" style="justify-content:flex-start;margin-top:8px">
+        <button class="btn${j.mark ? "" : " primary"}" data-act="judge" data-jid="${esc(j.id)}">${
+          j.mark ? "Reassess" : "Answer this"}</button></div>`}
+    </div>`;
+  }).join("");
+  return `<section class="group" style="margin-top:26px">
+    <div class="ghead"><h3>Your judgement</h3>
+      <span>${owed ? `${owed} unanswered` : "answered"}</span></div>
+    <p class="hint" style="margin:8px 0 0">Questions the filings cannot answer, which
+    ${esc(((S.strategy || {}).name) || "this journal's strategy")} reads for this security.
+    Each is your assessment with your reasoning, never a figure the journal worked out — and
+    unanswered is not a fail. The record is append-only and dated: changing your mind adds an
+    entry above the old one, and neither is ever edited.</p>
+    <div class="plist" style="margin-top:12px">${rows}</div></section>`;
 }
 
 /* ---------------------------------------------------------------- detail */
@@ -825,8 +897,9 @@ function detailView(s) {
       That is the field you will want when it drops 25% and you are deciding whether to add or exit.</p></div>`;
   }
 
-  /* the decision, then the lots it was built from beside it */
+  /* the decision, what you had to judge for yourself, then the lots */
   h += decisionSection(d, isPrev ? "Where it stands now" : "The verdict");
+  h += judgementSection(s);
   h += lotHistory(s);
 
   /* where the numbers come from */
@@ -1355,6 +1428,14 @@ function bankListHTML() {
   return `<div class="plist">${list.map(bankCard).join("")}</div>`;
 }
 
+/* The units whose id does not read as words. An unglossed token on a page
+   whose whole job is explaining what a value is teaches the wrong thing. */
+const UNIT_WORD = {
+  yes_no: "pass or fail",
+  percentage_points: "percentage points",
+  times_own_median: "times its own median",
+};
+
 function bankCard(e) {
   const pol = e.polarity === "higher_is_better" ? "higher is better"
     : e.polarity === "lower_is_better" ? "lower is better"
@@ -1364,7 +1445,7 @@ function bankCard(e) {
     <div class="pe-head"><b>${esc(e.label || e.id)}</b><code>${esc(e.id)}</code>
       <span class="req">${esc(e.kind || "")}</span>
       ${pol ? `<span class="req">${esc(pol)}</span>` : ""}
-      ${e.unit ? `<span class="req">${esc(e.unit)}</span>` : ""}</div>`;
+      ${e.unit ? `<span class="req">${esc(UNIT_WORD[e.unit] || e.unit)}</span>` : ""}</div>`;
   if (x.plain) h += `<div class="pe-desc">${prose(x.plain)}</div>`;
   if (e.polarity_note) h += `<div class="pe-block"><i>Why no direction</i>
     <div class="pe-why" style="margin-top:0">${prose(e.polarity_note)}</div></div>`;
@@ -1379,7 +1460,11 @@ function bankCard(e) {
       <div class="pe-why" style="margin-top:0">${prose(e.question)}</div>
       ${e.response ? `<div class="pe-sub">prose ${esc(e.response.prose)} ·
         marked ${esc((e.response.marks || []).join(" or "))} ·
-        unmarked = ${esc(e.response.unmarked)}</div>` : ""}</div>`;
+        unmarked = ${esc(e.response.unmarked)}</div>` : ""}
+      <div class="pe-sub">Answered per security, under <i>Your judgement</i> on
+      that security's page, whenever your strategy reads it. The record is
+      append-only and dated: changing your mind adds an entry, and nothing is
+      ever edited.</div></div>`;
   }
   if (e.parameters && e.parameters.length) {
     h += `<div class="pe-block"><i>Declared parameters — no strategy can supply one yet</i>${
@@ -1774,6 +1859,54 @@ function dlgMetrics(s) {
       Object.keys(d).forEach((k) => { if (k.startsWith("m_")) metrics[k.slice(2)] = d[k]; });
       const r = await api("save_metrics", s.ticker, metrics, d.price);
       if (!r) return " ";
+    },
+  });
+}
+
+/* One question at a time, with what it means in front of you. Not folded
+   into the values dialog: that one is a column of numbers, and a question
+   about whether a moat holds for another decade is not answered well in a
+   row between two of them. It is also the only dialog whose answer is
+   append-only, and putting it beside fields that overwrite would say the
+   wrong thing about what happens when you press save. */
+function dlgJudgement(s, entryId) {
+  const j = (s._judgements || []).find((x) => x.id === entryId);
+  if (!j) { toast("That question is not on this security.", true); return; }
+  const prior = j.mark
+    ? `<div class="notice quiet"><h4>Your assessment of ${esc(String(j.recorded).slice(0, 10))}</h4>
+       <p><b>${esc((MARK_CHIP[j.mark] || ["Marked"])[0])}</b></p>${prose(j.reasoning)}
+       <p class="hint">Saving adds a new entry above this one. Nothing here is
+       edited or replaced — an answer improved after the fact cannot be measured
+       against what happened, which is the only thing this record is for.</p></div>`
+    : "";
+  dialog({
+    title: `${j.label} · ${s.ticker}`,
+    blurb: "Your judgement, with your reasoning. The journal records it as yours and never as something it worked out.",
+    body: prior
+      + `<div class="pe-desc">${prose(j.question)}</div>`
+      + `<details class="whybox"><summary>What this is asking</summary>${prose(j.plain)}
+         <span class="who">Bank entry <code>${esc(j.id)}</code> — full definition, where it
+         misfires and where it comes from, on the Metrics tab</span></details>`
+      + `<div class="field"><label for="f_mark">Your mark</label>
+         <select id="f_mark" name="mark">
+           <option value="">Not answering yet</option>
+           <option value="pass">Pass</option>
+           <option value="fail">Fail</option></select>
+         <div class="help">Unanswered is not a fail. Leaving it is a fine thing to
+         do — the strategy is told the question has no answer, and absence never
+         reads as a pass.</div></div>`
+      + area("reasoning", "Why", "",
+             "What you looked at and what convinced you. Required: a mark with "
+             + "nothing behind it teaches nothing when you read it back.")
+      /* Both fields are checked here as well as at the write, so the message
+         lands beside the field rather than as a banner over a closed dialog. */,
+    confirm: "Record it",
+    onConfirm: async (d) => {
+      if (!d.mark) return "Choose pass or fail, or cancel — leaving it unanswered is done by not recording anything.";
+      if (!(d.reasoning || "").trim()) return "Write down your reasoning.";
+      const r = await api("record_judgement", s.ticker, j.id, d.mark, d.reasoning);
+      if (!r) return " ";
+      toast(`Recorded. ${j.label} for ${s.ticker} is on the journal's dated record.`);
     },
   });
 }
@@ -2173,6 +2306,7 @@ document.addEventListener("click", async (ev) => {
       return;
     }
     case "metrics": return dlgMetrics(s);
+    case "judge": return dlgJudgement(s, act.dataset.jid);
     case "falsifier": return dlgFalsifier(s);
     case "note": return dlgNote(s);
     case "buy": return dlgBuy(s);

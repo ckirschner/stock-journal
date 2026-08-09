@@ -218,6 +218,13 @@ for (const s of state.securities) {
                `a blocked verdict offers the "${fix}" screen that resolves it`]);
   }
 }
+// Several of the emptiness guards below are only owed where a strategy
+// actually spoke. A journal blocked on setup is the host saying it could not
+// ask: it cites nothing about any security, so demanding cited content there
+// would fail the very screen that state exists for.
+const spoke = state.securities.some(
+  (s) => (s._decision || {}).produced_by === "strategy");
+
 // A limit the host read out of a named setting has to say WHOSE it is, on
 // screen, beside the number. That attribution is the whole reason the
 // strategy is not allowed to state the figure itself, and it is also what
@@ -233,14 +240,72 @@ for (const s of state.securities) {
                `${s.ticker}: the limit names the setting it was read from`]);
   }
 }
-// Only owed where a strategy actually spoke. A journal blocked on setup is
-// the host saying it could not ask, and the host cites no limits at all —
-// demanding one there would fail the very screen that state exists for.
-const spoke = state.securities.some(
-  (s) => (s._decision || {}).produced_by === "strategy");
 if (spoke && !attributed) {
   problems.push("no verdict in the harness cites a limit by the setting it "
                 + "came from — the attribution renders against nothing");
+}
+
+// The questions no filing answers. Three renderings have to work: an
+// answered one showing the mark and the reasoning behind it, an unanswered
+// one showing the question and a way to answer it, and the earlier
+// assessments an append-only record keeps — which are the whole reason for
+// keeping them and are invisible if only the newest one draws.
+const judged = state.securities.filter((s) => (s._judgements || []).length);
+if (spoke && !judged.length) {
+  problems.push("no security in the payload has a judgement to answer, so "
+                + "the whole judgement surface renders against nothing");
+}
+let answered = 0, unanswered = 0, revised = 0;
+for (const s of judged) {
+  must.push([`detail:${s.ticker}`, "Your judgement",
+             `${s.ticker} shows the questions it was asked`]);
+  for (const j of s._judgements) {
+    must.push([`detail:${s.ticker}`, j.label,
+               `${s.ticker}: "${j.id}" is named on the page`]);
+    if (j.mark) {
+      answered += 1;
+      must.push([`detail:${s.ticker}`, j.reasoning,
+                 `${s.ticker}: the reasoning behind "${j.id}" is on screen`]);
+    } else {
+      unanswered += 1;
+      // Unanswered is not a fail, and it must never be dressed as one.
+      mustNot.push([`detail:${s.ticker}`, "Failed",
+                    `${s.ticker}: an unassessed question reads as a failure`]);
+    }
+    if ((j.history || []).length > 1) {
+      revised += 1;
+      must.push([`detail:${s.ticker}`, j.history[1].reasoning,
+                 `${s.ticker}: the earlier assessment of "${j.id}" survives`]);
+    }
+    // Answered or not, there is always a way to record one. A verdict that
+    // waits on a judgement with nothing to click is the trap.
+    must.push([`detail:${s.ticker}`, `data-jid="${j.id}"`,
+               `${s.ticker}: "${j.id}" can be answered from the page`]);
+  }
+}
+for (const [n, what] of [[answered, "answered"], [unanswered, "unanswered"],
+                         [revised, "revised"]]) {
+  if (spoke && !n) {
+    problems.push(`no ${what} judgement in the payload — that rendering is `
+                  + "unexercised and would pass however broken it is");
+  }
+}
+// The dialog that records one, on a question that has an answer already:
+// the prior assessment and the "this appends, it does not replace" wording
+// only render on that path.
+const withAnswer = judged.find((s) => (s._judgements || []).some((j) => j.mark));
+if (withAnswer) {
+  const jid = withAnswer._judgements.find((j) => j.mark).id;
+  dlg("dlg:judgement",
+      `openTicker = ${JSON.stringify(withAnswer.ticker)};`
+      + ` dlgJudgement(find(${JSON.stringify(withAnswer.ticker)}),`
+      + ` ${JSON.stringify(jid)}); openTicker = null`);
+  must.push(["dlg:judgement", 'name="mark"',
+             "the dialog offers a mark"]);
+  must.push(["dlg:judgement", 'name="reasoning"',
+             "the dialog asks for the reasoning"]);
+  must.push(["dlg:judgement", "adds a new entry above this one",
+             "the dialog says the record appends rather than replaces"]);
 }
 
 const held = state.securities.find((s) => s.bucket === "holdings");

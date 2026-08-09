@@ -9,11 +9,11 @@ assumptions and strategies free of fetching.
 from .expected_value import DEFAULT_SETTINGS, EV_METHODS, EVError
 from .expected_value import compute as compute_ev
 from .portfolio import EXIT_REASONS
-from . import backup, bank, journals, portfolio, store
+from . import backup, bank, journals, judgements, portfolio, store
 from . import contract, context, strategy_loader, strategy_values
 
 __all__ = [
     "EV_METHODS", "EXIT_REASONS", "DEFAULT_SETTINGS", "compute_ev", "EVError",
-    "backup", "bank", "journals", "portfolio", "store",
+    "backup", "bank", "journals", "judgements", "portfolio", "store",
     "contract", "context", "strategy_loader", "strategy_values",
 ]

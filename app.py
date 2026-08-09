@@ -26,8 +26,8 @@ from pathlib import Path
 import webview
 
 from engine import (backup, bank, contract, context, dataview, fetch,
-                    journals, portfolio, secrets, store, strategy_loader,
-                    strategy_values, tickermap, tiingo)
+                    journals, judgements, portfolio, secrets, store,
+                    strategy_loader, strategy_values, tickermap, tiingo)
 from engine.expected_value import EV_METHODS, EVError
 from engine.expected_value import compute as compute_ev
 from engine.portfolio import EXIT_REASONS
@@ -318,15 +318,61 @@ class Api:
                 record)
         return contract.evaluate(record, ctx)
 
-    def _cited_ids(self, decision) -> list:
-        """The bank measures this decision actually looked at. It is what the
-        Edit-metrics dialog offers: the numbers this strategy reads for this
-        security, never the whole bank."""
+    def _cited_ids(self, decision, kind="measure") -> list:
+        """What this decision actually looked at, of one subject kind. It is
+        what the Edit-values dialog offers, and what the Judgements section
+        asks: the figures this strategy reads for THIS security, never the
+        whole bank.
+
+        Citation is the whole discovery mechanism for anything per security,
+        because a question about one cannot be asked before there is one to
+        ask it about — which is exactly why judgement inputs are not declared
+        on a setup screen the way journal-level answers are. It has a
+        consequence worth stating: a strategy that reaches its moat rule only
+        after the numbers pass will not ask about a moat until they do. That
+        is the right way round. Nobody should be assessing the durability of
+        a business their own rules have already rejected.
+        """
         out = []
         for item in ((decision or {}).get("reason") or {}).get("evidence", []):
             subj = item.get("subject") or {}
-            if subj.get("kind") == "measure" and subj.get("id") not in out:
+            if subj.get("kind") == kind and subj.get("id") not in out:
                 out.append(subj["id"])
+        return out
+
+    @staticmethod
+    def _judgement_view(security, asked) -> list:
+        """The questions this security owes an answer to, and the answers on
+        record. Built from the bank's own qualitative entries, so a question
+        added there arrives here with no code changed.
+
+        Every prior assessment travels with it. The record is append-only and
+        the point of that is to be read: an opinion that flipped a fortnight
+        before a purchase is the thing worth seeing, and it is invisible if
+        only the newest one renders.
+
+        The cautions come from the same call that qualifies the figure a
+        strategy is handed, rather than being worked out again for the
+        screen. One sentence, one home — two copies of a caution drift until
+        they disagree about what they are warning of.
+        """
+        answered = {a["id"] for a in (security.get("judgements") or [])
+                    if isinstance(a, dict) and a.get("id")}
+        seen = judgements.observations(security)
+        out = []
+        for eid, q in judgements.questions().items():
+            if eid not in asked and eid not in answered:
+                continue
+            standing = judgements.in_force(security, eid)
+            out.append({
+                **q,
+                "cited": eid in asked,
+                "mark": (standing or {}).get("mark"),
+                "reasoning": (standing or {}).get("reasoning"),
+                "recorded": (standing or {}).get("recorded"),
+                "cautions": list((seen.get(eid) or {}).get("cautions") or []),
+                "history": judgements.history(security, eid),
+            })
         return out
 
     # -- read ------------------------------------------------------------
@@ -423,6 +469,11 @@ class Api:
             shown = cited + [m for m in (s.get("metrics") or {})
                              if m not in cited]
             s["_cited"] = cited
+            # What the strategy asked this security about that no filing can
+            # answer, plus anything already assessed — so an answer stays
+            # readable after the strategy stops reading the question.
+            s["_judgements"] = self._judgement_view(
+                s, self._cited_ids(s["_decision"], "judgement"))
             s["_inputs"] = [
                 {"id": mid, **{k: bank_meta[mid][k]
                                for k in ("label", "unit", "format", "plain")},
@@ -677,6 +728,18 @@ class Api:
         for k, v in (metrics or {}).items():
             if k not in known:
                 return err(f'"{k}" is not in the metric bank.')
+            # A judgement is not a number and must never be storable as one.
+            # This field takes floats, and float(True) is 1.0 — a moat read
+            # would land here as a measurement, which is exactly what
+            # principle 5 says a captured assessment must never look like.
+            # Refused at the write, not filtered out of the dialog: the
+            # dialog is a view, and a view is not a guarantee.
+            if judgements.is_judgement(k):
+                return err(
+                    f'"{k}" is a judgement you make about this security, not '
+                    "a number to type. Answer it in Judgements, in prose "
+                    "with a pass or a fail, and it goes on a dated record "
+                    "that is never overwritten.")
             if v in (None, "", "—"):
                 stored.pop(k, None)
                 continue
@@ -704,6 +767,24 @@ class Api:
             s["price"] = entered
         self._write(journal)
         return ok()
+
+    @guarded
+    @locked
+    def record_judgement(self, ticker, entry_id, mark, reasoning):
+        """Answer one qualitative bank entry for one security.
+
+        Appended, never edited. A judgement rewritten at the moment it is
+        about to matter is the most diagnostic thing this journal could hold,
+        and a slot that can be overwritten holds none of it — so a change of
+        mind is a new dated entry sitting above the old one, both readable.
+        """
+        journal, *_ = self._open()
+        if journal is None:
+            return err("No journal is open.")
+        s = self._find(journal, ticker)
+        answer = judgements.assess(s, entry_id, mark, reasoning)
+        self._write(journal)
+        return ok(seq=answer["seq"], mark=answer["mark"])
 
     @guarded
     @locked

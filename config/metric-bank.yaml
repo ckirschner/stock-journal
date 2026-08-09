@@ -36,7 +36,12 @@ schema: ledger.metric-bank/1
 #                 directions. That disagreement belongs to them, not here.
 #
 # unit            percent | percentage_points | times | ratio | score | usd |
-#                 shares | years | count | times_own_median
+#                 shares | years | count | times_own_median | yes_no
+#
+#                 yes_no belongs to the qualitative entries: what they carry
+#                 is a mark, and a mark reads as an answer rather than as a
+#                 quantity. Never a `format` beside it — a format is for
+#                 numbers, and running a yes/no through one prints a 1.
 #
 # inputs
 #   filings       raw figures from SEC XBRL company facts
@@ -2111,11 +2116,21 @@ entries:
   # pass.
   #
   # These entries define the question. They never say what a good answer is.
+  #
+  # Answered per security, in the journal, and answerable from here alone: the
+  # question, the plain-language explanation, where it misfires and whose idea
+  # it was are what someone assessing their first moat has to read, and they
+  # belong beside the definition rather than restated inside every strategy
+  # that asks. A strategy cites one exactly as it cites any other measure and
+  # the host answers; nothing about the shape of an answer is a strategy's to
+  # invent. The record of answers is append-only and dated — see
+  # engine/judgements.py.
   # ===========================================================================
 
   - id: moat_durability
     kind: qualitative
     label: Moat durability
+    unit: yes_no
     question: |
       What stops a competitor from taking this business's customers or its
       margin over the next ten years, and will that still be true in ten years?
@@ -2142,6 +2157,7 @@ entries:
   - id: management_integrity
     kind: qualitative
     label: Management integrity
+    unit: yes_no
     question: |
       Has management told shareholders the truth, including when the news was
       bad, and does what they say in the letter match what shows up in the
@@ -2168,6 +2184,7 @@ entries:
   - id: capital_allocation
     kind: qualitative
     label: Capital allocation
+    unit: yes_no
     question: |
       When this company has spare cash, where has it gone — and did those
       decisions turn out to be worth more than paying it out would have been?

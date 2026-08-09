@@ -161,10 +161,28 @@ def decide(ctx):
         }
 
     weight = position["weight"]
+    # A question no filing answers, cited exactly as a computed measure is:
+    # the fixture names it and the host answers with the user's own mark,
+    # its date and the reasoning they wrote. Unanswered comes back unknown
+    # and falls through to the size rules below — this fixture does not
+    # block on it, which is one of the two things a strategy may do with an
+    # unanswered judgement and the one that keeps the fixture usable.
+    moat = ctx["measures"]["moat_durability"]["current"]
     evidence = [{"fact": "position.weight", "comparator": "at_most",
                  "threshold_from": "cap"},
+                {"measure": "moat_durability", "comparator": "equals",
+                 "threshold": True},
                 {"fact": "portfolio.account_value"},
                 {"fact": "position.opened"}]
+    if moat["status"] == "known" and moat["value"] is False:
+        return {
+            "state": "size-down",
+            "payload": {"to": {"unit": "weight", "value": 0.0}},
+            "reason": _reason(
+                "moat-you-marked-broken",
+                "You assessed the moat as broken, so the fixture sizes the "
+                "position down regardless of what it weighs.", evidence),
+        }
     if weight["status"] != "known":
         return {
             "state": "no-account", "payload": {},
