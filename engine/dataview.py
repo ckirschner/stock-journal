@@ -70,8 +70,31 @@ def _bundle(cik: int, tickers: list[str]):
 def invalidate(cik: int | None = None) -> None:
     if cik is None:
         _cache.clear()
+        _prices_cache.clear()
     else:
         _cache.pop(cik, None)
+        _prices_cache.pop(cik, None)
+
+
+_prices_cache: dict = {}
+
+
+def _prices(cik: int) -> dict:
+    """The stored price document, cached on the price file's own mtime.
+
+    Kept apart from `_bundle` deliberately. Pricing a security needs the price
+    rows and nothing else — no filings, no computation context, and above all
+    no list of the company's other symbols. A reader with no list cannot pick
+    the wrong one out of it.
+    """
+    p = price_store.path_for(cik)
+    stamp = p.stat().st_mtime if p.exists() else 0
+    held = _prices_cache.get(cik)
+    if held and held[0] == stamp:
+        return held[1]
+    doc = price_store.load(cik)
+    _prices_cache[cik] = (stamp, doc)
+    return doc
 
 
 # -- as-of observation -------------------------------------------------------
@@ -115,16 +138,24 @@ def asof_results(cik: int, tickers: list[str], entry_ids,
     return out
 
 
-def asof_availability(cik: int, tickers: list[str], as_of: str) -> dict:
+def asof_availability(cik: int, tickers: list[str], ticker: str,
+                      as_of: str) -> dict:
     """What the stores can honestly say about `as_of`: how many stored
     filings had been filed by then (and the newest), and whether a close
     exists on or shortly before that day. The reconstruction's basis, for
-    the record and the screen."""
+    the record and the screen.
+
+    Two symbol arguments, because two different questions are being asked.
+    The filings and the measures built from them belong to the *company*, so
+    they read every class. The close belongs to the *security* being bought,
+    so it reads one — a purchase reconstructed at a sibling class's price
+    would freeze that price into an append-only record.
+    """
     b = _bundle(cik, tickers)
     slot = _asof_slot(b, as_of)
     newest = max((str(f.get("filed") or "")[:10] for f in slot["filings"]),
                  default=None)
-    price = price_view_asof(cik, tickers, as_of)
+    price = price_view_asof(cik, ticker, as_of)
     return {"as_of": as_of,
             "filings_by_then": len(slot["filings"]),
             "filings_held": len(b["filings"]),
@@ -132,24 +163,61 @@ def asof_availability(cik: int, tickers: list[str], as_of: str) -> dict:
             "price": price}
 
 
-def price_view_asof(cik: int, tickers: list[str], as_of: str) -> dict:
-    """The close that belongs to `as_of`: that day or the nearest earlier
-    trading day within the stale window, labelled with the date actually
-    used. A hand-entered price never appears here — it is a statement about
-    now, and reaching it into the past would invent a value."""
-    b = _bundle(cik, tickers)
-    best = None
-    for t in b["tickers"]:
-        got = price_store.close_on(b["prices"], t, as_of,
-                                   max_lookback_days=compute.STALE_PRICE_DAYS)
-        if got and (best is None or got[0] > best[0]):
-            best = (got[0], got[1], t)
-    if best:
-        return {"value": best[1], "source": "fetched", "date": best[0],
-                "ticker": best[2]}
-    return {"value": None, "source": None, "date": None,
-            "reason": f"no close is stored on or shortly before {as_of} for "
-                      + (", ".join(b["tickers"]) or "this security")}
+def _one_symbol(ticker, caller: str) -> str:
+    """Refuse a list where an instrument is wanted.
+
+    Iterating a list of every class mapped to the company and keeping the
+    newest close is exactly how a Class B holding came to be priced at the
+    Class A close, so the price readers take one symbol and say so loudly.
+    A string would iterate into characters and fail quietly; this is the
+    version that cannot.
+    """
+    if not isinstance(ticker, str):
+        raise TypeError(
+            f"{caller} prices one security and takes one symbol, not "
+            f"{type(ticker).__name__}. A company's other share classes are "
+            "different instruments at different prices — handing them over is "
+            "what let a holding be priced from a class it is not.")
+    return ticker
+
+
+def _no_close(prices: dict, ticker: str, when: str | None = None) -> str:
+    """Why there is no price, naming the other classes when there are any.
+
+    Seeing prices on screen under the same company while this security reads
+    absent is confusing enough to look like a bug, so the absence says which
+    instrument it is about and what else is stored. It is a sentence about
+    identity — it can explain the gap, and it cannot fill it.
+    """
+    where = f" on or shortly before {when}" if when else ""
+    others = price_store.other_series(prices, ticker)
+    if others:
+        return (f"no close is stored for {ticker}{where}. Prices are held for "
+                + ", ".join(others) + " — other share classes of the same "
+                "company, and not this security's price at any date")
+    return f"no close is stored for {ticker}{where}"
+
+
+def price_view_asof(cik: int, ticker: str, as_of: str) -> dict:
+    """The close that belongs to `as_of` for ONE security: that day or the
+    nearest earlier trading day within the stale window, labelled with the
+    date actually used.
+
+    A hand-entered price never appears here — it is a statement about now, and
+    reaching it into the past would invent a value. Neither does a sibling
+    class's close, for the same reason one day further out: it is a real price
+    for a different instrument, which is not this security's price at any
+    date.
+    """
+    _one_symbol(ticker, "price_view_asof")
+    prices = _prices(cik)
+    got = price_store.close_on(prices, ticker, as_of,
+                               max_lookback_days=compute.STALE_PRICE_DAYS)
+    if got:
+        return {"value": got[1], "source": "fetched", "date": got[0],
+                "ticker": price_store.series_key(prices, ticker)}
+    return {"value": None, "source": None, "date": None, "ticker": None,
+            "reason": _no_close(prices, ticker, as_of)}
 
 
 # -- the public joins --------------------------------------------------------
@@ -213,23 +281,72 @@ def merged_values(security: dict, computed: dict) -> tuple[dict, dict]:
     return values, sources
 
 
-def price_view(security: dict, cik: int | None, tickers: list[str]) -> dict:
-    """The price the journal should show: hand-entered wins, else the newest
-    stored as-traded close, labelled with its date so stale is visible."""
+def price_view(security: dict, cik: int | None, ticker: str) -> dict:
+    """The price the journal should show for ONE security: hand-entered wins,
+    else that security's own newest stored close, labelled with its date so
+    stale is visible.
+
+    One symbol, never a list of the company's classes. Two share classes are
+    two instruments at two prices — twenty shares of a Class B security priced
+    at the Class A close read $14,100,000 instead of $9,400 — and the error is
+    silent, because a dollar figure is plausible in shape whatever its value.
+    It reaches market value, the account total and every weight, and strategies
+    bind on weight, so it is wrong decisions rather than wrong displays.
+
+    The signature is the guarantee. There is no list here to take the newest
+    close from, so no future caller can reintroduce the substitution without
+    first changing this line.
+    """
+    _one_symbol(ticker, "price_view")
+    # Zero or less is refused rather than served. It is not a price the market
+    # set, and everything downstream would treat it as one — a $0 market value,
+    # a 0% weight, a -100% on every open share, all four confident. Refused
+    # here as well as at the field, because a journal written before the field
+    # refused it must not still read as a fact.
     manual = security.get("price")
+    refused = None
     if manual not in (None, ""):
-        return {"value": float(manual), "source": "manual", "date": None}
+        if float(manual) > 0:
+            return {"value": float(manual), "source": "manual", "date": None,
+                    "ticker": ticker}
+        refused = (f"the price on record for {ticker} is {float(manual):g}, "
+                   "which is not a price — clear it, or enter what the "
+                   "security actually trades at")
     if cik:
-        b = _bundle(cik, tickers)
-        best = None
-        for t in tickers:
-            got = price_store.latest_close(b["prices"], t)
-            if got and (best is None or got[0] > best[0]):
-                best = (got[0], got[1], t)
-        if best:
-            return {"value": best[1], "source": "fetched", "date": best[0],
-                    "ticker": best[2]}
-    return {"value": None, "source": None, "date": None}
+        prices = _prices(cik)
+        got = price_store.latest_close(prices, ticker)
+        if got:
+            return {"value": got[1], "source": "fetched", "date": got[0],
+                    "ticker": price_store.series_key(prices, ticker)}
+        return {"value": None, "source": None, "date": None, "ticker": None,
+                "reason": refused or _no_close(prices, ticker)}
+    return {"value": None, "source": None, "date": None, "ticker": None,
+            "reason": refused or
+            (f"{ticker} is not matched to a company at the SEC, so no price "
+             "history has been fetched for it — enter a price by hand, or "
+             "match it in Data")}
+
+
+def price_series(cik: int | None, ticker: str, until: str | None = None):
+    """(closes, events) for ONE security's own instrument, ascending.
+
+    The history has to belong to the same instrument as the price beside it,
+    or a strategy measures a move that never happened. Returned together with
+    nothing to choose between, for the same reason `price_view` takes one
+    symbol.
+    """
+    _one_symbol(ticker, "price_series")
+    if not cik:
+        return [], []
+    key = price_store.series_key(_prices(cik), ticker)
+    if key is None:
+        return [], []
+    s = _prices(cik)["series"][key]
+    closes = [[d, float(c)] for d, c, *_ in s["rows"]
+              if c not in (None, 0) and (until is None or d <= until)]
+    events = [list(e) for e in (s.get("events") or [])
+              if e and (until is None or e[0] <= until)]
+    return closes, events
 
 
 def ev_reference(cik: int, tickers: list[str]) -> dict:

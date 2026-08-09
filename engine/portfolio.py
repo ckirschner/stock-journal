@@ -619,13 +619,19 @@ def sell_lots(security: dict, decision: dict | None, reason: str,
 # position that silently returned 0% would be the most confidently wrong
 # number on the screen.
 
-def lot_return(security: dict, lot: dict, price) -> float | None:
-    """One acquisition's return, in percent, or None when it cannot be
-    computed honestly.
+def _gain_and_cost(security: dict, lot: dict, price):
+    """One acquisition as (gain, cost) in currency, or None when it cannot be
+    worked out honestly.
 
-    The realised part comes from the sales that drew on this lot, at the
-    price each of them got. The open part is marked at the price passed in.
-    A lot with shares still open and no price has no return.
+    The realised part comes from the sales that drew on this lot, at the price
+    each of them got. The open part is marked at the price passed in. A lot
+    with shares still open and no price has no answer, and neither has a lot
+    that cost nothing — a change measured from nothing has no value.
+
+    Currency rather than a percentage, because this is what an aggregate has
+    to be built from. Adding up percentages that have each been rounded, and
+    re-expanding them against their costs, is not the same arithmetic as
+    adding up the money.
     """
     cost = float(lot["shares"]) * float(lot["price"])
     if cost <= 0:
@@ -640,24 +646,43 @@ def lot_return(security: dict, lot: dict, price) -> float | None:
             sold += n
     left = round(float(lot["shares"]) - sold, 8)
     if left > 0:
-        if price is None:
+        # Open shares need a price to be marked at, and nothing-or-less is not
+        # one. Marking them at zero would report a confident -100% on a
+        # position nobody has valued, which is the most believable wrong number
+        # this module can produce.
+        if price is None or float(price) <= 0:
             return None
         gain += left * (float(price) - float(lot["price"]))
-    return round(gain / cost * 100, 2)
+    return gain, cost
+
+
+def lot_return(security: dict, lot: dict, price) -> float | None:
+    """One acquisition's return, in percent, or None when it cannot be
+    computed honestly."""
+    got = _gain_and_cost(security, lot, price)
+    return None if got is None else round(got[0] / got[1] * 100, 2)
 
 
 def _weighted(security: dict, buys: list[dict], price) -> float | None:
     """Several acquisitions as one figure, weighted by what each cost.
+
     Absent if any of them is, because a subset average presented as the whole
-    is a fabrication."""
+    is a fabrication.
+
+    Summed as money and divided once, rather than as each lot's already-rounded
+    percentage re-expanded against its cost. The old arrangement made the
+    aggregate a figure derived from displayed figures rather than from the
+    underlying ones, so a period could report a return that its own lots did
+    not add up to — off only in the last place, which is exactly the kind of
+    wrong number nobody notices.
+    """
     total_cost, total_gain = 0.0, 0.0
     for lot in buys:
-        r = lot_return(security, lot, price)
-        if r is None:
+        got = _gain_and_cost(security, lot, price)
+        if got is None:
             return None
-        cost = float(lot["shares"]) * float(lot["price"])
-        total_cost += cost
-        total_gain += cost * r / 100
+        total_gain += got[0]
+        total_cost += got[1]
     if total_cost <= 0:
         return None
     return round(total_gain / total_cost * 100, 2)
@@ -770,10 +795,16 @@ def since_sale(security: dict, sale: dict, price) -> dict:
         return {**end, "pct": None,
                 "reason": "no current price is known for this security"}
     if end["price"] <= 0:
+        # Two different things end a window, and the reason has to say which.
+        # Blaming "the purchase on None" when the window runs to today names an
+        # entry the user never made, and sends them looking for it.
         return {**end, "pct": None,
-                "reason": f'the purchase on {end["date"]} that ends this '
-                          "window is recorded at nothing, so it cannot stand "
-                          "for what the price was that day"}
+                "reason": (f'the purchase on {end["date"]} that ends this '
+                           "window is recorded at nothing, so it cannot stand "
+                           "for what the price was that day")
+                if end["until"] == "purchase" else
+                ("the price on record for this security is nothing or less, "
+                 "so what it did against the sale cannot be expressed")}
     return {**end, "reason": None,
             "pct": round((end["price"] / float(sold_at) - 1) * 100, 2)}
 
@@ -797,6 +828,7 @@ def override_scorecard(securities: list[dict], price_of) -> dict:
     would make a data gap look like defiance.
     """
     overrides, compliant = [], []
+    counted = {"override": 0, "compliant": 0}
     kinds = {"against": 0, "without": 0, "unevaluated": 0}
     reconstructed = 0
     per_rule: dict[str, dict] = {}
@@ -810,28 +842,41 @@ def override_scorecard(securities: list[dict], price_of) -> dict:
                     kinds.get(ov.get("kind", "against"), 0) + 1
                 if ov.get("basis") == "reconstructed":
                     reconstructed += 1
-            if r is None:
-                continue
-            if not ov:
-                compliant.append(r)
-                continue
-            overrides.append(r)
-            for cite in ov.get("failed", []):
+            counted["override" if ov else "compliant"] += 1
+            # Every purchase is counted; only the ones that can be scored are
+            # averaged. A purchase with no price is a real decision that
+            # happened and a return that is not knowable, and the two have to
+            # be reported apart — see the population figures below.
+            for cite in (ov or {}).get("failed", []):
                 b = per_rule.setdefault(
                     cite["key"], {"label": cite.get("label") or cite["key"],
-                                  "n": 0, "wins": 0, "avg": 0.0,
-                                  "returns": []})
+                                  "n": 0, "n_scored": 0, "wins": 0,
+                                  "avg": None, "returns": []})
                 b["n"] += 1
-                b["returns"].append(r)
-                if r > 0:
-                    b["wins"] += 1
+                if r is not None:
+                    b["n_scored"] += 1
+                    b["returns"].append(r)
+                    if r > 0:
+                        b["wins"] += 1
+            if r is None:
+                continue
+            (overrides if ov else compliant).append(r)
     for b in per_rule.values():
-        b["avg"] = round(sum(b["returns"]) / len(b["returns"]), 1)
+        b["avg"] = round(sum(b["returns"]) / len(b["returns"]), 1) \
+            if b["returns"] else None
         b.pop("returns")
 
+    # Each group says how many purchases it covers AND how many of them could
+    # be scored. Reporting a win rate over the priced subset beside a count of
+    # every override would let a data gap read as a settled result — and this
+    # is the panel that is supposed to be able to indict a rule, so it is the
+    # last place a partial population may pass for the whole.
     return {
-        "override": _summarise(overrides),
-        "compliant": _summarise(compliant),
+        "override": {**_summarise(overrides), "n_purchases": counted["override"],
+                     "n_unscored": counted["override"] - len(overrides)},
+        "compliant": {**_summarise(compliant),
+                      "n_purchases": counted["compliant"],
+                      "n_unscored": counted["compliant"] - len(compliant)},
         "kinds": kinds,
         "reconstructed_overrides": reconstructed,
         "per_rule": per_rule,

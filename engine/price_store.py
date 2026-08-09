@@ -133,6 +133,59 @@ def mark_terminal(doc: dict, ticker: str, reason: str) -> dict:
 
 # -- reads -------------------------------------------------------------------
 
+def symbol_forms(ticker) -> list[str]:
+    """The spellings one instrument's symbol can be stored under.
+
+    The SEC writes a share class with a hyphen (BRK-B); people and price
+    sources write a dot (BRK.B); a fetch can leave a series under either,
+    because it asks for both the mapped symbols and the one the journal holds.
+    Those are one instrument under two spellings — the same equivalence
+    tickermap.resolve already applies to the SEC map — and nothing else is.
+
+    A *different class* is a different instrument at a different price and is
+    never a form of this one. That is the whole point of this function
+    existing: everything above it asks for one security's series by name, and
+    the only latitude it gets is punctuation.
+    """
+    t = str(ticker or "").strip().upper()
+    if not t:
+        return []
+    forms = [t]
+    for alt in (t.replace(".", "-"), t.replace("-", ".")):
+        if alt not in forms:
+            forms.append(alt)
+    return forms
+
+
+def series_key(doc: dict, ticker: str):
+    """The stored key holding this instrument's rows, or None.
+
+    Tries the symbol as written and its punctuation variants, in that order,
+    and returns the first that actually holds rows — so a series stored under
+    the SEC's hyphen form is found by a journal that spells it with a dot,
+    and a series that exists but is empty does not shadow one that isn't.
+    """
+    series = doc.get("series") or {}
+    for form in symbol_forms(ticker):
+        s = series.get(form)
+        if s and s.get("rows"):
+            return form
+    return None
+
+
+def other_series(doc: dict, ticker: str) -> list[str]:
+    """Every stored series that is NOT this instrument, with rows in it.
+
+    For saying why a value is absent, never for supplying one. A company's
+    other share classes are what make "no price for this security" confusing
+    when the screen can see prices under the same company, so the absence gets
+    to name them — as a sentence, which cannot become a number.
+    """
+    forms = set(symbol_forms(ticker))
+    return sorted(k for k, s in (doc.get("series") or {}).items()
+                  if k not in forms and s and s.get("rows"))
+
+
 def close_on(doc: dict, ticker: str, date: str, max_lookback_days: int = 7):
     """As-traded close on `date`, or the nearest earlier trading day within
     the lookback. Returns (date_used, close) or None. Never interpolates,
@@ -141,10 +194,14 @@ def close_on(doc: dict, ticker: str, date: str, max_lookback_days: int = 7):
 
     A zero or null close is a no-trade artifact, not a price; it is stepped
     over, exactly as latest_close steps over it, so a halt on the asked day
-    cannot mask a real close from the day before."""
-    s = (doc.get("series") or {}).get(str(ticker).upper())
-    if not s or not s["rows"]:
+    cannot mask a real close from the day before.
+
+    The symbol resolves through `series_key`, so one instrument is found
+    whichever punctuation it was stored under — and only that instrument."""
+    key = series_key(doc, ticker)
+    if key is None:
         return None
+    s = doc["series"][key]
     rows = s["rows"]
     lo, hi = 0, len(rows)
     while lo < hi:                       # rightmost row with row.date <= date
@@ -165,12 +222,12 @@ def close_on(doc: dict, ticker: str, date: str, max_lookback_days: int = 7):
 
 
 def latest_close(doc: dict, ticker: str):
-    """(date, close) of the newest held row, or None. Staleness is the
-    caller's question to ask — the date is right there."""
-    s = (doc.get("series") or {}).get(str(ticker).upper())
-    if not s or not s["rows"]:
+    """(date, close) of the newest held row for ONE instrument, or None.
+    Staleness is the caller's question to ask — the date is right there."""
+    key = series_key(doc, ticker)
+    if key is None:
         return None
-    for row in reversed(s["rows"]):
+    for row in reversed(doc["series"][key]["rows"]):
         if row[1] not in (None, 0):
             return (row[0], float(row[1]))
     return None

@@ -24,6 +24,8 @@ The shape, in full::
                             | {"status": "absent", "reason"},
                    "closes": [[date, close], ...],   # as traded, ascending
                    "events": [[date, "split"|"dividend", amount], ...]},
+                  # All three describe the security this journal holds, and
+                  # only it. See the reading rule on share classes below.
       "position": {"held", "shares", "opened",
                    "lots":      [{"date", "shares", "remaining", "open"}],
                    "disposals": [{"date", "shares"}],
@@ -53,6 +55,21 @@ Reading rules a strategy can rely on:
   the host cannot honestly serve a number, status is "absent" with a reason,
   and a series point that could not be read carries value None with its
   reason. Nothing is zero-filled, carried forward, or interpolated.
+- **A share class is a security; the company is not.** Two classes of one
+  company are two instruments at two prices, and the two scopes are served
+  differently. `price`, `position.market_value`, `position.weight` and every
+  holding in `portfolio` are about the *instrument this journal holds*, priced
+  from its own symbol alone — where that symbol has no close the value is
+  absent with a reason, never a sibling's price. `measures` are about the
+  *company*, so a whole-enterprise figure such as market capitalization reads
+  every class; where one of them has no price of its own the measure says so
+  in its cautions, which is the only place in this context an approximation
+  is permitted to appear.
+
+  This is not a convention to be remembered. The reader that serves a price
+  takes one symbol and refuses a list, because taking the newest close across
+  every mapped class is what priced twenty shares of a Class B security at
+  $14,100,000 instead of $9,400 — silently, in a figure sizing rules bind on.
 - **Percent units are percent numbers** (18.9 means 18.9%), including
   position weight, matching the metric bank's convention.
 - **A hand-entered value has no date.** It wins over a computed one, says so
@@ -119,11 +136,18 @@ SERIES_BOUNDARY_CAP = compute.CONFIRMATION_BOUNDARY_CAP
 
 
 def _tickers_of(security: dict) -> list:
-    """Every symbol the SEC maps to this security's company — share classes
-    are genuinely different instruments at different prices, and reading one
-    class's series while the journal shows another's would compute a
-    different number for the same security. Cached snapshot only; building a
-    context never touches the network."""
+    """Every symbol the SEC maps to this security's company.
+
+    Company-scoped, and only that. A whole-company measure — market cap over
+    every class, the shares a per-share valuation divides by — genuinely needs
+    all of them, because the company is the subject.
+
+    Nothing about the *position* comes through here. Share classes are
+    different instruments at different prices, so what a holding is worth, and
+    every figure derived from it, reads the security's own symbol alone and
+    goes nowhere near this list. See dataview.price_view.
+
+    Cached snapshot only; building a context never touches the network."""
     ticker = str(security.get("ticker") or "").upper()
     cik = security.get("cik")
     if cik:
@@ -280,17 +304,27 @@ def _measures(security, cik, tickers, as_of, today) -> dict:
 
 # -- price -------------------------------------------------------------------
 
-def _price(security, cik, tickers, as_of, today) -> dict:
+def _price(security, cik, ticker, as_of, today) -> dict:
+    """This security's price and its own close history.
+
+    One instrument throughout. The history has to belong to the same
+    instrument as the close beside it or a strategy measures a move that never
+    happened — and both have to belong to the security the journal holds, not
+    to whichever class of the company happens to have traded most recently.
+    Where this instrument has no rows the history is empty, because another
+    class's history is not a fallback for it; it is a different price series
+    for a different thing.
+    """
     if as_of:
         # A hand-entered price is a statement about now; it never reaches
         # into the past, even when no fetched history exists to answer.
-        view = dataview.price_view_asof(cik, tickers, as_of) if cik else \
+        view = dataview.price_view_asof(cik, ticker, as_of) if cik else \
             {"value": None,
              "reason": "no fetched price history is stored for this "
                        f"security, so no close exists to reconstruct "
                        f"for {as_of}"}
     else:
-        view = dataview.price_view(security, cik, tickers)
+        view = dataview.price_view(security, cik, ticker)
     if view.get("value") is None:
         latest = _absent(view.get("reason")
                          or "no price is stored for this security — fetch "
@@ -299,45 +333,37 @@ def _price(security, cik, tickers, as_of, today) -> dict:
         latest = {"status": "known", "value": float(view["value"]),
                   "date": view.get("date"), "ticker": view.get("ticker"),
                   "source": view.get("source")}
-    # The history must belong to the same instrument as `latest`: share
-    # classes are genuinely different instruments at different prices, and a
-    # history from one class under a close from another would let a strategy
-    # measure a move that never happened. When no close was served, fall
-    # back to the first class holding rows so the history is not silently
-    # empty.
-    closes, events = [], []
-    if cik:
-        doc = price_store.load(cik)
-        served = latest.get("ticker")
-        order = [served] + [t for t in tickers if t != served] if served \
-            else list(tickers)
-        for t in order:
-            s = (doc.get("series") or {}).get(str(t or "").upper())
-            if not s or not s.get("rows"):
-                continue
-            closes = [[d, float(c)] for d, c, *_ in s["rows"]
-                      if c not in (None, 0) and d <= today]
-            events = [list(e) for e in (s.get("events") or [])
-                      if e and e[0] <= today]
-            break
+    closes, events = dataview.price_series(cik, ticker, until=today)
     return {"latest": latest, "closes": closes, "events": events}
 
 
 # -- position and portfolio --------------------------------------------------
 
 def _market_value(sec, shares, as_of=None):
-    """Shares times the price that belongs to the clock — the journal's
-    effective price live, the reconstructed close under a pin."""
+    """Shares times the price of the security actually held.
+
+    The price belongs to the clock — the journal's effective price live, the
+    reconstructed close under a pin — and to the instrument. A holding is
+    priced from its own symbol and from nothing else: a company's other share
+    classes trade at their own prices, and borrowing one would put a plausible
+    dollar figure into market value, the account total and every weight
+    measured against it, with nothing on the screen to say it was the wrong
+    thing. Where this security has no close, the value is absent with the
+    reason, per principle 4.
+
+    The provenance names the instrument as well as the day, so the figure can
+    be checked without leaving the screen.
+    """
     cik = sec.get("cik")
-    tickers = _tickers_of(sec)
+    ticker = str(sec.get("ticker") or "")
     if as_of:
-        view = dataview.price_view_asof(cik, tickers, as_of) if cik else \
+        view = dataview.price_view_asof(cik, ticker, as_of) if cik else \
             {"value": None,
              "reason": "no fetched price history is stored for this "
                        f"security, so no close exists to reconstruct "
                        f"for {as_of}"}
     else:
-        view = dataview.price_view(sec, cik, tickers)
+        view = dataview.price_view(sec, cik, ticker)
     if view.get("value") is None:
         return _absent(view.get("reason")
                        or "no price is stored for this security, so its "
@@ -345,8 +371,8 @@ def _market_value(sec, shares, as_of=None):
     if view.get("source") == "manual":
         basis = "the price entered by hand"
     else:
-        basis = ("the close of " + view["date"] if view.get("date")
-                 else "the recorded close")
+        basis = (f'the {view.get("ticker") or ticker} close of {view["date"]}'
+                 if view.get("date") else "the recorded close")
     return _known(float(view["value"]) * shares, "computed",
                   provenance=[f"{shares:g} shares at {basis}"])
 
@@ -533,8 +559,12 @@ def build_context(security: dict, journal_securities: list | None,
         "security": {"ticker": security.get("ticker"),
                      "name": security.get("name"),
                      "cik": cik},
+        # Two symbol scopes, deliberately. `tickers` is every class the SEC
+        # maps to the company, which is what a whole-company measure needs.
+        # The price is the security's own instrument and never sees that list.
         "measures": _measures(security, cik, tickers, as_of, today),
-        "price": _price(security, cik, tickers, as_of, today),
+        "price": _price(security, cik, str(security.get("ticker") or ""),
+                        as_of, today),
         "position": _position(security, today, as_of,
                               folio["account_value"]),
         "portfolio": folio,

@@ -139,16 +139,19 @@ class Api:
         take the journal down with it, and must never block recording."""
         cik = s.get("cik")
         if not cik:
-            return {}, dataview.price_view(s, None, [s["ticker"]]), None, \
+            return {}, dataview.price_view(s, None, s["ticker"]), None, \
                 [s["ticker"]]
+        # Company scope for the measures, security scope for the price. A
+        # measure is about the enterprise and reads every class; a holding is
+        # one instrument and is priced from its own symbol alone.
         tickers = self._tickers_of(s)
         try:
             computed = dataview.computed_results(cik, tickers, entry_ids)
-            price = dataview.price_view(s, cik, tickers)
+            price = dataview.price_view(s, cik, s["ticker"])
             status = dataview.data_status(cik)
         except Exception as e:                          # noqa: BLE001
             traceback.print_exc()
-            return {}, dataview.price_view(s, None, [s["ticker"]]), \
+            return {}, dataview.price_view(s, None, s["ticker"]), \
                 {"error": f"the data layer failed: {e}"}, tickers
         return computed, price, status, tickers
 
@@ -682,7 +685,23 @@ class Api:
             except (TypeError, ValueError):
                 return err(f"{k} must be a number or left blank.")
         s["metrics"] = stored
-        s["price"] = float(price) if price not in (None, "") else None
+        # A price of nothing, or less than nothing, is not a price. Stored as
+        # one it becomes a confident $0 market value, a 0% weight, and a -100%
+        # on every open share — four settled-looking answers built on a number
+        # that says the market valued the security at nothing. Blank is the way
+        # to say you have no price, and it is a different thing.
+        if price in (None, ""):
+            s["price"] = None
+        else:
+            try:
+                entered = float(price)
+            except (TypeError, ValueError):
+                return err("The price must be a number, or left blank.")
+            if entered <= 0:
+                return err("A price has to be more than zero. Leave it blank "
+                           "if you do not have one — the journal will say the "
+                           "price is unknown rather than treat it as nothing.")
+            s["price"] = entered
         self._write(journal)
         return ok()
 
@@ -755,7 +774,8 @@ class Api:
             try:
                 computed = dataview.asof_results(cik, tickers, entry_ids,
                                                  as_of)
-                avail = dataview.asof_availability(cik, tickers, as_of)
+                avail = dataview.asof_availability(cik, tickers,
+                                                   s["ticker"], as_of)
                 price = avail["price"]
                 if avail["filings_by_then"]:
                     parts.append(f'{avail["filings_by_then"]} of the '
@@ -1054,7 +1074,7 @@ class Api:
         cik = s.get("cik")
         tickers = self._tickers_of(s)
 
-        price = dataview.price_view(s, cik, tickers)
+        price = dataview.price_view(s, cik, s["ticker"])
         if price["value"] is None:
             price_item = {"status": "absent",
                           "reason": "no price is stored — fetch prices, or "

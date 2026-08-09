@@ -89,7 +89,7 @@ class TestAsofResults:
         before[price_store.path_for(cik).name] = \
             price_store.path_for(cik).read_bytes()
         dataview.asof_results(cik, ["SYN"], ["current_ratio"], "2025-06-30")
-        dataview.price_view_asof(cik, ["SYN"], "2025-06-30")
+        dataview.price_view_asof(cik, "SYN", "2025-06-30")
         after = {p.name: p.read_bytes()
                  for p in facts_store.cik_dir(cik).glob("*.json")}
         after[price_store.path_for(cik).name] = \
@@ -102,7 +102,7 @@ class TestAsofPrice:
         cik = next(_CIK)
         _store_company(cik, [], [["2025-06-27", 10.0, 1000],
                                  ["2026-08-01", 20.0, 1000]])
-        p = dataview.price_view_asof(cik, ["SYN"], "2025-06-30")
+        p = dataview.price_view_asof(cik, "SYN", "2025-06-30")
         assert p["value"] == 10.0
         assert p["date"] == "2025-06-27"
         assert p["source"] == "fetched"
@@ -110,14 +110,14 @@ class TestAsofPrice:
     def test_gap_beyond_the_stale_window_is_absent_with_reason(self):
         cik = next(_CIK)
         _store_company(cik, [], [["2025-06-27", 10.0, 1000]])
-        p = dataview.price_view_asof(cik, ["SYN"], "2025-07-20")
+        p = dataview.price_view_asof(cik, "SYN", "2025-07-20")
         assert p["value"] is None
         assert "2025-07-20" in p["reason"]
 
     def test_never_reaches_forward_to_a_later_close(self):
         cik = next(_CIK)
         _store_company(cik, [], [["2025-06-27", 10.0, 1000]])
-        p = dataview.price_view_asof(cik, ["SYN"], "2025-06-26")
+        p = dataview.price_view_asof(cik, "SYN", "2025-06-26")
         assert p["value"] is None
 
     def test_a_no_trade_zero_row_cannot_mask_the_prior_real_close(self):
@@ -128,7 +128,7 @@ class TestAsofPrice:
         cik = next(_CIK)
         _store_company(cik, [], [["2025-06-27", 10.0, 1000],
                                  ["2025-06-30", 0, 0]])
-        p = dataview.price_view_asof(cik, ["SYN"], "2025-06-30")
+        p = dataview.price_view_asof(cik, "SYN", "2025-06-30")
         assert p["value"] == 10.0
         assert p["date"] == "2025-06-27"
 
@@ -140,7 +140,7 @@ class TestAvailability:
             _fy_filing("A-1", "2025-02-20", "2024-12-31", 200, 100),
             _fy_filing("A-2", "2026-02-20", "2025-12-31", 300, 300),
         ], [["2025-06-27", 10.0, 1000]])
-        a = dataview.asof_availability(cik, ["SYN"], "2025-06-30")
+        a = dataview.asof_availability(cik, ["SYN"], "SYN", "2025-06-30")
         assert a["filings_by_then"] == 1
         assert a["filings_held"] == 2
         assert a["newest_filed"] == "2025-02-20"

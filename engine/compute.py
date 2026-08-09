@@ -104,7 +104,15 @@ class Ctx:
         """The close a computation should use for one specific symbol: the
         newest held, or under a price_cutoff the close on or shortly before
         it. Every price consumer must come through the context — a direct
-        latest_close call would quietly price an as-of reading at today."""
+        latest_close call would quietly price an as-of reading at today.
+
+        The symbol here comes off a filing cover, which writes it the way the
+        company does; the series was stored under whatever the SEC map said.
+        price_store resolves the punctuation between them, so a class that is
+        listed and priced is not mistaken for one that has no price of its
+        own — which is the difference between using this class's close and
+        borrowing a sibling's.
+        """
         if self.price_cutoff:
             got = price_store.close_on(self.prices, ticker, self.price_cutoff,
                                        max_lookback_days=STALE_PRICE_DAYS)
@@ -328,6 +336,89 @@ def ttm_flow_result(ctx, input_id):
     return out
 
 
+def blend_classes(ctx, classes: list, on: str | None = None):
+    """Every share class at its own close, with the classes that have none
+    valued at the largest priced class — or absent when none of them can be
+    priced at all.
+
+    Returns {"total", "provenance", "cautions", "oldest"} or an absent dict.
+
+    **This is an approximation, and it is the only one in the file.** A class
+    with no stored close of its own is valued at a sibling's, which principle 4
+    does not otherwise permit: the filing does not account for what that class
+    was worth, so nothing is asserting the number. It is kept because the case
+    it exists for is ordinary — a founder class that never lists, converting
+    one-for-one into a class that does, a few percent of the count — and
+    refusing would take market cap, and with it P/E, enterprise value,
+    dividend yield and both cash-to-cap ratios, away from companies most people
+    would think of as unremarkable.
+
+    What it may not do is pretend to be a measurement. So:
+
+    - The anchor is the **largest priced class**, not whichever series happens
+      to be newest. The old rule flipped between fetches whenever one class's
+      prices lagged the other's, silently moving a headline figure.
+    - The caution states what is true — that the class has no stored price —
+      never that it is unlisted, which the host has no evidence for and which
+      is false whenever a listed class simply failed to fetch.
+    - The caution says **how much of the company** was valued this way. Seven
+      percent of the count is a footnote; ninety percent means the figure is
+      mostly an assumption, and only the reader can judge which.
+    - With no priced class at all there is nothing to anchor to, and the answer
+      is absence rather than a number built on a symbol that is not a class.
+
+    `on` pins every close to a past day, so the historical side of a
+    self-comparison blends by exactly the same rule as the live side. Two
+    different rules either side of "P/E against its own five-year median" made
+    the comparison meaningless.
+    """
+    priced, unpriced = [], []
+    for cl in classes:
+        sym = cl.get("symbol")
+        got = (ctx.price_on(sym, on) if on else ctx.price_for(sym)) \
+            if sym else None
+        (priced if got else unpriced).append((cl, got))
+
+    count = sum(cl["value"] for cl in classes) or 0.0
+    if not priced:
+        named = ", ".join(str(cl.get("symbol") or cl["member"])
+                          for cl in classes)
+        return absent(
+            f"none of the {len(classes)} share classes ({named}) has a stored "
+            "close of its own"
+            + (f" on or shortly before {on}" if on else "")
+            + ", so market capitalization cannot be reached without inventing "
+              "a price")
+
+    anchor, anchor_close = max(priced, key=lambda pair: pair[0]["value"])
+    total, prov, cautions, dates = 0.0, [], [], []
+    borrowed = 0.0
+    for cl, got in priced + unpriced:
+        close = got or anchor_close
+        if got is None:
+            borrowed += cl["value"]
+        total += cl["value"] * close[1]
+        dates.append(close[0])
+        prov.append(f"{cl.get('symbol') or cl['member']}: "
+                    f"{cl['value']:,.0f} shares × {close[1]:,.2f} (close "
+                    f"{close[0]}{'' if got else ', borrowed'})")
+    if unpriced:
+        share = f"{borrowed / count * 100:.1f}%" if count else "an unknown "\
+            "share"
+        cautions.append(
+            ", ".join(f"{cl.get('label') or cl['member']} "
+                      f"({cl['value']:,.0f} shares)" for cl, _ in unpriced)
+            + f" — {share} of the share count — "
+            + ("has" if len(unpriced) == 1 else "have")
+            + " no stored close, and "
+            + ("is" if len(unpriced) == 1 else "are")
+            + f" valued here at the {anchor.get('symbol') or anchor['member']}"
+              f" close of {anchor_close[0]}. That is an assumption about what "
+              "those shares are worth, not a measurement of it.")
+    return {"total": total, "provenance": prov, "cautions": cautions,
+            "oldest": min(dates)}
+
+
 def _market_cap_result(ctx):
     """Market cap = shares outstanding (cover) × as-traded price, summed per
     class for multi-class filers because each class has its own price."""
@@ -343,42 +434,38 @@ def _market_cap_result(ctx):
             f"{shares['accession']}"]
 
     if shares.get("classes"):
-        total, prices_used = 0.0, []
-        primary = ctx.price_now()
-        if is_absent(primary):
-            return primary
-        for cl in shares["classes"]:
-            sym = cl.get("symbol")
-            close = None
-            if sym:
-                got = ctx.price_for(sym)
-                if got:
-                    close = got
-            if close is None:
-                close = (primary["date"], primary["close"])
-                cautions.append(
-                    f"{cl.get('label') or cl['member']} "
-                    f"({cl['value']:,.0f} shares) has no market price"
-                    + (f" for symbol {sym}" if sym else "")
-                    + f"; valued at the {primary['ticker']} close — an "
-                      "unlisted class carries no price of its own")
-            total += cl["value"] * close[1]
-            prices_used.append(
-                f"{sym or cl['member']}: {cl['value']:,.0f} shares × "
-                f"{close[1]:,.2f} (close {close[0]})")
-        prov.extend(prices_used)
-        pdate = primary["date"]
+        blend = blend_classes(ctx, shares["classes"])
+        if is_absent(blend):
+            return _absent_result(blend)
+        total = blend["total"]
+        prov.extend(blend["provenance"])
+        cautions.extend(blend["cautions"])
+        # The OLDEST close in the blend, not the newest. Staleness measured
+        # against the freshest class cannot see a second class whose prices
+        # stopped updating months ago, which is precisely the one worth
+        # knowing about.
+        pdate = blend["oldest"]
     else:
         p = ctx.price_now()
         if is_absent(p):
             return p
         total = shares["total"] * p["close"]
         prov.append(f"{p['ticker']} close {p['close']:,.2f} on {p['date']}")
+        # One count for the whole company and more than one symbol trading
+        # against it: the count covers shares this price does not describe,
+        # and the cover gave nothing to split them by.
+        others = [t for t in ctx.tickers
+                  if t != p["ticker"] and ctx.price_for(t)]
+        if others:
+            cautions.append(
+                f"the cover states one share count for the whole company, but "
+                f"{', '.join(others)} also trade against it; every share is "
+                f"valued here at the {p['ticker']} close")
         pdate = p["date"]
 
     gap = (date.fromisoformat(ctx.today) - date.fromisoformat(pdate)).days
     if gap > STALE_PRICE_DAYS:
-        cautions.append(f"the newest stored price is {gap} days old "
+        cautions.append(f"the oldest price in this figure is {gap} days old "
                         f"({pdate}); fetch prices to bring it current")
     return computed(total, prov, cautions)
 
@@ -995,25 +1082,14 @@ def _quarterly_ratio_series(ctx, kind):
         price = None
         if shares is not None:
             if shares.get("classes"):
-                total = 0.0
-                ok = True
-                fallback = None
-                for cl in shares["classes"]:
-                    sym = cl.get("symbol")
-                    got = ctx.price_on(sym, q) if sym else None
-                    if got is None:
-                        if fallback is None:
-                            for c2 in shares["classes"]:
-                                if c2.get("symbol"):
-                                    fallback = ctx.price_on(c2["symbol"], q)
-                                    if fallback:
-                                        break
-                        if fallback is None:
-                            ok = False
-                            break
-                        got = fallback
-                    total += cl["value"] * got[1]
-                mcap = total if ok else None
+                # The same blend as the live figure, by the same anchor rule.
+                # This side used to borrow from the first class that happened
+                # to have a price and the live side from whichever series was
+                # newest — so "P/E against its own five-year median" compared
+                # two numbers built on different share classes, which is the
+                # one thing that comparison must not do.
+                blend = blend_classes(ctx, shares["classes"], on=q)
+                mcap = None if is_absent(blend) else blend["total"]
             else:
                 for t in ctx.tickers:
                     price = ctx.price_on(t, q)

@@ -111,6 +111,28 @@ inflate every weight measured against it.
 The host reports the figure and stops there. Whether a weight is too high is
 a strategy's opinion, and appears nowhere in the host.
 
+### A share class is a security; the company is not
+
+Two classes of one company are two instruments at two prices, and the tool
+keeps the two scopes apart because collapsing them produces figures that are
+plausible in shape and badly wrong in value.
+
+**A holding is priced from its own symbol, and only that one.** Market value,
+weight, the account total and every return read the close of the security you
+actually hold. Where that security has no close stored, the value is absent
+and says so — a sibling class's price is a real price for a different thing,
+so it is never borrowed. Twenty shares of a Class B security priced at the
+Class A close read $14,100,000 instead of $9,400, and nothing on the screen
+would have said which one you were looking at.
+
+**A whole-company measure reads every class**, because the company is the
+subject: market capitalization is each class's share count at its own price.
+Where a class has no price of its own — a founder class that never listed is
+the ordinary case — it is valued at the largest class that does have one, and
+the caution says so, names the symbol borrowed from, and states what share of
+the company was valued that way. That is the only approximation in the
+compute layer, and it is labelled an assumption rather than a measurement.
+
 ## Writing a strategy
 
 A strategy is a directory under `strategies/`:
@@ -400,6 +422,19 @@ failing test does not.
 
 One test renders every screen under Node with a stub DOM
 (`tests/test_view_smoke.py`); it is skipped where Node is not installed.
+
+**Two ground-truth sweeps hold the arithmetic to figures no code produced.**
+`tests/fixtures/groundtruth/` holds statement lines read by hand off primary
+filings on EDGAR, cited by URL and accession, and
+`tests/fixtures/positions/histories.json` holds position histories stated in
+plain terms with every expected figure worked out on paper and the arithmetic
+written beside it. Both exist for the same reason: deriving an expectation
+through the machinery under test proves only that it agrees with itself.
+
+Several of the position histories also record the *wrong* answer — the figure
+the code produced with the defect that history was built for present — so a
+passing run is evidence the defect is gone rather than evidence of a rounding
+preference.
 
 ## Packaging to an EXE
 

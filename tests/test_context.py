@@ -237,10 +237,16 @@ class TestTheClock:
         assert build(security(913))["measures"]["fcf_ttm"]["series"][
             "truncated"] is False
 
-    def test_the_history_belongs_to_the_same_class_as_the_close(self):
+    def test_the_close_and_its_history_are_the_security_being_shown(self):
         """Two share classes are two instruments. The served close and the
-        close history must describe the same one, or a strategy measures a
-        move that never happened."""
+        close history must describe the same one — and it must be the one the
+        journal holds, not whichever class traded most recently.
+
+        This test used to assert the opposite: that the newest close across
+        every mapped class wins. It was right about the guarantee and backwards
+        about the answer, which is how a Class B holding came to be priced at
+        the Class A close.
+        """
         store_two_years(909)
         map_tickers(909, "SYN", "SYN.B")
         doc = price_store.load(909)
@@ -249,21 +255,74 @@ class TestTheClock:
         price_store.merge_series(doc, "SYN.B", "test",
                                  [["2026-01-05", 55.0, 100]], [])
         price_store.save(909, doc)
-        sec = security(909)
+        sec = security(909)                          # the journal holds SYN
         ctx = context.build_context(sec, [sec], {}, {})
         latest = ctx["price"]["latest"]
-        assert latest["ticker"] == "SYN.B"           # the newest close wins
-        assert ctx["price"]["closes"] == [["2026-01-05", 55.0]]
+        assert latest["ticker"] == "SYN"
+        assert latest["value"] == 10.0
+        assert ctx["price"]["closes"] == [["2026-01-02", 10.0]]
 
-    def test_every_mapped_share_class_is_read_not_just_the_journals(self):
-        """The journal names one symbol; the SEC maps several to the CIK.
-        Reading only the journal's would price the security off a class the
-        journal is not showing."""
+        held = context.build_context(security(909, ticker="SYN.B"),
+                                     [security(909, ticker="SYN.B")], {}, {})
+        assert held["price"]["latest"]["ticker"] == "SYN.B"
+        assert held["price"]["latest"]["value"] == 55.0
+        assert held["price"]["closes"] == [["2026-01-05", 55.0]]
+
+    def test_a_security_with_no_close_of_its_own_says_so_by_name(self):
+        """Seeing the company's other classes priced on screen while this one
+        reads absent looks like a bug, so the absence names the instrument it
+        is about and what else is stored. It explains the gap; it never fills
+        it with a sibling's close."""
+        store_two_years(915)
+        map_tickers(915, "SYN", "SYN.B")
+        doc = price_store.load(915)
+        price_store.merge_series(doc, "SYN", "test",
+                                 [["2026-01-02", 10.0, 100]], [])
+        price_store.save(915, doc)
+        latest = context.build_context(security(915, ticker="SYN.B"),
+                                       [], {}, {})["price"]["latest"]
+        assert latest["status"] == "absent"
+        assert "SYN.B" in latest["reason"]
+        assert "SYN" in latest["reason"] and "share class" in latest["reason"]
+        assert "value" not in latest
+
+    def test_one_instrument_is_found_under_either_spelling(self):
+        """The SEC writes a share class with a hyphen and people type a dot,
+        and a fetch stores whichever it asked for. Those are one instrument;
+        a different class is not."""
+        store_two_years(916)
+        doc = price_store.load(916)
+        price_store.merge_series(doc, "SYN-B", "test",
+                                 [["2026-01-05", 55.0, 100]], [])
+        price_store.save(916, doc)
+        latest = context.build_context(security(916, ticker="SYN.B"),
+                                       [], {}, {})["price"]["latest"]
+        assert latest["value"] == 55.0
+        assert latest["ticker"] == "SYN-B"
+
+    def test_every_mapped_share_class_is_read_for_company_measures(self):
+        """The journal names one symbol; the SEC maps several to the CIK. A
+        whole-company measure needs all of them, because the company is the
+        subject. Nothing about the position comes through here."""
         store_two_years(914)
         map_tickers(914, "SYN", "SYN.B")
         assert context._tickers_of({"ticker": "SYN", "cik": 914}) \
             == ["SYN", "SYN.B"]
         assert context._tickers_of({"ticker": "SYN"}) == ["SYN"]
+
+    def test_the_price_readers_refuse_a_list_of_classes(self):
+        """The guarantee is structural, not a convention anyone has to
+        remember: handing every mapped class to a price reader is refused at
+        the door rather than quietly resolved to the newest one."""
+        import pytest
+
+        from engine import dataview
+        for call in (lambda: dataview.price_view({}, 909, ["SYN", "SYN.B"]),
+                     lambda: dataview.price_view_asof(909, ["SYN"],
+                                                      "2026-01-05")):
+            with pytest.raises(TypeError) as raised:
+                call()
+            assert "one symbol" in str(raised.value)
 
     def test_closes_stop_at_the_clock_and_skip_no_trade_artifacts(self):
         store_two_years(905)

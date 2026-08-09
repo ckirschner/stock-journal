@@ -193,3 +193,116 @@ class TestRealtyIncome:
         x = fi(726728, "0001104659-17-011170")
         r = cm.resolve_instant(x, "total_debt", "2016-12-31")
         assert r["value"] == 5839605 * K
+
+
+class TestMulticlassMarketCap:
+    """The one approximation in the compute layer, pinned against a real
+    three-class filer.
+
+    Alphabet's FY2024 cover states Class A 5,833 million (GOOGL), Class B 860
+    million (no trading symbol tagged — the founder class, which does not
+    list), Class C 5,497 million (GOOG). Those counts are hand-read from the
+    primary document and pinned above; the closes below are chosen for the
+    trace and stated as such.
+
+    Class B has no close of its own, so it is valued at a sibling's. That is
+    an approximation principle 4 does not otherwise allow, and it earns its
+    place only by being deterministic, bounded, and honest about both — which
+    is what these tests hold it to.
+    """
+
+    A, B, C = 5833 * M, 860 * M, 5497 * M
+
+    def _ctx(self, rows):
+        from engine import compute, price_store
+        doc = {"schema": price_store.SCHEMA, "cik": 1652044, "series": {}}
+        for sym, date, close in rows:
+            price_store.merge_series(doc, sym, "test", [[date, close, 100]], [])
+        return compute.Ctx([], doc, ["GOOG", "GOOGL"], today="2026-08-10")
+
+    def _classes(self):
+        r = cm.resolve_cover_shares(fi(1652044, "0001652044-25-000014"))
+        return r["classes"]
+
+    def test_the_unpriced_class_is_valued_at_the_largest_priced_one(self):
+        """Not at whichever series is newest. GOOG closes a day after GOOGL
+        here, which is exactly the arrangement that used to decide it — and it
+        moved a headline figure every time one class's fetch lagged."""
+        from engine import compute
+        ctx = self._ctx([("GOOGL", "2026-08-06", 200.0),
+                         ("GOOG", "2026-08-07", 198.0)])
+        blend = compute.blend_classes(ctx, self._classes())
+        # 5,833M x 200.00  +  860M x 200.00 (borrowed)  +  5,497M x 198.00
+        assert blend["total"] == (5833 * 200 + 860 * 200 + 5497 * 198) * M
+        assert blend["total"] == 2427006 * M
+        # and NOT the old rule, which anchored Class B on the newer GOOG close
+        assert blend["total"] != (5833 * 200 + 860 * 198 + 5497 * 198) * M
+
+    def test_the_caution_says_how_much_of_the_company_was_assumed(self):
+        """Seven percent is a footnote and ninety percent means the figure is
+        mostly an assumption. Only the reader can judge which, and only if the
+        share is stated."""
+        from engine import compute
+        ctx = self._ctx([("GOOGL", "2026-08-06", 200.0),
+                         ("GOOG", "2026-08-06", 198.0)])
+        note = " ".join(compute.blend_classes(ctx, self._classes())["cautions"])
+        assert "7.1%" in note                       # 860 / 12,190 of the count
+        assert "860,000,000 shares" in note
+        assert "GOOGL close of 2026-08-06" in note
+        assert "assumption" in note and "not a measurement" in note
+
+    def test_the_caution_never_claims_the_class_is_unlisted(self):
+        """A class lands here for three different reasons — genuinely unlisted,
+        listed but untagged on the cover, listed and tagged but never fetched.
+        The host cannot tell them apart, so it states what it knows (no stored
+        close) and not what it would like to conclude."""
+        from engine import compute
+        ctx = self._ctx([("GOOGL", "2026-08-06", 200.0),
+                         ("GOOG", "2026-08-06", 198.0)])
+        note = " ".join(compute.blend_classes(ctx, self._classes())["cautions"])
+        assert "unlisted" not in note
+        assert "no stored close" in note
+
+    def test_staleness_is_measured_against_the_oldest_close_in_the_blend(self):
+        """A second class whose prices stopped updating months ago is the one
+        worth knowing about, and measuring against the freshest cannot see
+        it."""
+        from engine import compute
+        ctx = self._ctx([("GOOGL", "2026-08-06", 200.0),
+                         ("GOOG", "2025-01-02", 198.0)])
+        assert compute.blend_classes(ctx, self._classes())["oldest"] \
+            == "2025-01-02"
+
+    def test_with_no_priced_class_there_is_nothing_to_anchor_to(self):
+        """Absence, not a number built on a symbol that is not a share
+        class."""
+        from engine import compute
+        blend = compute.blend_classes(self._ctx([]), self._classes())
+        assert is_absent(blend)
+        assert "none of the 3 share classes" in blend["reason"]
+        assert "without inventing a price" in blend["reason"]
+
+    def test_a_class_with_its_own_close_never_borrows(self):
+        """The approximation applies only where there is nothing else. Both
+        listed classes are priced at their own closes, so only Class B is
+        assumed."""
+        from engine import compute
+        ctx = self._ctx([("GOOGL", "2026-08-06", 200.0),
+                         ("GOOG", "2026-08-06", 150.0)])
+        blend = compute.blend_classes(ctx, self._classes())
+        assert blend["total"] == (5833 * 200 + 860 * 200 + 5497 * 150) * M
+        borrowed = [p for p in blend["provenance"] if "borrowed" in p]
+        assert len(borrowed) == 1 and "860,000,000" in borrowed[0]
+
+    def test_the_live_and_historical_blends_use_one_anchor_rule(self):
+        """P/E against its own five-year median compares a current figure with
+        a historical one. Two anchor rules made those two numbers rest on
+        different share classes, which is the one thing that comparison must
+        not do."""
+        from engine import compute
+        ctx = self._ctx([("GOOGL", "2026-08-06", 200.0),
+                         ("GOOG", "2026-08-07", 198.0)])
+        classes = self._classes()
+        live = compute.blend_classes(ctx, classes)
+        then = compute.blend_classes(ctx, classes, on="2026-08-07")
+        assert live["total"] == then["total"] == 2427006 * M
