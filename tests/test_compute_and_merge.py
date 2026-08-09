@@ -1,9 +1,9 @@
 """Computation semantics: absence over guessing, manual over fetched, and the
 public-float cross-check catching a wrong price basis."""
 
-from conftest import dur, filing, inst, balance_face
+from conftest import dur, entered, filing, inst, balance_face
 
-from engine import crosscheck, dataview, price_store
+from engine import context, crosscheck, dataview, price_store
 from engine.compute import Ctx, compute_all
 
 
@@ -74,18 +74,19 @@ class TestManualOverFetched:
     def test_hand_entered_wins_and_both_sides_survive(self):
         computed = {"fcf_ttm": {"status": "computed", "value": 150.0},
                     "current_ratio": {"status": "computed", "value": 1.4}}
-        security = {"metrics": {"fcf_ttm": 149.0}}
+        security = entered({}, "2026-03-04", fcf_ttm=149.0)
+        before = len(security["hand_entered"])
         values = dataview.merged_values(security, computed)
         assert values["fcf_ttm"]["value"] == 149.0
         assert values["fcf_ttm"]["source"] == "manual"
         assert values["current_ratio"]["value"] == 1.4
         assert values["current_ratio"]["source"] == "computed"
         # nothing was written into the security by the merge
-        assert security["metrics"] == {"fcf_ttm": 149.0}
+        assert len(security["hand_entered"]) == before
 
     def test_absent_computed_never_contributes_a_value(self):
         computed = {"pe_ttm": {"status": "absent", "reason": "no prices"}}
-        values = dataview.merged_values({"metrics": {}}, computed)
+        values = dataview.merged_values({}, computed)
         assert "pe_ttm" not in values
 
     def test_the_merge_carries_the_caution_with_the_value(self):
@@ -96,20 +97,40 @@ class TestManualOverFetched:
         computed = {"market_cap": {"status": "computed", "value": 2.4e12,
                                    "cautions": ["Class B has no stored close"],
                                    "provenance": ["shares from the cover"]}}
-        v = dataview.merged_values({"metrics": {}}, computed)["market_cap"]
+        v = dataview.merged_values({}, computed)["market_cap"]
         assert v["cautions"] == ["Class B has no stored close"]
         assert v["provenance"] == ["shares from the cover"]
 
-    def test_a_hand_entered_value_is_qualified_as_undated_under_a_pin(self):
-        """It participates — the journal has no other value to offer — but a
-        record rebuilt for a past day must never claim a number typed today
-        was known then."""
-        values = dataview.merged_values({"metrics": {"fcf_ttm": 149.0}}, {},
-                                        as_of="2024-03-01")
-        note = " ".join(values["fcf_ttm"]["cautions"])
-        assert "carry no date" in note and "2024-03-01" in note
-        live = dataview.merged_values({"metrics": {"fcf_ttm": 149.0}}, {})
-        assert live["fcf_ttm"]["cautions"] == []
+    def test_a_hand_entered_value_names_the_day_it_was_entered(self):
+        """A record rebuilt for a past day must never claim a number typed
+        today was known then. It says which day instead, and a pin before
+        that day does not see it at all."""
+        s = entered({}, "2024-03-01", fcf_ttm=149.0)
+        after = dataview.merged_values(s, {}, as_of="2024-06-30")["fcf_ttm"]
+        assert after["value"] == 149.0
+        assert after["provenance"] == ["entered by hand on 2024-03-01"]
+        assert after["cautions"] == []
+        assert "fcf_ttm" not in dataview.merged_values(s, {},
+                                                       as_of="2024-01-01")
+
+    def test_the_two_overlays_cannot_disagree_about_the_same_figure(self):
+        """The strategy's context and the snapshot merge read the same
+        record through the same module.
+
+        They were separate implementations and had already come apart: this
+        one supplied a provenance sentence the context did not. A figure that
+        reads one way to a strategy and another way in the record frozen
+        beside it is two halves of the program disagreeing about a number
+        nobody can go back and check.
+        """
+        s = {"ticker": "SYN", "name": "Synthetic Co", "lots": []}
+        entered(s, "2026-03-04", fcf_ttm=149.0)
+        merged = dataview.merged_values(s, {})["fcf_ttm"]
+        served = context.build_context(
+            s, [], values={}, inputs={},
+        )["measures"]["fcf_ttm"]["current"]
+        for key in ("value", "source", "cautions", "provenance"):
+            assert merged[key] == served[key], key
 
 
 class TestCrosscheck:

@@ -26,10 +26,10 @@ from pathlib import Path
 import webview
 
 from engine import (backup, bank, contract, context, dataview, fetch,
-                    journals, judgements, portfolio, secrets, store,
-                    strategy_loader, strategy_values, tickermap, tiingo)
+                    hand_entered, journals, judgements, portfolio, secrets,
+                    store, strategy_loader, strategy_values, thesis as
+                    thesis_mod, tickermap, tiingo, valuation)
 from engine.expected_value import EV_METHODS, EVError
-from engine.expected_value import compute as compute_ev
 from engine.portfolio import EXIT_REASONS
 
 UI_DIR = Path(__file__).resolve().parent / "ui"
@@ -447,10 +447,11 @@ class Api:
         securities = journal.get("securities", [])
         entry_ids = list(bank_meta)
         priced = []             # effective-price views, for the analytics
+        today = date.today().isoformat()
 
         for s in securities:
             computed, price, dstatus, _ = self._computed_layer(s, entry_ids)
-            values = dataview.merged_values(s, computed)
+            values = dataview.merged_values(s, computed, today=today)
             s["_price"] = price
             s["_data"] = dstatus
             s["_fetch"] = fetch.status_of(s["ticker"])
@@ -473,7 +474,7 @@ class Api:
             # recorded — so a value entered before the strategy stopped
             # reading it never becomes invisible.
             cited = self._cited_ids(s["_decision"])
-            shown = cited + [m for m in (s.get("metrics") or {})
+            shown = cited + [m for m in hand_entered.ids(s)
                              if m not in cited]
             s["_cited"] = cited
             # What the strategy asked this security about that no filing can
@@ -481,10 +482,24 @@ class Api:
             # readable after the strategy stops reading the question.
             s["_judgements"] = self._judgement_view(
                 s, self._cited_ids(s["_decision"], "judgement"))
+            # The other two dated records the user writes. Both are read
+            # through the same modules a purchase freezes from, so a screen
+            # can never show a version the record would not have handed to a
+            # decision.
+            s["_thesis"] = {**thesis_mod.standing(s, today=today),
+                            "history": thesis_mod.history(s)}
+            s["_valuation"] = {**valuation.standing(s, today=today),
+                               "history": valuation.history(s)}
             s["_inputs"] = [
                 {"id": mid, **{k: bank_meta[mid][k]
                                for k in ("label", "unit", "format", "plain")},
-                 "cited": mid in cited}
+                 "cited": mid in cited,
+                 # What was entered by hand for this measure, and when — plus
+                 # everything entered before it. A value that was retyped the
+                 # week a rule was about to fire is only visible if the
+                 # earlier one renders too.
+                 "entered": hand_entered.reading(s, mid),
+                 "entries": hand_entered.history(s, mid)}
                 for mid in shown if mid in bank_meta
                 and bank_meta[mid].get("kind") == "computed"]
             s["_computed"] = {
@@ -720,48 +735,46 @@ class Api:
     @guarded
     @locked
     def save_metrics(self, ticker, metrics, price):
-        """Blank fields delete the metric rather than storing a zero.
+        """Record hand-entered values on the security's dated record.
 
-        A zero would render as a confident failure; absent renders as grey.
-        Only fields the dialog offered are touched, so a value the strategy
-        has stopped reading is not silently dropped.
+        Blank fields withdraw the value rather than storing a zero — a zero
+        would render as a confident failure and absent renders as grey — and
+        a withdrawal is an entry saying so on the day it happened, not a
+        deletion. Only fields the dialog offered are touched, so a value the
+        strategy has stopped reading is not silently dropped.
+
+        Every change is appended. A figure quietly retyped the week a rule
+        was about to fire is worth exactly as much as a judgement quietly
+        remarked, and until now this screen was the one place in the journal
+        where that left no trace. Nothing is appended where nothing changed:
+        the dialog posts every field it offered on every save, and five
+        visits should not read as five revisions.
+
+        The price is the one value here that is still a mutable, undated
+        slot. It is not a claim about the business — it is what the market
+        said, superseded every time the market says something else, and the
+        dated version of it is the price history the fetcher already keeps.
         """
-        known = set(bank.meta())
         journal, *_ = self._open()
         if journal is None:
             return err("No journal is open.")
         s = self._find(journal, ticker)
-        stored = s.get("metrics") or {}
-        for k, v in (metrics or {}).items():
-            if k not in known:
-                return err(f'"{k}" is not in the metric bank.')
-            # A judgement is not a number and must never be storable as one.
-            # This field takes floats, and float(True) is 1.0 — a moat read
-            # would land here as a measurement, which is exactly what
-            # principle 5 says a captured assessment must never look like.
-            # Refused at the write, not filtered out of the dialog: the
-            # dialog is a view, and a view is not a guarantee.
-            if judgements.is_judgement(k):
-                return err(
-                    f'"{k}" is a judgement you make about this security, not '
-                    "a number to type. Answer it in Judgements, in prose "
-                    "with a pass or a fail, and it goes on a dated record "
-                    "that is never overwritten.")
-            if v in (None, "", "—"):
-                stored.pop(k, None)
-                continue
-            try:
-                stored[k] = float(v)
-            except (TypeError, ValueError):
-                return err(f"{k} must be a number or left blank.")
-        s["metrics"] = stored
+        # -- everything is checked before anything is written ------------
+        # An append-only record cannot take an entry back, so "three fields
+        # landed and the fourth was refused" is not a state to recover from
+        # — it is a state that must be unreachable. The price is in the same
+        # pass for the same reason: it is not on a dated record, but it
+        # arrives from the same form, and a save that appended three figures
+        # and then refused over the price would leave a rejection on screen
+        # beside changes that went through.
+        #
         # A price of nothing, or less than nothing, is not a price. Stored as
         # one it becomes a confident $0 market value, a 0% weight, and a -100%
         # on every open share — four settled-looking answers built on a number
         # that says the market valued the security at nothing. Blank is the way
         # to say you have no price, and it is a different thing.
         if price in (None, ""):
-            s["price"] = None
+            entered = None
         else:
             try:
                 entered = float(price)
@@ -771,7 +784,17 @@ class Api:
                 return err("A price has to be more than zero. Leave it blank "
                            "if you do not have one — the journal will say the "
                            "price is unknown rather than treat it as nothing.")
-            s["price"] = entered
+        # Bank membership, numbers-only and the judgement refusal all live in
+        # engine/hand_entered rather than here: the dialog is a view and a
+        # view is not a guarantee, and a second caller arriving later must
+        # meet the same refusals this one does.
+        for k, v in (metrics or {}).items():
+            hand_entered.checked(k, v)
+
+        # -- and only then is anything written ---------------------------
+        for k, v in (metrics or {}).items():
+            hand_entered.record(s, k, v)
+        s["price"] = entered
         self._write(journal)
         return ok()
 
@@ -795,13 +818,26 @@ class Api:
 
     @guarded
     @locked
-    def save_falsifier(self, ticker, text):
+    def amend_thesis(self, ticker, thesis, falsifier, reason=""):
+        """Append one version of why you own this and what would prove you
+        wrong. Never edits, never replaces.
+
+        A falsifier rewritten the week before it was about to fire is the
+        most diagnostic event this journal could hold, and a slot that can
+        be overwritten holds none of it. Both versions stay readable, and
+        the amendment carries the reason it was made — because the thesis is
+        what every override and every exit is graded against, and one that
+        can be revised once the answer is known cannot grade anything.
+        """
         journal, *_ = self._open()
         if journal is None:
             return err("No journal is open.")
-        self._find(journal, ticker)["falsifier"] = (text or "").strip()
-        self._write(journal)
-        return ok()
+        s = self._find(journal, ticker)
+        version = thesis_mod.amend(s, thesis, falsifier, reason)
+        if version is not None:
+            self._write(journal)
+        return ok(amended=version is not None,
+                  seq=(version or {}).get("seq"))
 
     @guarded
     @locked
@@ -833,19 +869,22 @@ class Api:
         """(values, price) — merged qualified values, hand-entered on top."""
         entry_ids = list(bank.meta())
         computed, price, _, _ = self._computed_layer(s, entry_ids)
-        return dataview.merged_values(s, computed), price
+        return (dataview.merged_values(s, computed,
+                                       today=date.today().isoformat()), price)
 
     def _values_asof(self, s, as_of):
         """(values, price, evaluation record) rebuilt from what was
         observable on `as_of`: filings filed by then, the close on or shortly
         before it — the same as-of rule the strategy's own context obeys.
 
-        Hand-entered values still sit on top, exactly as in the live merge:
-        they are the user's standing assertions and carry no date, so the
-        record names them as undated rather than either trusting them into
-        the past silently or fabricating a verdict on securities the user
-        maintains by hand. The evaluation record says all of this in plain
-        language, and it is frozen with the snapshot.
+        Hand-entered values sit on top exactly as in the live merge, and
+        obey the same clock as the filings: the figure that was on record by
+        `as_of` participates and names the day it was entered, and one
+        entered afterwards does not participate at all. Both halves are in
+        the evaluation record — what was there, and what was withheld —
+        because a reconstruction that quietly dropped a value would look
+        identical to one that never had it, and the second is the honest
+        story only sometimes.
         """
         entry_ids = list(bank.meta())
         cik = s.get("cik")
@@ -892,57 +931,116 @@ class Api:
             parts.append("no company is linked to this ticker, so no stored "
                          f"filing or price from {as_of} could be consulted")
 
-        # Under a pin the merge qualifies every hand-entered value as
-        # undated, in the record itself. The sentence below is the same fact
-        # said once for the reader; the per-value caution is what a screen
-        # reading one figure two years from now will find beside it.
-        values = dataview.merged_values(s, computed, as_of=as_of)
+        # Hand-entered values are dated now, so the reconstruction serves the
+        # figure that was on record on the purchase date and nothing typed
+        # afterwards. Both halves are worth saying: what was there, and what
+        # the journal holds a figure for today that was not on record then —
+        # otherwise a reader comparing this against the values screen finds a
+        # number missing with nothing saying why.
+        #
+        # Said without naming a cause. There are two ways to be absent here —
+        # entered after this day, or withdrawn on or before it — and the
+        # summary cannot tell them apart without listing them one by one.
+        # Each value carries its own reason in the record, which says exactly
+        # which it was and when; a summary that guessed would be wrong every
+        # time someone cleared a field.
+        #
+        # `today` is `as_of` here, not the real calendar. It is the clock the
+        # *holding* history is read against — whether a judgement belongs to
+        # a holding that had already closed — and under a pin the strategy's
+        # own context reads it as the pinned day (engine/context.py). Handing
+        # this side the real date would let one lot freeze two clocks: a
+        # caution the strategy never saw filed into an append-only record, or
+        # one it did see filed off. Live, `as_of` is None and the caller
+        # passes the real day.
+        values = dataview.merged_values(s, computed, as_of=as_of, today=as_of)
         manual = sorted(mid for mid, v in values.items()
                         if v["source"] == "manual")
         if manual:
             parts.append(f"{len(manual)} hand-entered value"
-                         f"{'s' if len(manual) != 1 else ''} entered as "
-                         "recorded — hand-entered values carry no date")
+                         f"{'s' if len(manual) != 1 else ''} on record by "
+                         f"{as_of}")
+        later = sorted(mid for mid in hand_entered.ids(s) if mid not in manual)
+        if later:
+            parts.append(f"{len(later)} hand-entered value"
+                         f"{'s' if len(later) != 1 else ''} not on record by "
+                         f"{as_of}, so {'they' if len(later) != 1 else 'it'} "
+                         "took no part in this")
         evaluation = {
             "basis": "reconstructed",
             "as_of": as_of,
             "filings_by_then": (avail or {}).get("filings_by_then", 0),
             "newest_filed": (avail or {}).get("newest_filed"),
             "priced": price.get("date"),
-            "manual_undated": manual,
+            # Renamed from "manual_undated" the day hand-entered values
+            # stopped being undated. A snapshot is written once and never
+            # revisited, so a key whose name asserts the opposite of what
+            # the record holds is a wrong word frozen into permanent
+            # history — worth changing now, while almost nothing carries it.
+            "manual_on_record": manual,
+            "manual_withheld": later,
             "note": "; ".join(parts),
         }
         return values, price, evaluation
 
     def _at_purchase(self, journal, record, chain, s, opened_iso, is_past):
-        """(decision, values, price, evaluation) for the day being recorded.
-        Today evaluates live; a past date is reconstructed from the data
-        available by then, and says so everywhere."""
+        """(decision, values, price, evaluation, thesis, valuation) for the
+        day being recorded. Today evaluates live; a past date is
+        reconstructed from the data available by then, and says so
+        everywhere.
+
+        The thesis and the valuation obey the same clock as the filings. A
+        purchase backdated to before either was written freezes nothing for
+        it, which is the honest record of a buy made without one — never the
+        version written afterwards, which would let a thesis composed with
+        hindsight be presented as the case that was made at the time.
+        """
         securities = journal.get("securities", [])
         if is_past:
             values, price, evaluation = self._values_asof(s, opened_iso)
             decision = self._decide(s, securities, journal, record, chain,
                                     as_of=opened_iso)
+            pin = opened_iso
         else:
             values, price = self._values_live(s)
             evaluation = {"basis": "live", "as_of": date.today().isoformat()}
             decision = self._decide(s, securities, journal, record, chain)
-        return decision, values, price, evaluation
+            pin = None
+        return (decision, values, price, evaluation,
+                thesis_mod.in_force(s, pin),
+                valuation.frozen(valuation.in_force(s, pin)))
 
     @guarded
     @locked
     def preview_purchase(self, ticker, opened=None):
         """What the journal's strategy says for the chosen date, before
-        anything is committed."""
+        anything is committed.
+
+        The thesis and the claim come back as the same known-or-absent view
+        every other screen reads, pinned to the day being recorded — not as
+        the raw entries `_at_purchase` freezes. Two shapes for one document
+        is how a screen comes to assert "no thesis on record" about a thesis
+        it is holding: the absent branch reads a `status` the raw entry does
+        not carry, and a raw entry's `reason` — the reason it was *amended*
+        — reads as the reason there is nothing.
+        """
         journal, record, chain, _ = self._open()
         if journal is None:
             return err("No journal is open.")
         s = self._find(journal, ticker)
         opened_iso, is_past = self._purchase_date(opened)
-        decision, *_, evaluation = self._at_purchase(
-            journal, record, chain, s, opened_iso, is_past)
+        decision, _values, _price, evaluation, *_ = \
+            self._at_purchase(journal, record, chain, s, opened_iso, is_past)
+        # What this purchase is about to freeze, in front of the person
+        # about to make it. A buy recorded against no thesis at all is
+        # allowed and always will be — but it should be a thing you notice
+        # you are doing, not a thing you find out about months later.
+        pin = opened_iso if is_past else None
+        clock = str(pin or date.today().isoformat())[:10]
         return ok(decision=decision, basis=evaluation["basis"],
-                  as_of=evaluation["as_of"], note=evaluation.get("note"))
+                  as_of=evaluation["as_of"], note=evaluation.get("note"),
+                  thesis=thesis_mod.standing(s, as_of=pin, today=clock),
+                  valuation=valuation.standing(s, as_of=pin, today=clock))
 
     @guarded
     @locked
@@ -953,11 +1051,12 @@ class Api:
             return err("No journal is open.")
         s = self._find(journal, ticker)
         opened_iso, is_past = self._purchase_date(opened)
-        decision, values, price, evaluation = self._at_purchase(
-            journal, record, chain, s, opened_iso, is_past)
+        decision, values, price, evaluation, standing, claim = \
+            self._at_purchase(journal, record, chain, s, opened_iso, is_past)
         lot = portfolio.add_lot(s, decision, float(shares), float(cost),
                                 opened_iso, override_reason, values=values,
-                                price_seen=price, evaluation=evaluation)
+                                price_seen=price, evaluation=evaluation,
+                                thesis=standing, valuation=claim)
         self._write(journal)
         state = (decision.get("state") or {}).get("id")
         return ok(override=bool(lot.get("override")),
@@ -998,8 +1097,14 @@ class Api:
             decision = self._decide(s, journal.get("securities", []), journal,
                                     record, chain)
             values, seen = self._values_live(s)
+        # The thesis standing at the sale, frozen with it. This is where it
+        # gets graded — "did the falsifier fire, or did I talk myself out of
+        # it" is a question about the version that was on record when the
+        # sell button was pressed, and that version is amendable right up
+        # until it.
         lot = portfolio.sell_lots(s, decision, reason, n, float(price),
-                                  exited, values=values, price_seen=seen)
+                                  exited, values=values, price_seen=seen,
+                                  thesis=thesis_mod.in_force(s))
         self._write(journal)
         return ok(rule_triggered=lot["rule_triggered"],
                   signal=lot["signal_at_exit"],
@@ -1170,12 +1275,12 @@ class Api:
         if price["value"] is None:
             price_item = {"status": "absent",
                           "reason": "no price is stored — fetch prices, or "
-                                    "enter one in Edit metrics"}
+                                    "enter one in Edit values"}
         elif price["source"] == "manual":
             price_item = {"status": "computed", "source": "manual",
                           "value": float(price["value"]), "asof": None,
                           "provenance": ["hand-entered price from Edit "
-                                         "metrics (undated)"],
+                                         "values (undated)"],
                           "cautions": []}
         else:
             price_item = {"status": "computed", "source": "fetched",
@@ -1192,16 +1297,17 @@ class Api:
             ref = dataview.ev_reference(cik, tickers)
         fcf = self._ev_item(ref.get("fcf_ttm")
                             or {"status": "absent", "reason": never}, 1e6)
-        manual_fcf = (s.get("metrics") or {}).get("fcf_ttm")
-        if manual_fcf is not None:
-            prov = ["hand-entered in Edit metrics (undated)"]
+        entered = hand_entered.reading(s, "fcf_ttm")
+        if entered["status"] == "known":
+            prov = list(entered["provenance"])
             if fcf["status"] == "computed":
                 prov.append(f"overrides the computed ${fcf['value']:,.1f}M "
                             "from filings — clear the hand-entered value in "
-                            "Edit metrics to use it")
+                            "Edit values to use it")
             fcf = {"status": "computed", "source": "manual",
-                   "value": round(float(manual_fcf) / 1e6, 3),
-                   "asof": None, "provenance": prov, "cautions": []}
+                   "value": round(float(entered["value"]) / 1e6, 3),
+                   "asof": entered["recorded"], "provenance": prov,
+                   "cautions": list(entered["cautions"])}
         shares = self._ev_item(ref.get("shares")
                                or {"status": "absent", "reason": never}, 1e6)
         references = {}
@@ -1242,35 +1348,45 @@ class Api:
 
     @guarded
     @locked
-    def compute_ev(self, ticker, method, inputs, sources=None):
-        result = compute_ev(method, inputs or {})
+    def record_valuation(self, ticker, method, inputs, sources=None):
+        """Append one valuation claim. Never edits, never replaces.
+
+        A valuation is the case for a specific purchase, made against a
+        price and a filing that both move. Overwriting the last one would
+        lose the claim you actually bought on and leave a number that reads
+        as though you had always thought this — including the claims that
+        talked you out of buying, which are the ones worth reading back.
+
+        Where the assumptions are identical to the standing claim nothing is
+        appended: re-running the same numbers is not a new claim about
+        anything, and a history nobody can wade through is a history nobody
+        consults.
+        """
         journal, *_ = self._open()
         if journal is None:
             return err("No journal is open.")
         s = self._find(journal, ticker)
-        record = {"method": method, "inputs": inputs,
-                  "computed": date.today().isoformat()}
-        # Where each prefillable input came from — fetched, overridden, or
-        # typed against absence — so the stored assumptions stay traceable.
-        if isinstance(sources, dict):
-            keys = {k for k, _l, _h in EV_METHODS.get(method, {})
-                    .get("inputs", [])}
-            record["sources"] = {k: v for k, v in sources.items()
-                                 if k in keys and isinstance(v, dict)}
-        s["ev"] = record
-        self._write(journal)
-        return ok(result=result)
+        entry, result = valuation.claim(s, method, inputs or {}, sources)
+        if entry is not None:
+            self._write(journal)
+        return ok(result=result, recorded=entry is not None)
 
     @guarded
     @locked
     def recompute_ev(self, ticker):
+        """The number the standing claim's assumptions solve to today.
+
+        Derived rather than stored, so there is no second opinion about a
+        figure the assumptions already settle. The frozen copy on a purchase
+        is the exception, and it is a different record.
+        """
         journal, *_ = self._open()
         if journal is None:
             return err("No journal is open.")
-        ev = self._find(journal, ticker).get("ev")
-        if not ev:
+        claim = valuation.in_force(self._find(journal, ticker))
+        if not claim:
             return ok(result=None)
-        return ok(result=compute_ev(ev["method"], ev["inputs"]))
+        return ok(result=valuation.result_of(claim))
 
     # -- backup ----------------------------------------------------------
     @guarded

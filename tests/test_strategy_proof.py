@@ -36,7 +36,7 @@ class TestTheProof:
         resolved = strategy_values.resolve(rec, [])
         assert resolved["errors"] == []
         sec = {"ticker": "SYN", "name": "Synthetic Co", "cik": 999,
-               "metrics": {}, "lots": []}
+               "lots": []}
         ctx = context.build_context(sec, [sec], resolved["values"],
                                     {"journal-note": "present"}, record=rec)
         result = contract.evaluate(rec, ctx)
@@ -100,7 +100,7 @@ class TestTheProof:
 
         rec = proof_record()
         sec = {"ticker": "SYNB", "name": "Synthetic Co B", "cik": 998,
-               "metrics": {}, "lots": []}
+               "lots": []}
         ctx = context.build_context(sec, [sec],
                                     strategy_values.resolve(rec)["values"],
                                     {}, record=rec)
@@ -125,7 +125,7 @@ class TestTheProof:
         store_company()
         rec = proof_record()
         sec = {"ticker": "SYN", "name": "Synthetic Co", "cik": 999,
-               "metrics": {}, "lots": []}
+               "lots": []}
         ctx = context.build_context(sec, [sec],
                                     strategy_values.resolve(rec)["values"],
                                     {"free-cash": 25_000.0}, record=rec)
@@ -141,7 +141,7 @@ class TestTheProof:
         resolved = strategy_values.resolve(
             rec, [("journal override", {"patience": 1})])
         sec = {"ticker": "SYN", "name": "Synthetic Co", "cik": 999,
-               "metrics": {}, "lots": []}
+               "lots": []}
         ctx = context.build_context(sec, [sec], resolved["values"], {},
                                     record=rec)
         result = contract.evaluate(rec, ctx)
@@ -154,8 +154,7 @@ class TestTheProof:
         """No stored data: the scaffold must land on its unknown-typed
         state carrying the host's reason — never a zero, never a crash."""
         rec = proof_record()
-        sec = {"ticker": "NOPE", "name": "Never Fetched Co",
-               "metrics": {}, "lots": []}
+        sec = {"ticker": "NOPE", "name": "Never Fetched Co", "lots": []}
         ctx = context.build_context(sec, [sec],
                                     strategy_values.resolve(rec)["values"],
                                     {}, record=rec)

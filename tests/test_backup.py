@@ -14,9 +14,9 @@ construction" is entirely in nobody having to remember.
 import json
 
 import pytest
-from conftest import journal_for
+from conftest import entered, journal_for
 
-from engine import backup, journals, secrets, store
+from engine import backup, hand_entered, journals, secrets, store
 
 
 def _bundle(tmp_path, name="b.json"):
@@ -27,9 +27,16 @@ class TestExport:
     def test_a_bundle_carries_every_journal_whole(self, strategies, tmp_path):
         strategies("verdicts")
         a, record = journal_for("verdicts", "First")
-        a["securities"].append({"ticker": "ACME", "lots": [],
-                                "metrics": {"fcf_ttm": 5.0},
-                                "notes": [{"date": "x", "text": "hello"}]})
+        acme = {"ticker": "ACME", "lots": [],
+                "notes": [{"date": "x", "text": "hello"}]}
+        # Two readings of the same measure, a year apart, because a figure
+        # the user revised is the case that would go unnoticed: a bundle
+        # carrying only the value in force still looks whole from the
+        # outside, and the entry it dropped is the one saying they changed
+        # their mind.
+        entered(acme, "2024-03-01", fcf_ttm=4.0)
+        entered(acme, "2025-03-01", fcf_ttm=5.0)
+        a["securities"].append(acme)
         journals.observe_rule_change(a, record, {"cash-floor": 250000})
         journals.explain(a, 1, "Widened on purpose.")
         journals.save(a)
@@ -43,6 +50,15 @@ class TestExport:
         assert kept["strategy"]["values"] == {"cash-floor": 1000000}
         assert kept["rule_changes"][0]["reason"] == "Widened on purpose."
         assert kept["securities"][0]["notes"][0]["text"] == "hello"
+        # Read straight out of the file, so this says what the bundle holds
+        # rather than what the engine can make of it: every entry, in order,
+        # each still carrying the day it was written. A backup is the copy
+        # nobody checks until the original is gone, and a dated record that
+        # came back as a single current figure would be indistinguishable
+        # from one the user only ever wrote once.
+        assert [(e["id"], e["value"], e["recorded"][:10])
+                for e in kept["securities"][0]["hand_entered"]] == \
+            [("fcf_ttm", 4.0, "2024-03-01"), ("fcf_ttm", 5.0, "2025-03-01")]
 
     def test_no_credential_can_reach_a_bundle(self, strategies, tmp_path):
         """By construction: the exportable set is the journals directory and
@@ -72,7 +88,10 @@ class TestImport:
     def test_a_round_trip_restores_everything(self, strategies, tmp_path):
         strategies("verdicts")
         a, record = journal_for("verdicts", "First")
-        a["securities"].append({"ticker": "ACME", "lots": []})
+        acme = {"ticker": "ACME", "lots": []}
+        entered(acme, "2024-03-01", fcf_ttm=4.0)
+        entered(acme, "2025-03-01", fcf_ttm=5.0)
+        a["securities"].append(acme)
         journals.save(a)
         out = _bundle(tmp_path)
 
@@ -85,6 +104,15 @@ class TestImport:
         back = journals.load(a["id"])
         assert back["securities"][0]["ticker"] == "ACME"
         assert back["strategy"]["id"] == "verdicts"
+        # Restored, the record answers as-of questions again — which is only
+        # true if the whole history came home. What a purchase backdated into
+        # 2024 is entitled to see is the figure that was on record in 2024,
+        # and a restore that kept just the newest entry would answer that
+        # question with a number written a year after the fact.
+        restored = back["securities"][0]
+        early = hand_entered.reading(restored, "fcf_ttm", "2024-06-01")
+        assert (early["status"], early.get("value")) == ("known", 4.0), early
+        assert hand_entered.reading(restored, "fcf_ttm")["value"] == 5.0
 
     def test_an_older_bundle_is_refused_rather_than_converted(self, tmp_path):
         """Bundles from before a journal was stamped with one strategy

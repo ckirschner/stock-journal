@@ -98,7 +98,7 @@ def security_of(spec, cik=None) -> dict:
     return {
         "ticker": spec["ticker"], "name": spec["name"],
         "cik": spec.get("cik", cik),
-        "price": spec.get("manual_price"), "metrics": {}, "notes": [],
+        "price": spec.get("manual_price"), "notes": [],
         "lot_seq": len(spec["lots"]),
         # An override is part of the lot as add_lot writes it: which kind it
         # was, and which cited figures came out against. The scorecards read

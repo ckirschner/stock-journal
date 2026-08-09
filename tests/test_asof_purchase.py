@@ -18,7 +18,7 @@ they happen to match.
 from datetime import date, timedelta
 
 import pytest
-from conftest import balance_face, dur, filing, inst, journal_for
+from conftest import balance_face, dur, entered, filing, inst, journal_for
 
 from engine import dataview, facts_store, journals, price_store
 
@@ -155,7 +155,16 @@ class TestApiPurchasePath:
         strategies("verdicts")
         journal_for("verdicts", "Backfill")
 
-    def _seed(self, cik, metrics=None):
+    def _seed(self, cik, metrics=None, entered_on=None):
+        """A linked security, optionally carrying hand-entered figures.
+
+        `metrics` go down through the same dated write the values dialog
+        uses, stamped as typed on `entered_on` — because the day a figure
+        was entered is now the whole question a reconstruction asks of it,
+        and a test that could hand the write its own date would be proving
+        something the program does not allow. Left unset, they are typed
+        today, which is what the user did if they are typing them now.
+        """
         api = Api()
         assert api.add_security("SYN", "Synthetic Co")["ok"]
         journal = journals.load(journals.resolve_open())
@@ -163,7 +172,7 @@ class TestApiPurchasePath:
         if cik is not None:
             s["cik"] = cik
         if metrics:
-            s["metrics"] = dict(metrics)
+            entered(s, entered_on, **metrics)
         journals.save(journal)
         return api
 
@@ -295,20 +304,22 @@ class TestApiPurchasePath:
         assert r["ok"], r
         assert r["remaining"] == 0
 
-    def test_manual_values_participate_and_are_named_undated(self):
-        """A hand-entered value is the user's standing assertion; excluding
-        it would fabricate an unevaluable state — and with it a 'bought
-        without a signal' override — on securities the user maintains by
-        hand. It enters, and the record says it is undated.
+    def test_a_value_entered_before_the_purchase_date_participates(self):
+        """A hand-entered value that was already on record is the signal the
+        user actually had; excluding it would fabricate an unevaluable state
+        — and with it a 'bought without a signal' override — on securities
+        the user maintains by hand. It enters, and the record names the day
+        it was entered.
 
         Said on the value itself, not only in the evaluation's prose note.
         The note is a summary of the reconstruction; a reader two years from
-        now looking at one figure needs the qualification beside that figure,
-        because the number is what they are reading.
+        now looking at one figure needs to know where that figure came from
+        beside the figure, because the number is what they are reading.
         """
         cik = next(_CIK)
         self._company(cik)
-        api = self._seed(cik, metrics={"pe_3y_avg_eps": 12.0})
+        api = self._seed(cik, metrics={"pe_3y_avg_eps": 12.0},
+                         entered_on="2025-01-15")
         r = api.open_position("SYN", 5, 9.5, "2025-06-30",
                               override_reason="backfilled")
         assert r["ok"], r
@@ -316,22 +327,78 @@ class TestApiPurchasePath:
         frozen = snap["metrics"]["pe_3y_avg_eps"]
         assert frozen["value"] == 12.0
         assert frozen["source"] == "manual"
-        assert any("carry no date" in c and "2025-06-30" in c
-                   for c in frozen["cautions"])
-        assert "pe_3y_avg_eps" in snap["evaluation"]["manual_undated"]
-        assert "hand-entered" in snap["evaluation"]["note"]
+        assert frozen["provenance"] == ["entered by hand on 2025-01-15"]
+        # Nothing is wrong with this figure, so nothing warns about it.
+        assert frozen["cautions"] == []
+        # The evaluation says the same thing once for the whole day.
+        assert "pe_3y_avg_eps" in snap["evaluation"]["manual_on_record"]
+        assert snap["evaluation"]["manual_withheld"] == []
+        assert "1 hand-entered value on record by 2025-06-30" \
+            in snap["evaluation"]["note"]
 
-    def test_a_live_purchase_leaves_a_hand_entered_value_unqualified(self):
-        """The undated caution is about a pin, not about hand entry. A live
-        record that carried it would be warning of a mismatch that does not
-        exist, and a caution that fires when nothing is wrong is how the
-        rest stop being read."""
+    def test_a_value_entered_after_the_purchase_date_is_withheld(self):
+        """The other half, and the reason dating them was worth the work: a
+        figure typed today may have been typed *because* of what happened
+        after the purchase, so a reconstruction that served it would present
+        hindsight as the case the user had at the time. It stays out, and the
+        record says out loud that it was withheld rather than leaving a
+        reader to wonder why a value they can see on screen is missing from
+        the day."""
         cik = next(_CIK)
         self._company(cik)
-        api = self._seed(cik, metrics={"pe_3y_avg_eps": 12.0})
-        assert api.open_position("SYN", 5, 9.5, date.today().isoformat(),
+        api = self._seed(cik, metrics={"pe_3y_avg_eps": 12.0},
+                         entered_on="2025-12-01")
+        r = api.open_position("SYN", 5, 9.5, "2025-06-30",
+                              override_reason="backfilled")
+        assert r["ok"], r
+        snap = self._snapshot()
+        assert "pe_3y_avg_eps" not in snap["metrics"]
+        assert snap["evaluation"]["manual_on_record"] == []
+        assert snap["evaluation"]["manual_withheld"] == ["pe_3y_avg_eps"]
+        assert "1 hand-entered value not on record by 2025-06-30" \
+            in snap["evaluation"]["note"]
+
+    def test_a_value_cleared_before_the_purchase_is_not_called_a_later_one(
+            self):
+        """Two ways to be absent, and the summary must not guess which.
+
+        A figure entered in January and withdrawn in June was not "entered
+        after" a purchase backdated to August — it was taken back before it.
+        Both are correctly absent, and a note that named the wrong cause
+        would be a plausible wrong sentence in an append-only record, which
+        is the kind of error nobody catches. The per-value reason says which
+        it was; the summary counts and stops.
+        """
+        cik = next(_CIK)
+        self._company(cik)
+        api = self._seed(cik, metrics={"pe_3y_avg_eps": 12.0},
+                         entered_on="2025-01-15")
+        doc = journals.load(journals.resolve_open())
+        entered(doc["securities"][0], "2025-03-01", pe_3y_avg_eps=None)
+        journals.save(doc)
+        assert api.open_position("SYN", 5, 9.5, "2025-06-30",
+                                 override_reason="backfilled")["ok"]
+        snap = self._snapshot()
+        note = snap["evaluation"]["note"]
+        assert snap["evaluation"]["manual_withheld"] == ["pe_3y_avg_eps"]
+        assert "not on record by 2025-06-30" in note
+        assert "after 2025-06-30" not in note
+
+    def test_a_live_purchase_leaves_a_hand_entered_value_unqualified(self):
+        """A value typed today, recorded today, is exactly what it says it
+        is. A live record that qualified it would be warning of a mismatch
+        that does not exist, and a caution that fires when nothing is wrong
+        is how the rest stop being read."""
+        cik = next(_CIK)
+        self._company(cik)
+        today = date.today().isoformat()
+        api = self._seed(cik, metrics={"pe_3y_avg_eps": 12.0},
+                         entered_on=today)
+        assert api.open_position("SYN", 5, 9.5, today,
                                  override_reason="now")["ok"]
-        assert self._snapshot()["metrics"]["pe_3y_avg_eps"]["cautions"] == []
+        frozen = self._snapshot()["metrics"]["pe_3y_avg_eps"]
+        assert frozen["cautions"] == []
+        assert frozen["provenance"] == [f"entered by hand on {today}"]
 
     def test_a_broken_data_layer_never_blocks_recording_the_decision(self):
         """Principle 2: the tool records decisions, it never blocks them. A

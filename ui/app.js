@@ -743,6 +743,44 @@ function judgementSection(s) {
     <div class="plist" style="margin-top:12px">${rows}</div></section>`;
 }
 
+/* -------------------------------------------------------------- thesis */
+/* The standing version, and every version before it.
+
+   Amendments render collapsed rather than hidden. A falsifier rewritten the
+   week before an exit is the most instructive thing this journal holds, and
+   it is instructive precisely because you can see what it said before — but
+   the screen at rest is the thesis you hold today, not a changelog. */
+function thesisBlock(s) {
+  const t = s._thesis || {};
+  const v = t.status === "known" ? t.version : null;
+  const past = (t.history || []).slice(1);
+  if (!v) {
+    return `<div class="fals"><em>Why I own this</em>
+      <span class="dim">Not yet written.</span></div>`;
+  }
+  return `<div class="fals">
+    ${v.thesis ? `<em>Why I own this</em>${esc(v.thesis)}` : ""}
+    ${v.falsifier ? `<em>What would make me wrong</em>${esc(v.falsifier)}` : ""}
+    </div>
+    <div class="pe-sub">${past.length ? "Amended" : "Written"} ${esc(t.amended)}</div>
+    ${/* The reason for the amendment standing now — the most recent time
+          someone changed their mind, which is the one worth reading before
+          the earlier ones are opened at all. It renders here rather than
+          only inside the history, because a version list you have to expand
+          is a version list nobody expands. */
+      v.reason ? `<div class="pe-why"><b>Changed because</b> ${esc(v.reason)}</div>` : ""}
+    ${cautionLines(t.cautions)}
+    ${past.length ? `<details class="whybox"><summary>${past.length} earlier version${past.length === 1 ? "" : "s"}</summary>
+      ${past.map((p) => `<div class="pe-sub" style="margin-top:8px">
+        <b>${esc(String(p.recorded).slice(0, 10))}</b></div>
+        ${p.reason ? `<div class="pe-why" style="margin-top:0"><b>Changed because</b> ${esc(p.reason)}</div>` : ""}
+        ${p.thesis ? `<div class="pe-why" style="margin-top:0">${prose(p.thesis)}</div>` : ""}
+        ${p.falsifier ? `<div class="pe-why" style="margin-top:0"><b>Would make me wrong</b> ${esc(p.falsifier)}</div>` : ""}`).join("")}
+      <p class="hint">Nothing here was edited. Each amendment is the whole thesis as it stood that day,
+      with the reason it changed — because a thesis that can be revised once the answer is known cannot
+      grade the decisions made under it.</p></details>` : ""}`;
+}
+
 /* ---------------------------------------------------------------- detail */
 function detailView(s) {
   const isHold = s.bucket === "holdings", isPrev = s.bucket === "previous";
@@ -777,7 +815,7 @@ function detailView(s) {
     <button class="btn" data-act="fetchdata" ${fetching ? "disabled" : ""}>${fetching ? "Fetching…" : "Fetch data"}</button>
     <button class="btn" data-act="metrics">Edit values</button>
     <button class="btn" data-act="ev">Expected value</button>
-    <button class="btn" data-act="falsifier">Falsifier</button>
+    <button class="btn" data-act="thesis">Thesis</button>
     <button class="btn" data-act="note">Add note</button>
     ${!isHold ? `<button class="btn primary" data-act="buy">${isPrev ? "Record a purchase — buying it back" : "Record a purchase"}</button>` : ""}
     ${!isHold && !isPrev ? '<button class="btn danger" data-act="remove">Remove</button>' : ""}
@@ -890,7 +928,7 @@ function detailView(s) {
         ${esc(ex.date)}, so no signal could be evaluated. That absence is on the record, not papered over.</p></div>`;
     }
   });
-  if (isHold && !(s.falsifier || "").trim()) {
+  if (isHold && !((s._thesis || {}).version || {}).falsifier) {
     h += `<div class="notice quiet"><h4>No falsifier on record</h4>
       <p>This position is open without a written answer to "what would make me wrong?".
       That is the field you will want when it drops 25% and you are deciding whether to add or exit.</p></div>`;
@@ -906,9 +944,12 @@ function detailView(s) {
 
   /* panels */
   h += '<div class="panels">';
-  h += `<div class="panel" id="evpanel"><h3>Expected value</h3><div class="sub">${s.ev ? esc(S.ev_methods[s.ev.method].label) : "Not calculated"}</div>`;
-  if (s.ev) {
-    const meth = S.ev_methods[s.ev.method];
+  const val = s._valuation || {};
+  const claim = val.status === "known" ? val.claim : null;
+  h += `<div class="panel" id="evpanel"><h3>Expected value</h3><div class="sub">${
+    claim ? esc(S.ev_methods[claim.method].label) : "Not calculated"}</div>`;
+  if (claim) {
+    const meth = S.ev_methods[claim.method];
     /* Each stored assumption says where it came from, in place: fetched
        with its as-of date, computed from filings, or typed — and an
        override names what it replaced. No bare numbers in the record. */
@@ -926,19 +967,44 @@ function detailView(s) {
     };
     h += '<div class="assump">';
     meth.inputs.forEach(([key, label]) => {
-      h += `<div class="k">${esc(label)}</div><div class="v">${esc(s.ev.inputs[key] ?? "—")}${SRC_MARK((s.ev.sources || {})[key])}</div>`;
+      const src = (claim.sources || {})[key];
+      h += `<div class="k">${esc(label)}</div><div class="v">${esc(claim.inputs[key] ?? "—")}${SRC_MARK(src)}</div>`
+        + (src ? cautionLines(src.cautions) : "");
     });
     h += `</div><div class="evout" id="evout"><div><div class="lbl">Computing…</div><div class="big">—</div></div></div>`;
-    h += `<p class="locked">Computed ${esc(s.ev.computed)} from the assumptions above. There is no field anywhere that accepts a target price.</p>`;
+    h += cautionLines(val.cautions);
+    h += `<p class="locked">Claimed ${esc(val.made)} from the assumptions above. There is no field anywhere that accepts a target price.</p>`;
+    /* Earlier claims, collapsed. A valuation belongs to the purchase it
+       justified — what you thought it was worth at $40 is not amended by
+       what you think at $61, it is a different claim about a different
+       decision. Both stay, neither averages into anything, and the one a
+       purchase was made on is frozen onto that purchase. */
+    const past = (val.history || []).slice(1);
+    if (past.length) {
+      h += `<details class="whybox"><summary>${past.length} earlier claim${past.length === 1 ? "" : "s"}</summary>
+        ${past.map((c) => {
+          const m = S.ev_methods[c.method] || { label: c.method, inputs: [] };
+          return `<div class="pe-sub" style="margin-top:8px"><b>${esc(m.label)}</b> on
+            ${esc(String(c.recorded).slice(0, 10))}</div>
+            <div class="assump">${m.inputs.map(([k, l]) =>
+              `<div class="k">${esc(l)}</div><div class="v">${esc(c.inputs[k] ?? "—")}</div>`).join("")}</div>`;
+        }).join("")}
+        <p class="hint">Nothing here was replaced. A claim is the case for one purchase, so it is kept
+        as the case for that purchase and never blended into a figure about the position.</p></details>`;
+    }
+  } else if (val.reason) {
+    h += `<p class="fals">${esc(S.ev_methods[S.journal.settings.default_ev_method].blurb)}</p>
+      <div class="greynote">${esc(val.reason)}</div>
+      <p class="locked">You enter assumptions; the value is solved for. That way, when the estimate is wrong, you can see which assumption was wrong.</p>`;
   } else {
     h += `<p class="fals">${esc(S.ev_methods[S.journal.settings.default_ev_method].blurb)}</p>
       <p class="locked">You enter assumptions; the value is solved for. That way, when the estimate is wrong, you can see which assumption was wrong.</p>`;
   }
   h += "</div>";
 
-  h += `<div class="panel"><h3>Journal</h3><div class="sub">Falsifier and notes</div>
-    <div class="fals"><em>What would make me wrong</em>${esc(s.falsifier) || '<span class="dim">Not yet written.</span>'}
-    <em>Notes</em></div>
+  h += `<div class="panel"><h3>Journal</h3><div class="sub">Thesis and notes</div>
+    ${thesisBlock(s)}
+    <div class="fals"><em>Notes</em></div>
     <ul class="notelist">${(s.notes || []).slice().reverse().map((n) =>
       `<li><time>${esc(String(n.date).slice(0, 10))}</time><p>${esc(n.text)}</p></li>`).join("")
       || '<li><p class="dim">No entries yet.</p></li>'}</ul></div>`;
@@ -1600,7 +1666,7 @@ function render() {
     const s = find(openTicker);
     if (!s) { openTicker = null; return render(); }
     v.innerHTML = detailView(s);
-    if (s.ev) paintEV(s.ticker);
+    if ((s._valuation || {}).status === "known") paintEV(s.ticker);
   } else if (tab === "strategy") v.innerHTML = strategyView();
   else if (tab === "metrics") v.innerHTML = metricsView();
   else if (tab === "data") v.innerHTML = dataView();
@@ -1844,14 +1910,42 @@ function dlgMetrics(s) {
     } else if (comp && comp.status === "absent" && comp.reason) {
       compNote = `<div class="u">Not computed — ${esc(comp.reason)}</div>`;
     }
+    /* When you entered it, and everything entered before. A figure quietly
+       retyped the week a rule was about to fire is worth what a judgement
+       quietly remarked is worth, and it is only visible if the earlier one
+       renders too. Collapsed, because the screen at rest is the value you
+       hold now. */
+    const ent = m.entered || {};
+    const all = m.entries || [];
+    const past = all.slice(1);
+    let mine = "";
+    if (ent.status === "known") {
+      mine = `<div class="u">Entered by you on ${esc(ent.recorded)}.</div>`;
+    } else if (all.length && all[0].value === null) {
+      /* Clearing a field is an entry too, and it is the entry someone is
+         most likely to want back. Said in place — the standing row is the
+         withdrawal, so it never appears in the earlier-entries list below. */
+      mine = `<div class="u">You cleared your value on
+        ${esc(String(all[0].recorded).slice(0, 10))}.</div>`;
+    }
+    if (past.length) {
+      mine += `<details class="whybox"><summary>${past.length} earlier entr${past.length === 1 ? "y" : "ies"}</summary>
+        ${past.map((e) => `<div class="pe-sub">${esc(String(e.recorded).slice(0, 10))} —
+          ${e.value === null ? "cleared" : `<b>${esc(fmtBank(e.value, m.format))}</b>`}</div>`).join("")}
+        <p class="hint">Nothing was overwritten. Each save that changed something added an entry, and a
+        reconstruction for a past day reads the one that was standing then.</p></details>`;
+    }
     body += `<div class="metric-input"><div>${esc(m.label)}
       <div class="u">${esc(m.unit || "")} · ${m.cited ? "read by the strategy for this security"
-        : "not currently read — kept because a value was recorded"}</div>${compNote}</div>
-      <input name="m_${m.id}" type="number" step="any" value="${s.metrics[m.id] ?? ""}"></div>`;
+        : "not currently read — kept because a value was recorded"}</div>${compNote}${mine}</div>
+      <input name="m_${m.id}" type="number" step="any" value="${(m.entered || {}).value ?? ""}"></div>`;
   });
   dialog({
     title: `Values · ${s.ticker}`,
-    blurb: "Hand-entered values always beat fetched ones, visibly. Leave a field blank to use the computed value, or to show absent where none computes — a zero would read as a confident failure.",
+    blurb: "Hand-entered values always beat fetched ones, visibly, and each one is dated — a purchase "
+      + "recorded for a past day reads the value that was on record then. Changing one adds an entry "
+      + "rather than replacing it. Leave a field blank to withdraw yours and use the computed value, or "
+      + "to show absent where none computes — a zero would read as a confident failure.",
     body, confirm: "Save",
     onConfirm: async (d) => {
       const metrics = {};
@@ -1910,14 +2004,54 @@ function dlgJudgement(s, entryId) {
   });
 }
 
-function dlgFalsifier(s) {
+/* The thesis, amended. Never edited.
+
+   The fields carry the standing text forward, because an entry holds the
+   WHOLE document: someone changing only the falsifier would otherwise save
+   a version whose thesis prose is blank, and the blanking would be silent
+   and permanent. Starting empty was the wrong way to say "this is not an
+   edit" — the notice above the fields says it in words instead, and the
+   words can say the part the empty box could not.
+
+   The reason is required on an amendment and absent on a first statement.
+   There is nothing to explain the first time you write down what you
+   believe; there is something to explain every time after. That is the same
+   argument the journal makes about a strategy's declared values — a rule you
+   can quietly retune is not a rule — and the falsifier is the rule you wrote
+   for yourself. */
+function dlgThesis(s) {
+  const t = s._thesis || {};
+  const v = t.status === "known" ? t.version : null;
+  const prior = v
+    ? `<div class="notice quiet"><h4>Standing since ${esc(t.amended)}</h4>
+       <p class="hint">Below is your thesis as it stands, ready to change. Saving does not edit it —
+       it adds a new version above it, and the one standing now stays readable exactly as written.
+       A thesis revised after the answer is known cannot be measured against what happened, and
+       measuring it is what every override and every exit in this journal is for.</p></div>`
+    : "";
   dialog({
-    title: `Falsifier · ${s.ticker}`,
-    blurb: "What would have to happen for you to be wrong? Write it now, while you are calm.",
-    body: area("text", "What would make me wrong", s.falsifier,
-      "Make it testable. “Margins fall below 30% for two quarters” beats “the story changes”."),
-    confirm: "Save",
-    onConfirm: async (d) => { if (!(await api("save_falsifier", s.ticker, d.text))) return " "; },
+    title: `Thesis · ${s.ticker}`,
+    blurb: v
+      ? "Amending what you believe. Both versions stay on the record, with the reason it changed."
+      : "Why is this worth owning, and what would have to happen for you to be wrong? Write it now, while you are calm.",
+    body: prior
+      + area("thesis", "Why I own this", v ? v.thesis : "",
+             "What the business is, and why the market is wrong about it. This is what "
+             + "every later decision gets graded against.")
+      + area("falsifier", "What would make me wrong", v ? v.falsifier : "",
+             "Make it testable. “Margins fall below 30% for two quarters” beats “the story changes”.")
+      + (v ? area("reason", "Why it changed", "",
+                  "Required on an amendment. Months from now the useful question is not what "
+                  + "you believe — it is what made you stop believing the other thing.") : ""),
+    confirm: v ? "Amend" : "Save",
+    onConfirm: async (d) => {
+      if (!(d.thesis || "").trim() && !(d.falsifier || "").trim())
+        return "Write down what you believe, or what would prove you wrong, or both.";
+      if (v && !(d.reason || "").trim()) return "Say why it changed.";
+      const r = await api("amend_thesis", s.ticker, d.thesis, d.falsifier, d.reason || "");
+      if (!r) return " ";
+      if (r.amended === false) toast("Nothing changed, so nothing was recorded.");
+    },
   });
 }
 
@@ -1976,13 +2110,41 @@ async function dlgBuy(s, dateChosen, keep, fallbackDate) {
      resumption of the holding that ended. Saying so is the whole difference
      between a fresh decision and averaging into an old one. */
   const back = s.bucket === "previous";
+  /* What this purchase is about to freeze onto itself: the thesis standing
+     on the day being recorded, and the valuation claim standing with it.
+     Shown, not editable. Amending is done in one place — the Thesis dialog —
+     because two ways to write the same document is how you end up with a
+     version written to fit the purchase you had already decided on. A buy
+     against no thesis is allowed and always will be; it should be a thing
+     you notice you are doing.
+
+     Under a reconstruction this reads the past too, so a backdated purchase
+     never shows a thesis written afterwards as the case that was made. */
+  const th = p.thesis || {};
+  const pv = p.valuation || {};
+  const claimLine = pv.status === "known"
+    ? `<p class="hint"><b>${esc((S.ev_methods[pv.claim.method] || {}).label || pv.claim.method)}</b>,
+       claimed ${esc(pv.made)}${pv.result ? ` — ${esc(pv.result.label)} ${esc(pv.result.display)}` : ""}.
+       That claim belongs to this purchase and to no other.</p>${cautionLines(pv.cautions)}`
+    : `<p class="hint">No valuation is on record for this day, so this purchase records none.</p>`;
+  const thesisBox = th.status === "known"
+    ? `<details class="whybox" style="margin:0 0 12px"><summary>Buying on your thesis
+       of ${esc(th.amended)}${(th.cautions || []).length ? " — qualified" : ""}</summary>
+       ${th.version.thesis ? prose(th.version.thesis) : ""}
+       ${th.version.falsifier ? `<p><b>What would make me wrong</b></p>${prose(th.version.falsifier)}` : ""}
+       ${cautionLines(th.cautions)}${claimLine}
+       <p class="hint">This version is frozen onto the purchase. To change it, close this and amend the
+       thesis first — nothing here edits it.</p></details>`
+    : `<div class="notice quiet" style="margin:0 0 12px"><h4>No thesis on record${recon ? ` for ${esc(when)}` : ""}</h4>
+       <p>${esc(th.reason || "Nothing is written yet.")} The purchase records that, and so does every
+       later question about why you own this. Nothing here stops you.</p></div>`;
   dialog({
     title: `Record a purchase · ${s.ticker}`,
     blurb: (back
       ? `You held ${s.ticker} before and closed it. This starts a new holding, judged from scratch by ${who}`
       : `Judged by ${who}`)
       + ", the strategy this journal is stamped with. This records what you already did; the tool cannot place trades.",
-    body: reconBox + warn + `<div class="grid2">${field("shares", "Shares", (keep && keep.shares) || "", "", "number")}${field("cost", "Cost per share", (keep && keep.cost) || "", "", "number")}</div>`
+    body: reconBox + warn + thesisBox + `<div class="grid2">${field("shares", "Shares", (keep && keep.shares) || "", "", "number")}${field("cost", "Cost per share", (keep && keep.cost) || "", "", "number")}</div>`
       + `<div class="field"><label for="f_opened">Date</label>
          <input id="f_opened" name="opened" type="date" value="${esc(when)}" max="${esc(today)}">
          ${recon ? "" : '<div class="help">A past date is evaluated with the data of that day, and the preview updates when you change this. The future is not offered — its data does not exist yet.</div>'}</div>`
@@ -2078,7 +2240,10 @@ function dlgEV(s, methodOverride, pf) {
     api("ev_prefill", s.ticker).then((r) => dlgEV(s, methodOverride, r || null));
     return;
   }
-  const cur = methodOverride || (s.ev ? s.ev.method : S.journal.settings.default_ev_method);
+  /* The standing claim seeds the form, and saving makes a new one — a
+     valuation is a claim about a moment, not a document you revise. */
+  const standing = (s._valuation || {}).status === "known" ? s._valuation.claim : null;
+  const cur = methodOverride || (standing ? standing.method : S.journal.settings.default_ev_method);
   const meth = S.ev_methods[cur];
   const prefill = (pf && pf.prefill) || {};
   const refs = (pf && pf.references) || {};
@@ -2102,13 +2267,18 @@ function dlgEV(s, methodOverride, pf) {
         : `<div class="help refline">${esc(rlabel)}: not computed — ${esc(r.reason)}</div>`;
     }).join("");
     if (pre && pre.status === "computed") {
+      /* Cautions travel with the figure into the stored claim. A cash flow
+         prefilled from a line that folds in finance leases is that kind of
+         number in the claim built on it, and a record keeping where a figure
+         came from while dropping what was wrong with it states the claim as
+         more certain than it was. */
       sourcesInit[key] = { used: pre.source, provenance: (pre.provenance || []).join("; "),
-        asof: pre.asof || null, offered: String(pre.value) };
+        cautions: pre.cautions || [], asof: pre.asof || null, offered: String(pre.value) };
       const prov = (pre.provenance || []).map(esc).join(" · ");
-      const priorSrc = (s.ev && s.ev.method === cur && s.ev.sources) ? s.ev.sources[key] : null;
+      const priorSrc = (standing && standing.method === cur && standing.sources) ? standing.sources[key] : null;
       const prior = (priorSrc && priorSrc.used === "overridden"
-        && String(s.ev.inputs[key]) !== String(pre.value))
-        ? `<div class="help">Your last computation overrode this with ${esc(s.ev.inputs[key])}; the fresh ${esc(SOURCE_WORDS[pre.source] || pre.source).toLowerCase()} value is shown. Override again if you still disagree.</div>` : "";
+        && String(standing.inputs[key]) !== String(pre.value))
+        ? `<div class="help">Your last claim overrode this with ${esc(standing.inputs[key])}; the fresh ${esc(SOURCE_WORDS[pre.source] || pre.source).toLowerCase()} value is shown. Override again if you still disagree.</div>` : "";
       return `<div class="field"><label for="f_${key}">${esc(label)}</label>
         <div class="prefill-row">
           <input id="f_${key}" name="${key}" type="number" step="any" value="${esc(pre.value)}" readonly>
@@ -2118,7 +2288,7 @@ function dlgEV(s, methodOverride, pf) {
         ${cautionLines(pre.cautions)}
         ${prior}<div class="help">${esc(help)}</div>${refLines}</div>`;
     }
-    let v = s.ev && s.ev.method === cur ? s.ev.inputs[key] : "";
+    let v = standing && standing.method === cur ? standing.inputs[key] : "";
     let extra = "";
     if (pre && pre.status === "absent") {
       sourcesInit[key] = { used: "typed", provenance: "entered by hand — " + pre.reason, asof: null };
@@ -2151,14 +2321,18 @@ function dlgEV(s, methodOverride, pf) {
         if (!si) return;
         if (unlocked.has(k) && String(d[k]) !== si.offered) {
           sources[k] = { used: "overridden", instead_of: si.used,
-            provenance: si.provenance, asof: si.asof, offered: si.offered };
+            provenance: si.provenance, cautions: si.cautions || [],
+            asof: si.asof, offered: si.offered };
         } else {
-          sources[k] = { used: si.used, provenance: si.provenance, asof: si.asof };
+          sources[k] = { used: si.used, provenance: si.provenance,
+            cautions: si.cautions || [], asof: si.asof };
         }
       });
-      const r = await api("compute_ev", s.ticker, d.method, inputsObj, sources);
+      const r = await api("record_valuation", s.ticker, d.method, inputsObj, sources);
       if (!r) return " ";
-      toast(`${r.result.label}: ${r.result.display}`);
+      toast(r.recorded === false
+        ? `${r.result.label}: ${r.result.display} — unchanged, so nothing was added to the record.`
+        : `${r.result.label}: ${r.result.display}`);
     },
   });
   $("dlgbody").querySelectorAll("[data-unlock]").forEach((b) => {
@@ -2232,11 +2406,19 @@ document.addEventListener("click", async (ev) => {
       /* Only ideas reach this button; the backend re-checks regardless.
          Say exactly what goes with it — an informed removal, not a shrug. */
       const lost = [];
-      const vals = Object.keys(s.metrics || {}).length;
+      /* Counted off the dated records, so what goes is what was written —
+         including versions since amended and figures since withdrawn. Those
+         are the record, not clutter on top of it. */
+      const vals = (s._inputs || []).reduce((n, m) => n + (m.entries || []).length, 0);
       const notes = (s.notes || []).length;
+      const amend = ((s._thesis || {}).history || []).length;
+      const claims = ((s._valuation || {}).history || []).length;
+      const judged = (s._judgements || []).reduce((n, j) => n + (j.history || []).length, 0);
       if (vals) lost.push(`${vals} hand-entered value${vals === 1 ? "" : "s"}`);
       if (notes) lost.push(`${notes} note${notes === 1 ? "" : "s"}`);
-      if ((s.falsifier || "").trim()) lost.push("its falsifier");
+      if (amend) lost.push(`its thesis${amend > 1 ? ` and ${amend - 1} amendment${amend === 2 ? "" : "s"}` : ""}`);
+      if (claims) lost.push(`${claims} valuation${claims === 1 ? "" : "s"}`);
+      if (judged) lost.push(`${judged} assessment${judged === 1 ? "" : "s"}`);
       dialog({
         title: `Remove ${s.ticker}`,
         blurb: "It was never a position, so no decision history is lost. Positions and previous holdings can never be removed.",
@@ -2306,7 +2488,7 @@ document.addEventListener("click", async (ev) => {
     }
     case "metrics": return dlgMetrics(s);
     case "judge": return dlgJudgement(s, act.dataset.jid);
-    case "falsifier": return dlgFalsifier(s);
+    case "thesis": return dlgThesis(s);
     case "note": return dlgNote(s);
     case "buy": return dlgBuy(s);
     case "sell": return dlgSell(s);

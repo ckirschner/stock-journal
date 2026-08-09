@@ -80,9 +80,14 @@ Reading rules a strategy can rely on:
   $14,100,000 instead of $9,400 — silently, in a figure sizing rules bind on.
 - **Percent units are percent numbers** (18.9 means 18.9%), including
   position weight, matching the metric bank's convention.
-- **A hand-entered value has no date.** It wins over a computed one, says so
-  in `source`, and under a pin carries a caution saying it is the value on
-  record now rather than one known to be true then. A hand-entered *price*
+- **A hand-entered value is dated, like everything else the user supplies.**
+  It wins over a computed one for its own day, says so in `source`, and
+  names the day it was entered in `provenance`. A reconstruction sees the
+  figure that was on record *then* — the value you typed last week is not
+  served to a purchase backdated to 2024, which is absent with the reason
+  instead. Clearing a value is an entry too, not a deletion: the computed
+  figure underneath becomes visible again and the withdrawal stays legible.
+  A hand-entered *price* is the one exception left — it carries no date and
   never reaches into the past at all.
 - **A qualitative measure is a judgement the user made, and it is dated.**
   The bank's qualitative entries — a moat read, a management read — are
@@ -91,20 +96,21 @@ Reading rules a strategy can rely on:
   reasoning in `provenance`. Nothing else about citing one differs: a
   strategy names it as `{"measure": "<id>"}` and the host answers.
 
-  Two things follow from the record being append-only and dated, and both
-  are the opposite of the hand-entered case above. A reconstruction sees the
-  assessment that stood on its own day and nothing written later, so a
-  backdated purchase never inherits an opinion formed afterwards; and an
-  assessment older than the holding you have now carries a caution saying
-  so, because buying a name back does not renew a judgement made about a
-  different decision.
+  Two things follow from the record being append-only and dated. A
+  reconstruction sees the assessment that stood on its own day and nothing
+  written later, so a backdated purchase never inherits an opinion formed
+  afterwards; and an assessment older than the holding you have now carries
+  a caution saying so, because buying a name back does not renew a judgement
+  made about a different decision. The first of those is now true of every
+  value the user supplies; the second is true only of the ones that are
+  about a *holding*, which a number read off a balance sheet is not.
 
   An unanswered question is absent with its reason. What to do about that is
   the strategy's business — the host holds no view on whether a missing moat
   read should stop a verdict — but absence resolves to `unknown` and can
-  never come out as a pass. A judgement is never served from `metrics`: a
-  number laid over a question about a moat would be an assessment wearing a
-  measurement's clothes.
+  never come out as a pass. A judgement is never served from a hand-entered
+  number: one laid over a question about a moat would be an assessment
+  wearing a measurement's clothes.
 - **Unknown keys may appear** in future contract versions; a strategy reads
   what it declares an interest in and ignores the rest.
 - **`position` is the holding you have now, except where it says otherwise.**
@@ -156,8 +162,8 @@ import copy
 from datetime import date
 
 from . import bank as bank_mod
-from . import compute, contract, dataview, facts_store, judgements, portfolio
-from . import price_store, tickermap
+from . import compute, contract, dataview, facts_store, hand_entered
+from . import judgements, portfolio, price_store, tickermap
 
 # Series stop at the same number of filing boundaries the sell-confirmation
 # view uses; the truncated flag says when older boundaries exist.
@@ -203,27 +209,27 @@ def _absent(reason: str) -> dict:
 
 # -- measures ----------------------------------------------------------------
 
-# One sentence, one home. The journal's own merge says the same thing about
-# the same value when it freezes it into a snapshot, and two copies of a
-# caution drift until they disagree about what they are warning of.
-_UNDATED = dataview.UNDATED_MANUAL
-
-
 def _current_values(security, cik, tickers, registry_ids, as_of):
     """{entry id: current dict} for every computable entry, hand-entered
     values winning over computed ones exactly as the journal shows them.
 
-    A hand-entered value has no date. It still participates in a pinned
-    reading — the journal has no other value to offer — but it is labelled
-    undated there, so a strategy is never told a present-day number was
-    known on a past day.
+    A hand-entered value is dated, so a pinned reading serves the figure
+    that was on record on its day and nothing entered afterwards. Where
+    none was — the figure was typed later, or withdrawn — the measure is
+    absent with the reason, and a strategy is never told a present-day
+    number was known on a past day.
+
+    The absence only shows through where the computed layer has nothing
+    known to offer. A user who typed a figure today and then withdrew it has
+    not made the filings unreadable, and "you cleared this" is a worse
+    answer than the number that was there all along.
 
     A judgement is not among them. Hand-entered values are numbers, and a
     number laid over a question about a moat would be an assessment
     presented as a measurement — the one thing principle 5 says a captured
     judgement must never be. Judgements are served from their own dated
-    record, in `_measures`, and nothing that lands in `metrics` can reach
-    one: the write refuses the id, and this read would ignore it anyway.
+    record, in `_measures`; the hand-entered write refuses the id, and this
+    read refuses it again.
     """
     out = {}
     if cik:
@@ -238,11 +244,13 @@ def _current_values(security, cik, tickers, registry_ids, as_of):
             else:
                 out[eid] = _absent(r.get("reason")
                                    or "the value could not be computed")
-    cautions = [_UNDATED.format(day=as_of)] if as_of else None
-    for eid, value in (security.get("metrics") or {}).items():
-        if judgements.is_judgement(eid):
-            continue
-        out[eid] = _known(value, "manual", cautions)
+    for eid in hand_entered.ids(security):
+        r = hand_entered.reading(security, eid, as_of)
+        if r["status"] == "known":
+            out[eid] = _known(r["value"], "manual", r["cautions"],
+                              r["provenance"])
+        elif (out.get(eid) or {}).get("status") != "known":
+            out[eid] = _absent(r["reason"])
     return out
 
 

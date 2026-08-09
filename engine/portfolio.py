@@ -100,11 +100,16 @@ def new_security(ticker: str, name: str) -> dict:
         "name": name.strip(),
         "added": _today(),
         "price": None,
-        "metrics": {},          # bank id -> hand-entered value
-        "history": {},          # bank id -> [[period, value], ...], unfilled
         "lots": [],             # append-only; the position is derived from it
-        "ev": None,
-        "falsifier": "",
+        # Everything the user supplies about this security is a dated,
+        # append-only record — never a slot. Each is read through its own
+        # module, and the entry in force on a day is the newest one written
+        # by then, so a purchase rebuilt for a past date sees what was on
+        # record then and never what was written afterwards.
+        "judgements": [],       # engine/judgements.py — the questions asked
+        "hand_entered": [],     # engine/hand_entered.py — numbers you read
+        "thesis": [],           # engine/thesis.py — why you own it
+        "valuations": [],       # engine/valuation.py — what it is worth
         "notes": [],            # dated entries, appended, never edited
     }
 
@@ -217,6 +222,34 @@ def open_cycle(security: dict, on_or_before=None) -> dict | None:
     held. There is at most one: shares are held or they are not."""
     found = [c for c in cycles(security, on_or_before) if c["open"]]
     return found[-1] if found else None
+
+
+def last_exit(security: dict, on_or_before=None) -> str | None:
+    """When the holding *before* the current one ended, or None.
+
+    This is what makes something the user wrote about this security stale,
+    and the current holding's own start date is not. Writing your thesis the
+    week before you buy is the whole discipline — commit to the criteria
+    while calm — so keying staleness on "written before this holding opened"
+    would put a warning on every correctly-formed record there is. What is
+    genuinely stale is something written while you owned the name a previous
+    time: you sold it, the reasons you sold it are not in what you wrote,
+    and buying it back is a different decision.
+
+    Anything written in the gap — flat, between two holdings, deciding
+    whether to buy back — is about the holding that followed it, so it is
+    not stale either.
+
+    Here rather than beside any one of its readers: the judgement record,
+    the thesis and the valuation claim all ask the same question of the same
+    lot list, and three answers to "when did the last holding end" is two
+    answers too many.
+    """
+    periods = cycles(security, on_or_before)
+    if not periods or periods[-1].get("open") is not True:
+        return None
+    closed = [p["closed"] for p in periods[:-1] if p.get("closed")]
+    return max(closed) if closed else None
 
 
 def shares_held(security: dict, on_or_before=None) -> float:
@@ -365,7 +398,30 @@ def _qualified_values(values) -> dict:
     return out
 
 
-def _snapshot(decision, values, price_seen, evaluation) -> dict:
+def _dated_entry(entry, what: str):
+    """Refuse naked prose where a dated entry belongs.
+
+    Same guarantee as `_qualified_values` above, for the other half of what
+    a lot freezes. A thesis or a valuation arriving as a bare string or as a
+    dict with no `recorded` on it is one that was read from somewhere other
+    than its own append-only record — and a frozen copy that cannot say
+    which version it was, or when that version was written, is a copy the
+    record can never be reconciled against.
+    """
+    if entry is None:
+        return None
+    if not isinstance(entry, dict) or "recorded" not in entry \
+            or "seq" not in entry:
+        raise ValueError(
+            f"The {what} frozen onto this lot is a bare "
+            f"{type(entry).__name__}. A purchase records which version was "
+            "standing and when it was written, so it must be an entry off "
+            f"the {what} record — not the text of one.")
+    return copy.deepcopy(entry)
+
+
+def _snapshot(decision, values, price_seen, evaluation,
+              thesis=None, valuation=None) -> dict:
     return {
         "frozen": _stamp(),
         # The decision, entire. Everything the screen showed — state, payload
@@ -394,6 +450,20 @@ def _snapshot(decision, values, price_seen, evaluation) -> dict:
         "price_date": (price_seen or {}).get("date"),
         "price_ticker": (price_seen or {}).get("ticker"),
         "evaluation": copy.deepcopy(evaluation),
+        # What the user believed, and what they thought it was worth, on the
+        # day this was recorded — the version standing then, not the version
+        # standing now. Both are whole entries off their own append-only
+        # records, carrying their own `seq` and `recorded`, so this copy can
+        # always be pointed back at the amendment it came from.
+        #
+        # A copy rather than a reference by seq, for the same reason the
+        # values above are copied: the record has to explain itself with
+        # nothing else on hand. The valuation's copy is the one place the
+        # solved number is written down instead of derived, because a later
+        # change to how a DCF is computed must not restate a decision made
+        # two years ago.
+        "thesis": _dated_entry(thesis, "thesis"),
+        "valuation": _dated_entry(valuation, "valuation"),
     }
 
 
@@ -401,7 +471,9 @@ def add_lot(security: dict, decision: dict, shares: float, price: float,
             opened: str | None = None, override_reason: str = "",
             values: dict | None = None,
             price_seen: dict | None = None,
-            evaluation: dict | None = None) -> dict:
+            evaluation: dict | None = None,
+            thesis: dict | None = None,
+            valuation: dict | None = None) -> dict:
     """Record a purchase as its own lot, and freeze the decision that was on
     screen for it.
 
@@ -419,6 +491,12 @@ def add_lot(security: dict, decision: dict, shares: float, price: float,
     screen right now) or "reconstructed" (rebuilt from what was observable on
     a past purchase date), with `as_of` naming the day. The record must never
     claim a verdict was seen live when it was rebuilt later.
+
+    `thesis` and `valuation` are the versions that were standing on the day
+    being recorded, off their own append-only records. The thesis belongs to
+    the position and carries on to the next purchase; the valuation belongs
+    to *this* purchase and to no other, which is why it is frozen here and
+    never averaged into a figure about the holding.
     """
     shares, price = float(shares), float(price)
     if shares <= 0:
@@ -437,7 +515,8 @@ def add_lot(security: dict, decision: dict, shares: float, price: float,
         "shares": shares,
         "price": price,
         "override": None,
-        "snapshot": _snapshot(decision, values, price_seen, evaluation),
+        "snapshot": _snapshot(decision, values, price_seen, evaluation,
+                              thesis, valuation),
     }
 
     kind = override_kind(decision)
@@ -551,7 +630,8 @@ def sell_lots(security: dict, decision: dict | None, reason: str,
               against: list | None = None,
               values: dict | None = None,
               price_seen: dict | None = None,
-              evaluation: dict | None = None) -> dict:
+              evaluation: dict | None = None,
+              thesis: dict | None = None) -> dict:
     """Record a sale against specific lots, keeping the ticker in the journal.
 
     A partial sale leaves the position open and the remaining lots intact; a
@@ -563,6 +643,14 @@ def sell_lots(security: dict, decision: dict | None, reason: str,
     one strategy and it does not change. Where the strategy could not be
     asked at all (it is not installed on this machine), that absence is
     recorded as itself rather than as a signal that read clear.
+
+    The thesis standing at the sale is frozen with it, because this is where
+    it gets graded: "did the falsifier fire, or did I talk myself out of it"
+    is a question about the version that was on record when the sell button
+    was pressed, and that version is amendable right up until it. No
+    valuation is frozen here — a claim is the case for a purchase, and
+    attaching one to an exit would invent a number the sale was never
+    justified by.
     """
     shares, exit_price = float(shares), float(exit_price)
     if shares <= 0:
@@ -662,7 +750,8 @@ def sell_lots(security: dict, decision: dict | None, reason: str,
         "snapshot": _snapshot(
             decision, values, price_seen,
             copy.deepcopy(evaluation) if evaluation
-            else {"basis": "live", "as_of": _today()}),
+            else {"basis": "live", "as_of": _today()},
+            thesis=thesis),
     }
     security.setdefault("lots", []).append(lot)
 

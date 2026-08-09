@@ -69,8 +69,8 @@ def _state(strategies, answers=ANSWERS) -> dict:
     """A journal exercising every branch the screens have: a holding built
     from two lots and trimmed by a partial sale, one lot bought against the
     signal, a name held twice — closed and bought back — a name closed and
-    left closed, an idea, an expected-value record, a note, a second journal
-    to switch to, and a rule change owed a reason.
+    left closed, an idea, a valuation claim, a thesis amended once, a note, a
+    second journal to switch to, and a rule change owed a reason.
 
     The two-holdings case earns its place here rather than in a fixture of
     its own: the previous-holdings table, the period grouping in the lot
@@ -121,6 +121,22 @@ def _state(strategies, answers=ANSWERS) -> dict:
                                 "Both rivals withdrew; switching costs "
                                 "held after all.")["ok"]
 
+    # A thesis, then an amendment to it, so both renderings of a living
+    # document have something to draw. One version on record renders
+    # identically whether the record behind it is append-only or a slot that
+    # was overwritten — it is the superseded version, and the reason it was
+    # superseded, that only a journal keeping both can put on a screen.
+    assert api.amend_thesis(
+        "ACME", "A toll road on a category nobody wants to enter.",
+        "A second supplier wins a national account.")["ok"]
+    assert api.amend_thesis(
+        "ACME",
+        "A toll road on a category nobody wants to enter, and the switching "
+        "costs are contractual rather than habitual.",
+        "A second supplier wins a national account at list price.",
+        "Read the customer contracts: the lock-in is written down, which is "
+        "a stronger claim than the one I bought on.")["ok"]
+
     # Priced by hand: neither has filings, and an unpriced holding rightly
     # makes the account total absent, which would take the weight arithmetic
     # below down with it.
@@ -137,10 +153,11 @@ def _state(strategies, answers=ANSWERS) -> dict:
     assert api.open_position("CLSD", 5, 30.0, "2026-02-02", "a reason")["ok"]
     assert api.sell_shares("CLSD", "Panic", 24.0, "2026-05-02")["ok"]
 
-    api.compute_ev("ACME", "reverse_dcf",
-                   {"price": 20, "fcf_ttm": 4, "shares": 10,
-                    "discount_rate": 9, "terminal_growth": 2.5},
-                   {"price": {"used": "fetched", "asof": "2026-08-01"}})
+    assert api.record_valuation(
+        "ACME", "reverse_dcf",
+        {"price": 20, "fcf_ttm": 4, "shares": 10,
+         "discount_rate": 9, "terminal_growth": 2.5},
+        {"price": {"used": "fetched", "asof": "2026-08-01"}})["ok"]
     api.add_note("BRDG", "watching this one")
 
     record = strategy_loader.discover()[0]["awkward"]
@@ -152,6 +169,22 @@ def _state(strategies, answers=ANSWERS) -> dict:
 
     state = api.get_state()
     assert state["ok"], state
+    # The purchase dialog renders from a backend reply, not from get_state,
+    # so the harness cannot reach it without one. Captured here through the
+    # same Api the window calls — and captured for a security WITH a thesis
+    # and one without, because the two sides of that branch are exactly
+    # where the two payloads for one document drifted apart.
+    state["__previews"] = {
+        s["ticker"]: api.preview_purchase(s["ticker"])
+        for s in state["securities"]}
+    for ticker, preview in state["__previews"].items():
+        assert preview["ok"], (ticker, preview)
+    # The coverage panel loads the same way. Captured for the same reason,
+    # and because without it every detail page in the harness rendered
+    # "could not reach the app backend" where the panel should be.
+    state["__coverage"] = {
+        s["ticker"]: api.get_coverage(s["ticker"])
+        for s in state["securities"]}
     return state
 
 
@@ -171,6 +204,116 @@ def test_every_screen_renders(strategies, tmp_path):
 
     r = _render(state, tmp_path)
     assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_every_screen_reads_one_shape_for_one_document(strategies):
+    """The purchase preview and the detail page describe the same thesis, in
+    the same shape.
+
+    They did not. `preview_purchase` returned the raw record entry — right
+    for freezing onto the lot, wrong for a screen — while the dialog read the
+    known-or-absent view every other surface gets. A raw entry has no
+    `status`, so the dialog took the absent branch every time and told people
+    who had written a thesis that they had not; and a raw entry *does* carry
+    a `reason` — the reason it was amended — which then rendered as the
+    reason there was nothing.
+
+    Asserted against the shape directly rather than against what the page
+    happens to say, because the page is what was wrong. Two shapes for one
+    document is the defect; one shape is the guarantee.
+    """
+    state = _state(strategies)
+    for s in state["securities"]:
+        preview = app_mod.Api().preview_purchase(s["ticker"])
+        assert preview["ok"], preview
+        for key in ("thesis", "valuation"):
+            page, shown = s[f"_{key}"], preview[key]
+            assert shown["status"] == page["status"], (s["ticker"], key)
+            if shown["status"] == "known":
+                assert "reason" not in shown, (
+                    f"{s['ticker']}: the {key} preview carries a bare "
+                    "`reason`, which the absent branch renders as the reason "
+                    "there is none")
+            else:
+                assert shown["reason"], (s["ticker"], key)
+
+
+def test_the_records_the_user_writes_reach_the_screen_with_their_history(
+        strategies):
+    """The three things the user writes by hand — a figure, a thesis, a
+    valuation — arrive at the view as dated records rather than as slots.
+
+    Each of them used to be one mutable field, and the payload said so: a
+    number, a string, a dict. They are logs now, and what the window is
+    handed is the version in force *plus* the versions behind it. Pinned
+    here rather than at the engine seam because the engine tests already say
+    the log is correct, and none of them says the log is what reaches a
+    screen — which is the half that went missing when three keys were
+    renamed at once.
+
+    Absence is asserted beside presence deliberately. A security nobody has
+    written a word about has to arrive saying so, with the reason it has
+    nothing, rather than arriving with a key the view dereferences into
+    "undefined" — and the harness below only catches that on a page it
+    happens to render.
+    """
+    state = _state(strategies)
+    by_ticker = {s["ticker"]: s for s in state["securities"]}
+
+    # Every security carries all three, written about or not.
+    for s in state["securities"]:
+        assert s["_thesis"]["status"] in ("known", "absent"), s["ticker"]
+        assert s["_valuation"]["status"] in ("known", "absent"), s["ticker"]
+        for row in s["_inputs"]:
+            assert row["entered"]["status"] in ("known", "absent"), row["id"]
+            assert isinstance(row["entries"], list), row["id"]
+
+    # The figure recorded by hand: the reading the row prints, and the
+    # history that makes a retyped figure visible rather than replaced.
+    acme = by_ticker["ACME"]
+    rows = [r for r in acme["_inputs"] if r["id"] == "fcf_ttm"]
+    assert rows, "the hand-entered measure never reaches the page"
+    entered = rows[0]["entered"]
+    assert entered["status"] == "known", entered
+    assert entered["value"] == 4_100_000
+    # It is dated now, so the standing caution that it was not is gone —
+    # and its provenance says the day, which is the thing that replaced it.
+    assert entered["cautions"] == [], entered
+    assert any("entered by hand on" in p for p in entered["provenance"]), \
+        entered
+    assert len(rows[0]["entries"]) == 1
+
+    # The thesis in force, the version it replaced, and the reason it was
+    # replaced — all three on the payload, because a falsifier rewritten the
+    # week before it was about to fire is only legible next to the one it
+    # rewrote.
+    t = acme["_thesis"]
+    assert t["status"] == "known", t
+    assert "contractual" in t["version"]["thesis"]
+    assert len(t["history"]) == 2, "the superseded version is not on screen"
+    assert t["history"][0] == t["version"], \
+        "the standing version is not the newest one in the history"
+    assert t["history"][1]["falsifier"] == \
+        "A second supplier wins a national account."
+    assert t["version"]["reason"], "an amendment reached the page unexplained"
+    assert t["history"][1]["reason"] == "", "a first thesis owes no reason"
+
+    # The valuation claim, with the number its assumptions solve to. The
+    # result is derived on read rather than stored, so a payload that
+    # carried the claim and not the answer would render a valuation with
+    # nothing in it.
+    v = acme["_valuation"]
+    assert v["status"] == "known", v
+    assert v["claim"]["method"] == "reverse_dcf"
+    assert v["result"] is not None, v
+    assert len(v["history"]) == 1
+
+    # …and the security nobody has written about says which nothing it has.
+    brdg = by_ticker["BRDG"]
+    for absent in (brdg["_thesis"], brdg["_valuation"]):
+        assert absent["status"] == "absent", absent
+        assert absent["reason"], "absence with no reason is a blank space"
+        assert absent["history"] == []
 
 
 def test_a_blocked_journal_offers_the_way_out(strategies, tmp_path):

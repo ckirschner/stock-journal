@@ -41,6 +41,18 @@ vm.runInContext(fs.readFileSync(appPath, "utf8"), ctx, { filename: "app.js" });
 Object.assign(ctx, { __state: state });
 const run = (code) => vm.runInContext(code, ctx);
 run("S = __state;");
+// A stub backend, serving replies the Python side captured from the real
+// Api. Some of the view loads asynchronously — the coverage panel does —
+// and without this those loads fail and the page renders "could not reach
+// the app backend" as its content. That was invisible for as long as the
+// harness never yielded to the microtask queue, which is a bad reason for a
+// panel to look tested.
+run(`window.pywebview = { api: {
+  preview_purchase: async (t) => (__state.__previews || {})[t]
+    || { ok: false, error: "no preview captured for " + t },
+  get_coverage: async (t) => (__state.__coverage || {})[t]
+    || { ok: false, error: "no coverage captured for " + t },
+} };`);
 ["view", "maststats", "subtitle", "foot", "tabs"].forEach(mkEl);
 
 const problems = [];
@@ -83,6 +95,41 @@ dlg("dlg:settings", "dlgSettings()");
 dlg("dlg:newjournal", "dlgNewJournal()");
 const holding = state.securities.find((s) => s.bucket === "holdings");
 if (holding) dlg("dlg:sell", `dlgSell(find(${JSON.stringify(holding.ticker)}))`);
+
+// The three dialogs that write to a dated record. Each renders one branch
+// when the record is empty and a different one when it is not — the second
+// shows the standing version above the fields, which is the branch that
+// dereferences the payload and so the branch that breaks when a key moves.
+const written = state.securities.find(
+  (s) => ((s._thesis || {}).history || []).length);
+const unwritten = state.securities.find(
+  (s) => !((s._thesis || {}).history || []).length);
+if (written) dlg("dlg:thesis-amend",
+                 `dlgThesis(find(${JSON.stringify(written.ticker)}))`);
+if (unwritten) dlg("dlg:thesis-first",
+                   `dlgThesis(find(${JSON.stringify(unwritten.ticker)}))`);
+const valued = state.securities.find(
+  (s) => (s._valuation || {}).status === "known");
+if (valued) {
+  // `pf` passed explicitly: undefined would send it round the backend for
+  // its prefills, and there is no backend here.
+  dlg("dlg:ev", `dlgEV(find(${JSON.stringify(valued.ticker)}), null,`
+    + ` {prefill: {}, references: {}})`);
+}
+
+// The purchase dialog, against a REAL preview payload captured from the same
+// Api the window calls. It is the one dialog that renders from a backend
+// reply rather than from get_state, so it is the one place the two sides can
+// hold different shapes for the same document and nothing notices — which is
+// exactly what happened: it read the standing view and was handed a raw
+// record entry, so it told people who had written a thesis that they had not.
+for (const ticker of Object.keys(state.__previews || {})) {
+  // dlgBuy is async; the stub resolves immediately, so awaiting it is enough
+  // before reading the body. What it must and must not say is asserted with
+  // everything else, further down — `must` is not declared yet up here.
+  await run(`dlgBuy(find(${JSON.stringify(ticker)}))`);
+  check(`dlg:buy:${ticker}`, `document.getElementById("dlgbody").innerHTML`);
+}
 // the explain-this-figure branch, which only renders when a tip is open
 if (state.securities.length) {
   run('tipOpen = "ev:0";');
@@ -330,6 +377,99 @@ if (withAnswer) {
              "the dialog asks for the reasoning"]);
   must.push(["dlg:judgement", "adds a new entry above this one",
              "the dialog says the record appends rather than replaces"]);
+}
+
+// The three records the user writes, on the screen and in their dialogs.
+// Each of these is the append-only guarantee made visible: if the earlier
+// version stops rendering, the record is still correct and the reader has
+// no way to know it changed, which is the whole thing being worthless.
+if (written) {
+  const t = written._thesis, prev = t.history[t.history.length - 1];
+  must.push([`detail:${written.ticker}`, t.version.falsifier || t.version.thesis,
+             "the standing thesis renders"]);
+  must.push(["dlg:thesis-amend", 'name="reason"',
+             "amending an existing thesis asks why it changed"]);
+  must.push(["dlg:thesis-amend", "it adds a new version above it",
+             "the dialog says the record appends rather than replaces"]);
+  // The fields carry the standing text, so amending one half cannot blank
+  // the other. An entry holds the whole document; a blank box would save a
+  // blank half, silently and permanently.
+  if (t.version.falsifier) {
+    must.push(["dlg:thesis-amend", t.version.falsifier,
+               "the amendment form carries the standing falsifier forward"]);
+  }
+  if (t.version.thesis) {
+    must.push(["dlg:thesis-amend", t.version.thesis,
+               "the amendment form carries the standing thesis forward"]);
+  }
+  if (t.version.reason) {
+    must.push([`detail:${written.ticker}`, t.version.reason,
+               "the reason for the standing amendment renders on the page"]);
+  }
+  if (t.history.length > 1) {
+    must.push([`detail:${written.ticker}`, prev.falsifier || prev.thesis,
+               "a superseded thesis is still readable on the page"]);
+    must.push([`detail:${written.ticker}`, "earlier version",
+               "the page says how many versions came before"]);
+  }
+}
+if (unwritten) {
+  mustNot.push(["dlg:thesis-first", 'name="reason"',
+                "a first thesis is asked why it changed, when nothing changed"]);
+}
+// The purchase dialog, which renders from a backend reply rather than from
+// get_state — the one place the two sides can hold different shapes for the
+// same document. They did: it read the standing view, was handed a raw
+// record entry, and so rendered "No thesis on record" over a thesis it was
+// holding, splicing the amendment's own reason in as the explanation for the
+// absence. A screen asserting absence about something present is the one
+// inversion this program must never make, and nothing was watching for it.
+// What the dialog must say is read off `_thesis` — the detail page's own
+// payload, which is the standing shape — never off the preview reply. Keying
+// it off the reply is how the first version of this check passed against the
+// defect: a preview in the wrong shape has no `status`, the check read that
+// as "nothing written", and cheerfully asserted the very sentence that was
+// wrong. An expectation derived from the thing under test tests nothing.
+for (const ticker of Object.keys(state.__previews || {})) {
+  const t = (state.securities.find((s) => s.ticker === ticker) || {})._thesis;
+  if (!t) continue;
+  if (t.status === "known") {
+    must.push([`dlg:buy:${ticker}`, t.version.thesis || t.version.falsifier,
+               "the purchase dialog shows the thesis it is about to freeze"]);
+    mustNot.push([`dlg:buy:${ticker}`, "No thesis on record",
+                  "the purchase dialog denies a thesis it was handed"]);
+    if (t.version.reason) {
+      mustNot.push([`dlg:buy:${ticker}`, t.version.reason,
+                    "the amendment reason reads as the reason there is none"]);
+    }
+  } else {
+    must.push([`dlg:buy:${ticker}`, "No thesis on record",
+               "buying with nothing written says so"]);
+  }
+}
+if (valued) {
+  const v = valued._valuation;
+  must.push([`detail:${valued.ticker}`, `Claimed ${v.made}`,
+             "the standing valuation says the day it was claimed"]);
+  if (v.history.length > 1) {
+    must.push([`detail:${valued.ticker}`, "earlier claim",
+               "a superseded valuation is still reachable"]);
+  }
+}
+for (const s of state.securities) {
+  for (const m of s._inputs || []) {
+    if ((m.entered || {}).status === "known") {
+      must.push([`dlg:values:${s.ticker}`, `Entered by you on ${m.entered.recorded}`,
+                 "a hand-entered figure says the day it was entered"]);
+    }
+    if ((m.entries || []).length > 1) {
+      must.push([`dlg:values:${s.ticker}`, "earlier entr",
+                 "an earlier hand-entered figure is still readable"]);
+    }
+  }
+  if ((s._inputs || []).length) {
+    dlg(`dlg:values:${s.ticker}`, `dlgMetrics(find(${JSON.stringify(s.ticker)}))`);
+  }
 }
 
 const held = state.securities.find((s) => s.bucket === "holdings");

@@ -321,6 +321,27 @@ Closed positions keep getting priced. If *Panic* keeps showing a strong
 return *after* you sold, that is a finding you would never get from a tool
 that drops the ticker the day you exit.
 
+### Your thesis, and what would prove you wrong
+
+Everything else in the journal is measured against it. An override is
+overriding *the thesis*; an exit is the thesis breaking or paying off; the
+falsifier is the one part written to be checked.
+
+So it is not a field you edit. It is a living document with amendments,
+appended and dated, and the version standing on a day is the newest written
+by then. **Amending it asks why it changed** — a first statement does not,
+because there is nothing to explain the first time you write down what you
+believe, and everything to explain every time after. A falsifier quietly
+rewritten the week before it was about to fire is the most diagnostic event
+a journal can hold, and the only way to hold it is to make the rewrite an
+entry rather than an overwrite.
+
+The thesis belongs to the **position**: one document per security, carried
+across purchases, and each purchase freezes the version that was standing
+when it was made. A sale freezes it too, because that is where it gets
+graded. Buying a name back after selling it does not renew a thesis written
+about the last time you owned it — that version still shows, and it says so.
+
 ### Expected value is computed, never typed
 
 There is no target price field anywhere. You enter assumptions and the number
@@ -333,6 +354,13 @@ already requires, which is a far easier question to answer honestly than
 probabilities that must total 100%, and makes you enter the bear case first.
 Owner earnings capitalises normalised cash flow at your discount rate, then
 takes a required discount off the result.
+
+A valuation belongs to the **purchase**, not to the position. What you
+thought it was worth at $40 is not amended by what you think at $61 — they
+are two claims about two decisions, so both are kept, the purchase freezes
+the one it was made on, and nothing anywhere averages them. Claims that
+talked you *out* of buying stay on the record too; they are the most
+instructive entries in it.
 
 ### Fetched data never outranks you
 
@@ -362,8 +390,23 @@ comparison.
 
 Record a purchase with a past date and the verdict is rebuilt from what was
 observable then — filings filed by that day, that day's close — and is
-labelled a reconstruction everywhere it appears. Hand-entered values carry no
-date, so they participate and the record says they were undated.
+labelled a reconstruction everywhere it appears.
+
+Hand-entered values obey the same clock. Each one is dated when you enter it,
+so a purchase backdated to 2024 reads the figure that was on record in 2024,
+or nothing — and the record says which values it withheld as well as which it
+used. A figure typed today may have been typed *because* of what happened
+since, and serving it to a verdict rebuilt for an earlier day would let
+hindsight into a reconstruction. Changing a value adds an entry above the old
+one; clearing one is an entry too, not a deletion, so the number you no
+longer stand behind stays readable and the computed figure underneath becomes
+visible again.
+
+Every value you supply now travels this path — a judgement, a thesis, a
+valuation, a typed figure. None of them can be edited, none can be deleted,
+and none can be given a date by the thing writing it: there is no parameter
+to backdate an entry with, which is what makes "what did I know then" a
+question the journal can answer honestly.
 
 ## Where your data lives
 
@@ -407,8 +450,15 @@ engine/                   no UI imports live here
   journals.py             the journal collection, the rule-change record and
                           the record of answers you changed
   bank.py                 the metric bank
-  judgements.py           the per-security questions no filing answers, on
-                          an append-only dated record
+  dated.py                append, date, never edit — the one mechanic under
+                          every record below
+  judgements.py           the per-security questions no filing answers
+  thesis.py               why you own it and what would prove you wrong;
+                          belongs to the position, amended with a reason
+  valuation.py            what you thought it was worth; belongs to the
+                          purchase, and never averages into anything
+  hand_entered.py         numbers you read off a document this program
+                          could not; clearing one is an entry, not a delete
   portfolio.py            lot history, snapshots, the override log,
                           scorecards
   store.py                data paths and the two atomic primitives
@@ -424,7 +474,8 @@ engine/                   no UI imports live here
   compute.py              every computed bank measure, from raw facts
   crosscheck.py           price × shares vs public float
   fetch.py                the explicit-action fetch orchestrator
-  dataview.py             computed values joined under hand-entered ones
+  dataview.py             computed values joined under hand-entered ones,
+                          on the same clock a strategy reads them by
   secrets.py              the credential store and machine-local settings
 ui/                       index.html, app.css, app.js
 tests/fixtures/           hand-read ground truth + recorded extractions

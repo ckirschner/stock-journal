@@ -1,14 +1,16 @@
 """Joining computed values to the journal, with the resolution rule.
 
 The rule, from the task's decisions: **hand-entered values are never
-overwritten by a fetch.** Nothing here writes into a security's `metrics` —
-computed values live beside them, and the merge happens at read time, visibly:
+overwritten by a fetch.** Nothing here writes into what the user entered —
+computed values live beside it, and the merge happens at read time, visibly:
 
     merged = computed values, with hand-entered values on top
 
 Both sides survive. The UI can always show "hand-entered 2.1 (computed 1.8)"
 because the resolution is a view, not a mutation. Clearing the hand-entered
-value is the explicit act that lets the computed one through.
+value is the explicit act that lets the computed one through — and it is an
+entry on a dated record rather than a deletion, so the figure that was
+withdrawn is still readable and the day it was withdrawn is on it.
 
 Computation is cheap and never persisted, but it is not free — a company's
 filings are a few dozen JSON files — so results are cached in memory against a
@@ -28,7 +30,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from . import compute, concept_map, crosscheck, facts_store
-from . import judgements, price_store
+from . import hand_entered, judgements, price_store
 
 _cache: dict = {}
 
@@ -264,13 +266,6 @@ def confirmation_history(cik: int, tickers: list[str], entry_id: str,
     return cache[key]
 
 
-UNDATED_MANUAL = ("hand-entered values carry no date, so this one is the "
-                  "value on record now, not a value known to be true on "
-                  "{day}")
-
-BY_HAND = "entered by hand in this journal, in Edit values"
-
-
 def qualified(value, source, cautions=None, provenance=None) -> dict:
     """A value and everything that qualifies it, as one object.
 
@@ -288,40 +283,47 @@ def qualified(value, source, cautions=None, provenance=None) -> dict:
 
 
 def merged_values(security: dict, computed: dict,
-                  as_of: str | None = None) -> dict:
+                  as_of: str | None = None, today: str | None = None) -> dict:
     """{entry id: qualified value} — computed values, hand-entered on top,
     and the judgements the user assessed.
 
     Each entry says which side it came from and never loses the other: the
     computed result is still in `computed` for a screen to show beside it.
 
-    A hand-entered value has no date. Under a pin it still participates —
-    the journal has no other value to offer — but it is qualified as undated
-    there, exactly as the strategy's own context qualifies it, so a record
-    frozen for a past day never claims a present-day number was known then.
+    Everything the user supplied is dated. A pin serves the figure or the
+    assessment that stood on that day and nothing at all where none did, so
+    a record frozen for a past day never claims a present-day number was
+    known then. Both are read through the same modules the strategy's own
+    context reads — `hand_entered.values` and `judgements.observations` —
+    rather than off the stored list here, so the two overlays cannot come to
+    disagree about the same figure. They did, before that was true: this one
+    supplied a provenance sentence the context did not, and read the holding
+    history on a different clock.
 
-    A judgement is dated, so it does better: a pin serves the assessment
-    that stood on that day and nothing at all where none did. It is here
-    rather than only inside the decision's evidence because this is what a
-    purchase freezes as "every value behind the decision", and an assessment
-    the strategy did not happen to cite is still one of them.
+    `today` is that clock — the day the *holding* history is read against,
+    which is not the same as the day being reconstructed. A judgement is
+    stale because a holding closed, and whether it had closed is a question
+    about the calendar, not about the pin.
+
+    Judgements are here rather than only inside the decision's evidence
+    because this is what a purchase freezes as "every value behind the
+    decision", and an assessment the strategy did not happen to cite is
+    still one of them.
 
     A hand-entered number can never land on a qualitative id — the write
-    refuses it — but the overlay skips them regardless, so a journal written
-    before that refusal existed cannot still read as an assessment.
+    refuses it and the read refuses it again — so a journal written before
+    that refusal existed cannot still read as an assessment.
     """
     values = {}
     for eid, r in computed.items():
         if r.get("status") == "computed":
             values[eid] = qualified(r["value"], "computed",
                                     r.get("cautions"), r.get("provenance"))
-    undated = [UNDATED_MANUAL.format(day=as_of)] if as_of else None
-    for eid, v in (security.get("metrics") or {}).items():
-        if judgements.is_judgement(eid):
-            continue
-        values[eid] = qualified(v, "manual", undated, [BY_HAND])
+    for eid, r in hand_entered.values(security, as_of).items():
+        values[eid] = qualified(r["value"], "manual", r["cautions"],
+                                r["provenance"])
     for eid, a in judgements.observations(security, as_of=as_of,
-                                          today=as_of).items():
+                                          today=today).items():
         if a["status"] == "known":
             values[eid] = qualified(a["value"], "judgement",
                                     a.get("cautions"), a.get("provenance"))

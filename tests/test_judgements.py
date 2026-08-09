@@ -171,7 +171,8 @@ class TestItIsAJudgementAndNeverAMeasurement:
         r = api.save_metrics("SYN", {MOAT: 1}, None)
         assert r["ok"] is False
         assert "judgement you make" in r["error"]
-        assert MOAT not in (security().get("metrics") or {})
+        assert not [e for e in (security().get("hand_entered") or [])
+                    if e["id"] == MOAT]
 
     def test_a_number_left_behind_by_an_older_journal_is_still_ignored(self,
                                                                        api):
@@ -180,7 +181,12 @@ class TestItIsAJudgementAndNeverAMeasurement:
         rest on every past write having been checked."""
         hold(api)
         doc = journal()
-        doc["securities"][0].setdefault("metrics", {})[MOAT] = 1.0
+        # Planted straight onto the dated record, going round the write that
+        # would refuse it — which is exactly what an older journal on disk
+        # amounts to.
+        doc["securities"][0].setdefault("hand_entered", []).append(
+            {"seq": 1, "id": MOAT, "value": 1.0,
+             "recorded": "2020-01-01T00:00:00+00:00"})
         journals.save(doc)
         state = api.get_state()
         moat = cited(state)[MOAT]["observed"]

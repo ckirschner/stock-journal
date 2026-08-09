@@ -47,10 +47,11 @@ Storage, on the security, oldest first::
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from . import bank as bank_mod
+from . import dated
 from . import portfolio
+
+KEY = "judgements"
 
 # The marks this host can record. A bank entry asking for anything else is
 # not served — the shape of an answer is something the host has to
@@ -69,10 +70,6 @@ _BELONGS_TO_AN_EARLIER_HOLDING = (
     "this assessment was written on {when}, while you still owned this from "
     "an earlier holding that closed on {closed} — it was written about that "
     "decision, not the one you hold now")
-
-
-def _stamp() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 # -- what the bank asks -------------------------------------------------------
@@ -145,11 +142,7 @@ def history(security: dict, entry_id: str | None = None) -> list:
     """Every assessment on record, newest first. Nothing is ever removed
     from it, so a revision reads as what it is: an earlier answer, and the
     day the user changed their mind."""
-    kept = [dict(a) for a in (security.get("judgements") or [])
-            if isinstance(a, dict)
-            and (entry_id is None or a.get("id") == entry_id)]
-    kept.sort(key=lambda a: (str(a.get("recorded") or ""), a.get("seq") or 0))
-    return list(reversed(kept))
+    return dated.history(security, KEY, entry_id)
 
 
 def in_force(security: dict, entry_id: str, as_of: str | None = None):
@@ -160,33 +153,7 @@ def in_force(security: dict, entry_id: str, as_of: str | None = None):
     and nothing later. An opinion formed after a purchase is not evidence
     about that purchase, however true it turned out to be.
     """
-    for a in history(security, entry_id):
-        if as_of is None or str(a.get("recorded") or "")[:10] <= str(as_of):
-            return a
-    return None
-
-
-def _last_exit(security: dict, today: str | None = None) -> str | None:
-    """When the holding *before* the current one ended, or None.
-
-    This is what makes an old assessment stale, and the current holding's
-    own start date is not. Writing your moat read the week before you buy is
-    the whole discipline — commit to the criteria while calm — so keying
-    staleness on "written before this holding opened" would put a warning on
-    every correctly-formed assessment there is. What is genuinely stale is
-    one written while you owned the name a previous time: you sold it, the
-    reasons you sold it are not in that assessment, and buying it back is a
-    different decision.
-
-    An assessment written in the gap — flat, between two holdings, deciding
-    whether to buy back — is about the holding that followed it, so it is
-    not stale either.
-    """
-    periods = portfolio.cycles(security, today)
-    if not periods or periods[-1].get("open") is not True:
-        return None
-    closed = [p["closed"] for p in periods[:-1] if p.get("closed")]
-    return max(closed) if closed else None
+    return dated.in_force(security, KEY, entry_id, as_of)
 
 
 def observation(security: dict, entry_id: str, entry: dict,
@@ -202,7 +169,7 @@ def observation(security: dict, entry_id: str, entry: dict,
     if answer is None:
         later = history(security, entry_id)
         if later:
-            first = str(later[-1].get("recorded") or "")[:10]
+            first = dated.day_of(later[-1])
             return {"status": "absent",
                     "reason": f"you first assessed this on {first}, after "
                               f"{as_of} — nothing was on record then"}
@@ -210,7 +177,7 @@ def observation(security: dict, entry_id: str, entry: dict,
                 "reason": "assessed by you, not computed — nothing is "
                           "recorded in this journal yet"}
 
-    when = str(answer.get("recorded") or "")[:10]
+    when = dated.day_of(answer)
     cautions = []
     # A name bought back inherits the assessment written about the last time
     # you owned it, which is a different decision. It is not withheld — the
@@ -237,7 +204,7 @@ def observations(security: dict, as_of: str | None = None,
     evaluation asks whether the assessment belonged to a holding that had
     already closed *by that day* rather than by this one.
     """
-    last_exit = _last_exit(security, today)
+    last_exit = portfolio.last_exit(security, today)
     return {eid: observation(security, eid, entry, as_of, last_exit)
             for eid, entry in _entries().items()}
 
@@ -273,8 +240,5 @@ def assess(security: dict, entry_id: str, mark: str, reasoning: str) -> dict:
             "be checked against what happened, which is the only thing this "
             "record is for.")
 
-    log = security.setdefault("judgements", [])
-    answer = {"seq": len(log) + 1, "id": entry_id, "mark": mark,
-              "reasoning": reasoning, "recorded": _stamp()}
-    log.append(answer)
-    return answer
+    return dated.append(security, KEY, {"id": entry_id, "mark": mark,
+                                        "reasoning": reasoning})

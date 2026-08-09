@@ -46,6 +46,58 @@ def strategies(tmp_path, monkeypatch):
     return install
 
 
+@pytest.fixture
+def written_on(monkeypatch):
+    """Write dated entries as though on a chosen day.
+
+    Everything the user supplies — a judgement, a thesis, a valuation, a
+    hand-entered figure — is stamped by the host at the moment of writing,
+    and no caller can hand in its own date. That is the guarantee, so a test
+    exercising "what was on record in 2024" cannot ask for it politely: it
+    has to move the clock the host reads.
+
+        def test_x(written_on):
+            with written_on("2024-03-01"):
+                hand_entered.record(s, "fcf_ttm", 149.0)
+
+    Leaving the block restores the real clock, so a test can lay down a
+    history and then write today's entry the way the app does.
+    """
+    import contextlib
+    from engine import dated
+    real = dated.stamp
+
+    @contextlib.contextmanager
+    def at(day):
+        monkeypatch.setattr(dated, "stamp",
+                            lambda: f"{day}T12:00:00+00:00")
+        try:
+            yield
+        finally:
+            monkeypatch.setattr(dated, "stamp", real)
+    return at
+
+
+def entered(security, day=None, **values):
+    """Hand-entered figures on a security's dated record, through the same
+    write the dialog uses — bank membership, judgement refusal and all.
+
+    For the many tests that only need a value to exist. Anything asserting
+    *when* it was on record should take the `written_on` fixture instead,
+    which is scoped by pytest rather than by a try/finally here.
+    """
+    from engine import dated, hand_entered
+    real = dated.stamp
+    try:
+        if day:
+            dated.stamp = lambda: f"{day}T12:00:00+00:00"
+        for eid, v in values.items():
+            hand_entered.record(security, eid, v)
+    finally:
+        dated.stamp = real
+    return security
+
+
 def journal_for(strategy_id, name="Test journal", inputs=None, config=None):
     """A journal stamped with a discovered strategy, saved and opened.
 

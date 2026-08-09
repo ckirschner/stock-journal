@@ -2,6 +2,7 @@
 absence with reasons and never an invented value, series that obey the
 clock, and a boundary the strategy cannot mutate anything through."""
 
+import conftest
 from conftest import (balance_face, dur, filing, inst,
                       multiclass_company)
 
@@ -43,11 +44,16 @@ def store_two_years(cik):
                      "2025-02-20", cfo=300, capex=60)     # fcf 240
 
 
-def security(cik=None, **over):
-    s = {"ticker": "SYN", "name": "Synthetic Co", "metrics": {}, "lots": []}
+def security(cik=None, entered_on=None, entered=None, **over):
+    """A bare security, optionally with hand-entered figures already on its
+    dated record. `entered_on` is the day they were written — the record has
+    no other way to be given one, which is the point of it."""
+    s = {"ticker": "SYN", "name": "Synthetic Co", "lots": []}
     if cik:
         s["cik"] = cik
     s.update(over)
+    if entered:
+        conftest.entered(s, entered_on, **entered)
     return s
 
 
@@ -148,10 +154,14 @@ class TestMeasuresAndSeries:
 
     def test_a_hand_entered_value_wins_and_says_so(self):
         store_two_years(902)
-        ctx = build(security(902, metrics={"fcf_ttm": 149.0}))
+        ctx = build(security(902, entered={"fcf_ttm": 149.0},
+                             entered_on="2026-03-04"))
         cur = ctx["measures"]["fcf_ttm"]["current"]
         assert cur["value"] == 149.0
         assert cur["source"] == "manual"
+        # And says when. A figure someone typed is only checkable against
+        # what happened if the record says which day they typed it.
+        assert cur["provenance"] == ["entered by hand on 2026-03-04"]
 
     def test_an_unreadable_series_point_carries_its_reason(self):
         """The first boundary has no prior year, so a measure needing two
@@ -177,18 +187,56 @@ class TestTheClock:
         assert latest["status"] == "absent"
         assert "2024-06-30" in latest["reason"]
 
-    def test_a_manual_measure_participates_but_is_labelled_undated(self):
-        """A hand-entered value has no date. It is the only value the
-        journal has, so it stands — but never as a number known then."""
-        ctx = build(security(metrics={"fcf_ttm": 999.0}), as_of="2020-01-01")
+    def test_a_manual_measure_reaches_a_pin_written_after_it(self):
+        """A hand-entered value is on record from the day it was entered.
+        A pin after that day sees it, exactly as it sees a filing."""
+        ctx = build(security(entered={"fcf_ttm": 999.0},
+                             entered_on="2019-05-02"), as_of="2020-01-01")
         cur = ctx["measures"]["fcf_ttm"]["current"]
         assert cur["value"] == 999.0 and cur["source"] == "manual"
-        assert any("no date" in c and "2020-01-01" in c
-                   for c in cur["cautions"])
+        assert cur["provenance"] == ["entered by hand on 2019-05-02"]
+        # Nothing to caution about. The old undated warning existed because
+        # the figure could not say when it was written; it can now.
+        assert cur["cautions"] == []
 
-    def test_the_same_value_carries_no_undated_caution_live(self):
-        ctx = build(security(metrics={"fcf_ttm": 999.0}))
-        assert ctx["measures"]["fcf_ttm"]["current"]["cautions"] == []
+    def test_a_manual_measure_written_after_the_pin_is_absent_not_undated(self):
+        """The contamination this record exists to stop.
+
+        A figure typed today may have been typed *because* of what happened
+        since. Serving it to a verdict rebuilt for 2020 would let hindsight
+        into a reconstruction, so it is absent, and the reason says the day
+        it was actually written.
+        """
+        ctx = build(security(entered={"fcf_ttm": 999.0},
+                             entered_on="2026-08-09"), as_of="2020-01-01")
+        cur = ctx["measures"]["fcf_ttm"]["current"]
+        assert cur["status"] == "absent"
+        assert "value" not in cur
+        assert "2026-08-09" in cur["reason"] and "2020-01-01" in cur["reason"]
+
+    def test_a_withdrawn_value_is_absent_and_never_a_none(self):
+        """Clearing a field is an entry, not a deletion — and the entry
+        holds nothing, so nothing can serve it as a figure. A `None` reaching
+        a strategy as a known value is principle 4's exact failure."""
+        s = security(entered={"fcf_ttm": 999.0}, entered_on="2026-01-05")
+        conftest.entered(s, "2026-02-05", fcf_ttm=None)
+        cur = build(s)["measures"]["fcf_ttm"]["current"]
+        assert cur["status"] == "absent"
+        assert "value" not in cur
+        assert "2026-02-05" in cur["reason"]
+        # And the withdrawal is still legible: nothing was removed.
+        assert len(s["hand_entered"]) == 2
+
+    def test_a_withdrawn_value_lets_the_computed_one_back_through(self):
+        """Withdrawing your own figure does not make the filings
+        unreadable. "You cleared this" is a worse answer than the number
+        that was there all along."""
+        store_two_years(917)
+        s = security(917, entered={"fcf_ttm": 149.0}, entered_on="2026-01-05")
+        conftest.entered(s, "2026-02-05", fcf_ttm=None)
+        cur = build(s)["measures"]["fcf_ttm"]["current"]
+        assert cur["status"] == "known"
+        assert cur["value"] == 240.0 and cur["source"] == "computed"
 
     def test_a_series_point_carries_the_cautions_of_its_own_reading(self):
         """A point is a measure like any other. Citing one at a past period
@@ -562,7 +610,8 @@ class TestTheBoundary:
         again = build(sec)
         assert again["measures"]["fcf_ttm"]["current"]["value"] == 240.0
         assert again["measures"]["fcf_ttm"]["series"]["points"]
-        assert sec.get("metrics") == {}  # the journal dict is untouched
+        # The journal dict is untouched: a read never writes to the record.
+        assert sec.get("hand_entered") is None
 
     def test_a_strategy_cannot_retune_its_own_values_through_the_context(self):
         """The values and inputs dicts are the host's, resolved through the

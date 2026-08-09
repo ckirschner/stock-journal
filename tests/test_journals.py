@@ -18,7 +18,7 @@ afterwards.
 import copy
 
 import pytest
-from conftest import journal_for
+from conftest import entered, journal_for
 
 from engine import journals, store, strategy_loader, strategy_values
 
@@ -62,8 +62,8 @@ class TestCreation:
         strategies("verdicts")
         a, record = journal_for("verdicts", "First")
         b = journals.create("Second", record)
-        a["securities"].append({"ticker": "ACME", "lots": [],
-                                "metrics": {"fcf_ttm": 5.0}})
+        a["securities"].append(
+            entered({"ticker": "ACME", "lots": []}, fcf_ttm=5.0))
         journals.save(a)
         assert journals.load(b["id"])["securities"] == []
         assert len(journals.load(a["id"])["securities"]) == 1
@@ -166,7 +166,7 @@ class TestStorageBoundary:
 
         other = journals.create("Other", record)
         other["securities"].append({"ticker": "ACME", "lots": [],
-                                    "metrics": {}, "notes": []})
+                                    "notes": []})
         journals.save(other)
         journals.set_open(other["id"])
 
@@ -454,9 +454,9 @@ class TestAStrategyThatMovedOn:
         strategies("verdicts")
         journal, record = journal_for("verdicts", "Older")
         journal["inputs"] = {"a-question-since-dropped": "yes"}
-        journal["securities"].append({"ticker": "ACME", "lots": [],
-                                      "metrics": {"fcf_ttm": 5_000_000.0},
-                                      "notes": []})
+        journal["securities"].append(
+            entered({"ticker": "ACME", "lots": [], "notes": []},
+                    fcf_ttm=5_000_000.0))
         journals.save(journal)
 
         state = Api().get_state()

@@ -11,7 +11,7 @@ worst of both.
 import pytest
 from conftest import journal_for
 
-from engine import journals
+from engine import hand_entered, journals
 
 from app import Api
 
@@ -50,7 +50,14 @@ class TestRemoveSecurity:
         the learning loop needs. The confirmation names them; the guard does
         not stand on them."""
         api.add_security("SCRAP", "Scrapped Idea Corp")
-        api.save_metrics("SCRAP", {"current_ratio": 1.5}, 12.0)
+        assert api.save_metrics("SCRAP", {"current_ratio": 1.5}, 12.0)["ok"]
+        # A hand-entered value is an appended entry now rather than a slot,
+        # and an append can decline — bank membership, a judgement refused,
+        # nothing changed since last time. So the premise is confirmed before
+        # it is relied on: a write that quietly declined would leave this
+        # removing a security carrying nothing, and pass while doing it.
+        held = hand_entered.reading(_find("SCRAP"), "current_ratio")
+        assert (held["status"], held.get("value")) == ("known", 1.5), held
         api.add_note("SCRAP", "considered, passed")
         assert api.remove_security("SCRAP")["ok"]
         assert all(s["ticker"] != "SCRAP" for s in _securities())
@@ -89,7 +96,7 @@ class TestRemoveSecurity:
         record = strategy_loader.discover()[0]["verdicts"]
         other = journals.create("Second", record)
         other["securities"].append({"ticker": "SHARED", "lots": [],
-                                    "metrics": {}, "notes": []})
+                                    "notes": []})
         journals.save(other)
 
         assert api.remove_security("SHARED")["ok"]

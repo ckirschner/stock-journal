@@ -114,20 +114,20 @@ class TestFrozenSnapshot:
         d = decision("commit", evidence=[cite("Price / earnings", "pass")])
         values = {"pe_ttm": qual(12.0, cautions=["a live caution"])}
         evaluation = {"basis": "live", "as_of": "2026-08-01",
-                      "manual_undated": ["pe_ttm"]}
+                      "manual_on_record": ["pe_ttm"]}
         lot = portfolio.add_lot(s, d, 10, 40.0, "2026-08-01", values=values,
                                 evaluation=evaluation)
         d["state"]["id"] = "tampered"
         d["reason"]["evidence"][0]["outcome"] = "fail"
         values["pe_ttm"]["value"] = 99.0
         values["pe_ttm"]["cautions"].append("added afterwards")
-        evaluation["manual_undated"].append("tampered")
+        evaluation["manual_on_record"].append("tampered")
         snap = lot["snapshot"]
         assert snap["decision"]["state"]["id"] == "a-state"
         assert snap["decision"]["reason"]["evidence"][0]["outcome"] == "pass"
         assert snap["metrics"]["pe_ttm"]["value"] == 12.0
         assert snap["metrics"]["pe_ttm"]["cautions"] == ["a live caution"]
-        assert snap["evaluation"]["manual_undated"] == ["pe_ttm"]
+        assert snap["evaluation"]["manual_on_record"] == ["pe_ttm"]
 
     def test_a_frozen_value_keeps_what_qualified_it(self):
         """The serious half of the caution work. A snapshot is written once
