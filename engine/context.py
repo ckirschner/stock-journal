@@ -17,7 +17,8 @@ The shape, in full::
                       "provenance"}
                    | {"status": "absent", "reason"},
           "series": {"cadence", "points": [{"period_end", "filed", "form",
-                                            "accession", "value", "reason"}],
+                                            "accession", "value", "reason",
+                                            "cautions", "provenance"}],
                      "note", "truncated"}}},
       "price":    {"latest": {"status": "known", "value", "date", "ticker",
                               "source"}
@@ -55,6 +56,13 @@ Reading rules a strategy can rely on:
   the host cannot honestly serve a number, status is "absent" with a reason,
   and a series point that could not be read carries value None with its
   reason. Nothing is zero-filled, carried forward, or interpolated.
+- **A qualified number says so wherever it appears.** Where a figure rests on
+  an approximation, a borrowed price or a line the concept map matched
+  loosely, its `cautions` say so — on `current` and on every `series` point
+  alike, because the qualification belongs to the reading and not to the
+  moment it was read. A strategy never restates a caution (it cites; the
+  host answers), but nothing it is handed is a bare number pretending to be
+  more certain than it is.
 - **A share class is a security; the company is not.** Two classes of one
   company are two instruments at two prices, and the two scopes are served
   differently. `price`, `position.market_value`, `position.weight` and every
@@ -174,8 +182,10 @@ def _absent(reason: str) -> dict:
 
 # -- measures ----------------------------------------------------------------
 
-_UNDATED = ("hand-entered values carry no date, so this one is the value on "
-            "record now, not a value known to be true on {day}")
+# One sentence, one home. The journal's own merge says the same thing about
+# the same value when it freezes it into a snapshot, and two copies of a
+# caution drift until they disagree about what they are warning of.
+_UNDATED = dataview.UNDATED_MANUAL
 
 
 def _current_values(security, cik, tickers, registry_ids, as_of):
@@ -242,6 +252,16 @@ def _series_for(filings, prices, tickers, today):
                     "reason": None if ok else (r.get("reason")
                                                or "the reading could not "
                                                   "be computed"),
+                    # A reading is qualified exactly as the current value
+                    # is. A point computed from a debt line that folds in
+                    # finance leases, or a market cap with a class valued
+                    # at a sibling's close, is that kind of number whether
+                    # it is read today or at a filing boundary two years
+                    # back — and a strategy citing the point gets the
+                    # qualification with it rather than a bare figure.
+                    "cautions": list(r.get("cautions") or []) if ok else [],
+                    "provenance": list(r.get("provenance") or []) if ok
+                    else [],
                 })
             if points:
                 note = None

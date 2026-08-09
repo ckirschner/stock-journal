@@ -99,6 +99,59 @@ def balance_face(date, assets=1000.0, extra=()):
     return rows
 
 
+CLASS_AXIS = "us-gaap:StatementClassOfStockAxis"
+MULTICLASS_PRICED, MULTICLASS_UNPRICED = 900.0, 100.0   # 10% has no close
+MULTICLASS_CLOSES = (("2025-02-20", 20.0), ("2025-06-27", 20.0))
+
+
+def multiclass_company(cik, closes=None):
+    """A two-class filer where only one class has a stored close of its own.
+
+    Invented company. It exists because this is the case the market-cap blend
+    was kept for — the unpriced class is valued at the priced one's close,
+    the one approximation in the compute layer — and the condition of keeping
+    it was that the reader is told which class, what share of the count, and
+    at whose close. Anything checking that a caution survives a trip needs a
+    caution to carry.
+
+    `closes` are rows for the listed class alone. The second default row is
+    there so a purchase backdated into mid-2025 reconstructs to a real close
+    rather than to absence: a figure that cannot be computed carries no
+    caution to lose.
+
+    Returns the unpriced class's label, so a test can assert the caution
+    names it rather than matching a substring that could come from anywhere.
+    """
+    from engine import facts_store, price_store
+    end, filed = "2024-12-31", "2025-02-20"
+    facts = [
+        dur("us-gaap:Revenues", "2024-01-01", end, 1000),
+        dur("us-gaap:NetIncomeLoss", "2024-01-01", end, 120),
+    ] + balance_face(end, assets=800)
+    for member, label, count, symbol in (
+            ("us-gaap:CommonClassAMember", "Class A", MULTICLASS_PRICED,
+             "SYN"),
+            ("us-gaap:CommonClassBMember", "Class B", MULTICLASS_UNPRICED,
+             None)):
+        facts.append({**inst("dei:EntityCommonStockSharesOutstanding", filed,
+                             count, stmt=None),
+                      "unit": "shares", "currency": None, "label": label,
+                      "dimensions": {CLASS_AXIS: member}})
+        if symbol:
+            facts.append({**inst("dei:TradingSymbol", filed, 0, stmt=None),
+                          "value": symbol, "unit": None, "currency": None,
+                          "dimensions": {CLASS_AXIS: member}})
+    f = filing("M-1", "10-K", filed, end, facts)
+    f["cik"] = cik
+    facts_store.save_filing(cik, f)
+    doc = price_store.load(cik)
+    price_store.merge_series(doc, "SYN", "test",
+                             [[d, c, 100] for d, c in
+                              (closes or MULTICLASS_CLOSES)], [])
+    price_store.save(cik, doc)
+    return "Class B"
+
+
 def annual_filing(fy_end, fy_start, accession, filed, revenue,
                   concept="us-gaap:Revenues", comparatives=(), extra=()):
     """A 10-K with its own-year revenue and optional comparative years.

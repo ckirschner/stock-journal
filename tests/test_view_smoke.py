@@ -102,6 +102,14 @@ def _state(strategies, answers=ANSWERS) -> dict:
                              "adding against the signal")["ok"]
     assert api.sell_shares("ACME", "Risk limit", 25.0, None, 4)["ok"]
 
+    # One value recorded by hand, so the values dialog and the computed-value
+    # rows on the detail page have something to render. Without it the whole
+    # measure side of the page is empty on this fixture and every defect in it
+    # renders as a blank screen that looks fine. The strategy does not read
+    # this measure, which is the point: a value that was recorded stays
+    # visible even after the strategy stops asking for it.
+    assert api.save_metrics("ACME", {"fcf_ttm": 4_100_000}, None)["ok"]
+
     # Priced by hand: neither has filings, and an unpriced holding rightly
     # makes the account total absent, which would take the weight arithmetic
     # below down with it.

@@ -195,7 +195,7 @@ class TestApiPurchasePath:
         assert snap["evaluation"]["basis"] == "reconstructed"
         assert snap["evaluation"]["as_of"] == "2025-06-30"
         # the frozen value is the one observable then, not today's
-        assert snap["metrics"]["current_ratio"] == 2.0
+        assert snap["metrics"]["current_ratio"]["value"] == 2.0
         # priced at that day's close, not today's
         assert snap["price"] == 10.0
         assert snap["price_date"] == "2025-06-27"
@@ -225,7 +225,7 @@ class TestApiPurchasePath:
         assert r["ok"], r
         snap = self._snapshot()
         assert snap["evaluation"]["basis"] == "live"
-        assert snap["metrics"]["current_ratio"] == 1.0
+        assert snap["metrics"]["current_ratio"]["value"] == 1.0
         assert snap["decision"]["state"]["id"] == "say-no"
 
     def test_a_reconstruction_can_never_be_labelled_live(self):
@@ -264,11 +264,48 @@ class TestApiPurchasePath:
         assert "future" in r["error"]
         assert api.preview_purchase("SYN", tomorrow)["ok"] is False
 
+    def test_future_dated_sale_is_refused_the_same_way(self):
+        """The asymmetry that put this on the board: the purchase screen
+        refused tomorrow and the sale screen took 2062, which closed the
+        position for every reader and removed its whole value from the
+        account while the strategy was still holding it."""
+        cik = next(_CIK)
+        self._company(cik)
+        api = self._seed(cik)
+        assert api.open_position("SYN", 5, 9.5, "2025-06-30", "in")["ok"]
+        ahead = (date.today() + timedelta(days=13_000)).isoformat()
+        r = api.sell_shares("SYN", "Panic", 12.0, ahead)
+        assert r["ok"] is False
+        assert "future" in r["error"] and "sale" in r["error"]
+        # and the holding is exactly as it was
+        state = api.get_state()
+        held = state["securities"][0]
+        assert held["_shares"] == 5
+        assert held["bucket"] == "holdings"
+
+    def test_a_sale_dated_today_still_records(self):
+        """The refusal is of days that have not happened, not of same-day
+        entry — which is how most sales are recorded."""
+        cik = next(_CIK)
+        self._company(cik)
+        api = self._seed(cik)
+        assert api.open_position("SYN", 5, 9.5, "2025-06-30", "in")["ok"]
+        r = api.sell_shares("SYN", "Hit valuation", 12.0,
+                            date.today().isoformat())
+        assert r["ok"], r
+        assert r["remaining"] == 0
+
     def test_manual_values_participate_and_are_named_undated(self):
         """A hand-entered value is the user's standing assertion; excluding
         it would fabricate an unevaluable state — and with it a 'bought
         without a signal' override — on securities the user maintains by
-        hand. It enters, and the record says it is undated."""
+        hand. It enters, and the record says it is undated.
+
+        Said on the value itself, not only in the evaluation's prose note.
+        The note is a summary of the reconstruction; a reader two years from
+        now looking at one figure needs the qualification beside that figure,
+        because the number is what they are reading.
+        """
         cik = next(_CIK)
         self._company(cik)
         api = self._seed(cik, metrics={"pe_3y_avg_eps": 12.0})
@@ -276,10 +313,25 @@ class TestApiPurchasePath:
                               override_reason="backfilled")
         assert r["ok"], r
         snap = self._snapshot()
-        assert snap["metrics"]["pe_3y_avg_eps"] == 12.0
-        assert snap["value_sources"]["pe_3y_avg_eps"] == "manual"
+        frozen = snap["metrics"]["pe_3y_avg_eps"]
+        assert frozen["value"] == 12.0
+        assert frozen["source"] == "manual"
+        assert any("carry no date" in c and "2025-06-30" in c
+                   for c in frozen["cautions"])
         assert "pe_3y_avg_eps" in snap["evaluation"]["manual_undated"]
         assert "hand-entered" in snap["evaluation"]["note"]
+
+    def test_a_live_purchase_leaves_a_hand_entered_value_unqualified(self):
+        """The undated caution is about a pin, not about hand entry. A live
+        record that carried it would be warning of a mismatch that does not
+        exist, and a caution that fires when nothing is wrong is how the
+        rest stop being read."""
+        cik = next(_CIK)
+        self._company(cik)
+        api = self._seed(cik, metrics={"pe_3y_avg_eps": 12.0})
+        assert api.open_position("SYN", 5, 9.5, date.today().isoformat(),
+                                 override_reason="now")["ok"]
+        assert self._snapshot()["metrics"]["pe_3y_avg_eps"]["cautions"] == []
 
     def test_a_broken_data_layer_never_blocks_recording_the_decision(self):
         """Principle 2: the tool records decisions, it never blocks them. A

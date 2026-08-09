@@ -263,22 +263,50 @@ def confirmation_history(cik: int, tickers: list[str], entry_id: str,
     return cache[key]
 
 
-def merged_values(security: dict, computed: dict) -> tuple[dict, dict]:
-    """(values, sources): computed values with hand-entered on top.
+UNDATED_MANUAL = ("hand-entered values carry no date, so this one is the "
+                  "value on record now, not a value known to be true on "
+                  "{day}")
 
-    sources says, per entry id, which side the merged value came from —
-    "manual" or "computed" — and never loses the other side: the computed
-    result is still in `computed` for the UI to show beside it.
+BY_HAND = "entered by hand in this journal, in Edit values"
+
+
+def qualified(value, source, cautions=None, provenance=None) -> dict:
+    """A value and everything that qualifies it, as one object.
+
+    One object rather than a number beside some notes, because the number
+    travels — onto a screen, into a frozen snapshot, through a strategy's
+    evidence — and every hop is a chance to carry the figure and drop what
+    was wrong with it. A record that loses its qualifier states the number
+    as more certain than it was, which in an append-only journal can never
+    be corrected afterwards. Nothing here hands out a bare float, so no
+    caller can hold one without its cautions.
     """
-    values, sources = {}, {}
+    return {"value": value, "source": source,
+            "cautions": list(cautions or []),
+            "provenance": list(provenance or [])}
+
+
+def merged_values(security: dict, computed: dict,
+                  as_of: str | None = None) -> dict:
+    """{entry id: qualified value} — computed values with hand-entered on top.
+
+    Each entry says which side it came from and never loses the other: the
+    computed result is still in `computed` for a screen to show beside it.
+
+    A hand-entered value has no date. Under a pin it still participates —
+    the journal has no other value to offer — but it is qualified as undated
+    there, exactly as the strategy's own context qualifies it, so a record
+    frozen for a past day never claims a present-day number was known then.
+    """
+    values = {}
     for eid, r in computed.items():
         if r.get("status") == "computed":
-            values[eid] = r["value"]
-            sources[eid] = "computed"
+            values[eid] = qualified(r["value"], "computed",
+                                    r.get("cautions"), r.get("provenance"))
+    undated = [UNDATED_MANUAL.format(day=as_of)] if as_of else None
     for eid, v in (security.get("metrics") or {}).items():
-        values[eid] = v
-        sources[eid] = "manual"
-    return values, sources
+        values[eid] = qualified(v, "manual", undated, [BY_HAND])
+    return values
 
 
 def price_view(security: dict, cik: int | None, ticker: str) -> dict:

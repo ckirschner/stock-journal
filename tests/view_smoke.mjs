@@ -99,6 +99,36 @@ check("missing-strategy",
   + " const h = strategyView() + listView();"
   + " S.strategy = a; S.strategy_missing = b; return h; })()");
 
+// A qualified figure — one that borrowed a share class's close, say — has to
+// render its qualification wherever the number renders. The payload is
+// stamped here, last, rather than built upstream: this harness is about what
+// the view does with what it is handed, and that the host hands the caution
+// over at all is pinned against a real multi-class filer in
+// tests/test_cautions_travel.py.
+const QUAL = "Class B has no stored close and is valued at the Class A close";
+run(`__q = ${JSON.stringify(QUAL)};`);
+const stamped = run(`(() => {
+  const s = S.securities.find((x) => Object.keys(x._computed || {}).length);
+  if (!s) return null;
+  Object.values(s._computed).forEach((c) => { c.cautions = [__q]; });
+  let cited = 0;
+  (((s._decision || {}).reason || {}).evidence || []).forEach((e) => {
+    if (e.observed && e.observed.status === "known") {
+      e.observed.cautions = [__q];
+      cited += 1;
+    }
+  });
+  __qs = s;
+  return { ticker: s.ticker, cited };
+})();`);
+if (!stamped) {
+  problems.push("no security in the payload has a computed value, so the "
+                + "qualified-figure rendering is unexercised");
+} else {
+  check("qualified:detail", "detailView(__qs)");
+  dlg("qualified:values", "dlgMetrics(__qs)");
+}
+
 // Substance: a screen that renders empty is not a screen that works. Each
 // of these is load-bearing text the pivot is supposed to have put there.
 // Text a screen must NOT carry. A button offered where the backend would
@@ -117,6 +147,22 @@ const must = [
   ["welcome", "one strategy", "the empty state explains the commitment"],
   ["data", "Back up", "export is reachable"],
 ];
+if (stamped) {
+  // The whole point of carrying a caution: it is on screen beside the number
+  // it qualifies. The values dialog never rendered one at all.
+  must.push(["qualified:values", `Qualified — ${QUAL}`,
+             "the values dialog says what a computed figure rests on"]);
+  // The verdict's own figures, where a verdict cited any. A host state —
+  // "the strategy could not be asked" — cites nothing about the security by
+  // design, so there is nothing to qualify and nothing to assert.
+  if (stamped.cited) {
+    must.push(["qualified:detail", `Qualified — ${QUAL}`,
+               "a cited figure's qualification renders with the verdict"]);
+    // never a bare glyph, and never colour doing the work on its own
+    mustNot.push(["qualified:detail", "⚠",
+                  "a caution is not rendered as a warning glyph"]);
+  }
+}
 // Everything the declaration asked for has to reach the settings form, and
 // everything the lots recorded has to reach the detail page. A field type
 // or a lot kind the view quietly drops renders as a shorter screen, which
@@ -166,6 +212,16 @@ if (!closed.length) {
   must.push(["previous", closed[0].ticker,
              "a closed holding reaches the previous table"]);
   must.push(["previous", "Overrides", "the scorecards render beside the list"]);
+  // The host counts a group's purchases and, apart from that, how many of
+  // them could be scored at all. Printing the average beside the group count
+  // and dropping the scored count is how a partial population passes for the
+  // whole — on the one panel meant to be able to indict a rule.
+  must.push(["previous", "Scored",
+             "an average says how many purchases it rests on"]);
+  for (const bad of ["null%", "NaN%", "undefined%"]) {
+    mustNot.push(["previous", bad,
+                  `an absent average renders as "${bad}" instead of a dash`]);
+  }
 }
 // A name held more than once: every period is its own row, the detail page
 // groups the entries by holding, and no figure spanning them is unlabelled.
@@ -240,6 +296,16 @@ for (const [screen, text, why] of mustNot) {
 // setting one of them happens to declare. The view renders from
 // declaration; a hardcoded id means a wrong turn.
 const viewSource = fs.readFileSync(appPath, "utf8");
+// A caution says what a number rests on; it is not a failure. Rendering it as
+// a warning glyph puts a red flag on twelve of a company's twenty-nine
+// measures, and a warning that fires that often is one nobody reads — which
+// is the same outcome as dropping it. One vocabulary, in cautionLines(), and
+// nothing else in the view gets to invent a louder one.
+if (viewSource.includes("⚠")) {
+  problems.push("app.js renders a warning glyph — a caution is a "
+                + "qualification, not a failure, and every one of them goes "
+                + "through cautionLines()");
+}
 for (const sid of ["graham", "buffett", "lynch", "discount-closure",
                    "contract-proof", "verdicts", "awkward",
                    "free-cash", "cash-floor", "patience"]) {

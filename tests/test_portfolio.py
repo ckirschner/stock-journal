@@ -15,14 +15,20 @@ decisions by hand rather than through a strategy.
 """
 
 import copy
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 
-from engine import portfolio
+from engine import dataview, portfolio
 
 STRATEGY = {"id": "fixture", "name": "Fixture", "version": 2,
             "values_version": 3, "contract": 2}
+
+
+def qual(value, source="computed", cautions=None, provenance=None):
+    """A value in the shape a snapshot may freeze — built through the one
+    constructor, so these tests break the same way callers would."""
+    return dataview.qualified(value, source, cautions, provenance)
 
 
 def decision(render, state="a-state", evidence=(), payload=None,
@@ -85,8 +91,7 @@ class TestFrozenSnapshot:
         s = held()
         d = decision("commit", evidence=[cite("Price / earnings", "pass")])
         lot = portfolio.add_lot(s, d, 10, 40.0, "2026-08-01",
-                                values={"pe_ttm": 12.0},
-                                value_sources={"pe_ttm": "computed"},
+                                values={"pe_ttm": qual(12.0)},
                                 price_seen={"value": 41.0,
                                             "source": "fetched",
                                             "date": "2026-07-31"})
@@ -107,20 +112,55 @@ class TestFrozenSnapshot:
         exists to prevent, and one with no visible symptom."""
         s = held()
         d = decision("commit", evidence=[cite("Price / earnings", "pass")])
-        values = {"pe_ttm": 12.0}
+        values = {"pe_ttm": qual(12.0, cautions=["a live caution"])}
         evaluation = {"basis": "live", "as_of": "2026-08-01",
                       "manual_undated": ["pe_ttm"]}
         lot = portfolio.add_lot(s, d, 10, 40.0, "2026-08-01", values=values,
                                 evaluation=evaluation)
         d["state"]["id"] = "tampered"
         d["reason"]["evidence"][0]["outcome"] = "fail"
-        values["pe_ttm"] = 99.0
+        values["pe_ttm"]["value"] = 99.0
+        values["pe_ttm"]["cautions"].append("added afterwards")
         evaluation["manual_undated"].append("tampered")
         snap = lot["snapshot"]
         assert snap["decision"]["state"]["id"] == "a-state"
         assert snap["decision"]["reason"]["evidence"][0]["outcome"] == "pass"
-        assert snap["metrics"] == {"pe_ttm": 12.0}
+        assert snap["metrics"]["pe_ttm"]["value"] == 12.0
+        assert snap["metrics"]["pe_ttm"]["cautions"] == ["a live caution"]
         assert snap["evaluation"]["manual_undated"] == ["pe_ttm"]
+
+    def test_a_frozen_value_keeps_what_qualified_it(self):
+        """The serious half of the caution work. A snapshot is written once
+        and never recomputed, so a figure that arrives without its caution
+        states itself as more certain than the evidence supported — forever,
+        with nothing downstream able to tell."""
+        s = held()
+        lot = portfolio.add_lot(
+            s, decision("commit"), 10, 40.0, "2026-08-01",
+            values={"market_cap": qual(
+                2.4e12, source="computed",
+                cautions=["Class B (860,000,000 shares) — 7.1% of the share "
+                          "count — has no stored close"],
+                provenance=["shares outstanding from the FY2024 cover"])})
+        frozen = lot["snapshot"]["metrics"]["market_cap"]
+        assert frozen["value"] == 2.4e12
+        assert "7.1% of the share count" in frozen["cautions"][0]
+        assert frozen["provenance"] == ["shares outstanding from the FY2024 "
+                                        "cover"]
+        assert frozen["source"] == "computed"
+
+    def test_a_bare_number_cannot_be_frozen_at_all(self):
+        """Structural, not procedural. The way a caution went missing was a
+        caller handing over a float, so a float is refused at the write —
+        every writer, including one nobody has written yet."""
+        s = held()
+        with pytest.raises(ValueError) as e:
+            portfolio.add_lot(s, decision("commit"), 10, 40.0, "2026-08-01",
+                              values={"pe_ttm": 12.0})
+        assert "bare float" in str(e.value)
+        assert "qualified" in str(e.value)
+        # and the refusal happens before anything is appended
+        assert s["lots"] == []
 
     def test_without_an_evaluation_the_default_is_live_as_of_today(self):
         """The engine never asserts a past evaluation it was not told about:
@@ -467,6 +507,75 @@ class TestExits:
         portfolio.sell_lots(s, decision("hold"), "Risk limit", 4, 60.0)
         assert "Trimmed" in s["notes"][-1]["text"]
         assert portfolio.bucket_of(s) == "holdings"
+
+
+class TestADatedEntryCannotBeInTheFuture:
+    """One rule, at the write, for every kind of lot.
+
+    The buy path refused a future date and the sale path did not, which is
+    what a rule applied per caller looks like. A sale dated years ahead
+    reports the position closed to every screen that asks while the strategy
+    is still holding it — two states at once, which principle 7 forbids —
+    and takes the whole holding out of the account total.
+
+    Not a gate on judgement. Principle 2 protects decisions the user made,
+    and a sale dated 2062 has not been made.
+    """
+
+    def _ahead(self, days=1):
+        return (date.today() + timedelta(days=days)).isoformat()
+
+    def test_a_sale_dated_ahead_is_refused(self):
+        s = bought(shares=10)
+        with pytest.raises(ValueError) as e:
+            portfolio.sell_lots(s, decision("close"), "Panic", 10, 60.0,
+                                self._ahead(13_000))
+        assert "future" in str(e.value)
+        assert "has not happened yet" in str(e.value)
+        # nothing was appended, so the position is untouched
+        assert portfolio.shares_held(s) == 10
+        assert portfolio.bucket_of(s) == "holdings"
+
+    def test_tomorrow_is_refused_as_firmly_as_2062(self):
+        """A one-day slip is the ordinary typo, and it is the one that would
+        pass a rule written to catch only absurd dates."""
+        s = bought(shares=10)
+        with pytest.raises(ValueError):
+            portfolio.sell_lots(s, decision("close"), "Panic", 10, 60.0,
+                                self._ahead(1))
+
+    def test_a_purchase_dated_ahead_is_refused_at_the_write(self):
+        """The screen checked this; the engine did not. A rule that lives
+        only in the caller is one new caller away from being gone."""
+        s = held()
+        with pytest.raises(ValueError) as e:
+            portfolio.add_lot(s, decision("commit"), 10, 40.0, self._ahead())
+        assert "purchase" in str(e.value) and "future" in str(e.value)
+        assert s["lots"] == []
+
+    def test_today_is_allowed_on_both_paths(self):
+        """The boundary is "has not happened", not "is not in the past".
+        Refusing today would refuse every trade recorded the day it was
+        made, which is most of them."""
+        s = held()
+        today = date.today().isoformat()
+        portfolio.add_lot(s, decision("commit"), 10, 40.0, today)
+        lot = portfolio.sell_lots(s, decision("close"), "Panic", 10, 60.0,
+                                  today)
+        assert lot["date"] == today
+
+    def test_a_date_that_is_not_a_date_is_refused_by_name(self):
+        s = bought(shares=10)
+        for bad in ("not-a-date", "2026-13-01", "08/09/2026"):
+            with pytest.raises(ValueError) as e:
+                portfolio.sell_lots(s, decision("close"), "Panic", 10, 60.0,
+                                    bad)
+            assert "real date" in str(e.value), bad
+
+    def test_no_date_still_means_today(self):
+        s = bought(shares=10)
+        lot = portfolio.sell_lots(s, decision("close"), "Panic", 10, 60.0)
+        assert lot["date"] == date.today().isoformat()
 
 
 class TestReturns:

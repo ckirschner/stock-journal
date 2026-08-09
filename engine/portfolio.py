@@ -64,6 +64,36 @@ def _stamp():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def recorded_date(value, what: str) -> str:
+    """The day a lot is dated, or a refusal. One rule, every writer.
+
+    The future is refused. This is not principle 2 being weakened: that
+    principle protects decisions the user actually made, and a sale dated
+    2062 has not been made — it is a typo or a bad import. It is also two
+    contradictory states at once, which principle 7 forbids outright: the
+    position reads closed to every screen that asks, while the strategy is
+    still holding it, and the account inflates by its whole value.
+
+    Here rather than in each caller, because that is how the two paths came
+    apart in the first place — the purchase screen checked and the sale
+    screen did not. Every dated lot is written through this module, so a
+    rule enforced at the write cannot be got round by a new caller that
+    does not know it exists.
+    """
+    if not value:
+        return _today()
+    try:
+        d = date.fromisoformat(str(value)[:10])
+    except ValueError:
+        raise ValueError(f"The {what} date must be a real date "
+                         "(YYYY-MM-DD).")
+    if d > date.today():
+        raise ValueError(f"A {what} cannot be dated in the future — "
+                         f"{d.isoformat()} has not happened yet. Check the "
+                         "date.")
+    return d.isoformat()
+
+
 def new_security(ticker: str, name: str) -> dict:
     return {
         "ticker": ticker.upper().strip(),
@@ -305,7 +335,37 @@ def _next_id(security: dict) -> tuple[str, int]:
     return f"l{seq}", seq
 
 
-def _snapshot(decision, values, value_sources, price_seen, evaluation) -> dict:
+# What a value must carry to be frozen. Named here, by the consumer, so a
+# producer that renames one of them fails at the write with this message
+# rather than quietly freezing a shape nothing can read back.
+# dataview.qualified() builds them.
+_VALUE_KEYS = ("value", "source", "cautions", "provenance")
+
+
+def _qualified_values(values) -> dict:
+    """Refuse a bare number where a qualified value belongs.
+
+    A snapshot is written once and never recomputed, so a caution filed off
+    on the way in is filed off forever — the record then states a figure as
+    more certain than the evidence supported, and nothing downstream can
+    tell. The check is here, at the write, rather than trusted to every
+    caller: a number arriving on its own is the failure this is guarding,
+    and it is exactly what a new caller would hand over.
+    """
+    out = {}
+    for eid, v in (values or {}).items():
+        if not isinstance(v, dict) or not all(k in v for k in _VALUE_KEYS):
+            raise ValueError(
+                f'The value frozen for "{eid}" is a bare '
+                f"{type(v).__name__}. A snapshot records what a figure was "
+                "and what qualified it — its source, its provenance and any "
+                "caution on it — because the record can never be asked "
+                "again. Build it with dataview.qualified().")
+        out[eid] = copy.deepcopy(v)
+    return out
+
+
+def _snapshot(decision, values, price_seen, evaluation) -> dict:
     return {
         "frozen": _stamp(),
         # The decision, entire. Everything the screen showed — state, payload
@@ -313,8 +373,13 @@ def _snapshot(decision, values, value_sources, price_seen, evaluation) -> dict:
         # the record explains itself with no strategy on disk to ask.
         "decision": copy.deepcopy(decision),
         "strategy": copy.deepcopy((decision or {}).get("strategy")),
-        "metrics": copy.deepcopy(values or {}),
-        "value_sources": copy.deepcopy(value_sources or {}),
+        # Every value behind the decision, each with its source, its
+        # provenance and any caution on it. One object per figure rather
+        # than a number here and a source label in a table beside it: two
+        # structures describing one value are two structures that can come
+        # apart, and the half that goes missing is always the qualifying
+        # half.
+        "metrics": _qualified_values(values),
         # What was SEEN: the effective price (hand-entered over fetched),
         # with its source, its date and the instrument it belongs to — not
         # just the hand-entered field.
@@ -335,7 +400,6 @@ def _snapshot(decision, values, value_sources, price_seen, evaluation) -> dict:
 def add_lot(security: dict, decision: dict, shares: float, price: float,
             opened: str | None = None, override_reason: str = "",
             values: dict | None = None,
-            value_sources: dict | None = None,
             price_seen: dict | None = None,
             evaluation: dict | None = None) -> dict:
     """Record a purchase as its own lot, and freeze the decision that was on
@@ -347,8 +411,9 @@ def add_lot(security: dict, decision: dict, shares: float, price: float,
     its own kind of override and is kept apart from the other.
 
     `values` are the merged values behind the decision — hand-entered over
-    computed — and `value_sources` says which side each came from, so the
-    frozen record can say so forever.
+    computed — each one qualified: what it was, which side it came from, how
+    it was derived and anything that was wrong with it. Built by
+    dataview.merged_values; a bare number is refused.
 
     `evaluation` says which moment those belong to: basis "live" (the data on
     screen right now) or "reconstructed" (rebuilt from what was observable on
@@ -358,7 +423,7 @@ def add_lot(security: dict, decision: dict, shares: float, price: float,
     shares, price = float(shares), float(price)
     if shares <= 0:
         raise ValueError("A purchase has to be more than zero shares.")
-    values = values if values is not None else (security.get("metrics") or {})
+    when = recorded_date(opened, "purchase")
     evaluation = copy.deepcopy(evaluation) if evaluation \
         else {"basis": "live", "as_of": _today()}
 
@@ -367,13 +432,12 @@ def add_lot(security: dict, decision: dict, shares: float, price: float,
         "id": lot_id,
         "seq": seq,
         "kind": "buy",
-        "date": opened or _today(),
+        "date": when,
         "recorded": _stamp(),
         "shares": shares,
         "price": price,
         "override": None,
-        "snapshot": _snapshot(decision, values, value_sources, price_seen,
-                              evaluation),
+        "snapshot": _snapshot(decision, values, price_seen, evaluation),
     }
 
     kind = override_kind(decision)
@@ -503,7 +567,7 @@ def sell_lots(security: dict, decision: dict | None, reason: str,
     shares, exit_price = float(shares), float(exit_price)
     if shares <= 0:
         raise ValueError("A sale has to be more than zero shares.")
-    when = exited or _today()
+    when = recorded_date(exited, "sale")
     held = shares_held(security)
     if held <= 0:
         raise ValueError(f"No shares of {security['ticker']} are recorded as "
@@ -596,7 +660,7 @@ def sell_lots(security: dict, decision: dict | None, reason: str,
         # it is recorded — there is no as-of sell path — so the basis is
         # stated rather than left out and read as unknown later.
         "snapshot": _snapshot(
-            decision, values, None, price_seen,
+            decision, values, price_seen,
             copy.deepcopy(evaluation) if evaluation
             else {"basis": "live", "as_of": _today()}),
     }

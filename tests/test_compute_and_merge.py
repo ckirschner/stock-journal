@@ -75,18 +75,41 @@ class TestManualOverFetched:
         computed = {"fcf_ttm": {"status": "computed", "value": 150.0},
                     "current_ratio": {"status": "computed", "value": 1.4}}
         security = {"metrics": {"fcf_ttm": 149.0}}
-        values, sources = dataview.merged_values(security, computed)
-        assert values["fcf_ttm"] == 149.0
-        assert sources["fcf_ttm"] == "manual"
-        assert values["current_ratio"] == 1.4
-        assert sources["current_ratio"] == "computed"
+        values = dataview.merged_values(security, computed)
+        assert values["fcf_ttm"]["value"] == 149.0
+        assert values["fcf_ttm"]["source"] == "manual"
+        assert values["current_ratio"]["value"] == 1.4
+        assert values["current_ratio"]["source"] == "computed"
         # nothing was written into the security by the merge
         assert security["metrics"] == {"fcf_ttm": 149.0}
 
     def test_absent_computed_never_contributes_a_value(self):
         computed = {"pe_ttm": {"status": "absent", "reason": "no prices"}}
-        values, sources = dataview.merged_values({"metrics": {}}, computed)
+        values = dataview.merged_values({"metrics": {}}, computed)
         assert "pe_ttm" not in values
+
+    def test_the_merge_carries_the_caution_with_the_value(self):
+        """The merge is the last place a computed figure is a rich object
+        before it is frozen into a snapshot for good. A merge that kept the
+        number and dropped what qualified it would put a figure into an
+        append-only record stating it as more certain than it was."""
+        computed = {"market_cap": {"status": "computed", "value": 2.4e12,
+                                   "cautions": ["Class B has no stored close"],
+                                   "provenance": ["shares from the cover"]}}
+        v = dataview.merged_values({"metrics": {}}, computed)["market_cap"]
+        assert v["cautions"] == ["Class B has no stored close"]
+        assert v["provenance"] == ["shares from the cover"]
+
+    def test_a_hand_entered_value_is_qualified_as_undated_under_a_pin(self):
+        """It participates — the journal has no other value to offer — but a
+        record rebuilt for a past day must never claim a number typed today
+        was known then."""
+        values = dataview.merged_values({"metrics": {"fcf_ttm": 149.0}}, {},
+                                        as_of="2024-03-01")
+        note = " ".join(values["fcf_ttm"]["cautions"])
+        assert "carry no date" in note and "2024-03-01" in note
+        live = dataview.merged_values({"metrics": {"fcf_ttm": 149.0}}, {})
+        assert live["fcf_ttm"]["cautions"] == []
 
 
 class TestCrosscheck:

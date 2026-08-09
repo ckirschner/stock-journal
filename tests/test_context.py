@@ -2,7 +2,8 @@
 absence with reasons and never an invented value, series that obey the
 clock, and a boundary the strategy cannot mutate anything through."""
 
-from conftest import dur, filing, inst, balance_face
+from conftest import (balance_face, dur, filing, inst,
+                      multiclass_company)
 
 from engine import context, contract, facts_store, price_store, tickermap
 
@@ -188,6 +189,22 @@ class TestTheClock:
     def test_the_same_value_carries_no_undated_caution_live(self):
         ctx = build(security(metrics={"fcf_ttm": 999.0}))
         assert ctx["measures"]["fcf_ttm"]["current"]["cautions"] == []
+
+    def test_a_series_point_carries_the_cautions_of_its_own_reading(self):
+        """A point is a measure like any other. Citing one at a past period
+        must not be the way to get a figure with its qualification filed
+        off — a screen showing that evidence has no other source for it, and
+        a snapshot keeps whatever it was handed forever."""
+        cls = multiclass_company(911)
+        points = build(security(911))["measures"]["market_cap"]["series"][
+            "points"]
+        assert points, "the fixture must produce at least one boundary"
+        for p in points:
+            assert p["value"] is not None
+            note = " ".join(p["cautions"])
+            assert "no stored close" in note, p
+            assert cls in note
+            assert p["provenance"], p
 
     def test_series_points_are_priced_at_their_own_boundary(self):
         """A 2024 reading must use the 2024 close, not today's. Without the

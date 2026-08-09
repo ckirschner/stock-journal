@@ -583,7 +583,9 @@ class TestEvidenceResolution:
                                 {"period_end": "2023-12-31",
                                  "filed": "2024-02-20", "form": "10-K",
                                  "accession": "S-1", "value": 120.0,
-                                 "reason": None}]}}},
+                                 "reason": None,
+                                 "cautions": ["a class with no close"],
+                                 "provenance": ["shares from the cover"]}]}}},
              "position": {"weight": {"status": "absent",
                                      "reason": "the journal records no "
                                                "account value"},
@@ -637,6 +639,17 @@ class TestEvidenceResolution:
         assert errors == []
         assert item["observed"]["value"] == 120.0
         assert "10-K" in item["observed"]["provenance"][0]
+
+    def test_a_past_reading_carries_its_own_qualification(self):
+        """Citing a measure at a past period used to be the one route that
+        returned a number with its cautions filed off — the same figure read
+        today came back qualified. A screen and a frozen snapshot have no
+        other source for it."""
+        [item], _ = self.resolve([{"measure": "fcf_ttm", "at": "2023-12-31"}])
+        assert item["observed"]["cautions"] == ["a class with no close"]
+        # the filing anchors the reading; how it was built follows it
+        assert "10-K" in item["observed"]["provenance"][0]
+        assert "shares from the cover" in item["observed"]["provenance"]
 
     def test_a_reading_that_is_not_on_record_says_which_are(self):
         [item], _ = self.resolve([{"measure": "fcf_ttm", "at": "1999-12-31"}])

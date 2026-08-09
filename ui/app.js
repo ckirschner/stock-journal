@@ -140,7 +140,14 @@ function fmtCloseDate(d) {
 }
 function priceCell(s) {
   const p = s._price;
-  if (!p || p.value == null) return money(null);
+  /* A dash with the host's reason behind it. "No close is stored for BRK.B —
+     prices are held for BRK.A, another share class of the same company" is a
+     different fact from "nothing has been fetched", and a bare dash makes
+     them look identical in the one column where it matters. */
+  if (!p || p.value == null) {
+    return (p && p.reason)
+      ? `<span class="dim" title="${esc(p.reason)}">—</span>` : money(null);
+  }
   if (p.source === "fetched")
     return `${money(p.value)} <span class="dim" title="Fetched close, as of ${esc(p.date)}">·${esc(fmtCloseDate(p.date))}</span>`;
   return money(p.value);
@@ -431,22 +438,44 @@ function scorecards() {
   const line = (k, v) => `<div class="kv"><span>${esc(k)}</span><b>${v}</b></div>`;
   /* Counted per purchase, not per name and not per round trip: one buy can
      be a compliant entry and the next in the same name an override, and
-     collapsing them loses exactly the comparison this exists to make. */
-  const summ = (d) => d.n
-    ? line("Purchases", d.n) + line("Win rate", d.win_rate + "%") + line("Average return", (d.avg >= 0 ? "+" : "") + d.avg + "%")
+     collapsing them loses exactly the comparison this exists to make.
+
+     Every average says what it rests on. The host counts the purchases in a
+     group and, separately, how many of them could be scored at all — a
+     purchase with no price is a decision that happened and a return that is
+     not knowable. Printing the average beside the group count and dropping
+     the scored count is how a partial population passes for the whole, on
+     the one panel that is supposed to be able to indict a rule. */
+  const pct = (v) => v === null || v === undefined
+    ? "—" : (v >= 0 ? "+" : "") + v + "%";
+  const unscored = (n) => n
+    ? `<div class="hint" style="margin:4px 0 0">${n} more ${n === 1 ? "has" : "have"} no price, so ${n === 1 ? "it is" : "they are"} counted but not averaged.</div>`
+    : "";
+  const summ = (d) => d.n_purchases
+    ? line("Purchases", d.n_purchases)
+      + line("Scored", d.n + " of " + d.n_purchases)
+      + line("Win rate", d.win_rate === null ? "—" : d.win_rate + "%")
+      + line("Average return", pct(d.avg))
+      + unscored(d.n_unscored)
     : '<p class="hint">Nothing to compare yet.</p>';
 
   const keys = Object.keys(o.per_rule || {});
   const perRule = keys.map((id) => {
     const b = o.per_rule[id];
-    return line(b.label, `${b.wins}/${b.n} · ${b.avg >= 0 ? "+" : ""}${b.avg}%`);
+    /* wins are counted over what could be scored, so the denominator has to
+       be that same population — "1/3" over three purchases of which two had
+       no price says a rule lost twice when nothing is known about them. */
+    return line(b.label, `${b.wins}/${b.n_scored} · ${pct(b.avg)}`
+      + (b.n_scored < b.n
+        ? ` <span class="dim">of ${b.n} overrides</span>` : ""));
   }).join("");
 
   const exRows = Object.keys(x).map((reason) => {
     const b = x[reason];
+    const over = (n) => n < b.n ? ` <span class="dim">(${n} of ${b.n})</span>` : "";
     return line(reason + ` (${b.n})`,
-      `held ${b.avg_held === null ? "—" : (b.avg_held >= 0 ? "+" : "") + b.avg_held + "%"}`
-      + ` · after ${b.avg_after === null ? "—" : (b.avg_after >= 0 ? "+" : "") + b.avg_after + "%"}`);
+      `held ${pct(b.avg_held)}${over(b.n_held)}`
+      + ` · after ${pct(b.avg_after)}${over(b.n_after)}`);
   }).join("") || '<p class="hint">No sales recorded yet.</p>';
   /* "After" measures to today, except where the name was bought again — there
      it stops at that purchase. Saying so matters: an average that silently
@@ -510,6 +539,46 @@ function payloadText(d) {
   return "";
 }
 
+/* ------------------------------------------------------------- cautions */
+/* A caution is a sentence about what a number rests on: a share class valued
+   at a sibling's close, a balance-sheet line matched by its label rather than
+   by a mapped concept, a price too old to be current. It travels with the
+   value everywhere the value goes, and this is the only place that decides
+   how it reads.
+
+   Not a warning glyph and not a colour. A caution is not a failure — it is a
+   number saying what it rests on — and a red mark on twelve of a company's
+   twenty-nine measures is how a reader learns to stop looking at all
+   twenty-nine. The word carries it instead, which also means it survives
+   being read aloud and never depends on colour alone.
+
+   Two treatments, because two kinds of screen ask different things:
+
+   - Where a figure is being acted on or audited — the evidence behind a
+     verdict, a frozen purchase, the values you are about to override — the
+     sentences are inline and always visible. It is a handful of rows and the
+     reader is deciding something on exactly these numbers.
+   - Where a screen is an inventory — the data page's thirty-odd measures —
+     the value carries a mark and its sentences open in place underneath.
+     Cautions propagate through derivation, so one borrowed price becomes the
+     same sentence on eleven measures: a real company's data page renders
+     thirty-eight caution lines saying nine things, and a wall of repeated
+     text is exactly how the one that mattered gets scrolled past. */
+const cautionLines = (cs) => (cs || []).map((c) =>
+  `<div class="greynote qual">Qualified — ${esc(c)}</div>`).join("");
+
+/* The mark. Always the same mark, always carrying the count, so "this number
+   has something attached to it" is one glance and never a judgement call. */
+function cautionMark(cs, key) {
+  if (!(cs || []).length) return "";
+  const id = "q:" + key;
+  return `<button class="chip qualmark" data-tip="${esc(id)}"
+    aria-expanded="${tipOpen === id}"
+    aria-label="What qualifies this figure">qualified${cs.length > 1 ? " ×" + cs.length : ""}</button>`;
+}
+const cautionBox = (cs, key) =>
+  tipOpen === "q:" + key ? cautionLines(cs) : "";
+
 function evidenceRow(item, i) {
   const subj = item.subject || {};
   const obs = item.observed || {};
@@ -530,7 +599,7 @@ function evidenceRow(item, i) {
   const at = subj.at ? ` <span class="dim">as at ${esc(subj.at)}</span>` : "";
   const why = !known ? `<div class="greynote">${esc(obs.reason)}</div>` : "";
   const prov = (obs.provenance || []).map((p) => `<div class="greynote">${esc(p)}</div>`).join("");
-  const warn = (obs.cautions || []).map((c) => `<div class="greynote">⚠ ${esc(c)}</div>`).join("");
+  const warn = cautionLines(obs.cautions);
 
   const explain = subj.explain
     || (subj.kind === "measure" && bankMeta(subj.id) ? bankMeta(subj.id).plain : null);
@@ -636,6 +705,16 @@ function detailView(s) {
   /* facts */
   const priceLabel = (s._price && s._price.source === "fetched")
     ? `Price · close ${String(s._price.date).slice(0, 10)}` : "Price";
+  /* Why there is no price, not just a dash. The host's reason names the
+     instrument and lists the sibling share classes that DO have stored
+     closes, which is the whole difference between "nothing was fetched" and
+     "prices exist for this company but not for the security you hold". A
+     bare dash makes the second look like the first. */
+  const priceWhy = (s._price && s._price.value == null && s._price.reason)
+    ? "Not known: " + s._price.reason + "."
+    : (s._price && s._price.source === "manual")
+    ? "The price you entered by hand. It wins over any fetched close, and carries no date."
+    : "";
   const pctText = (v) => v === null || v === undefined ? "—" : (v >= 0 ? "+" : "") + v + "%";
   /* Every fact on this strip describes one holding — the one open, or the one
      that ended. The lifetime figure is the single exception and appears only
@@ -653,15 +732,25 @@ function detailView(s) {
     : x.until === "purchase"
     ? `Measured from the sale to the ${x.date} purchase. Once you owned it again the move was yours, and carrying the window on to today would credit the sell rule with a stretch you spent holding.`
     : "What the price has done since you sold. A closed position keeps being priced, which is the only way to find out whether a sell rule works.";
+  /* An open holding is marked at the price it is worth now, so where there
+     is no price there is no return — and the reason is the price's reason.
+     Without it the two ways a return can be absent, unpriced and uncostable,
+     read as the same shrug. */
+  const sinceBuyWhy = "What this holding has returned so far, against what its"
+    + " purchases cost — counting shares you have already sold out of it at"
+    + " the price they got."
+    + (many ? " This holding only; the earlier one is its own row under Previous holdings." : "");
+  const unpriced = s._price && s._price.value == null && px(s) == null;
   let facts = [];
   if (isHold) {
-    facts = [[priceLabel, money(px(s))], ["Average cost", money(s._cost_basis)],
+    facts = [[priceLabel, money(px(s)), priceWhy], ["Average cost", money(s._cost_basis)],
       ["Shares", s._shares],
       ["Since buy", pctText(s._return),
-        "What this holding has returned so far, against what its purchases cost"
-        + " — counting shares you have already sold out of it at the price they got."
-        + (many ? " This holding only; the earlier one is its own row under Previous holdings." : "")],
-      ["Value", px(s) ? "$" + (px(s) * s._shares).toLocaleString(undefined, { maximumFractionDigits: 0 }) : "—"]];
+        (s._return === null || s._return === undefined) && unpriced && s._price.reason
+          ? `Not known: an open holding is marked at what it is worth now, and ${s._price.reason}.`
+          : sinceBuyWhy],
+      ["Value", px(s) ? "$" + (px(s) * s._shares).toLocaleString(undefined, { maximumFractionDigits: 0 }) : "—",
+        unpriced && s._price.reason ? `Not known: ${s._price.reason}.` : ""]];
   } else if (isPrev) {
     facts = [["Exit price", money(last.exit_price)],
       ["Return held", pctText(last.return),
@@ -669,7 +758,7 @@ function detailView(s) {
       ["Since exit", sinceExitText(last.since_exit), sinceExitWhy(last.since_exit)],
       ["Reason", last.reason || "not stated"]];
   } else {
-    facts = [[priceLabel, money(px(s))], ["Added", s.added],
+    facts = [[priceLabel, money(px(s)), priceWhy], ["Added", s.added],
       ["Values read", (s._cited || []).length + " cited by the strategy"]];
   }
   if (many) {
@@ -1002,6 +1091,18 @@ function coverageSection(s) {
     (st.terminal_series || []).forEach((t) => {
       inner += `<div class="notice quiet"><h4>${esc(t.ticker)} price series is terminal</h4><p>${esc(t.reason)}</p></div>`;
     });
+    /* The one inventory screen. Thirty-odd rows, and cautions propagate
+       through derivation — one borrowed price lands on every measure built
+       from market cap — so the sentences are marked here and opened in
+       place rather than repeated down the page. Provenance stays inline:
+       it is specific to its own row and does not multiply. */
+    const marked = cov.entries.filter((e) => (e.cautions || []).length);
+    if (marked.length) {
+      inner += `<p class="hint" style="margin:0 0 10px">${marked.length} of
+        ${cov.entries.length} figures rest on something worth knowing — a share class
+        valued at another's close, a line matched by its label, a price no longer current.
+        Each is marked <b>qualified</b>; open one to read what it rests on.</p>`;
+    }
     inner += cov.entries.map((e) => {
       const val = e.status === "computed" ? fmtBank(e.value, e.format) : "—";
       const chip = e.status === "computed"
@@ -1010,9 +1111,9 @@ function coverageSection(s) {
       const why = e.status === "computed"
         ? (e.provenance || []).map((p) => `<div class="greynote">${esc(p)}</div>`).join("")
         : `<div class="greynote">${esc(e.reason || "")}</div>`;
-      const warn = (e.cautions || []).map((c) => `<div class="greynote">⚠ ${esc(c)}</div>`).join("");
       return `<div class="srow"><div class="sname">${esc(e.label)}</div>
-        <div class="scond">${val === "—" ? "" : `<b>${val}</b>`}${why}${warn}</div>
+        <div class="scond">${val === "—" ? "" : `<b>${val}</b>`}
+          ${cautionMark(e.cautions, "cov:" + e.id)}${why}${cautionBox(e.cautions, "cov:" + e.id)}</div>
         <div class="sstate">${chip}</div></div>`;
     }).join("");
     inner = `<div class="slist">${inner}</div>` + crosscheckHTML(cov.crosscheck);
@@ -1443,9 +1544,12 @@ function dialog({ title, blurb, body, confirm, onConfirm, danger }) {
   };
   dlg.showModal();
 }
-const field = (name, label, value, help, type = "text") =>
+/* `attrs` is inserted as markup, for the handful of native constraints an
+   input can carry — a date's `max`, say. Callers pass literals they wrote
+   themselves; nothing user-supplied goes through it. */
+const field = (name, label, value, help, type = "text", attrs = "") =>
   `<div class="field"><label for="f_${name}">${esc(label)}</label>
-   <input id="f_${name}" name="${name}" type="${type}" value="${esc(value ?? "")}">
+   <input id="f_${name}" name="${name}" type="${type}" value="${esc(value ?? "")}" ${attrs}>
    ${help ? `<div class="help">${esc(help)}</div>` : ""}</div>`;
 const area = (name, label, value, help) =>
   `<div class="field"><label for="f_${name}">${esc(label)}</label>
@@ -1621,7 +1725,13 @@ function dlgMetrics(s) {
     const comp = (s._computed || {})[m.id];
     let compNote = "";
     if (comp && comp.status === "computed") {
-      compNote = `<div class="u">Computed from filings: <b>${fmtBank(comp.value, m.format)}</b> — a value typed here overrides it; blank uses it.</div>`;
+      /* Inline and always visible, not behind a mark. This is the screen
+         where someone decides whether to type over a computed figure, and
+         "it borrowed another share class's price" is the single most likely
+         reason to. A qualification hidden here is a qualification withheld
+         at the only moment it changes what the reader does. */
+      compNote = `<div class="u">Computed from filings: <b>${fmtBank(comp.value, m.format)}</b> — a value typed here overrides it; blank uses it.</div>`
+        + cautionLines(comp.cautions);
     } else if (comp && comp.status === "absent" && comp.reason) {
       compNote = `<div class="u">Not computed — ${esc(comp.reason)}</div>`;
     }
@@ -1777,7 +1887,14 @@ function dlgSell(s) {
         <div class="help">Answer honestly. The Previous holdings tab groups outcomes by this, and it is the only way to find out whether your sell rules work.</div></div>`
       + field("shares", "Shares sold", s._shares, `You hold ${s._shares}. Sell fewer to trim; the rest stays open, priced from what it actually cost. ${lotHelp}`, "number")
       + field("price", "Sale price per share", prefill, priceHelp, "number")
-      + field("exited", "Date", localToday(), "", "date"),
+      /* Same bound as the purchase date, and for the same reason. A sale
+         dated ahead has not happened: it reports the position closed to
+         every screen that asks while the strategy is still holding it, and
+         takes the whole holding out of the account. The backend refuses it
+         regardless; this is so the picker never offers it. */
+      + field("exited", "Date", localToday(),
+        "The day you actually sold. A date that has not happened yet is refused.",
+        "date", `max="${localToday()}"`),
     confirm: "Record the sale", danger: true,
     onConfirm: async (d) => {
       if (!d.price) return "A sale price is required.";
@@ -1830,8 +1947,7 @@ function dlgEV(s, methodOverride, pf) {
     if (pre && pre.status === "computed") {
       sourcesInit[key] = { used: pre.source, provenance: (pre.provenance || []).join("; "),
         asof: pre.asof || null, offered: String(pre.value) };
-      const prov = (pre.provenance || []).map(esc).join(" · ")
-        + ((pre.cautions || []).length ? " · ⚠ " + (pre.cautions || []).map(esc).join(" · ") : "");
+      const prov = (pre.provenance || []).map(esc).join(" · ");
       const priorSrc = (s.ev && s.ev.method === cur && s.ev.sources) ? s.ev.sources[key] : null;
       const prior = (priorSrc && priorSrc.used === "overridden"
         && String(s.ev.inputs[key]) !== String(pre.value))
@@ -1842,6 +1958,7 @@ function dlgEV(s, methodOverride, pf) {
           <button type="button" class="btn" data-unlock="${key}">Override</button>
         </div>
         <div class="help" id="prov_${key}"><b>${esc(SOURCE_WORDS[pre.source] || pre.source)}</b> — ${prov}.${pre.source === "manual" ? "" : " Computed, never typed; override only when you have reason to disagree."}</div>
+        ${cautionLines(pre.cautions)}
         ${prior}<div class="help">${esc(help)}</div>${refLines}</div>`;
     }
     let v = s.ev && s.ev.method === cur ? s.ev.inputs[key] : "";

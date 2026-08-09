@@ -397,7 +397,7 @@ class Api:
 
         for s in securities:
             computed, price, dstatus, _ = self._computed_layer(s, entry_ids)
-            values, sources = dataview.merged_values(s, computed)
+            values = dataview.merged_values(s, computed)
             s["_price"] = price
             s["_data"] = dstatus
             s["_fetch"] = fetch.status_of(s["ticker"])
@@ -435,7 +435,7 @@ class Api:
                       "cautions": r.get("cautions") or [],
                       "provenance": r.get("provenance") or []}
                 for eid, r in computed.items() if eid in shown}
-            s["_value_sources"] = {k: v for k, v in sources.items()
+            s["_value_sources"] = {k: v["source"] for k, v in values.items()
                                    if k in shown}
             # Returns and the scorecards read the EFFECTIVE price —
             # hand-entered over the fetched close. On the raw record a
@@ -727,31 +727,28 @@ class Api:
 
     # -- purchases and exits ----------------------------------------------
     def _purchase_date(self, opened):
-        """(iso date or None, is_past). The future is refused outright: the
-        data that belongs to a day that hasn't happened does not exist, so
-        no honest evaluation of it can be recorded."""
+        """(iso date or None, is_past), on the one date rule every dated
+        entry obeys — a real date, and one that has happened.
+
+        The refusal itself lives in engine/portfolio, at the write, so a
+        purchase cannot be dated ahead by any route. Checked again here
+        because the preview evaluates before anything is written, and
+        reconstructing a day that has not happened is not a thing the data
+        can honestly answer.
+        """
         if not opened:
             return None, False
-        try:
-            d = date.fromisoformat(str(opened)[:10])
-        except ValueError:
-            raise ValueError("The purchase date must be a real date "
-                             "(YYYY-MM-DD).")
-        if d > date.today():
-            raise ValueError("A purchase cannot be dated in the future — "
-                             "the data belonging to that day does not "
-                             "exist yet.")
-        return d.isoformat(), d < date.today()
+        iso = portfolio.recorded_date(opened, "purchase")
+        return iso, iso < date.today().isoformat()
 
     def _values_live(self, s):
-        """(values, sources, price) — merged values, hand-entered on top."""
+        """(values, price) — merged qualified values, hand-entered on top."""
         entry_ids = list(bank.meta())
         computed, price, _, _ = self._computed_layer(s, entry_ids)
-        values, sources = dataview.merged_values(s, computed)
-        return values, sources, price
+        return dataview.merged_values(s, computed), price
 
     def _values_asof(self, s, as_of):
-        """(values, sources, price, evaluation record) rebuilt from what was
+        """(values, price, evaluation record) rebuilt from what was
         observable on `as_of`: filings filed by then, the close on or shortly
         before it — the same as-of rule the strategy's own context obeys.
 
@@ -807,9 +804,13 @@ class Api:
             parts.append("no company is linked to this ticker, so no stored "
                          f"filing or price from {as_of} could be consulted")
 
-        values, sources = dataview.merged_values(s, computed)
-        manual = sorted(mid for mid, side in sources.items()
-                        if side == "manual")
+        # Under a pin the merge qualifies every hand-entered value as
+        # undated, in the record itself. The sentence below is the same fact
+        # said once for the reader; the per-value caution is what a screen
+        # reading one figure two years from now will find beside it.
+        values = dataview.merged_values(s, computed, as_of=as_of)
+        manual = sorted(mid for mid, v in values.items()
+                        if v["source"] == "manual")
         if manual:
             parts.append(f"{len(manual)} hand-entered value"
                          f"{'s' if len(manual) != 1 else ''} entered as "
@@ -823,23 +824,22 @@ class Api:
             "manual_undated": manual,
             "note": "; ".join(parts),
         }
-        return values, sources, price, evaluation
+        return values, price, evaluation
 
     def _at_purchase(self, journal, record, chain, s, opened_iso, is_past):
-        """(decision, values, sources, price, evaluation) for the day being
-        recorded. Today evaluates live; a past date is reconstructed from the
-        data available by then, and says so everywhere."""
+        """(decision, values, price, evaluation) for the day being recorded.
+        Today evaluates live; a past date is reconstructed from the data
+        available by then, and says so everywhere."""
         securities = journal.get("securities", [])
         if is_past:
-            values, sources, price, evaluation = self._values_asof(
-                s, opened_iso)
+            values, price, evaluation = self._values_asof(s, opened_iso)
             decision = self._decide(s, securities, journal, record, chain,
                                     as_of=opened_iso)
         else:
-            values, sources, price = self._values_live(s)
+            values, price = self._values_live(s)
             evaluation = {"basis": "live", "as_of": date.today().isoformat()}
             decision = self._decide(s, securities, journal, record, chain)
-        return decision, values, sources, price, evaluation
+        return decision, values, price, evaluation
 
     @guarded
     @locked
@@ -865,12 +865,11 @@ class Api:
             return err("No journal is open.")
         s = self._find(journal, ticker)
         opened_iso, is_past = self._purchase_date(opened)
-        decision, values, sources, price, evaluation = self._at_purchase(
+        decision, values, price, evaluation = self._at_purchase(
             journal, record, chain, s, opened_iso, is_past)
         lot = portfolio.add_lot(s, decision, float(shares), float(cost),
                                 opened_iso, override_reason, values=values,
-                                value_sources=sources, price_seen=price,
-                                evaluation=evaluation)
+                                price_seen=price, evaluation=evaluation)
         self._write(journal)
         state = (decision.get("state") or {}).get("id")
         return ok(override=bool(lot.get("override")),
@@ -898,16 +897,21 @@ class Api:
             n = float(shares) if shares not in (None, "") else held
         except (TypeError, ValueError):
             return err("The number of shares sold must be a number.")
+        # Before anything is evaluated, on the same rule the purchase screen
+        # obeys. The write refuses it too, which is where the guarantee
+        # actually lives — this is only so the message names the date rather
+        # than arriving after a strategy has been asked about a day that has
+        # not happened.
+        exited = portfolio.recorded_date(exited, "sale")
         # A strategy that is not installed is not a signal that read clear:
         # the sale records that it could not be asked at all.
         decision, values, seen = None, None, None
         if record is not None:
             decision = self._decide(s, journal.get("securities", []), journal,
                                     record, chain)
-            values, _, seen = self._values_live(s)
+            values, seen = self._values_live(s)
         lot = portfolio.sell_lots(s, decision, reason, n, float(price),
-                                  exited or None, values=values,
-                                  price_seen=seen)
+                                  exited, values=values, price_seen=seen)
         self._write(journal)
         return ok(rule_triggered=lot["rule_triggered"],
                   signal=lot["signal_at_exit"],

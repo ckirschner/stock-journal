@@ -1201,10 +1201,15 @@ def _measure_observation(ctx, item, where, errors):
             "measure")
     if hit["value"] is None:
         return _unobserved(hit["reason"], "measure")
-    return _observed(hit["value"], "measure",
-                     provenance=[f'{hit["form"]} for the period ending '
-                                 f'{hit["period_end"]}, filed '
-                                 f'{hit["filed"]}'])
+    # The filing this reading came from, then how the reading was built and
+    # what qualifies it. A point is a measure like any other: citing one at
+    # a past period must not be the way to get a figure with its cautions
+    # filed off, because a screen showing evidence has no other source for
+    # them and a frozen snapshot keeps whatever it was handed forever.
+    return _observed(hit["value"], "measure", hit.get("cautions"),
+                     [f'{hit["form"]} for the period ending '
+                      f'{hit["period_end"]}, filed {hit["filed"]}']
+                     + list(hit.get("provenance") or []))
 
 
 def _fact_observation(ctx, item, where, errors):
