@@ -545,23 +545,47 @@ class TestEvidenceShape:
         errors = self.cited({"label": "Vibe", "unit": "vibes", "actual": 1})
         assert any("never invents a rendering" in e for e in errors)
 
-    def test_a_comparator_and_threshold_come_together(self):
+    def test_a_comparator_needs_a_limit(self):
         errors = self.cited({"measure": "fcf_ttm", "comparator": "at_least"})
-        assert any("come together or not at all" in e for e in errors)
+        assert any("exactly one of `threshold`" in e for e in errors)
+
+    def test_a_limit_with_no_comparator_says_nothing(self):
+        errors = self.cited({"measure": "fcf_ttm", "threshold": 1})
+        assert any("no `comparator`" in e for e in errors)
 
     def test_an_unknown_comparator_is_refused(self):
         errors = self.cited({"measure": "fcf_ttm", "comparator": "vibes_with",
                              "threshold": 1})
         assert any("`comparator` must be one of" in e for e in errors)
 
-    def test_threshold_from_must_name_a_declared_setting(self):
-        rec = record(values=[{"id": "cap", "label": "Cap", "type": "number",
-                              "explain": "e"}])
-        assert self.cited({"measure": "fcf_ttm", "comparator": "at_most",
-                           "threshold": 5, "threshold_from": "cap"}, rec) == []
+    def capped(self):
+        return record(values=[{"id": "cap", "label": "Cap", "type": "number",
+                               "explain": "e"}])
+
+    def test_a_limit_is_stated_or_cited_and_never_both(self):
+        """The misquote the evidence split exists to prevent, at the one
+        place it had a hole. Supplying the number AND naming the setting is
+        what let "at most your position cap of 5" be written over a cap
+        holding 20 — so the pair is unrepresentable rather than compared."""
         errors = self.cited({"measure": "fcf_ttm", "comparator": "at_most",
-                             "threshold": 5, "threshold_from": "nope"}, rec)
+                             "threshold": 5, "threshold_from": "cap"},
+                            self.capped())
+        assert any("exactly one of `threshold`" in e for e in errors)
+        assert any("a setting that does not hold it" in e for e in errors)
+
+    def test_naming_the_setting_alone_is_the_way_to_attribute_a_limit(self):
+        assert self.cited({"measure": "fcf_ttm", "comparator": "at_most",
+                           "threshold_from": "cap"}, self.capped()) == []
+
+    def test_threshold_from_must_name_a_declared_setting(self):
+        errors = self.cited({"measure": "fcf_ttm", "comparator": "at_most",
+                             "threshold_from": "nope"}, self.capped())
         assert any("neither a value nor an input" in e for e in errors)
+
+    def test_threshold_from_needs_a_comparator_to_be_a_limit_at_all(self):
+        errors = self.cited({"measure": "fcf_ttm", "threshold_from": "cap"},
+                            self.capped())
+        assert any("no `comparator`" in e for e in errors)
 
     def test_at_only_means_something_for_a_measure(self):
         errors = self.cited({"fact": "position.weight", "at": "2024-12-31"})
@@ -714,15 +738,69 @@ class TestEvidenceResolution:
         assert item["observed"]["value"] == 5
         assert item["subject"]["explain"]
 
-    def test_a_threshold_says_whose_limit_it_is(self):
-        rec = record(values=[{"id": "cap", "label": "Position cap",
-                              "type": "number", "unit": "percent",
-                              "explain": "e"}])
+    def capped(self, **over):
+        spec = {"id": "cap", "label": "Position cap", "type": "number",
+                "unit": "percent", "explain": "e"}
+        spec.update(over)
+        return record(values=[spec])
+
+    def test_a_cited_limit_is_read_out_of_the_setting_not_the_strategy(self):
+        """The whole point. The strategy names which setting; the host reads
+        the number. A strategy cannot state a limit and attribute it to a
+        setting holding something else, because it never states one."""
+        ctx = self.ctx(values={"cap": 5})
+        ctx["position"] = {"weight": {"status": "known", "value": 4.0,
+                                      "source": "computed", "cautions": [],
+                                      "provenance": []}}
+        [item], errors = self.resolve(
+            [{"fact": "position.weight", "comparator": "at_most",
+              "threshold_from": "cap"}], rec=self.capped(), ctx=ctx)
+        assert errors == []
+        assert item["test"]["threshold"] == 5
+        assert item["outcome"] == "pass"
+
+        # …and the same citation against a different setting reads the
+        # different number, with nothing in the strategy changed.
+        ctx["values"]["cap"] = 3
+        [item], _ = self.resolve(
+            [{"fact": "position.weight", "comparator": "at_most",
+              "threshold_from": "cap"}], rec=self.capped(), ctx=ctx)
+        assert item["test"]["threshold"] == 3
+        assert item["outcome"] == "fail"
+
+    def test_a_cited_limit_says_whose_it_is_and_how_it_reads(self):
         [item], _ = self.resolve([{"fact": "position.weight",
-                                   "comparator": "at_most", "threshold": 5,
-                                   "threshold_from": "cap"}], rec=rec)
+                                   "comparator": "at_most",
+                                   "threshold_from": "cap"}],
+                                 rec=self.capped(),
+                                 ctx=self.ctx(values={"cap": 5}))
         assert item["test"]["threshold_from"] == {
-            "kind": "value", "id": "cap", "label": "Position cap"}
+            "kind": "value", "id": "cap", "label": "Position cap",
+            "unit": "percent"}
+
+    def test_a_limit_nobody_answered_is_unknown_and_never_a_pass(self):
+        """An optional input sets no limit until it is answered. A test with
+        no limit has not been passed — it has not been run."""
+        rec = record(inputs=[{"id": "floor", "label": "Your floor",
+                              "type": "number", "unit": "usd",
+                              "explain": "e"}])
+        [item], errors = self.resolve(
+            [{"fact": "portfolio.slots_occupied", "comparator": "at_least",
+              "threshold_from": "floor"}], rec=rec, ctx=self.ctx(inputs={}))
+        assert errors == []
+        assert item["outcome"] == "unknown"
+        assert item["test"]["threshold"] is None
+        assert "Your floor" in item["test"]["absent"]
+        # the figure itself was there; it is the limit that was missing
+        assert item["observed"]["status"] == "known"
+
+    def test_a_stated_limit_is_never_absent(self):
+        [item], _ = self.resolve([{"measure": "fcf_ttm",
+                                   "comparator": "at_least",
+                                   "threshold": 100}])
+        assert item["test"]["absent"] is None
+        assert item["test"]["threshold_from"] is None
+        assert item["outcome"] == "pass"
 
 
 class TestEvidenceUnitsTrackTheBank:

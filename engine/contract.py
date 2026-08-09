@@ -69,7 +69,22 @@ from types import MappingProxyType
 #    would simply have been wrong, and would have looked right. Two questions
 #    were sharing one name; lot ages remain on `position.lots`, each entry
 #    carrying its own date.
-CONTRACT_VERSION = 3
+# 4: a qualitative measure can now answer. It used to be permanently absent
+#    — nothing in the program could record one — so a v3 strategy reading
+#    `measures["moat_durability"]["current"]["status"]` got "absent" forever
+#    and could reasonably branch on that to mean "nothing here to read".
+#    Under v4 the same key returns a yes/no the user assessed, so that branch
+#    silently takes the other road: same key, same shape, a different
+#    question answered. That is the quietest break there is and the one this
+#    number exists to refuse.
+#
+#    Bundled with it, because bumping once beats bumping twice: an evidence
+#    item now carries `threshold` OR `threshold_from`, never both. Naming a
+#    setting means the host reads the number out of it; stating a number
+#    means the strategy may not attribute it. A v3 item supplying both is
+#    refused, which is loud — but refusing it at *load*, by version, beats
+#    refusing every verdict it produces at evaluation.
+CONTRACT_VERSION = 4
 
 # A strategy may declare at most this many states. The cap is deliberate:
 # states are user-facing vocabulary, and complexity must not creep back in
@@ -182,15 +197,19 @@ SPLIT_TEST = (
 # it examined and what it required, and the *host* resolves the citation into
 # the rendered fact. That division is deliberate:
 #
-#   - the strategy owns the question — which measure, which threshold, which
-#     direction. Those are opinions and belong to it.
+#   - the strategy owns the question — which measure, which direction, and
+#     either a limit it states outright or the name of one of its own
+#     settings. Those are opinions and belong to it.
 #   - the host owns the answer — the value, its label, its unit, whether it
-#     was absent and why, and whether the comparison passed. Those are
-#     facts, and a strategy restating them could restate them wrongly.
+#     was absent and why, the limit read out of any setting that was named,
+#     and whether the comparison passed. Those are facts, and a strategy
+#     restating them could restate them wrongly.
 #
 # The consequence worth naming: a strategy cannot misquote the host's own
 # numbers, because it never quotes them at all. It cannot claim a pass on an
-# absent value either — absence resolves to `unknown`, never to success.
+# absent value either — absence resolves to `unknown`, never to success. And
+# it cannot attribute a limit to a setting that does not hold it, because
+# naming the setting and supplying the number is refused: one or the other.
 # ---------------------------------------------------------------------------
 
 # How a value is rendered. Must remain a superset of the metric bank's own
@@ -1058,31 +1077,46 @@ def _check_evidence_item(record, item, where, errors) -> None:
             errors.append(f"{where}: `at` must be the YYYY-MM-DD period end "
                           "of the reading being cited.")
 
-    has_cmp, has_thr = "comparator" in item, "threshold" in item
-    if has_cmp != has_thr:
-        errors.append(f"{where}: `comparator` and `threshold` come together "
-                      "or not at all — an item with neither is an "
-                      "observation, which is a fine thing to cite.")
-    elif has_cmp:
-        if item["comparator"] not in COMPARATORS:
-            errors.append(f"{where}: `comparator` must be one of "
-                          f"{', '.join(COMPARATORS)}.")
-        if not _is_scalar(item["threshold"]):
-            errors.append(f"{where}: `threshold` must be a number, a "
-                          "YYYY-MM-DD date, true/false, or text.")
+    # A limit is either stated or cited, and the two are mutually exclusive.
+    # Supplying both is what let a strategy attribute any number at all to a
+    # setting: "at most your position cap of 5" while the cap held 20, with
+    # nothing checking. That is the misquote the evidence split exists to
+    # prevent, at the one place the split had a hole — so it is closed the
+    # way principle 14 asks, by making the pair unrepresentable rather than
+    # by comparing the two and complaining.
+    has_cmp = "comparator" in item
+    limits = [k for k in ("threshold", "threshold_from") if k in item]
+    if has_cmp and len(limits) != 1:
+        errors.append(
+            f"{where}: a `comparator` needs exactly one of `threshold` (a "
+            "figure the strategy states outright) or `threshold_from` (the "
+            "id of one of its own settings, which the host reads for "
+            f"itself). It carries {_names(limits) or 'neither'}."
+            + (" Naming the setting AND supplying the number is how a limit "
+               "gets attributed to a setting that does not hold it — drop "
+               "the `threshold` and the host will read the setting."
+               if len(limits) == 2 else ""))
+    elif not has_cmp and limits:
+        errors.append(
+            f"{where} carries {_names(limits)} with no `comparator` saying "
+            "what the limit is. An item with neither is an observation, "
+            "which is a fine thing to cite.")
+    if has_cmp and item["comparator"] not in COMPARATORS:
+        errors.append(f"{where}: `comparator` must be one of "
+                      f"{', '.join(COMPARATORS)}.")
+    if "threshold" in item and not _is_scalar(item["threshold"]):
+        errors.append(f"{where}: `threshold` must be a number, a "
+                      "YYYY-MM-DD date, true/false, or text.")
     if "threshold_from" in item:
-        if not has_thr:
-            errors.append(f"{where}: `threshold_from` says where a threshold "
-                          "came from, so it needs a `threshold`.")
-        else:
-            known = {f["id"] for f in record.get("values", [])} \
-                | {f["id"] for f in record.get("inputs", [])}
-            if item["threshold_from"] not in known:
-                errors.append(
-                    f'{where}: `threshold_from` names "'
-                    f'{item["threshold_from"]}", which this strategy '
-                    "declares as neither a value nor an input. It exists so "
-                    "the screen can say whose limit this is and link to it.")
+        known = {f["id"] for f in record.get("values", [])} \
+            | {f["id"] for f in record.get("inputs", [])}
+        if item["threshold_from"] not in known:
+            errors.append(
+                f'{where}: `threshold_from` names "'
+                f'{item["threshold_from"]}", which this strategy declares as '
+                "neither a value nor an input. The host reads the limit out "
+                "of the setting you name, so it has to be one this strategy "
+                "owns.")
 
 
 def validate_decision(record: dict, decision) -> list[str]:
@@ -1236,6 +1270,26 @@ def _fact_observation(ctx, item, where, errors):
                        or "the host cannot report this figure", "fact")
 
 
+def _declared_unit(spec) -> str:
+    """How a declared setting renders. Its own `unit` where it named one from
+    the host's list, and otherwise whatever its type can honestly claim."""
+    if spec.get("unit") in EVIDENCE_UNITS:
+        return spec["unit"]
+    return ("yes_no" if spec["type"] == "boolean"
+            else "text" if spec["type"] == "text" else "none")
+
+
+def _declared_spec(record, fid):
+    """(kind, spec) for a declared setting named by id, or (None, None). Ids
+    are unique across inputs and values, so one lookup cannot be ambiguous."""
+    for kind in ("value", "input"):
+        spec = next((f for f in record.get(kind + "s", [])
+                     if f["id"] == fid), None)
+        if spec is not None:
+            return kind, spec
+    return None, None
+
+
 def _declared_observation(record, ctx, item, subject, where, errors):
     """An input or a declared value, cited by id. Its label and unit come
     from the declaration, so a setting always reads on screen the way its
@@ -1247,11 +1301,8 @@ def _declared_observation(record, ctx, item, subject, where, errors):
         errors.append(f'{where} cites the {subject} "{fid}", which this '
                       f"strategy does not declare.")
         return None, None
-    unit = spec.get("unit") if spec.get("unit") in EVIDENCE_UNITS else (
-        "yes_no" if spec["type"] == "boolean"
-        else "text" if spec["type"] == "text" else "none")
     subject_view = {"kind": subject, "id": fid, "label": spec["label"],
-                    "unit": unit, "explain": spec["explain"]}
+                    "unit": _declared_unit(spec), "explain": spec["explain"]}
     pool = ctx.get("values" if subject == "value" else "inputs") or {}
     if fid not in pool or pool[fid] is None:
         return subject_view, _unobserved(
@@ -1259,23 +1310,28 @@ def _declared_observation(record, ctx, item, subject, where, errors):
     return subject_view, _observed(pool[fid], subject)
 
 
-def _outcome(observation, item, where, errors):
+def _outcome(observation, test, where, errors):
     """pass, fail, unknown, or noted. Derived, never claimed: the strategy
-    chose the question, and arithmetic is not an opinion. An absent value
-    is `unknown` and can never come out as success."""
-    if "comparator" not in item:
+    chose the question, and arithmetic is not an opinion.
+
+    Either side of the comparison can be missing and neither missing side is
+    ever success. An absent figure is `unknown`, and so is a limit the host
+    could not read out of the setting it was told to read — a test whose
+    limit nobody has supplied has not been passed, it has not been run.
+    """
+    if test is None:
         return "noted"
-    if observation["status"] != "known":
+    if test["absent"] is not None or observation["status"] != "known":
         return "unknown"
-    actual, threshold = observation["value"], item["threshold"]
-    cmp_ = COMPARATORS[item["comparator"]]
+    actual, threshold = observation["value"], test["threshold"]
+    cmp_ = COMPARATORS[test["comparator"]]
     if _kind_of(actual) != _kind_of(threshold):
         errors.append(f"{where} compares {_kind_of(actual)} against "
                       f"{_kind_of(threshold)}; the two have to be the same "
                       "kind of thing.")
         return None
     if cmp_["numeric_only"] and _kind_of(actual) not in ("number", "date"):
-        errors.append(f'{where}: "{item["comparator"]}" only means something '
+        errors.append(f'{where}: "{test["comparator"]}" only means something '
                       "for numbers and dates.")
         return None
     return "pass" if cmp_["fn"](actual, threshold) else "fail"
@@ -1324,15 +1380,8 @@ def resolve_evidence(record: dict, ctx: dict, items: list):
         if view is None or observation is None:
             continue
 
-        test = None
-        if "comparator" in item:
-            test = {"comparator": item["comparator"],
-                    "phrase": COMPARATORS[item["comparator"]]["phrase"]
-                    if item["comparator"] in COMPARATORS else None,
-                    "threshold": item["threshold"],
-                    "threshold_from": _threshold_source(
-                        record, item.get("threshold_from"))}
-        outcome = _outcome(observation, item, where, errors)
+        test = _test(record, ctx, item)
+        outcome = _outcome(observation, test, where, errors)
         if outcome is None:
             continue
         rendered.append({"subject": view, "observed": observation,
@@ -1340,18 +1389,52 @@ def resolve_evidence(record: dict, ctx: dict, items: list):
     return rendered, errors
 
 
-def _threshold_source(record, fid):
-    """Where a threshold came from, so a screen can say "your limit" and
-    link to the setting that holds it — and so analytics can ask whether
-    overriding that particular rule keeps working out."""
-    if fid is None:
+def _test(record, ctx, item):
+    """What the strategy required, with the limit resolved by the host.
+
+    A limit is either stated by the strategy or read out of one of its own
+    settings, never both — the declaration refuses the pair. Where it is
+    cited, the number comes from this journal's resolved settings and not
+    from the strategy, for the same reason nothing else in an evidence item
+    does: a figure the strategy restates is a figure it can restate wrongly,
+    and "at most your position cap of 5" over a cap holding 20 is a sentence
+    the screen has no way to catch. The strategy owns the question — which
+    setting, which direction. The host owns the number.
+
+    `threshold_from` carries the setting's own label and unit so the screen
+    can say whose limit it is and render it the way its author named it,
+    rather than in whatever unit the thing being measured happens to use.
+
+    `absent` is the limit's own missing-reason: an optional input nobody
+    answered sets no limit, and a test with no limit is unknown rather than
+    passed. Where the limit is stated it is never absent.
+    """
+    if "comparator" not in item:
         return None
-    for kind in ("value", "input"):
-        spec = next((f for f in record.get(kind + "s", [])
-                     if f["id"] == fid), None)
-        if spec:
-            return {"kind": kind, "id": fid, "label": spec["label"]}
-    return None
+    phrase = (COMPARATORS[item["comparator"]]["phrase"]
+              if item["comparator"] in COMPARATORS else None)
+    if "threshold_from" not in item:
+        return {"comparator": item["comparator"], "phrase": phrase,
+                "threshold": item.get("threshold"), "threshold_from": None,
+                "absent": None}
+
+    fid = item["threshold_from"]
+    kind, spec = _declared_spec(record, fid)
+    if spec is None:                       # refused by validate_decision
+        return {"comparator": item["comparator"], "phrase": phrase,
+                "threshold": None, "threshold_from": None,
+                "absent": f'"{fid}" is not a setting this strategy declares, '
+                          "so there is no limit to read"}
+    source = {"kind": kind, "id": fid, "label": spec["label"],
+              "unit": _declared_unit(spec)}
+    pool = (ctx.get("values") if kind == "value" else ctx.get("inputs")) or {}
+    if fid not in pool or pool[fid] is None:
+        return {"comparator": item["comparator"], "phrase": phrase,
+                "threshold": None, "threshold_from": source,
+                "absent": f'"{spec["label"]}" has no answer in this journal, '
+                          "so the limit it sets cannot be read"}
+    return {"comparator": item["comparator"], "phrase": phrase,
+            "threshold": pool[fid], "threshold_from": source, "absent": None}
 
 
 _bank_cache: dict = {}

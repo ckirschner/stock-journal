@@ -8,7 +8,7 @@ STRATEGY = {
     "summary": "A test fixture that always stages a tiny commit. It is not "
                "investment logic.",
     "version": 2,
-    "contract": 3,
+    "contract": 4,
     "changelog": {
         1: "First version.",
         2: "Second version, to prove multi-entry changelogs load.",
@@ -48,10 +48,10 @@ def decide(ctx):
                        "unconditionally, by construction.",
             "evidence": [
                 # A held position's weight against the user's own target —
-                # the case that proves a threshold can cite where it came
-                # from, so the screen can say whose limit it is.
+                # the case that proves a limit is NAMED rather than restated,
+                # so the screen can say whose limit it is and the number
+                # cannot disagree with the setting it is attributed to.
                 {"fact": "position.weight", "comparator": "at_most",
-                 "threshold": ctx["inputs"]["target-weight"],
                  "threshold_from": "target-weight"},
                 {"input": "target-weight"},
                 {"label": "This tranche", "unit": "percent",

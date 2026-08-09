@@ -185,6 +185,31 @@ for (const s of state.securities) {
                `a blocked verdict offers the "${fix}" screen that resolves it`]);
   }
 }
+// A limit the host read out of a named setting has to say WHOSE it is, on
+// screen, beside the number. That attribution is the whole reason the
+// strategy is not allowed to state the figure itself, and it is also what
+// the override scorecard groups by — an attribution that never renders is
+// one nobody can check against the setting it claims.
+let attributed = 0;
+for (const s of state.securities) {
+  for (const e of ((s._decision || {}).reason || {}).evidence || []) {
+    const src = (e.test || {}).threshold_from;
+    if (!src) continue;
+    attributed += 1;
+    must.push([`detail:${s.ticker}`, `— your ${src.label}`,
+               `${s.ticker}: the limit names the setting it was read from`]);
+  }
+}
+// Only owed where a strategy actually spoke. A journal blocked on setup is
+// the host saying it could not ask, and the host cites no limits at all —
+// demanding one there would fail the very screen that state exists for.
+const spoke = state.securities.some(
+  (s) => (s._decision || {}).produced_by === "strategy");
+if (spoke && !attributed) {
+  problems.push("no verdict in the harness cites a limit by the setting it "
+                + "came from — the attribution renders against nothing");
+}
+
 const held = state.securities.find((s) => s.bucket === "holdings");
 if (held) {
   must.push([`detail:${held.ticker}`, "Lot history",

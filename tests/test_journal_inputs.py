@@ -315,8 +315,8 @@ class TestSizeBindingWorksEndToEnd:
 
     def test_the_host_never_says_whether_a_weight_is_too_high(self, api):
         """The host reports the figure. Which side of a line it should sit
-        on is the strategy's opinion, and the threshold on the record has to
-        name the setting it came from."""
+        on is the strategy's opinion, and the limit on the record names the
+        setting it came from — and is read out of it, not supplied."""
         make(api)
         hold(api, cik=company())
         cited = {e["subject"]["id"]: e for e in
@@ -324,4 +324,21 @@ class TestSizeBindingWorksEndToEnd:
         test = cited["position.weight"]["test"]
         assert test["threshold_from"] == {"kind": "value", "id": "cap",
                                           "label": "Largest a position may "
-                                                   "get"}
+                                                   "get", "unit": "percent"}
+        assert test["threshold"] == journal()["strategy"]["values"]["cap"]
+
+    def test_retuning_the_setting_moves_the_limit_on_the_record(self, api):
+        """The attribution is only worth anything if it is true. Change the
+        cap and the limit the reason states changes with it, because the
+        strategy never held a copy of the number to go stale."""
+        make(api)
+        hold(api, cik=company())
+
+        def limit():
+            cited = {e["subject"]["id"]: e for e in
+                     decision_for(api.get_state())["reason"]["evidence"]}
+            return cited["position.weight"]["test"]["threshold"]
+
+        before = limit()
+        assert api.save_journal_settings(None, {"cap": str(before + 7)})["ok"]
+        assert limit() == before + 7

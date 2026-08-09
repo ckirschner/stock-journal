@@ -6,7 +6,7 @@ STRATEGY = {
     "name": "Inventing fixture",
     "summary": "Declares one state and returns another.",
     "version": 1,
-    "contract": 3,
+    "contract": 4,
     "changelog": {1: "First version."},
     "states": [
         {"id": "declared", "name": "Declared", "render": "hold",

@@ -24,7 +24,7 @@ STRATEGY = {
                "asks every awkward question a declaration can ask. It is "
                "not investment logic.",
     "version": 1,
-    "contract": 3,
+    "contract": 4,
     "changelog": {
         1: "First version: sizes against account weight and a cap.",
     },
@@ -123,9 +123,12 @@ def decide(ctx):
                     [{"input": "stance"}]),
             }
         reserve = ctx["inputs"].get("reserve")
-        evidence = [cash_cite if reserve is None else
-                    {"fact": "portfolio.cash", "comparator": "at_least",
-                     "threshold": float(reserve), "threshold_from": "reserve"},
+        # The limit is named, never restated: the host reads "reserve" out of
+        # this journal's own answers. Cited unconditionally, because a
+        # reserve nobody answered is a limit the host reports as unset rather
+        # than a test that quietly disappears from the reason.
+        evidence = [{"fact": "portfolio.cash", "comparator": "at_least",
+                     "threshold_from": "reserve"},
                     cap_cite]
         first = ctx["inputs"].get("first-buy")
         if first is not None:
@@ -154,7 +157,7 @@ def decide(ctx):
 
     weight = position["weight"]
     evidence = [{"fact": "position.weight", "comparator": "at_most",
-                 "threshold": cap, "threshold_from": "cap"},
+                 "threshold_from": "cap"},
                 {"fact": "portfolio.account_value"},
                 {"fact": "position.opened"}]
     if weight["status"] != "known":

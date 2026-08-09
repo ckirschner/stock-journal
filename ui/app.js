@@ -588,16 +588,31 @@ function evidenceRow(item, i) {
     ? `<b>${esc(fmtSubject(subj, obs.value))}</b>`
     : `<span class="chip blank">not known</span>`;
 
+  /* The limit, and whose it is. Where the strategy named one of its own
+     settings the host read the number out of that setting — so it renders in
+     the SETTING's unit, not in the unit of the thing being measured: a
+     dollar reserve under a percent measure would otherwise read as a
+     percentage. Older records carry no unit on the source and fall back to
+     the subject's, which is what they were rendered with when frozen. */
   let test = "";
   if (item.test) {
     const t = item.test;
-    const thr = esc(fmtSubject(subj, t.threshold));
-    const from = t.threshold_from
-      ? ` <span class="dim">— your ${esc(t.threshold_from.label)}</span>` : "";
+    const src = t.threshold_from;
+    const thr = t.absent
+      ? '<span class="chip blank">not set</span>'
+      : esc(src && src.unit ? fmtUnit(t.threshold, src.unit)
+                            : fmtSubject(subj, t.threshold));
+    const from = src
+      ? ` <span class="dim">— your ${esc(src.label)}</span>` : "";
     test = ` <span class="dim">${esc(t.phrase)}</span> ${thr}${from}`;
   }
   const at = subj.at ? ` <span class="dim">as at ${esc(subj.at)}</span>` : "";
   const why = !known ? `<div class="greynote">${esc(obs.reason)}</div>` : "";
+  /* A limit nobody supplied is its own kind of absence, and a different one
+     from a figure nobody could compute. Both can be true at once, and both
+     say so — the test did not fail, it never ran. */
+  const noLimit = (item.test && item.test.absent)
+    ? `<div class="greynote">${esc(item.test.absent)}</div>` : "";
   const prov = (obs.provenance || []).map((p) => `<div class="greynote">${esc(p)}</div>`).join("");
   const warn = cautionLines(obs.cautions);
 
@@ -616,7 +631,7 @@ function evidenceRow(item, i) {
          : "A figure the strategy worked out itself"}</span></div>` : "";
 
   return `<div class="srow"><div class="sname">${esc(subj.label)}${at}${tip}</div>
-    <div class="scond">${val}${test}${why}${prov}${warn}${tipBox}</div>
+    <div class="scond">${val}${test}${why}${noLimit}${prov}${warn}${tipBox}</div>
     <div class="sstate"><span class="chip ${cls}">${esc(word)}</span></div></div>`;
 }
 

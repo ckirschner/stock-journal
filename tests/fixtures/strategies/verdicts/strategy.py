@@ -14,7 +14,7 @@ STRATEGY = {
                "reaches a different state either side of it. It is not "
                "investment logic.",
     "version": 1,
-    "contract": 3,
+    "contract": 4,
     "changelog": {1: "First version: reads free cash flow against a floor."},
     "states": [
         {"id": "say-yes", "name": "Commit", "render": "commit",
@@ -51,7 +51,7 @@ def decide(ctx):
         }
     value = current["value"]
     cite = {"measure": "fcf_ttm", "comparator": "at_least",
-            "threshold": floor, "threshold_from": "cash-floor"}
+            "threshold_from": "cash-floor"}
     if value >= floor:
         return {
             "state": "say-yes",

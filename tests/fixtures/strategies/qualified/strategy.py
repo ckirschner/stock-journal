@@ -17,7 +17,7 @@ STRATEGY = {
     "summary": "A test fixture that reads market capitalization against a "
                "floor. It is not investment logic.",
     "version": 1,
-    "contract": 3,
+    "contract": 4,
     "changelog": {1: "First version."},
     "states": [
         {"id": "big-enough", "name": "Big enough", "render": "commit",
