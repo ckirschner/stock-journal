@@ -69,6 +69,17 @@ label and unit, whether it was absent and why, and how the comparison came
 out. So a strategy can never misquote the host's own numbers — it never
 quotes them at all — and can never claim a pass on a value that was absent.
 
+That extends to the limits themselves. A rule's limit is either a number the
+strategy states outright or the name of one of its own settings, never both:
+where it names the setting, the host reads the number out of your journal.
+"At most your position cap" beside a figure that is not your position cap is
+not a sentence this program can produce, and it matters because the
+scorecard that asks whether overriding a rule keeps working out groups by
+exactly that attribution.
+
+A limit can be missing too. An answer you have not given sets no limit, and a
+test with no limit reads as *not run* — never as passed.
+
 ## What a journal tells its strategy
 
 Two kinds of thing, and the difference is where the default comes from.
@@ -88,11 +99,37 @@ only appears once another one is answered a particular way, and it can be
 bounded by another field — "the cash you keep back" can never exceed the cash
 you have.
 
+A question can apply under any of several answers — "the cash you keep back"
+means something whether you are building or trimming and nothing at all while
+you are paused.
+
 **Both are editable after the journal is created**, on one screen, and both
 are recorded. Changing a setting changes what the strategy demands, so it
 goes on the rule-change record and asks you to write down why. Changing an
 answer updates a fact, so it goes on its own dated record and asks for
 nothing — your cash balance moving is not a rule being retuned.
+
+### Your judgement, per security
+
+Some of what decides an investment is not in the filings: whether a moat
+holds for another decade, whether management told the truth when the news was
+bad, where the spare cash went and whether it was worth it. Those are
+questions the metric bank asks and **you** answer, on the security's own page,
+in prose with a pass or a fail.
+
+The question lives beside its definition, so everything you need in order to
+answer one — what it means, what a good answer looks for, where it misfires,
+whose idea it was — is on the page you answer it on. A strategy reads one
+exactly as it reads any other measure. You are only asked the questions your
+strategy actually reads for that security, and the journal records what you
+say as **your assessment**, never as something it worked out.
+
+The record is append-only and dated. Changing your mind adds an entry above
+the old one and both stay readable — which also means a purchase backdated to
+2024 sees the answer that was on record in 2024, and an assessment written
+before the holding you have now says so rather than passing itself off as
+current. Leaving a question unanswered is not a fail; the strategy is told it
+has no answer, and absence never reads as a pass.
 
 ### The account, and why it is derived
 
@@ -370,6 +407,8 @@ engine/                   no UI imports live here
   journals.py             the journal collection, the rule-change record and
                           the record of answers you changed
   bank.py                 the metric bank
+  judgements.py           the per-security questions no filing answers, on
+                          an append-only dated record
   portfolio.py            lot history, snapshots, the override log,
                           scorecards
   store.py                data paths and the two atomic primitives
@@ -404,6 +443,11 @@ Add an entry to `config/metric-bank.yaml` — id, label, unit, format,
 derivation and the plain-language explanation are all required; a bare number
 with no explanation is incomplete, not a follow-up ticket. The UI renders
 whatever the bank and the strategy hand it; there is no view code to change.
+
+A `qualitative` entry is one you answer rather than one the host computes: it
+carries the question instead of a derivation, and adding one adds it to the
+security pages of every journal whose strategy reads it — again with no view
+code to change.
 
 A bank entry does nothing until a strategy reads it. That is intended: a new
 measure shouldn't silently start scoring positions you opened before it
