@@ -198,6 +198,14 @@ so a purchase entered later but dated before the exit correctly means the
 position never closed at all, which no marker written at exit time could have
 known.
 
+**When a holding began is the period's first purchase, and a trim does not
+move it.** How long you have held something and how old the oldest share you
+still hold is are two questions, and they part company the day the oldest lot
+is sold down to nothing. They serve different rules — a multi-year holding
+discipline is about the position, a tax boundary is about a lot — so they get
+different answers rather than one name. Lot ages live on the lot list, each
+entry carrying its own date.
+
 Two figures deliberately are not per period. **Overrides are counted per
 purchase**, because one buy in a name can be compliant and the next an
 override. **Exits are grouped per sale**, because the reason is given at the

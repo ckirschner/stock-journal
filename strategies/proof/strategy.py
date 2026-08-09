@@ -20,7 +20,7 @@ STRATEGY = {
                "data both ways. It reads one measure and always holds; it "
                "is not investment logic and never will be.",
     "version": 2,
-    "contract": 2,
+    "contract": 3,
     "changelog": {
         1: "First version: reads free cash flow and the clock, and holds.",
         2: "Asks for free cash so the account figures can be proved end to "

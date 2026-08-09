@@ -69,6 +69,17 @@ def bought(ticker="ACME", shares=10, price=40.0, when="2026-01-01",
     return s
 
 
+def closing_sale(s):
+    """The sale that ended the most recent completed holding, read off the
+    period it closed — the same reader the app uses.
+
+    There used to be a `last_exit` that returned the most recent sale of any
+    kind, and these tests reached for it because they wanted "the exit". A
+    trim is a sale too, so the two part company exactly when it matters."""
+    closed = [c for c in portfolio.cycles(s) if not c["open"]]
+    return closed[-1]["sells"][-1]
+
+
 class TestFrozenSnapshot:
     def test_the_whole_decision_is_frozen_with_its_stamp(self):
         s = held()
@@ -151,7 +162,25 @@ class TestLotsAreTheposition:
         # oldest first: the 40.0 lot is gone, the 60.0 lot is what remains
         assert portfolio.cost_basis(s) == 60.0
         assert portfolio.bucket_of(s) == "holdings"
-        assert portfolio.opened_on(s) == "2026-03-01"
+
+    def test_trimming_the_oldest_lot_does_not_restart_the_holding(self):
+        """`opened_on` answers when this holding began, and a trim does not
+        begin one. The position has been held continuously since January; the
+        January *lot* being sold down to nothing is a fact about a lot, and
+        the lot list is where that lives.
+
+        The two used to be one name. They agree until the day they matter,
+        which is what made this worth pinning."""
+        s = bought(shares=10, price=40.0, when="2026-01-01")
+        portfolio.add_lot(s, decision("commit"), 10, 60.0, "2026-03-01")
+        portfolio.sell_lots(s, decision("reduce"), "Risk limit", 10, 100.0,
+                            "2026-06-01")
+        assert portfolio.opened_on(s) == "2026-01-01"
+        # the oldest share still held is newer, and says so on its own entry
+        assert [l["date"] for l in portfolio.open_lots(s) if l["open"]] == \
+            ["2026-03-01"]
+        # …and it is one value with the period, not a second agreeing one
+        assert portfolio.opened_on(s) == portfolio.open_cycle(s)["opened"]
 
     def test_a_sale_can_name_the_lots_it_drew_on(self):
         """Only the user knows what they told their broker. Oldest-first is
@@ -565,7 +594,7 @@ class TestHoldingPeriods:
         portfolio.sell_lots(s, decision("close"), "Hit valuation", 10, 20.0,
                             "2024-06-03")
         portfolio.add_lot(s, decision("commit"), 5, 0.0, "2024-09-01")
-        x = portfolio.since_sale(s, portfolio.last_exit(s), 25.0)
+        x = portfolio.since_sale(s, closing_sale(s), 25.0)
         assert x["pct"] is None and "recorded at nothing" in x["reason"]
         card = portfolio.exit_scorecard([s], lambda _: 25.0)
         assert card["Hit valuation"]["avg_after"] is None
@@ -610,7 +639,7 @@ class TestReturnSinceExit:
 
     def test_the_window_closes_at_the_re_purchase(self):
         s = rebought()
-        x = portfolio.since_sale(s, portfolio.last_exit(s), 44.0)
+        x = portfolio.since_sale(s, closing_sale(s), 44.0)
         assert x["until"] == "purchase"
         assert x["date"] == "2025-01-06" and x["price"] == 40.0
         # $20 out, $40 back in. Today's $44 is after they were holding again.
@@ -620,7 +649,7 @@ class TestReturnSinceExit:
         s = bought(shares=10, price=10.0, when="2024-01-02")
         portfolio.sell_lots(s, decision("close"), "Hit valuation", 10, 20.0,
                             "2024-06-03")
-        x = portfolio.since_sale(s, portfolio.last_exit(s), 44.0)
+        x = portfolio.since_sale(s, closing_sale(s), 44.0)
         assert x["until"] == "today" and x["date"] is None
         assert x["pct"] == 120.0
 
@@ -628,15 +657,15 @@ class TestReturnSinceExit:
         s = bought(shares=10, price=10.0, when="2024-01-02")
         portfolio.sell_lots(s, decision("close"), "Panic", 10, 20.0,
                             "2024-06-03")
-        x = portfolio.since_sale(s, portfolio.last_exit(s), None)
+        x = portfolio.since_sale(s, closing_sale(s), None)
         assert x["pct"] is None and x["reason"]
         assert x["until"] == "today"
 
     def test_a_closed_window_is_exact_even_with_no_price_at_all(self):
         """The re-entry price is a recorded fact, so a window that ended at
         one never depends on a fetch and never goes absent for want of it."""
-        x = portfolio.since_sale(rebought(), portfolio.last_exit(rebought()),
-                                 None)
+        s = rebought()
+        x = portfolio.since_sale(s, closing_sale(s), None)
         assert x["pct"] == 100.0 and x["until"] == "purchase"
 
     def test_a_purchase_before_the_sale_does_not_close_its_window(self):
@@ -644,7 +673,7 @@ class TestReturnSinceExit:
         portfolio.add_lot(s, decision("commit"), 10, 12.0, "2024-02-02")
         portfolio.sell_lots(s, decision("close"), "Panic", 20, 20.0,
                             "2024-06-03")
-        x = portfolio.since_sale(s, portfolio.last_exit(s), 30.0)
+        x = portfolio.since_sale(s, closing_sale(s), 30.0)
         assert x["until"] == "today" and x["pct"] == 50.0
 
     def test_the_exit_scorecard_windows_each_sale_and_says_how_many(self):

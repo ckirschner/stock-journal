@@ -116,6 +116,13 @@ def open_lots(security: dict, on_or_before=None) -> list:
     `remaining` zero, because "this was bought and then exited" is part of
     the record and a re-entry only reads against it if the earlier lot is
     still visible.
+
+    Per lot, and only per lot: this is the reader for "what is left of each
+    purchase", and every entry carries its own date, `remaining` and `open`.
+    Anything asking a question about a *holding* — when it began, what it
+    returned, whether it has ended — wants `cycles`, because the answer
+    depends on where the position touched nothing and that boundary is not
+    in this list.
     """
     remaining = {}
     buys = lots(security, "buy", on_or_before)
@@ -204,11 +211,26 @@ def cost_basis(security: dict, on_or_before=None):
 
 
 def opened_on(security: dict, on_or_before=None):
-    """The date of the oldest lot still open — how long this position has
-    been held, with a re-entry after a full exit counting from the re-entry
-    rather than from a lot that no longer exists."""
-    left = [l for l in open_lots(security, on_or_before) if l["open"]]
-    return left[0]["date"] if left else None
+    """When the holding you have now began: the first purchase of the open
+    period, or None when nothing is held.
+
+    It does not move when a lot is trimmed away. Two legitimate questions were
+    sharing this name — when this holding began, and how old the oldest share
+    still held is — and they part company the moment the oldest lot is sold
+    down to nothing. They answer different rules: a multi-year holding
+    discipline is about the position, a tax boundary is about a lot. The lot
+    ages are still there for anyone who wants them, on the lot list, each with
+    its own date.
+
+    A re-entry after a full exit counts from the re-entry, because that is
+    where the period it belongs to opened.
+
+    Read off the period rather than recomputed, so this and the date the
+    screens show for the same holding cannot drift apart — they are one value,
+    not two agreeing ones.
+    """
+    period = open_cycle(security, on_or_before)
+    return period["opened"] if period else None
 
 
 def bucket_of(security: dict) -> str:
@@ -217,19 +239,6 @@ def bucket_of(security: dict) -> str:
     if not (security.get("lots") or []):
         return "ideas"
     return "holdings" if is_held(security) else "previous"
-
-
-def last_exit(security: dict) -> dict | None:
-    """The most recent sale, whatever it was.
-
-    Not "the exit" — a trim is a sale too, and a name held twice has ended
-    twice. Anything asking what a *holding* returned or how it ended wants
-    `cycles`, whose closing sale is the one that took the position to
-    nothing. Reading this as the exit is how a position closed in two
-    tranches came to report the smaller tranche's return as the whole.
-    """
-    sales = lots(security, "sell")
-    return sales[-1] if sales else None
 
 
 def has_history(security: dict) -> bool:

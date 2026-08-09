@@ -326,7 +326,11 @@ class TestPositionAndPortfolio:
                          {"lot": "l2", "shares": 4}])])
         pos = build(sec)["position"]
         assert pos["shares"] == 6.0
-        assert pos["opened"] == "2025-03-01"     # the first lot is all gone
+        # The holding began in January and has never ended, so that is what a
+        # strategy binding on "held since" is told — the January *lot* being
+        # sold down to nothing is a fact about a lot, and each lot carries its
+        # own date and `open` for a rule that wants one.
+        assert pos["opened"] == "2025-01-01"
         assert [(l["date"], l["remaining"], l["open"]) for l in pos["lots"]] \
             == [("2025-01-01", 0.0, False), ("2025-03-01", 6.0, True)]
         assert pos["disposals"] == [{"date": "2025-06-01", "shares": 14.0}]

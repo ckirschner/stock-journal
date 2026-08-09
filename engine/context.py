@@ -61,6 +61,33 @@ Reading rules a strategy can rely on:
   never reaches into the past at all.
 - **Unknown keys may appear** in future contract versions; a strategy reads
   what it declares an interest in and ignores the rest.
+- **`position` is the holding you have now, except where it says otherwise.**
+  `held`, `shares`, `opened`, `market_value` and `weight` are all about the
+  current holding period — the run from the purchase that took the position
+  up from nothing to now. `opened` is that period's first purchase and does
+  not move when a lot is trimmed away: it answers when this holding began,
+  not how old the oldest surviving share is. A rule that wants lot ages reads
+  `lots`, where every entry carries its own date, `remaining` and `open`.
+  A re-entry after a full exit opens a new period, so `opened` counts from
+  the re-entry.
+- **`lots` and `disposals` are the security's whole record, not the current
+  holding's.** Every purchase this journal ever made in the name is in
+  `lots`, and every sale in `disposals`, including those belonging to a
+  holding that closed before the current one opened. That is deliberate: a
+  strategy asking "have I owned this before" has nowhere else to look. But it
+  means these two are scoped differently from everything beside them, so a
+  rule counting entries wants `[l for l in lots if l["open"]]` rather than
+  the length.
+
+  `disposals` cannot be narrowed that way, and that is a known gap rather
+  than a design: each entry carries only `date` and `shares`, so nothing on
+  it says which holding it ended. Two securities can arrive with identical
+  `lots`, `disposals` and `shares` and different `opened` — one closed out
+  and bought back the same day, one added and trimmed the same day — and no
+  rule reading `disposals` can tell them apart. Until an entry can say which
+  holding it belongs to, treat `disposals` as a fact about the security and
+  not about the position, and do not derive "what this holding has sold" from
+  it.
 - **Nothing here says what a position cost.** Cost basis is reporting and is
   kept out of the context entirely, so a rule that fires on the distance
   from your own purchase price cannot be written. See contract.HOST_FACTS.
@@ -401,7 +428,13 @@ def _weight(market_value, account_value) -> dict:
 
 def _position(security, today, as_of, account_value) -> dict:
     """The lot history as a strategy reads it: every acquisition with what
-    remains of it, every disposal, and not one figure about cost."""
+    remains of it, every disposal, and not one figure about cost.
+
+    `opened` is the current holding period's first purchase — when this
+    holding began — and is read off the period rather than recomputed here,
+    so what a strategy is told and what the screens show for the same holding
+    are one value rather than two that happen to agree.
+    """
     held_lots = portfolio.open_lots(security, today)
     shares = round(sum(l["remaining"] for l in held_lots), 8)
     held = shares > 0
