@@ -316,10 +316,18 @@ def _snapshot(decision, values, value_sources, price_seen, evaluation) -> dict:
         "metrics": copy.deepcopy(values or {}),
         "value_sources": copy.deepcopy(value_sources or {}),
         # What was SEEN: the effective price (hand-entered over fetched),
-        # with its source and date, not just the hand-entered field.
+        # with its source, its date and the instrument it belongs to — not
+        # just the hand-entered field.
+        #
+        # The symbol is here because a company can have several share classes
+        # at several prices, and a frozen record that says only "$470" cannot
+        # afterwards be told from one that should have said $705,000. This
+        # record is append-only and never recomputed, so anything it cannot
+        # say now it can never be asked later.
         "price": (price_seen or {}).get("value"),
         "price_source": (price_seen or {}).get("source"),
         "price_date": (price_seen or {}).get("date"),
+        "price_ticker": (price_seen or {}).get("ticker"),
         "evaluation": copy.deepcopy(evaluation),
     }
 

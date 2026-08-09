@@ -592,3 +592,24 @@ def test_since_sale_says_which_thing_ended_the_window():
     assert after["until"] == "today"
     assert case["reason_mentions"] in after["reason"], after["reason"]
     assert case["must_not_mention"] not in after["reason"], after["reason"]
+
+
+def test_the_frozen_record_says_which_instrument_its_price_belonged_to():
+    """A record that says only "$470" cannot afterwards be told from one that
+    should have said $705,000. This record is append-only and never
+    recomputed, so anything it cannot say now it can never be asked later."""
+    history = HISTORIES["class-held-is-not-class-priced"]
+    secs = install(history)
+    sec = secs[0]
+    want = spec_of(history, "NWND.B")["expect"]["price"]
+
+    seen = dataview.price_view(sec, sec["cik"], sec["ticker"])
+    lot = portfolio.add_lot(sec, None, 20, 400.0, "2026-08-08",
+                            override_reason="testing the record",
+                            price_seen=seen)
+    snapshot = lot["snapshot"]
+    assert snapshot["price"] == want["value"]
+    assert snapshot["price_ticker"] == want["ticker"]
+    assert snapshot["price_date"] == want["date"]
+    wrong = spec_of(history, "NWND.B")["must_not_be"]["price_ticker"]
+    assert snapshot["price_ticker"] != wrong["value"], wrong["how"]
