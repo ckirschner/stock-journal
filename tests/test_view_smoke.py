@@ -233,6 +233,43 @@ def test_returns_and_scorecards_use_the_fetched_price(strategies):
     assert card["override"]["n"] + card["compliant"]["n"] == 5
 
 
+def test_the_screen_and_the_strategy_cannot_disagree_on_when_it_began(
+        strategies):
+    """The two panels that started this. The header reads the holding period
+    off the payload; a strategy binding on "held since" reads
+    `portfolio.opened_on`. They sat on one page saying different dates as
+    soon as the oldest lot was trimmed away, because one answered "when did
+    this holding begin" and the other "how old is the oldest share left".
+
+    Pinned through the real Api rather than at the engine seam, because the
+    disagreement was never visible from either side alone.
+    """
+    _state(strategies)
+    api = app_mod.Api()
+    # Bought in January, added to in March, then trimmed by exactly the first
+    # lot — oldest shares go first, so that lot is gone and the holding is
+    # not. The shape that pulled the two answers apart.
+    api.add_security("TRIM", "Trimwell Products")
+    assert api.save_metrics("TRIM", {}, 20.0)["ok"]
+    assert api.open_position("TRIM", 10, 10.0, "2026-01-05", "a reason")["ok"]
+    assert api.open_position("TRIM", 10, 12.0, "2026-03-05", "a reason")["ok"]
+    assert api.sell_shares("TRIM", "Risk limit", 18.0, "2026-05-05", 10)["ok"]
+
+    s = [x for x in api.get_state()["securities"] if x["ticker"] == "TRIM"][0]
+    assert s["bucket"] == "holdings" and s["_shares"] == 10.0
+    open_period = [c for c in s["_cycles"] if c["open"]][0]
+    assert [l["date"] for l in s["_lots"] if l["open"]] == ["2026-03-05"], \
+        "this test needs the oldest lot trimmed away and the holding intact"
+
+    # The screen reads the period; the strategy is handed position.opened.
+    # One value, or the page contradicts itself.
+    cited = {e["subject"]["id"]: e
+             for e in s["_decision"]["reason"]["evidence"]}
+    held_since = cited["position.opened"]["observed"]
+    assert held_since["status"] == "known", held_since
+    assert held_since["value"] == open_period["opened"] == "2026-01-05"
+
+
 def test_the_payload_scores_the_holding_you_have_not_the_ticker(strategies):
     """The regression this whole change exists to stop, pinned on the value
     rather than on its presence.

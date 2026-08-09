@@ -44,9 +44,16 @@ from datetime import date
 from types import MappingProxyType
 
 # The version of this contract. A strategy declares the version it speaks;
-# the host refuses any other. Bumped only when the shape of what a strategy
-# receives or returns changes incompatibly — adding a key to the context is
-# not a bump, because strategies must tolerate keys they don't read.
+# the host refuses any other.
+#
+# Bumped whenever a strategy written against the previous version would read
+# what it receives *wrongly and silently*. That is the test, not whether the
+# shape changed: a key that disappears raises, and a raise gets noticed, but a
+# key that keeps its name and its type while answering a different question
+# produces a plausible wrong verdict with nothing on screen saying so. A
+# meaning change is the quietest break there is, so it is the one this
+# mechanism most exists to refuse. Adding a key is still not a bump, because
+# strategies must tolerate keys they don't read.
 #
 # 2: `position` gained real lot history and lost every cost figure. A v1
 #    strategy was written when `lots` held exactly one synthesised buy and
@@ -54,7 +61,15 @@ from types import MappingProxyType
 #    that reading is wrong and wrong *quietly*, which is the case the
 #    version exists to refuse. Cost basis left the context entirely — see
 #    HOST_FACTS.
-CONTRACT_VERSION = 2
+# 3: `position.opened` means the holding period's first purchase and no
+#    longer moves when a lot is trimmed away. It used to be the date of the
+#    oldest lot still open, so a v2 strategy holding a position since January
+#    whose January lot was trimmed in June was told the position began in
+#    March. Same key, same type, same label — a rule counting years held
+#    would simply have been wrong, and would have looked right. Two questions
+#    were sharing one name; lot ages remain on `position.lots`, each entry
+#    carrying its own date.
+CONTRACT_VERSION = 3
 
 # A strategy may declare at most this many states. The cap is deliberate:
 # states are user-facing vocabulary, and complexity must not creep back in

@@ -406,7 +406,11 @@ class Api:
             s["_sales"] = portfolio.lots(s, "sell")
             s["_shares"] = portfolio.shares_held(s)
             s["_cost_basis"] = portfolio.cost_basis(s)
-            s["_opened"] = portfolio.opened_on(s)
+            # No separate "opened" here. The screens read it off the holding
+            # period below, which is the same value `opened_on` gives a
+            # strategy — one figure with one derivation, rather than two that
+            # have to be kept agreeing. Two panels disagreeing about when a
+            # holding began is what put this on the board.
             s["_decision"] = self._decide(s, securities, journal, record,
                                           chain)
             # What the strategy read for THIS security, plus anything already
