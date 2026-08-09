@@ -631,16 +631,15 @@ function evidenceRow(item, i) {
          : subj.kind === "fact" ? "A figure the journal reports about your position"
          : "A figure the strategy worked out itself"}</span></div>` : "";
 
-  /* A verdict resting on a question nobody has answered has to say where to
-     answer it. Without this a strategy that waits on three qualitative reads
-     is a dead end: the reason names them and the page offers nothing to
-     click. The host decides which subjects are judgements, from the bank, so
-     the view never learns which measures exist. */
-  const answer = (subj.kind === "judgement" && !known && openTicker)
-    ? ` <button class="btn" data-act="judge" data-jid="${esc(subj.id)}">Assess this</button>`
-    : "";
-
-  return `<div class="srow"><div class="sname">${esc(subj.label)}${at}${tip}${answer}</div>
+  /* No action here, deliberately. A verdict waiting on a question nobody
+     answered must not be a dead end — but the way in belongs to the
+     Judgements section on the same page, which renders a button for every
+     question the strategy cites, answered or not. A second button beside
+     the evidence would be the same action twice on one screen, and this row
+     is also what renders a decision frozen onto a lot years ago: offering
+     to answer that reads as though answering would change what an
+     append-only record says. */
+  return `<div class="srow"><div class="sname">${esc(subj.label)}${at}${tip}</div>
     <div class="scond">${val}${test}${why}${noLimit}${prov}${warn}${tipBox}</div>
     <div class="sstate"><span class="chip ${cls}">${esc(word)}</span></div></div>`;
 }

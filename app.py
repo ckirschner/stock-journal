@@ -363,13 +363,20 @@ class Api:
         for eid, q in judgements.questions().items():
             if eid not in asked and eid not in answered:
                 continue
-            standing = judgements.in_force(security, eid)
+            # Where the host cannot serve the question at all, it reports no
+            # answer — even if one is on record. The strategy was told the
+            # measure is absent, and a screen showing "Passed" beside a
+            # verdict that says "can't say" is the two halves of the program
+            # disagreeing about the same fact in front of the reader. The
+            # record itself is untouched and still travels in `history`.
+            standing = ({} if q["unsupported"]
+                        else judgements.in_force(security, eid) or {})
             out.append({
                 **q,
                 "cited": eid in asked,
-                "mark": (standing or {}).get("mark"),
-                "reasoning": (standing or {}).get("reasoning"),
-                "recorded": (standing or {}).get("recorded"),
+                "mark": standing.get("mark"),
+                "reasoning": standing.get("reasoning"),
+                "recorded": standing.get("recorded"),
                 "cautions": list((seen.get(eid) or {}).get("cautions") or []),
                 "history": judgements.history(security, eid),
             })

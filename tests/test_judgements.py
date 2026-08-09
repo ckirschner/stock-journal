@@ -95,6 +95,29 @@ class TestTheQuestionLivesWithItsDefinition:
             assert q["plain"], f"{eid} has no plain-language explanation"
             assert q["marks"] == list(judgements.MARKS)
 
+    def test_a_question_the_host_cannot_serve_shows_no_answer_either(self,
+                                                                     api,
+                                                                     monkeypatch):
+        """The screen and the strategy must not disagree about the same
+        fact. Where the host cannot serve the question, the strategy is told
+        the measure is absent — so the page reports no mark either, rather
+        than a confident "Passed" beside a verdict that says it cannot say.
+        The record itself is untouched and still readable."""
+        hold(api)
+        assert api.record_judgement("SYN", MOAT, "pass", "It holds.")
+        monkeypatch.setattr(judgements, "unanswerable",
+                            lambda entry: "this journal cannot record that")
+
+        row = next(j for j in held(api.get_state())["_judgements"]
+                   if j["id"] == MOAT)
+        assert row["unsupported"]
+        assert (row["mark"], row["reasoning"], row["recorded"]) == \
+            (None, None, None)
+        assert cited(api.get_state())[MOAT]["observed"]["status"] == "absent"
+        # …and nothing was destroyed: the assessment is still on the record.
+        assert [a["mark"] for a in row["history"]] == ["pass"]
+        assert security()["judgements"][0]["reasoning"] == "It holds."
+
     def test_a_mark_shape_this_host_cannot_store_is_refused_not_guessed(self):
         entry = {"id": "scored", "label": "Scored",
                  "response": {"marks": ["one", "two", "three"]}}
@@ -246,6 +269,26 @@ class TestTheRecordIsAppendOnly:
         assert view["mark"] == "fail"
         assert [a["mark"] for a in view["history"]] == ["fail", "pass"]
 
+    def test_the_whole_record_survives_an_export_and_an_import(self, api,
+                                                               tmp_path):
+        """Your own reasoning, written down once and worth reading years
+        later, has to be in a backup — including the assessments you
+        changed your mind about, which is the half a summary would drop."""
+        from engine import backup
+        hold(api)
+        assert api.record_judgement("SYN", MOAT, "fail", "It broke.")
+        assert api.record_judgement("SYN", MOAT, "pass", "Rebuilt since.")
+        before = security()["judgements"]
+
+        path = backup.export_bundle(tmp_path)
+        import json
+        bundle = json.loads(path.read_text())
+        [sec] = bundle["journals"][0]["securities"]
+        assert sec["judgements"] == before
+
+        backup.import_bundle(path)
+        assert security()["judgements"] == before
+
     def test_a_frozen_purchase_keeps_the_assessment_it_was_made_on(self, api):
         """The snapshot is written once and never recomputed, so an
         assessment revised afterwards must not reach back into it."""
@@ -304,24 +347,56 @@ class TestTheClockGovernsIt:
         assert any("It broke." in p for p in item["observed"]["provenance"])
         assert cited(api.get_state())[MOAT]["observed"]["value"] is True
 
-    def test_an_assessment_older_than_this_holding_says_so(self, api):
+    @staticmethod
+    def _assessed_on(day, mark="pass", reasoning="It held."):
+        doc = journal()
+        s = doc["securities"][0]
+        log = s.setdefault("judgements", [])
+        log.append({"seq": len(log) + 1, "id": MOAT, "mark": mark,
+                    "reasoning": reasoning,
+                    "recorded": f"{day}T00:00:00+00:00"})
+        journals.save(doc)
+
+    def test_an_assessment_from_a_previous_holding_says_so(self, api):
         """Buying a name back does not renew a judgement written about the
         last time you owned it. It is still served — the user's own opinion
         is the best the journal has — but never as though it were written
         about the holding in front of you."""
-        hold(api, when="2026-01-05")
-        s = security()
-        s.setdefault("judgements", []).append(
-            {"seq": 1, "id": MOAT, "mark": "pass", "reasoning": "It held.",
-             "recorded": "2025-06-01T00:00:00+00:00"})
-        doc = journal()
-        doc["securities"][0] = s
-        journals.save(doc)
+        hold(api, when="2025-01-05")
+        self._assessed_on("2025-06-01")
+        assert api.sell_shares("SYN", "Hit valuation", 22.0, "2025-09-01")["ok"]
+        assert api.open_position("SYN", 8, 19.0, "2026-01-05", "back in")["ok"]
 
         obs = cited(api.get_state())[MOAT]["observed"]
         assert obs["value"] is True
-        assert any("before the holding you have now began on 2026-01-05" in c
-                   for c in obs["cautions"])
+        assert any("closed on 2025-09-01" in c for c in obs["cautions"])
+
+    def test_assessing_before_you_buy_is_never_called_stale(self, api):
+        """The whole discipline is committing to the criteria while calm,
+        which means writing the assessment before the purchase. Keying
+        staleness on "written before this holding opened" would put a
+        warning on every correctly-formed assessment there is — and a
+        caution that fires when nothing is wrong is one nobody reads."""
+        api.add_security("SYN", "Synthetic Co")
+        doc = journal()
+        doc["securities"][0]["cik"] = company()
+        journals.save(doc)
+        self._assessed_on("2026-01-01")
+        assert api.open_position("SYN", 10, 15.0, "2026-01-05", "in")["ok"]
+
+        assert cited(api.get_state())[MOAT]["observed"]["cautions"] == []
+
+    def test_an_assessment_made_while_flat_belongs_to_the_buy_after_it(self,
+                                                                       api):
+        """Written between two holdings — sold out, thinking about buying
+        back. That is about the holding that followed it, not the one before.
+        """
+        hold(api, when="2025-01-05")
+        assert api.sell_shares("SYN", "Hit valuation", 22.0, "2025-09-01")["ok"]
+        self._assessed_on("2025-11-01")
+        assert api.open_position("SYN", 8, 19.0, "2026-01-05", "back in")["ok"]
+
+        assert cited(api.get_state())[MOAT]["observed"]["cautions"] == []
 
     def test_an_assessment_inside_this_holding_is_not_qualified(self, api):
         hold(api, when="2026-01-05")

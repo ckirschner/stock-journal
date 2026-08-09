@@ -65,9 +65,10 @@ MARKS = ("pass", "fail")
 # as success.
 _AS_VALUE = {"pass": True, "fail": False}
 
-_BEFORE_THIS_HOLDING = (
-    "this assessment was written on {when}, before the holding you have now "
-    "began on {opened} — it was written about a different decision")
+_BELONGS_TO_AN_EARLIER_HOLDING = (
+    "this assessment was written on {when}, while you still owned this from "
+    "an earlier holding that closed on {closed} — it was written about that "
+    "decision, not the one you hold now")
 
 
 def _stamp() -> str:
@@ -76,12 +77,28 @@ def _stamp() -> str:
 
 # -- what the bank asks -------------------------------------------------------
 
+_cache: dict = {}
+_cached_doc = None
+
+
 def _entries() -> dict:
-    """{entry id: plain entry} for every qualitative bank entry."""
+    """{entry id: plain entry} for every qualitative bank entry.
+
+    Held against the bank document itself rather than rebuilt per call:
+    `is_judgement` is asked once per stored value per security on every
+    render, and `load_bank` caches on the file's mtime and hands back the
+    same document until it moves — so an edit to the bank still takes
+    effect, and a render does not rescan sixty entries a hundred times.
+    """
+    global _cached_doc
     doc = bank_mod.load_bank()
-    return {str(e.get("id")): bank_mod.to_plain(e)
-            for e in (doc.get("entries") or [])
-            if str(e.get("kind") or "") == "qualitative"}
+    if doc is not _cached_doc:
+        _cached_doc = doc
+        _cache.clear()
+        _cache.update({str(e.get("id")): bank_mod.to_plain(e)
+                       for e in (doc.get("entries") or [])
+                       if str(e.get("kind") or "") == "qualitative"})
+    return _cache
 
 
 def unanswerable(entry: dict) -> str | None:
@@ -149,8 +166,32 @@ def in_force(security: dict, entry_id: str, as_of: str | None = None):
     return None
 
 
+def _last_exit(security: dict, today: str | None = None) -> str | None:
+    """When the holding *before* the current one ended, or None.
+
+    This is what makes an old assessment stale, and the current holding's
+    own start date is not. Writing your moat read the week before you buy is
+    the whole discipline — commit to the criteria while calm — so keying
+    staleness on "written before this holding opened" would put a warning on
+    every correctly-formed assessment there is. What is genuinely stale is
+    one written while you owned the name a previous time: you sold it, the
+    reasons you sold it are not in that assessment, and buying it back is a
+    different decision.
+
+    An assessment written in the gap — flat, between two holdings, deciding
+    whether to buy back — is about the holding that followed it, so it is
+    not stale either.
+    """
+    periods = portfolio.cycles(security, today)
+    if not periods or periods[-1].get("open") is not True:
+        return None
+    closed = [p["closed"] for p in periods[:-1] if p.get("closed")]
+    return max(closed) if closed else None
+
+
 def observation(security: dict, entry_id: str, entry: dict,
-                as_of: str | None = None, opened: str | None = None) -> dict:
+                as_of: str | None = None,
+                last_exit: str | None = None) -> dict:
     """One judgement as the context serves it: known with its mark, its
     reasoning and anything qualifying it, or absent with the reason."""
     unsupported = unanswerable(entry)
@@ -175,8 +216,9 @@ def observation(security: dict, entry_id: str, entry: dict,
     # you owned it, which is a different decision. It is not withheld — the
     # user's own opinion is the best the journal has — but it never passes
     # itself off as having been written about the holding in front of you.
-    if opened and when < str(opened):
-        cautions.append(_BEFORE_THIS_HOLDING.format(when=when, opened=opened))
+    if last_exit and when <= str(last_exit):
+        cautions.append(_BELONGS_TO_AN_EARLIER_HOLDING.format(
+            when=when, closed=last_exit))
     return {
         "status": "known",
         "value": _AS_VALUE[answer["mark"]],
@@ -191,12 +233,12 @@ def observations(security: dict, as_of: str | None = None,
                  today: str | None = None) -> dict:
     """{entry id: known-or-absent} for every qualitative bank entry.
 
-    `today` is the clock the holding period is read against, so a pinned
-    evaluation asks whether the assessment predates the holding *that day*
-    rather than the one open now.
+    `today` is the clock the holding history is read against, so a pinned
+    evaluation asks whether the assessment belonged to a holding that had
+    already closed *by that day* rather than by this one.
     """
-    opened = portfolio.opened_on(security, today)
-    return {eid: observation(security, eid, entry, as_of, opened)
+    last_exit = _last_exit(security, today)
+    return {eid: observation(security, eid, entry, as_of, last_exit)
             for eid, entry in _entries().items()}
 
 

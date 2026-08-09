@@ -290,6 +290,30 @@ for (const [n, what] of [[answered, "answered"], [unanswered, "unanswered"],
                   + "unexercised and would pass however broken it is");
   }
 }
+// Recorded history offers no actions. A lot's frozen decision renders
+// through the same row as the live one, and a purchase recorded in 2024
+// says what was unanswered THEN — a button inside it reads as though
+// answering would change what an append-only record says.
+const frozenJudged = state.securities.filter(
+  (s) => (s._lots || []).concat(s._sales || []).some(
+    (l) => ((((l.snapshot || {}).decision || {}).reason || {}).evidence || [])
+      .some((e) => (e.subject || {}).kind === "judgement")));
+if (spoke && !frozenJudged.length) {
+  problems.push("no lot in the payload froze a judgement citation, so "
+                + "nothing checks what a frozen judgement row offers");
+}
+for (const s of frozenJudged) {
+  const html = run(`(() => { const was = openTicker;`
+    + ` openTicker = ${JSON.stringify(s.ticker)};`
+    + ` const h = lotHistory(find(${JSON.stringify(s.ticker)}));`
+    + ` openTicker = was; return h; })()`);
+  if (String(html).includes("data-act=")) {
+    problems.push(`detail:${s.ticker}: the lot history offers an action, and `
+                  + "recorded history is not something to act on from "
+                  + "inside");
+  }
+}
+
 // The dialog that records one, on a question that has an answer already:
 // the prior assessment and the "this appends, it does not replace" wording
 // only render on that path.
