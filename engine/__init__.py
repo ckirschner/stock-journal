@@ -8,9 +8,11 @@ from .expected_value import EV_METHODS, EVError
 from .expected_value import compute as compute_ev
 from .portfolio import EXIT_REASONS
 from . import backup, migrate, portfolio, profile_history, profiles, store
+from . import contract, context, strategy_loader, strategy_values
 
 __all__ = [
     "condition_holds", "evaluate_buy", "evaluate_position",
     "EV_METHODS", "EXIT_REASONS", "compute_ev", "EVError",
     "backup", "migrate", "portfolio", "profile_history", "profiles", "store",
+    "contract", "context", "strategy_loader", "strategy_values",
 ]
