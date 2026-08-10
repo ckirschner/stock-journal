@@ -258,7 +258,21 @@ being made once for a whole file, and being silent about how far it reaches.
 A level with borrowed authority and homemade reasoning is the case worth
 being able to tell apart, and prose loses it first.
 
-`engine/contract.py` is the full specification and is written to be read.
+**`docs/WRITING-A-STRATEGY.md` is the reference**: what a bundle declares,
+what `decide` receives, what it must return, how evidence and groups work,
+which of the three version numbers moves when, what happens when a bundle
+fails to load or throws, and the things that cost the most time to get right.
+Its tables are generated from the host's own — a documented list that has
+gone stale is a failing test rather than a paragraph nobody re-reads.
+`engine/contract.py` is the specification itself and is written to be read.
+
+**`docs/example-strategy/` is a complete worked bundle** and the fastest way
+in: a two-tier rollup, one exit confirmed across consecutive filings, and one
+question no filing answers with a state that blocks until it is answered.
+It is deliberately not under `strategies/`, so the app never offers it and no
+journal can be created against its invented thresholds — copy the directory
+in to watch it run, and take it out again. It is loaded and exercised by the
+test suite from where it sits, so it cannot rot.
 
 A citation can also ask **how far a measure has moved since one of your own
 purchases**, rather than what it is now. The strategy names the measure, the
@@ -753,6 +767,14 @@ data.template/            one demonstration journal per strategy — invented
 tools/sample_kit.py       the shared machinery every sample is built with
 tools/make_sample.py      builds them by driving the real API, and refuses to
                           write one if a story stops being true
+tools/contract_reference.py
+                          regenerates the reference tables in the strategy
+                          documentation from the host's own tables
+docs/WRITING-A-STRATEGY.md
+                          the host/strategy contract, for someone writing one
+docs/example-strategy/    a complete worked bundle. Deliberately NOT under
+                          strategies/, so it never loads and no journal can
+                          be created against its invented numbers
 engine/                   no UI imports live here
   contract.py             the host/strategy boundary: what a strategy
                           declares, receives and must return

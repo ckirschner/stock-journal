@@ -1,0 +1,961 @@
+# Writing a strategy
+
+This is the reference for the host/strategy contract. It is for someone with
+`engine/contract.py` open in an editor, and it does not appear in the app —
+the program is built for people who will never write one of these, and a tab
+of developer documentation in it would be complexity charged to the wrong
+reader. What the app shows is the strategy a journal is actually stamped with:
+what it can say, what it asked you, what its settings are and every time they
+moved. That is a different document with a different audience.
+
+**Start with `docs/example-strategy/`.** It is a complete bundle demonstrating
+the three things that cost the most time here, and it is short enough to read
+in a sitting — about two hundred lines of declaration, two hundred of logic,
+and the rest comments explaining why each piece is shaped the way it is. That
+ratio is itself worth noticing: most of a strategy is saying what it means,
+not working anything out. Read §12 of this file before you write anything.
+
+Contents:
+
+1. [The shape of it](#1-the-shape-of-it)
+2. [The bundle](#2-the-bundle)
+3. [The declaration](#3-the-declaration)
+4. [Settings and answers](#4-settings-and-answers)
+5. [What `decide` receives](#5-what-decide-receives)
+6. [What `decide` must return](#6-what-decide-must-return)
+7. [Evidence](#7-evidence)
+8. [Groups, rollups, and the two checks](#8-groups-rollups-and-the-two-checks)
+9. [Versions, and when each one moves](#9-versions-and-when-each-one-moves)
+10. [When it goes wrong](#10-when-it-goes-wrong)
+11. [What a strategy may never do](#11-what-a-strategy-may-never-do)
+12. [The things that cost the most time](#12-the-things-that-cost-the-most-time)
+13. [Reference tables](#13-reference-tables)
+
+---
+
+## 1. The shape of it
+
+The host is an engine. Strategies are content.
+
+The host fetches filings and prices, computes measures, assembles periods,
+reconstructs any of it as of a past date, renders, records and reports. It
+holds no opinion about which strategy is correct, because the same host has to
+serve strategies that contradict each other.
+
+A strategy consumes what the host computed and produces one decision about one
+security. It holds all the opinions: which measures matter, in which direction,
+against what level, and what the answer means.
+
+**The boundary runs one way.** A strategy is strictly a consumer of what the
+host provides and a producer of decisions in the format the host defines. It
+never fetches, never reaches the network, never touches source data, never
+opens a file — not even its own — and never invents vocabulary. Not a state, not
+a render type, not a unit, not a comparator, not a destination for a blocked
+verdict. A strategy that needs something the host does not offer fails loudly
+and becomes a request against the host. It does not work around the gap.
+
+**A strategy cites, it never quotes.** Where a decision refers to a figure the
+host owns, it names the subject and lets the host resolve it. The strategy owns
+the question — which measure, which direction, which threshold. The host owns
+the answer — the value, its unit, whether it was absent and why, and whether
+the test was met. That split is the reason a strategy cannot misquote a number
+(it never states one), cannot claim a pass on a figure nobody could compute
+(absence resolves to `unknown`, never to success), and cannot attribute a level
+to a setting that does not hold it (naming the setting and supplying the number
+is refused — one or the other).
+
+Everything crossing the line is plain data: one dict in, one dict out. Nothing
+framework-shaped, no host objects, no live references into the journal.
+
+---
+
+## 2. The bundle
+
+A strategy is a directory:
+
+```
+strategies/<name>/
+  strategy.py     STRATEGY (the declaration) and decide(ctx) (the logic)
+  values.yaml     shipped defaults for the declared values, with a version
+  <reference>     any static data it ships — parsed by the host, never by it
+```
+
+**Discovered, not registered.** The host loads what it finds under
+`strategies/`. There is no central list to edit; adding a strategy means adding
+a directory.
+
+**Logic and declared values live apart, on purpose.** Logic is written in a
+real language because behaviour — conditionals, sequencing, anything depending
+on what else is true — cannot be expressed in a configuration format without
+inventing a language inside one. Declared values live in a YAML file beside it
+because a threshold means something on its own and belongs where it can be
+read, compared and changed without touching logic. That split follows the
+record: values are easy to retune, so they need a legible before-and-after;
+logic is not, and cannot have one.
+
+**Loading is defensive at every step.** A bundle that fails to import, declares
+itself badly, speaks the wrong contract version, moves its version without
+saying what changed, or ships defaults that do not match its declaration is
+*refused*: reported with a message naming the file, skipped, and never allowed
+to prevent another bundle from loading. Refused bundles are listed on the
+Strategy tab with their reasons. Nothing about a broken plugin raises — a
+broken plugin is a page fact, never a crashed application.
+
+**Importing runs the module's top level, and only that.** That is how the
+declaration is read. `decide` is never called at load, which is what lets the
+host build a setup screen and validate a journal before any decision is made.
+Do not do work at import time that a missing file or a network could break.
+
+**Two bundles claiming one id are both refused.** A journal is stamped with an
+id; guessing which claimant it meant would evaluate it under rules its author
+never chose.
+
+**Reference data.** A bundle may ship static data the host does not have — a
+sector map, a lookup table — as `.yaml`, `.yml` or `.json` files named in
+`STRATEGY["reference"]`. The host parses them at load and hands them back
+through `ctx["reference"]`, frozen and shared across every evaluation. That is
+what keeps a strategy from opening files itself. A declared reference file that
+is missing or unparseable refuses the whole bundle: a strategy reading half its
+lookup table produces plausible wrong answers, which is worse than not loading.
+
+---
+
+## 3. The declaration
+
+`STRATEGY` is a plain dict. Every key below is required except `inputs`,
+`values` and `reference`.
+
+| key | what it is |
+|---|---|
+| `id` | lowercase letters, digits and hyphens, starting with a letter. What a journal is stamped with, permanently. |
+| `name` | the user-facing name. |
+| `summary` | plain language: what this strategy *is*. Shown on the create-journal screen and on the Strategy tab. |
+| `version` | whole number ≥ 1. The version of the *logic*. See §9. |
+| `contract` | the contract version this bundle speaks. Anything but the current one is refused. |
+| `changelog` | `{version number: sentence}`. The declared `version` must have an entry, or the bundle is refused. |
+| `states` | every verdict this strategy can reach. |
+| `inputs` | what it needs from the user. Optional. |
+| `values` | numbers it has an opinion about. Optional. |
+| `reference` | file names it ships beside its code. Optional. |
+
+### States
+
+A state is the whole verdict as far as the user is concerned: a name, a
+description, and the render type that tells the host how to draw, sort, count
+and aggregate something whose meaning it does not know.
+
+```python
+{"id": "worth-buying", "render": "commit",
+ "name": "Worth buying",
+ "description": "Both tests this strategy will not bend have passed…"}
+```
+
+- `id` — lowercase letters, digits and hyphens. `host:` can never collide,
+  because the id alphabet has no colon in it.
+- `name` — what the user reads as the verdict.
+- `description` — plain language, and it is not optional. This is the text a
+  reader gets when they want to know what the verdict *means*.
+- `render` — one of the six host types. See the table in §13.
+- `fix` — **required on a `blocked` state, refused on any other.** Where the
+  answer is given. See below.
+
+There is a cap on how many states one strategy may declare (§13). It is
+deliberate: states are user-facing vocabulary, and complexity must not creep
+back in through the plugin door.
+
+**Declare only what you can reach.** A state nothing ever returns is vocabulary
+on the Strategy tab claiming the tool can say something it cannot. It is worth a
+test that walks every state. Conversely, *not* declaring a state is how a
+strategy says it does not believe in one: a strategy with no `reduce` state is
+saying it never trims, and that is legible on the screen in a way a declared
+state nothing reaches is not.
+
+### A blocked state must say where it is answered
+
+`blocked` means the tool will not produce a verdict until the user does
+something. A blocked verdict that does not say *where* that something is done
+is a dead end: the reader gets a sentence naming what is owed and has nothing
+to click, anywhere, with no way to find out what the author meant.
+
+So a blocked state names its way out from the host's own closed list, and the
+host renders the button. Two refusals enforce it, and they fire in different
+places on purpose:
+
+- **At load.** A `blocked` state with no `fix`, or a `fix` the host does not
+  have, refuses the bundle. That happens the first time the directory is
+  scanned — before a journal is ever stamped with it.
+- **At evaluation.** One destination is built out of the decision's own
+  citations: the questions under *Your judgement* are exactly the ones the
+  decision cited, because a question about one security cannot be declared on a
+  setup screen before there is a security to ask it about. So a verdict whose
+  `fix` is `judgement` and which cites no judgement is refused — otherwise the
+  button leads to an empty section, which is the same dead end one screen
+  further along and looks like it worked.
+
+Putting what is needed in `payload.needs` is **not** the same thing. Prose
+cannot be clicked and the host cannot read it. `needs` is the sentence; `fix`
+plus the citation is the way out.
+
+The list of destinations is in §13. Anything missing from it is a request
+against the host.
+
+---
+
+## 4. Settings and answers
+
+A strategy declares two kinds of thing the journal supplies. Getting the split
+wrong produces either a strategy that cannot ship or one that asks the user for
+something it should have an opinion about.
+
+### The test, and it has two axes
+
+**Can the strategy ship a sensible default? Does changing it move where a bar
+sits?** Either one makes it a value.
+
+| | ships a default? | moves a bar? | so it is |
+|---|---|---|---|
+| a position cap | yes | yes | a **value** |
+| a risk-free rate | no | yes | a **value** |
+| an account balance | no | no | an **input** |
+
+The risk-free rate is the case worth understanding, because the first axis on
+its own gets it wrong. Nobody has an opinion about what the Treasury pays, so
+in the ordinary sense no strategy can "have a view" on it. But retuning it moves
+every valuation bar in the strategy — so a change to it has to land on the
+rule-change record with a before and an after, and that is what being a value
+buys. An account balance moves no bar: it is a fact about the user, it changes
+because their circumstances changed, and asking them to write a *reason* for it
+would be the program treating their life as a rule change.
+
+### Declared values
+
+Numbers the strategy has an opinion about. Every one ships a default in
+`values.yaml`; a declared value with no default is refused, and a default for
+an undeclared value is refused too — a setting that silently does nothing is
+worse than one that will not load.
+
+```python
+{"id": "min-roic", "label": "Lowest return on capital it will take",
+ "type": "number", "unit": "percent", "min": 0, "max": 100,
+ "source": {"name": "…", "reasoning": True},
+ "explain": "How much profit the business makes on the money tied up in it…"}
+```
+
+- `type` — see §13.
+- `unit` — how the number renders.
+- `min` / `max` — bounds, for numbers only.
+- `options` — a fixed set of `{value, label}` choices, instead of bounds. Text
+  and numbers only; a yes/no answer is already a boolean. It earns its place
+  because the alternative is free text checked inside `decide`, which fails at
+  evaluation instead of while the user is looking at the field.
+- `explain` — **required.** Plain language, written for someone who has never
+  valued a company. Say what it means before how it is calculated. A field
+  without an explanation is incomplete, not a follow-up ticket.
+- `source` — **required.** `{"name": where the number came from,
+  "reasoning": whether the explanation above is that source's or your own}`.
+  Nothing can verify that a level really is a particular book's. What this
+  refuses is the three ways the claim goes wrong on its own: being absent,
+  being made once for a whole file and silently failing to cover the value
+  added afterwards, and being silent about how far it reaches. A level with
+  borrowed authority and homemade reasoning is exactly the case a reader needs
+  to be able to tell apart. If you made the number up, say so — a value with
+  nothing behind it is the case this field exists to make visible.
+
+### Declared inputs
+
+Facts about the account no strategy could guess. They build the setup screen
+with no logic running, which is what lets a journal be validated before a
+decision is ever made.
+
+```python
+{"id": "free-cash", "label": "Free cash", "type": "number", "unit": "usd",
+ "role": "cash", "required": False,
+ "explain": "Money in the account this journal covers that is not in any…"}
+```
+
+Everything a value carries except `source`, plus:
+
+- `required` — whether a verdict is possible without it. A required input with
+  no answer produces `host:inputs-missing`, which is blocked with a button to
+  the settings screen.
+- `role` — what the figure *is*, from the host's closed list (§13). The host has
+  no journal-level fields of its own: deciding which of them a journal collects
+  would be the host deciding how strategies work. But some figures the host
+  reports cannot be computed without one — position weight is market value over
+  the account, and the account is not something the host can observe. A role is
+  how those meet. A strategy that declares no role simply gets those facts
+  absent, with the reason naming the question that was never asked. Two inputs
+  claiming one role are both refused — the host would have no way to know which
+  figure to report — and the declared `type` and `unit` are checked against
+  what the role says the figure is.
+- `when` — `{"input": another input's id, "is": the answer that makes this one
+  apply}`, or a list of answers any one of which does. An input whose gate is
+  unmet is never handed to `decide` at all: a stale answer to a question that no
+  longer applies is worse than no answer, because the strategy cannot tell the
+  two apart.
+- `min_from` / `max_from` — a bound naming another declared field rather than a
+  literal. Where the other field has no answer the bound simply does not apply.
+
+### How they resolve
+
+Defaults first, then each override layer in order, the journal's own settings
+last, **merged per value**. A strategy that gains a new setting picks up its
+shipped default even in a journal that already overrides something else.
+
+Failure is loud and complete: an unrecognised key, a mistyped value or a
+missing default produces a sentence naming the file and the key — every problem
+at once, not the first one found. Where any layer has errors the host refuses
+to evaluate at all and returns `host:values-unresolved`. Proceeding on defaults
+the user believes they overrode is the quiet retuning this program exists to
+prevent.
+
+---
+
+## 5. What `decide` receives
+
+One plain dict per security, built in `engine/context.py` — whose module
+docstring is the authority on the exact shape and is worth reading in full. The
+top-level keys:
+
+```python
+{
+  "contract": 5,
+  "today": "YYYY-MM-DD",        # the clock; everything below obeys it
+  "security":  {"ticker", "name", "cik"},
+  "measures":  {bank id: {"current": known-or-absent,
+                          "series": {"cadence", "points", "note",
+                                     "truncated"}}},
+  "price":     {"latest": known-or-absent, "closes", "events"},
+  "position":  {"held", "shares", "opened", "months_held", "last_purchase",
+                "purchases", "baselines", "lots", "disposals",
+                "market_value", "weight"},
+  "portfolio": {"cash", "account_value", "slots", "holdings"},
+  "values":    {id: value},     # the resolved chain
+  "inputs":    {id: value},     # the answers that apply, and have answers
+  "reference": {file name: parsed},   # what the bundle ships, frozen
+}
+```
+
+A **known-or-absent** node is either
+`{"status": "known", "value", "source", "cautions", "provenance"}` or
+`{"status": "absent", "reason"}`. There is no third case and no null value
+standing in for one.
+
+### Reading rules you can rely on
+
+- **The clock governs everything.** Series points come only from filings filed
+  by `today`; prices stop at `today`. A reconstructed evaluation sees the world
+  of its day, never this one. Never read the system clock inside a strategy —
+  `ctx["today"]` is the only clock there is, and a strategy that reaches past it
+  produces a verdict that cannot be rebuilt.
+- **Absence is a value.** Every bank measure is present in `measures`. Where the
+  host cannot honestly serve a number, `status` is `"absent"` with a reason.
+  Nothing is zero-filled, carried forward, interpolated, or inferred from a
+  neighbour. Do not write `or 0`.
+- **Absence is never success.** The host's own arithmetic turns an absent figure
+  into `unknown`, never `pass` and never `fail`. What you *do* about that is
+  yours — but if you branch on it yourself, branch on `unknown`, never on
+  "did not fail".
+- **A qualified number says so.** Where a figure rests on an approximation or a
+  loosely matched line, its `cautions` say so, on `current` and on every series
+  point alike. You never restate a caution; the host carries it to the screen.
+- **Percent units are percent numbers.** 18.9 means 18.9%, including position
+  weight.
+- **A share class is a security; the company is not.** `price`,
+  `position.market_value`, `position.weight` and every holding in `portfolio`
+  are about the *instrument this journal holds*, priced from its own symbol
+  alone. `measures` are about the *company* and read every class.
+- **`position` is the holding you have now** — except `lots` and `disposals`,
+  which are the security's whole record including holdings that closed. A rule
+  counting current entries wants `[l for l in lots if l["open"]]`.
+- **`baselines` are what you were shown**, frozen onto each purchase and never
+  recomputed. A company restating two years of accounts cannot move them.
+- **Nothing here says what a position cost.** Cost basis is kept out of the
+  context entirely, not merely discouraged. A rule that fires on the distance
+  from your own purchase price is anchoring — it makes the same company a buy
+  for one person and a sell for another on the same day — so it is not merely
+  unsupported, it is unwritable.
+- **Unknown keys may appear** in later contract versions. Read what you declared
+  an interest in and ignore the rest.
+
+### What the context is, physically
+
+**Frozen, all the way down.** Mappings are read-only proxies and lists are
+tuples. Reads work exactly as they do on plain data — `.get`, `in`, indexing,
+slicing, iteration, `len` — and writes cannot happen at all. That is what makes
+"the host owns the answer" true rather than merely intended: a figure a strategy
+could edit is a figure it could quote back differently from the one on screen.
+If you need a mutable copy, build your own.
+
+### What the host offers a strategy to call
+
+- `contract.test(ctx, item)` — how one comparison came out. See §7.
+- `contract.months_after(day, months)` and `contract.months_between(start, end)`
+  — month arithmetic, clamped, each derived from the other so they cannot
+  disagree. 29 February plus twenty-four months is 28 February, and a count that
+  disagrees with that clamp reports a position as 23 months held on the day its
+  two-year clock falls due. Use these rather than writing date arithmetic.
+- `contract.PASS`, `FAIL`, `UNKNOWN`, `NOTED` — the outcome words, so a bundle
+  branches on the host's own vocabulary instead of on string literals.
+
+---
+
+## 6. What `decide` must return
+
+One dict, exactly three keys.
+
+```python
+{"state":   "worth-buying",       # an id this strategy declared
+ "payload": {...},                # shaped by that state's render type
+ "reason":  {...}}                # why, structured
+```
+
+### `payload`
+
+Exactly the keys that state's render type requires, and nothing else. Extra
+facts belong in the reason's evidence. The keys per type are in §13.
+
+- **`commit`** — `size` is `{"unit", "value"}` with a unit from the size list
+  and a value above zero. `condition` is `None` (buy now, unconditionally) or
+  `{"summary": plain language}` saying what must be true first. `plan` is
+  optional: the tranches being held back, each `{"size", "condition"}`, in the
+  same unit as the size, each with a real condition. The host never evaluates a
+  condition — a plan is prose the strategy re-reads on its own next evaluation,
+  and the day a condition holds it returns that tranche as the size in front of
+  you. Nothing is stored and nothing is scheduled, which is strictly better than
+  a plan executing itself six months after anyone last looked at the company.
+- **`reduce`** — `to` is `{"unit", "value"}` naming the level to reduce *to*,
+  in `weight` or `shares`. Not the amount to sell.
+- **`close`** — `when` is a `YYYY-MM-DD` date: the day the exit is due. A close
+  with no date makes a scheduled exit fire months early, so it is refused.
+- **`blocked`** — `needs` is a non-empty list of sentences saying what decision
+  is owed. Remember that this is the sentence, not the way out (§3).
+- **`hold`, `unknown`** — `{}`.
+
+### `reason`
+
+```python
+{"rule":     "screened-and-assessed",   # required
+ "summary":  "Both tests it will not bend passed…",  # required
+ "evidence": [...],                      # required, a list
+ "groups":   [...],                      # optional
+ "note":     None}                       # optional
+```
+
+- `rule` — the name of the rule *inside your strategy* that produced this state.
+  It renders beside the verdict. A verdict without its rule teaches nothing, and
+  teaching people their own rules is the point of the tool.
+- `summary` — one plain sentence saying why this state and not another.
+- `evidence` — the figures the decision rests on. A verdict about the security
+  (`commit`, `reduce`, `close`, `hold`) must cite something; an evaluation-tier
+  state (`blocked`, `unknown`) may cite nothing, because "the strategy could not
+  run" is not a claim about the company. The exception is a `blocked` state
+  whose `fix` is one the host builds out of citations — that one has to cite
+  what it is waiting on, because the citation *is* the way out (§3).
+- `groups` — the headings the evidence is gathered under. See §8.
+- `note` — the escape hatch for prose that genuinely will not fit an evidence
+  item. One string, deliberately harder to reach for than it looks. `None` is
+  fine.
+
+---
+
+## 7. Evidence
+
+A verdict without the figures that produced it teaches nothing, and a free-text
+reason teaches only the security in front of you — it cannot be compared across
+holdings or counted over time. So a strategy cites what it examined, and the
+host resolves each citation into the rendered fact: the value, its label, its
+unit, whether it was absent and why, the limit read out of any setting that was
+named, and how the comparison came out.
+
+An evidence item names **exactly one subject**:
+
+| key | cites |
+|---|---|
+| `measure` | a metric-bank measure, by id. Includes the qualitative ones. |
+| `fact` | a figure the host reports (§13), by name. |
+| `value` | one of this strategy's declared values, by id. |
+| `input` | one of this strategy's declared inputs, by id. |
+| `label` | something the strategy worked out itself. |
+
+Where the subject is `measure`, `fact`, `value` or `input`, the host supplies
+the value, the unit and the absence — so `actual`, `absent` and `unit` on the
+item are **refused**. A figure the host already knows is never restated by a
+strategy, because a restatement can be wrong.
+
+Where the subject is `label`, the strategy is stating a figure of its own, and
+must supply `unit` (from the host's list) and exactly one of `actual` (the
+figure) or `absent` (one sentence saying why it is unknown). Reach for this
+last: a stated figure is the one kind of row nobody can check.
+
+Optional on any item:
+
+- `comparator` — one of the host's comparisons (§13). With it, **exactly one**
+  of `threshold` (a figure stated outright) or `threshold_from` (the id of one
+  of this strategy's own settings, which the host reads for itself). Supplying
+  both is refused: that is how a limit gets attributed to a setting that does
+  not hold it — "at most your position cap of 5" while the cap held 20. An item
+  with neither is an observation, which is a fine thing to cite.
+- `group` — the id of one of `reason.groups`.
+- `at` — a `YYYY-MM-DD` period end, cites that reading in the measure's filing
+  history. `measure` only.
+- `since` — one of the baseline anchors (§13): cites how far the measure has
+  *moved* since a purchase. `measure` only, and never alongside `at` — one
+  citation answers one question. The host finds both readings and does the
+  subtraction. You could do that arithmetic yourself; what you could not do is
+  *cite* the answer, because a limit is a number or the id of a setting, and
+  "five points below what it was when you bought" is neither.
+- `change` — `distance` (the default) or `proportion`. Only alongside `since`.
+  A ratio that went from 2.6 to 2.1 has moved 0.5 as a distance. A return on
+  capital that went from 21% to 14% has fallen by a third — which reads as -33%
+  as a proportion and -7 as a distance, and only one of those says the same
+  thing to a business earning 45% and one earning 15%.
+
+### Asking the host how it came out
+
+```python
+CITE = {"measure": "interest_coverage", "comparator": "at_least",
+        "threshold_from": "min-interest-coverage", "group": "core"}
+
+if contract.test(ctx, CITE) == contract.FAIL:
+    ...
+```
+
+`contract.test` is the host answering the same question it will answer again
+when the citation reaches the screen, out of the same context, through the same
+code. **Pass the item you are going to cite** and the two cannot come apart.
+
+Before this existed, a strategy had to compare the figure itself in order to
+choose a state — the state is chosen before any evidence is resolved — so every
+bundle carried a private copy of the comparators, nothing checked the two
+agreed, and a verdict could render beside evidence saying the opposite with
+nothing on screen saying which to believe.
+
+`test` returns `pass`, `fail`, `unknown` or `noted`. It **raises** where the
+citation is not answerable at all — a measure the bank does not hold, a fact the
+host does not report, a comparison between a number and a date. That is a fault
+in the strategy rather than a fact about the security, and it is deliberately
+not `unknown`, which would let a misspelled measure id read as a missing figure.
+
+---
+
+## 8. Groups, rollups, and the two checks
+
+Evidence is gathered into groups, and a group says what it demands of its own
+members.
+
+```python
+KNOCKOUTS = {"id": "knockouts", "name": "Tests this strategy will not bend",
+             "requires": "all"}
+CORE = {"id": "core", "name": "Core tests", "requires": "at_least",
+        "threshold_from": "core-tests-required"}
+NOTED = {"id": "size", "name": "Where it sits in your account",
+         "requires": "noted"}
+```
+
+- `requires: "all"` — every member carrying a test has to pass. **The default**,
+  and the strict direction: an author who says nothing gets the rule that
+  refuses a contradiction rather than the one that allows it.
+- `requires: "at_least"` — that many of them, named the way any other limit is:
+  `threshold` or `threshold_from`, never both.
+- `requires: "noted"` — nothing is demanded. Reported so the reader can see
+  them, or acted on by a rule the host cannot express.
+
+The rows of one group must be **contiguous** in the evidence list — a group
+renders as one heading over one run of rows — and a declared group with no rows
+is refused, as is a row naming a group that was not declared.
+
+**The rollup is the host's.** "Six of eight core tests passed" is counted from
+the same outcomes the eight rows render, not from a tally the strategy kept. A
+group's own outcome uses the same four words a row does and reaches them the
+same way: unreadable rows are neither passes nor failures, so a requirement six
+rows short of its bar with three rows unreadable is `unknown`, not `fail`.
+
+Two things then follow, and they are the only places the host compares a
+strategy's conclusion against its own arithmetic.
+
+### A commit cannot contradict its own evidence
+
+A state whose render is `commit` is **refused** when:
+
+- a group it declared came out anything other than `pass` — including
+  `unknown`. The strategy said all four of these must pass, or six of these
+  eight; a figure nobody could compute has not met that demand, and treating it
+  as though it had is absence reading as success in the one place a reader looks
+  for the rollup; or
+- a citation carrying a comparator and *no* group came out `fail`. Nothing
+  declared it a requirement, so the host refuses the outright contradiction and
+  nothing more.
+
+The asymmetry is deliberate. A hold may legitimately cite failures — that is
+often why it is a hold — and an exit rests on them by definition. It is `commit`
+alone that says capital may go in.
+
+**This is the rule that decides the shape of your `decide`.** See §12.
+
+### A blocked verdict cannot be a dead end
+
+Covered in §3: a `blocked` state declares its `fix` at load, and where that fix
+is one the host builds out of citations, the decision has to cite one.
+
+---
+
+## 9. Versions, and when each one moves
+
+Three version numbers, three different questions.
+
+### `STRATEGY["contract"]` — which host contract this bundle speaks
+
+The host refuses any value but its own. That is what lets the contract be
+extended later without silently breaking what already exists.
+
+**When the host bumps it is not "when the shape changed incompatibly."** The
+test is: *would a strategy written against the previous version read what it
+receives wrongly and silently?*
+
+A key that disappears raises, and a raise gets noticed. A key that keeps its
+name, its type and its label while answering a *different question* produces a
+plausible wrong verdict with nothing on screen saying so. A meaning change is
+the quietest break there is, so it is the one this mechanism most exists to
+refuse. Adding a key is not a bump, because strategies must tolerate keys they
+do not read. The comments above `CONTRACT_VERSION` record every past bump and,
+just as usefully, several changes that deliberately did *not* bump and exactly
+why.
+
+### `STRATEGY["version"]` — the version of your logic
+
+Move it whenever the bundle's behaviour or declaration changes, and add a
+`changelog` entry saying what changed — the host refuses a version with no
+entry. That entry is not paperwork: a change to logic cannot be recorded as a
+before and after the way a number can, so the author's own account of it is the
+only thing the rule-change record can carry. Write it for someone reading their
+own journal in five years, and say plainly when a change moves what the strategy
+will buy.
+
+### `values.yaml: version` — the version of the declared numbers
+
+Move it whenever any number in the file moves. That is what puts the change on
+the rule-change record of every journal running the strategy, with a before and
+an after.
+
+Move a number and leave the version alone and the host **still** catches it — a
+journal's stamp holds the resolved values themselves, not only their version
+number — and reports it as the louder thing it is: settings that moved with
+nothing marking the change, on the journal's record rather than the author's,
+with a written reason owed from whoever did it.
+
+---
+
+## 10. When it goes wrong
+
+Every failure comes back in the same envelope, produced by the host and saying
+so. `evaluate` never raises. A strategy can never crash the application, can
+never block a recording, and can never take another bundle down with it.
+
+| what happened | when | comes back as |
+|---|---|---|
+| the module will not import, or declares itself badly | load | the bundle is refused and listed with its reason |
+| a required input has no answer | evaluation | `host:inputs-missing` |
+| the declared values will not resolve | evaluation | `host:values-unresolved` |
+| the journal's strategy is not installed here | evaluation | `host:strategy-missing` |
+| `decide` raised, or called `sys.exit` | evaluation | `host:strategy-error`, naming the file and line **inside the bundle** — never a full path, never a stack trace |
+| the decision is outside the contract | evaluation | `host:invalid-decision`, with every problem in the message |
+| the stored filings or prices could not be read | before evaluation | `host:data-unreadable` |
+
+The full list, with what each renders as and how each is escaped, is in §13.
+
+**Fail loudly inside your own logic.** A strategy that needs something the host
+does not offer should raise rather than approximate. `host:strategy-error` names
+the line; a plausible wrong verdict names nothing.
+
+---
+
+## 11. What a strategy may never do
+
+- **Fetch anything.** No network, at load or at evaluation.
+- **Read source data.** No filings store, no price store, no journal file.
+- **Open a file** — including its own. Reference data is declared and the host
+  parses it.
+- **Read the system clock.** `ctx["today"]` is the clock.
+- **Invent vocabulary.** Not a state id it did not declare, not a render type,
+  not a unit, not a comparator, not a baseline anchor, not a change form, not an
+  input role, not a blocked-state destination, not a payload key.
+- **Restate a figure the host owns.** Cite it.
+- **Mutate the context.** It is frozen; the attempt raises.
+- **Reach for what a position cost.** It is not there.
+- **Treat absence as success.**
+- **Block a recording.** The tool records decisions and never gates them. Acting
+  against the signal is allowed by design — a strategy's job is to say what its
+  rules say, not to stop anyone.
+
+Anything missing that you need is a request against the host, not something to
+work around. The host's tables are small, closed and deliberate; each of them
+says in a comment why it is closed and what adding to it costs.
+
+---
+
+## 12. The things that cost the most time
+
+Two strategies and one worked example are the whole of the experience behind
+this list. It is in order of what each one actually cost.
+
+### Confirmation counts filings, so a hand-driven journal can never confirm
+
+A rule of the form "this has to be true on two consecutive filings" walks
+`measures[id]["series"]["points"]`. Those points are built from **filings**, and
+from nothing else.
+
+A figure the user typed in by hand answers `current` and adds no point. So on a
+security with no stored filings — no CIK, nothing fetched, every number entered
+by hand — the run is always nought, and an exit written this way **can never
+fire**, however bad the number gets. The strategy is not broken and the host is
+not lying: nobody observed a second reading, so nothing is confirmed.
+
+`engine/context.py` states the fact. Nobody states the consequence, and it is
+invisible until an exit quietly never fires — there is no error, no absence, no
+caution. It is true of real journals and not only of demonstration data: a user
+who tracks a company the SEC does not cover, or who has not fetched, is in
+exactly this position.
+
+If your strategy is meant to work on hand-entered data, give it an exit that
+acts on one reading and say so in that state's description. If it is not, say
+*that* — the state description is the only place a user finds out.
+
+### A commit is refused beside a group that did not pass, so every other branch comes first
+
+The host refuses a `commit` standing beside a group it resolved as anything but
+`pass`. That is the guarantee working. What it means for your code is that the
+buy branch must be the **last** rung of the ladder, and every way the answer can
+be no has to be reached and explained before it.
+
+Write it the other way round — reach for the buy and let the host catch the
+contradiction — and the user gets `host:invalid-decision`: "the strategy
+returned something outside the contract". That tells them nothing about the
+company, and it is how you find this rule, by hitting it.
+
+The same applies one level in. `met` must mean *no knockout is unreadable and
+enough core tests passed*, not *no knockout failed*. Absence walking through a
+gate by failing to trip it is the quietest bug on this list, and the host's
+refusal will catch it — as an unreadable error rather than as a sentence.
+
+### Cite an exit in the direction the holding must keep, not the direction it fires
+
+Write the exit as `interest_coverage below exit-level` and a perfectly healthy
+holding renders as a page of red rows beside a verdict of *hold*, because the
+host correctly resolved "is it below 4" as false, and false renders as *misses
+it*.
+
+Write the same rule as `interest_coverage at_least exit-level` — what the
+holding must keep being true — and the same holding renders as passes, the exit
+is that test *failing*, and the screen says what you meant. The logic is
+identical; only the reader's experience changes, and only in the direction of
+being wrong.
+
+You find this by looking at the output, not by reading anything.
+
+### Smaller ones, in no order
+
+- **`decide` runs before evidence is resolved.** You cannot look at the rendered
+  rows to choose a state. That is what `contract.test` is for, and passing it
+  the same dict you are about to cite is the only thing that keeps the two
+  agreeing.
+- **A group with no rows is refused, and so are scattered rows.** Build the
+  evidence list in group order and only append a group when you appended its
+  rows.
+- **The `at_least` threshold on a group is a count of rows**, so it has to be a
+  whole number. Stated outright, a non-integer is refused at load. Read out of a
+  setting with `threshold_from`, nothing checks it until evaluation — and there
+  it does not fail loudly, it makes the group `unknown`, which then refuses any
+  commit beside it. Point a group's count at an integer value.
+- **A judgement is a judgement because the bank says so.** You cite it exactly
+  as you cite a computed measure; the host decides from the bank that it renders
+  as an assessment. You could not disguise one as a measurement if you tried.
+- **Do not cite a question your own rules have already made moot.** Citing is
+  what puts a question on the page. A screen asking someone to assess the
+  durability of a business their own rules have already rejected is the
+  overwhelm this program exists to avoid — so reach the refusing state *without*
+  the citation, and only cite the question on the branch where the answer would
+  actually decide something.
+- **`contract.test` raises where a citation is unanswerable** — a misspelled
+  measure id, a fact that does not exist, a number compared against a date. It
+  comes back as `host:strategy-error` naming the line inside your bundle, which
+  is the fastest debugging loop the contract has. It is deliberately not
+  `unknown`: a typo must not read as a missing figure.
+- **A `close` needs a date and there is no obvious one.** For an exit that has
+  already fired, `ctx["today"]` is the honest answer. For a scheduled one — a
+  holding period running out — it is the scheduled day, worked out with
+  `contract.months_after`, and not today.
+- **`weight` is a percent number.** A `size` of `{"unit": "weight", "value": 10}`
+  is ten percent of the account, not ten percent of one percent and not 0.1.
+- **The changelog entry is checked against the version you declared.** Bumping
+  `version` and forgetting the entry refuses the bundle at load, which is easy
+  to hit while iterating and reads at first like the bump itself was rejected.
+- **`position.opened` is the holding period's first purchase** and does not move
+  when a lot is trimmed away. Lot ages are on `position.lots`.
+- **A staged `plan` cannot be anchored to what you paid.** Not because the
+  payload lacks a field — because nothing about cost is in the context. Anchor
+  it to what the business is worth.
+
+### Testing one
+
+`strategy_loader.discover(roots)` takes the directories to scan, so a bundle
+can be loaded and exercised from anywhere — it does not have to be installed
+under `strategies/` to be tested. That is how `docs/example-strategy/` is kept
+honest without ever being offered to a user, and it is worth copying: a bundle
+under test is a bundle nobody can accidentally create a journal against.
+
+`tests/test_example_strategy.py` is the pattern. Two layers, and both earn
+their place:
+
+- **Contexts built by hand**, one dict per case, so a measure can be driven to
+  a chosen value directly. Driving fifteen measures to chosen values through the
+  compute layer would be a test of the compute layer, and it would be nearly
+  impossible to write.
+- **One pass through `context.build_context`** against stored filings, so the
+  hand-built shape cannot drift from the one a real journal serves. Without it
+  the whole suite can pass against a context shape that no longer exists.
+
+Two assertions are worth writing whatever else you do. Assert that no case
+returns `host:invalid-decision` — every contract refusal lands there, so one
+check catches contradicted commits, dead-end blocks, malformed payloads and
+scattered groups at once. And assert that **every declared state is reached** by
+some case: a state nothing returns is vocabulary on the Strategy tab telling the
+reader the tool can say something it cannot.
+
+---
+
+## 13. Reference tables
+
+Generated from `engine/contract.py`. Do not edit by hand; run
+`python -m tools.contract_reference`, and `tests/test_contract_docs.py` will
+tell you if you forgot.
+
+### The six render types
+
+<!-- generated: render-types -->
+| `render` | tier | means | payload keys | may also carry | needs attention |
+|---|---|---|---|---|---|
+| `commit` | position | capital may go in | `size`, `condition` | `plan` | yes |
+| `reduce` | position | partial exit | `to` | — | yes |
+| `close` | position | full exit | `when` | — | yes |
+| `hold` | position | no action | — (none) | — | — |
+| `blocked` | evaluation | a decision is owed from the user before any verdict | `needs` | — | yes |
+| `unknown` | evaluation | not enough data to say | — (none) | — | yes |
+<!-- end: render-types -->
+
+### Where a blocked verdict sends someone
+
+<!-- generated: state-fixes -->
+| `fix` | button | where it goes | must cite |
+|---|---|---|---|
+| `settings` | Fix this journal's settings | this journal's setup screen | — |
+| `judgement` | Answer these questions | "Your judgement" on this security's page | a `judgement` citation |
+| `thesis` | Write down what you think now | this security's thesis record | — |
+<!-- end: state-fixes -->
+
+### States the host produces itself
+
+A strategy never declares one of these; they are what the host says when no
+strategy verdict exists.
+
+<!-- generated: host-states -->
+| state | `render` | shown as | way out |
+|---|---|---|---|
+| `host:inputs-missing` | `blocked` | Waiting on setup | `settings` |
+| `host:strategy-missing` | `blocked` | Strategy not installed | nothing in the app resolves it |
+| `host:values-unresolved` | `blocked` | Settings need fixing | `settings` |
+| `host:strategy-error` | `unknown` | Strategy failed | nothing in the app resolves it |
+| `host:data-unreadable` | `unknown` | Data could not be read | nothing in the app resolves it |
+| `host:invalid-decision` | `unknown` | Strategy failed | nothing in the app resolves it |
+<!-- end: host-states -->
+
+### Comparisons
+
+<!-- generated: comparators -->
+| `comparator` | reads as | numbers and dates only |
+|---|---|---|
+| `at_least` | at least | yes |
+| `at_most` | at most | yes |
+| `above` | above | yes |
+| `below` | below | yes |
+| `equals` | equal to | — |
+| `not_equals` | not equal to | — |
+<!-- end: comparators -->
+
+### Facts the host reports
+
+Cited as `{"fact": "<name>"}`. Each carries its own plain-language explanation
+in `contract.HOST_FACTS`, which is what the reader sees.
+
+<!-- generated: host-facts -->
+| `fact` | label | unit |
+|---|---|---|
+| `position.weight` | Position weight | `percent` |
+| `position.months_held` | Months held | `months` |
+| `position.market_value` | Position market value | `usd` |
+| `position.shares` | Shares held | `shares` |
+| `position.opened` | Held since | `date` |
+| `position.last_purchase` | Last bought | `date` |
+| `position.purchases` | Purchases in this holding | `count` |
+| `portfolio.cash` | Free cash | `usd` |
+| `portfolio.account_value` | Account value | `usd` |
+| `portfolio.slots_occupied` | Positions held | `count` |
+| `price.latest` | Latest price | `usd` |
+| `price.days_since_close` | Days since the price's close | `days` |
+<!-- end: host-facts -->
+
+### Baseline anchors
+
+Cited as `{"measure": "<id>", "since": "<anchor>"}`.
+
+<!-- generated: baseline-anchors -->
+| `since` | reads as | the moment it anchors to |
+|---|---|---|
+| `last-purchase` | since you last bought | the last purchase into the holding you have now |
+| `first-purchase` | since you first bought | the purchase that took this holding up from nothing |
+<!-- end: baseline-anchors -->
+
+### How a move from a baseline is counted
+
+<!-- generated: change-forms -->
+| `change` | the row's unit | reads as |
+|---|---|---|
+| `distance` | the measure's own | "…, change since you bought" |
+| `proportion` | `percent` | "…, change since you bought, as a share of what it was then" |
+<!-- end: change-forms -->
+
+### Input roles
+
+<!-- generated: input-roles -->
+| `role` | declared as | means | unlocks |
+|---|---|---|---|
+| `cash` | `number` in `usd` | free cash in the account this journal covers — money that is not in any position | `portfolio.cash`, `portfolio.account_value`, `position.weight` |
+<!-- end: input-roles -->
+
+### The rest of the vocabulary
+
+<!-- generated: vocabulary -->
+- **Contract version** — `5`. A declaration naming any other is refused at load.
+- **Most states one strategy may declare** — `16`.
+- **Declared field types** — `number`, `integer`, `boolean`, `text`.
+- **Units a `size` may be in** — `weight`, `usd`, `shares` (`weight` is a percent number).
+- **Units a cited figure may render in** — `percent`, `percentage_points`, `times`, `ratio`, `score`, `usd`, `shares`, `years`, `months`, `days`, `count`, `times_own_median`, `date`, `text`, `yes_no`, `none`. A strategy picks one; it never invents a rendering.
+- **How a comparison can come out** — `pass`, `fail`, `unknown`, `noted`. The host derives one; a strategy branches on it and never asserts one.
+- **What a group may demand** — `all`, `at_least`, `noted`.
+<!-- end: vocabulary -->
+
+---
+
+## Where to look next
+
+- `engine/contract.py` — the specification itself, written to be read. Every
+  closed table carries a comment saying why it is closed.
+- `engine/context.py` — the module docstring is the authority on what a
+  strategy receives.
+- `docs/example-strategy/` — a complete bundle demonstrating the three
+  expensive things above. Copy it into `strategies/` to watch it run, and take
+  it out again — every number in it is invented, and it is not a strategy.
+- `strategies/proof/` — the smallest possible bundle that still crosses the
+  boundary in both directions.
+- `strategies/graham/` and `strategies/buffett/` — two real ones that
+  contradict each other, which is the point.
