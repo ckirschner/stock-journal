@@ -39,6 +39,14 @@ Unanswered is never a pass. It produces a verdict that says a decision is
 owed, and every question it names is answerable on the same screen that
 reports it.
 
+**It does not evaluate lenders, insurers or property companies — for now.**
+See DECLINES. Unlike Graham's refusal, this one is a gap in the host rather
+than a boundary of the method: Buffett has plenty to say about banks, and
+what is missing is measures built for them. All three tests here that cannot
+be bent are category errors on a lender, and one of them — owner earnings —
+does not come back grey but large, because a shrinking bank throws off the
+most cash from operations there is.
+
 **The dominant state is "nothing to do", for years at a time.** That is the
 strategy working. A wonderful business bought once and held for a decade
 without a single add — because the entry test stopped passing long ago while
@@ -263,6 +271,76 @@ BUFFETT_PRACTICE = {
     "reasoning": True}
 
 
+# ---------------------------------------------------------------------------
+# The kinds of company this strategy does not evaluate yet, and why the "yet"
+# is real here where it is not on Graham.
+#
+# Graham's refusal is permanent because his tests ARE the liquidation-oriented
+# balance sheet. This one's is not. What this strategy believes — a business
+# that earns high returns on the money put into it, protects them, and does
+# not need much borrowing to do it — is a claim somebody can make about a bank
+# and Buffett spent forty years making it. The obstruction is entirely in the
+# measures: the ones here are built for a company that sells something, and
+# every one of the three knockouts is a category error on a lender.
+#
+# Returns on invested capital divides by debt plus equity less cash, which for
+# a bank is most of the funding it exists to deploy. Debt against EBITDA
+# treats deposits as borrowing and strikes profit after the interest that IS
+# the cost of the product. Owner earnings takes operating cash flow less
+# maintenance capital spending — and a lender's operating cash flow moves with
+# the period's change in loans and deposits, so a bank that is SHRINKING
+# generates the most of it. That last one is the dangerous one, because it
+# does not come back grey. It comes back large.
+#
+# The substitute is a real piece of work rather than a switch: returns on
+# tangible common equity, the efficiency ratio, the net interest margin, the
+# reserve against charge-offs, the funding mix. None of those exists in this
+# host yet. Until they do, this refuses, because the alternative is not a
+# rougher answer — it is a confident wrong one on the exact tests that decide
+# whether money goes in.
+#
+# What is deliberately not refused: asset managers, exchanges and insurance
+# brokers. Those are ordinary fee businesses, several of them are exactly what
+# this strategy is looking for, and refusing everything financial-sounding
+# would be refusing some of the best companies on the list.
+DECLINES = [
+    {"class": "depository-lending",
+     "because": "Every one of the three tests this strategy will not bend is "
+                "a category error on a lender. Returns on invested capital "
+                "divides by borrowing plus equity, which for a bank is the "
+                "funding it exists to lend out. Debt against operating "
+                "profit counts deposits as borrowing and strikes the profit "
+                "after the interest that is the cost of the product. And "
+                "owner earnings starts from operating cash flow, which for a "
+                "lender moves with the period's change in loans and deposits "
+                "rather than with the business — a bank that is shrinking "
+                "generates the most of it, which is a large confident number "
+                "pointing the wrong way. This strategy has a real view about "
+                "banks and no honest way to express it here yet; the "
+                "measures it would need are not in this program."},
+    {"class": "insurance",
+     "because": "An insurer holds an investment portfolio against claims not "
+                "yet made, so returns measured against its capital are "
+                "measuring money that belongs to policyholders. Premiums "
+                "arriving before claims are paid make cash from operations "
+                "look like cash the business generated, when it is cash it "
+                "is holding — which lands on the owner-earnings test, one of "
+                "the three that decide a purchase here. Underwriting and "
+                "investing are two businesses in one set of accounts and "
+                "nothing in this program separates them."},
+    {"class": "real-estate",
+     "because": "Depreciation on buildings is an accounting convention "
+                "rather than a cost being incurred, so reported profit "
+                "understates by design and the return, margin and coverage "
+                "tests all read a company that is doing better than they "
+                "say. The industry's own figure adds it back; this program "
+                "does not compute that figure. Borrowing is structural here "
+                "too, so the leverage knockout refuses every property "
+                "company for a reason that has nothing to do with the "
+                "particular one in front of you."},
+]
+
+
 STRATEGY = {
     "id": "buffett",
     "name": "Buffett",
@@ -270,9 +348,42 @@ STRATEGY = {
                "and only at a price that leaves something on the table. "
                "Sells when the business breaks — never when the price gets "
                "high, and never because time has passed.",
-    "version": 2,
+    "version": 3,
     "contract": 5,
+    "declines": DECLINES,
     "changelog": {
+        3: "THIS STRATEGY NO LONGER EVALUATES BANKS, LENDERS, INSURERS OR "
+           "PROPERTY COMPANIES. No threshold moved and no test changed; "
+           "three kinds of company now get a refusal instead of a "
+           "verdict.\n\n"
+           "All three tests this strategy will not bend are category errors "
+           "on a lender, and the third one is worse than useless. Owner "
+           "earnings starts from cash from operations — and for a bank that "
+           "figure moves with the period's change in loans and deposits "
+           "rather than with the business, so a bank that is shrinking "
+           "produces the largest owner earnings of all. That is not a gap "
+           "that renders as grey and gets ignored; it is a big confident "
+           "number pointing the wrong way, on one of the three tests that "
+           "decide whether money goes in. Returns on invested capital and "
+           "debt against operating profit are wrong in quieter ways, both "
+           "because a bank's borrowing is its raw material and its interest "
+           "is its cost of goods.\n\n"
+           "Unlike Graham's, this refusal is meant to be temporary. What "
+           "this strategy believes is a claim somebody can make about a "
+           "bank, and Buffett spent forty years making it. What is missing "
+           "is the measures: returns on tangible common equity, the "
+           "efficiency ratio, the net interest margin, the reserve against "
+           "charge-offs. None of them exists in this program yet. When they "
+           "do, this strategy gets a branch for lenders rather than a "
+           "refusal — and that will be a version of its own, with its own "
+           "thresholds and its own sources, not a quiet lifting of this "
+           "one.\n\n"
+           "Nothing recorded changes: past verdicts were written down when "
+           "they were made and are never recomputed. Nothing is sold — a "
+           "holding in one of these now reads 'outside these rules', which "
+           "asks nothing of you. Asset managers, exchanges and insurance "
+           "brokers are NOT refused: they are ordinary fee businesses and "
+           "several are exactly what this strategy looks for.",
         2: "No threshold and no rule changed, and no verdict moves. The one "
            "state that stops and waits for you — the three questions — now "
            "says where it is answered, so the host puts a button on the "

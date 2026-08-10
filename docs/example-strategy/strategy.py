@@ -14,6 +14,9 @@ copied and cut down rather than read straight through:
   3. **A judgement with a blocked branch.** A question no filing answers,
      cited like any other measure, with a state that stops and says where
      the answer is given.
+  4. **A declared refusal.** The kinds of company these rules will not
+     evaluate, said in the declaration rather than branched on inside
+     `decide`, so the host can answer for them before any logic runs.
 
 Everything in it is invented, including every company it would ever look at
 and every number in values.yaml. It is not a claim about investing and no
@@ -48,14 +51,61 @@ STRATEGY = {
                "that has to hold across consecutive filings, and one "
                "question only you can answer. Every number in it is "
                "invented and it is not investment logic.",
-    "version": 1,
+    "version": 2,
     "contract": 5,
     "changelog": {
         1: "First version. Two knockouts and three core tests of which some "
            "number must pass, one exit on interest coverage confirmed across "
            "consecutive filings, and the moat question blocking a purchase "
            "until it is answered.",
+        2: "Declines the three kinds of company whose accounts the measures "
+           "it reads were not built for, so the fourth mechanism worth "
+           "demonstrating is demonstrated. No threshold moved.",
     },
+
+    # -----------------------------------------------------------------
+    # The kinds of company these rules will not evaluate.
+    #
+    # Demonstrated here because it is the one part of a declaration whose
+    # absence is invisible: a bundle with no `declines` looks exactly like a
+    # bundle whose author never considered the question, and the second is
+    # much commoner than the first.
+    #
+    # The reason it is declared rather than checked at the top of `decide`
+    # is worth sitting with. A branch is invisible from outside the bundle,
+    # so the screen offering this strategy could not say what it covers, and
+    # a journal could not be warned before it was stamped. A declaration is
+    # readable without running anything — the same reason inputs and values
+    # are declared — and the host refuses a declined company before `decide`
+    # is called at all, so the boundary cannot be lost to a later edit that
+    # adds a branch above the check.
+    #
+    # `because` is the strategy's own sentence and is required. What a reader
+    # needs is the reason THIS rule set has nothing to say, and only the
+    # author has that; "not supported" would be the host guessing.
+    # -----------------------------------------------------------------
+    "declines": [
+        {"class": "depository-lending",
+         "because": "Every test here reads a company that sells something. A "
+                    "lender's cash from operations moves with the period's "
+                    "change in loans and deposits rather than with the "
+                    "business, and it does not divide its balance sheet into "
+                    "what falls due within the year and what does not — so "
+                    "these tests do not read a lender roughly, they read "
+                    "something else entirely."},
+        {"class": "insurance",
+         "because": "Premiums arrive before claims are paid, so cash from "
+                    "operations carries money the company is holding rather "
+                    "than money it earned, and the investment portfolio "
+                    "behind it belongs to policyholders. The returns and "
+                    "coverage tests here would be measuring the wrong "
+                    "capital."},
+        {"class": "real-estate",
+         "because": "Depreciation on buildings is an accounting convention "
+                    "rather than a cost, so reported profit understates by "
+                    "design and every test here built on it reads a company "
+                    "as worse than it is."},
+    ],
 
     # -----------------------------------------------------------------
     # Eight states. Every branch below reaches exactly one of them, and

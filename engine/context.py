@@ -11,7 +11,12 @@ The shape, in full::
     {
       "contract": <contract.CONTRACT_VERSION>,
       "today": "YYYY-MM-DD",        # the clock; everything below obeys it
-      "security": {"ticker", "name", "cik"},
+      "security": {"ticker", "name", "cik",
+                   "sic":      {"status": "known", "value": "6021", ...}
+                             | {"status": "absent", "reason"},
+                   "industry": {"status": "known", "value", "class", "sic",
+                                "title", "source", "cautions", "provenance"}
+                             | {"status": "absent", "reason"}},
       "measures": {bank id: {
           "current": {"status": "known", "value", "source", "cautions",
                       "provenance"}
@@ -115,6 +120,22 @@ Reading rules a strategy can rely on:
   never come out as a pass. A judgement is never served from a hand-entered
   number: one laid over a question about a moat would be an assessment
   wearing a measurement's clothes.
+- **What kind of company this is, is a fact and not a judgement.**
+  `security.industry` carries the class the host derives from the industry
+  code the SEC publishes for the filer — a lender, an insurer, a property
+  company, or no class at all, which is the ordinary answer and covers almost
+  everything. A strategy that routes on it reads `["class"]`, which is a host
+  id; the `value` beside it is the sentence a reader sees and must never be
+  compared against, because a strategy comparing against a label is a
+  strategy quoting the host.
+
+  Absent means the code does not settle it, and there is no third answer:
+  several codes the SEC publishes cover businesses whose accounts have
+  nothing in common — American Express and a payment processor file under the
+  same one — so "ordinary" would be an invention there rather than a reading.
+  A strategy that declares `declines` never sees such a company at all: the
+  host refuses it before `decide` runs. See engine/industry.py for why the
+  clock does not govern this one figure.
 - **Unknown keys may appear** in future contract versions; a strategy reads
   what it declares an interest in and ignores the rest.
 - **`position` is the holding you have now, except where it says otherwise.**
@@ -186,6 +207,7 @@ from datetime import date
 
 from . import bank as bank_mod
 from . import compute, contract, dataview, facts_store, hand_entered
+from . import industry as industry_mod
 from . import judgements, portfolio, price_store, tickermap
 
 # Series stop at the same number of filing boundaries the sell-confirmation
@@ -931,7 +953,13 @@ def build_context(security: dict, journal_securities: list | None,
         "today": today,
         "security": {"ticker": security.get("ticker"),
                      "name": security.get("name"),
-                     "cik": cik},
+                     "cik": cik,
+                     # The published industry code and what the host makes of
+                     # it. Reported and not interpreted: whether a rule set
+                     # has anything to say about a lender belongs to the rule
+                     # set, and the same host serves strategies that would
+                     # answer that differently.
+                     **industry_mod.report(security, as_of)},
         # Two symbol scopes, deliberately. `tickers` is every class the SEC
         # maps to the company, which is what a whole-company measure needs.
         # The price is the security's own instrument and never sees that list.

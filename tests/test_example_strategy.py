@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import balance_face, dur, filing
+from conftest import balance_face, dur, filing, industry_node
 
 from engine import context, contract, facts_store, judgements
 from engine import strategy_loader, strategy_values
@@ -50,7 +50,7 @@ def values_for(record, **override):
 
 
 def build(record, known=None, series=None, moat=None, held=False,
-          weight=None, today="2026-08-09", **override):
+          weight=None, today="2026-08-09", industry=None, **override):
     """A context shaped exactly as engine/context builds one.
 
     Built by hand rather than from filings because driving five measures to
@@ -95,7 +95,10 @@ def build(record, known=None, series=None, moat=None, held=False,
     return {
         "contract": contract.CONTRACT_VERSION, "today": today,
         "security": {"ticker": "WDGE", "name": "Wedgemoor Fasteners",
-                     "cik": None},
+                     "cik": None,
+                     "sic": {"status": "absent",
+                             "reason": "a hand-built context"},
+                     "industry": industry_node(industry)},
         "measures": measures,
         "price": {"latest": {"status": "absent", "reason": "no price"},
                   "closes": [], "events": []},

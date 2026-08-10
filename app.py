@@ -184,6 +184,18 @@ class Api:
             "contract": record["contract"],
             "states": list(record["states"]),
             "inputs": list(record.get("inputs") or []),
+            # What it will not evaluate, and why, resolved into the host's
+            # own words for each kind. This is on the OFFER and not only on
+            # the stamped strategy on purpose: what a rule set covers is
+            # knowable without running it, so somebody choosing one can be
+            # told before the journal exists rather than finding out at the
+            # first verdict.
+            "declines": [
+                {"class": cid, "because": because,
+                 **{k: contract.INDUSTRY_CLASSES[cid][k]
+                    for k in ("label", "noun", "means", "explain")}}
+                for cid, because in
+                contract.declined_classes(record).items()],
         }
 
     def _strategy_view(self, record, chain, journal):
@@ -652,7 +664,7 @@ class Api:
             pending_changes=journals.pending(journal),
             securities=securities,
             bank_meta=bank_meta,
-            # The six render types, so the view sorts and counts a state
+            # The render types, so the view sorts and counts a state
             # whose meaning it does not know. It never learns which states
             # exist; it is told, every render.
             render_types={k: dict(v) for k, v in

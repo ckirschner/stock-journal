@@ -26,6 +26,15 @@ measure can hold "it has been two years", and without it there is no exit
 for a security that simply stays cheap — which is the single most common way
 this style of investing fails.
 
+And one thing it will not do at all. **It does not evaluate banks, lenders,
+insurers or property companies**, and the refusal is permanent — see
+DECLINES. The tests below are not a philosophy implemented through metrics;
+they *are* the metrics, and the spine of them is a balance sheet split into
+what falls due within the year and what does not. Three kinds of filer do not
+publish one. Substituting measures built for them would produce something
+that is not this strategy, so it says so instead of producing a verdict that
+looks like a judgement about the business and is not.
+
 Sources, and which is which, because a reader auditing a number later has
 to be able to tell. Every value carries its own `source` saying so, which
 is where to look rather than here: this paragraph is the version that used
@@ -273,6 +282,69 @@ AUTHOR = {
     "reasoning": True}
 
 
+# ---------------------------------------------------------------------------
+# The kinds of company this strategy does not evaluate, and why each refusal
+# is permanent rather than a gap waiting on data.
+#
+# This is not a judgement that banks, insurers or property companies are poor
+# investments. It is the narrower and more awkward statement that THIS RULE
+# SET is not a philosophy implemented through metrics — it *is* the metrics,
+# and specifically the liquidation-oriented balance sheet. Fifteen entry tests
+# and eight exits, and the spine of them is what the company owns that could
+# be turned into cash inside a year against what it owes inside that year.
+# Take that away and substitute something else and the result is not a
+# stricter Graham or a looser one; it is a different strategy wearing the
+# name, and the whole value of committing to one set of rules is that they
+# stay the ones you committed to.
+#
+# So these do not lift when better measures arrive. Bank measures would let
+# something be evaluated here; they would not make it Graham. There is
+# precedent rather than retreat in that: Greenblatt's published method
+# excludes financials and utilities outright, for exactly this reason.
+#
+# What is deliberately not refused: asset managers, exchanges, insurance
+# brokers and estate agents. Those are ordinary fee businesses with ordinary
+# balance sheets, and several of them screen well here. A refusal aimed at
+# everything financial-sounding would be this strategy declining companies it
+# is perfectly capable of judging.
+DECLINES = [
+    {"class": "depository-lending",
+     "because": "A bank does not divide its balance sheet into what falls due "
+                "within the year and what does not, so the current ratio, "
+                "long-term debt against working capital, the distress score "
+                "and the net-current-asset test — four of the fifteen tests "
+                "that buy, and three of the eight that sell — have nothing to "
+                "read. That division is not incidental to this strategy. It "
+                "is the strategy: the whole reason an unremarkable business "
+                "is acceptable here is that its liquid position carries the "
+                "risk its operations cannot, and there is no reading of a "
+                "lender's accounts that answers that question. Substituting "
+                "measures built for banks would produce something that is "
+                "not this strategy."},
+    {"class": "insurance",
+     "because": "An insurer's balance sheet is an investment portfolio held "
+                "against claims not yet made, and it is not split into "
+                "current and non-current either — so the same four "
+                "liquidity tests that make this strategy what it is have "
+                "nothing to read. Book value, which two of the knockouts "
+                "rest on, is whatever the reserve estimates say it is, and "
+                "the estimate is the thing an outsider cannot check. This "
+                "strategy buys on the published balance sheet being close to "
+                "literally true; here it is an actuarial opinion."},
+    {"class": "real-estate",
+     "because": "The accounts charge depreciation against buildings as "
+                "though they wear out, and well-kept property mostly does "
+                "not — so reported earnings understate by design, and every "
+                "test here that prices a company against its earnings reads "
+                "as expensive when it is not. The industry's own answer is a "
+                "different profit figure entirely, which this program does "
+                "not compute. High borrowing is also the normal condition of "
+                "a property company rather than a warning, so the leverage "
+                "tests refuse every one of them for a reason that is not "
+                "about the company."},
+]
+
+
 STRATEGY = {
     "id": "graham",
     "name": "Graham",
@@ -280,8 +352,9 @@ STRATEGY = {
                "what its assets and its typical earnings justify, and sells "
                "when that gap closes, when the balance sheet stops being "
                "safe, or when two years are up — whichever comes first.",
-    "version": 5,
+    "version": 6,
     "contract": 5,
+    "declines": DECLINES,
     "changelog": {
         1: "First version. The fifteen entry tests, the four-knockout / "
            "six-of-eight rollup, the eight exits with two-filing "
@@ -357,6 +430,41 @@ STRATEGY = {
            "business belongs in. Writing one still does not lift the bar: "
            "nothing does but selling and buying again, which is what the "
            "bar is for.",
+        6: "THIS STRATEGY NO LONGER EVALUATES BANKS, LENDERS, INSURERS OR "
+           "PROPERTY COMPANIES. No threshold moved and no test changed; what "
+           "changed is that three kinds of company now get a refusal instead "
+           "of a verdict.\n\n"
+           "It was producing verdicts on them, and the verdicts were "
+           "arithmetic laid over accounts the tests were never written "
+           "for. Four of the fifteen entry tests and three of the eight "
+           "exits read a balance sheet split into what falls due within the "
+           "year and what does not — and a bank does not split its balance "
+           "sheet that way at all, so those tests came back unreadable while "
+           "the remaining ones went on scoring the company. A verdict of "
+           "'not cheap enough' or 'not enough to go on' reads as a judgement "
+           "about the business. It was not one. It was this strategy running "
+           "on a company it has no way to assess, and saying so was the only "
+           "honest answer available.\n\n"
+           "The refusal is permanent and does not lift when better data "
+           "arrives, which is the part worth arguing with. This rule set is "
+           "not a philosophy that happens to be implemented through metrics; "
+           "it *is* the metrics, and specifically the liquidation-oriented "
+           "balance sheet. Measures built for banks would let something be "
+           "evaluated here — they would not make it Graham, and the value of "
+           "committing to one set of rules is that they stay the ones you "
+           "committed to. Greenblatt's published method excludes financials "
+           "outright for the same reason.\n\n"
+           "Nothing already recorded changes: every verdict in your history "
+           "was written down when it was made and is not recomputed. Nothing "
+           "is being sold — a holding in one of these companies now reads "
+           "'outside these rules', which asks nothing of you and blocks "
+           "nothing. And recording what you decide to do is never blocked by "
+           "any of this.\n\n"
+           "Asset managers, exchanges, insurance brokers and estate agents "
+           "are NOT refused. They are ordinary fee businesses with ordinary "
+           "balance sheets, several of them screen well here, and refusing "
+           "everything that sounds financial would have been this strategy "
+           "declining companies it can perfectly well judge.",
     },
 
     # -----------------------------------------------------------------

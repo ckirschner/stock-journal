@@ -1,5 +1,5 @@
 {
- "built": "2026-08-10T15:18:23+00:00",
+ "built": "2026-08-10T21:37:35+00:00",
  "as_of": "2026-08-09",
  "free_cash": 62000.0,
  "strategy": "graham",
@@ -710,7 +710,7 @@
        "strategy": {
         "id": "graham",
         "name": "Graham",
-        "version": 4,
+        "version": 6,
         "values_version": 3,
         "contract": 5
        }
@@ -718,7 +718,7 @@
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 4,
+       "version": 6,
        "values_version": 3,
        "contract": 5
       },
@@ -872,7 +872,7 @@
         "profitable_years_10y"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2025-11-04 could be consulted; 15 hand-entered values on record by 2025-11-04; judged by Graham v4 as it stands today (values v3) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2025-11-04 could be consulted; 15 hand-entered values on record by 2025-11-04; judged by Graham v6 as it stands today (values v3) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": {
        "seq": 1,
@@ -1026,7 +1026,7 @@
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 4,
+       "version": 6,
        "values_version": 3,
        "contract": 5
       },
@@ -1625,7 +1625,7 @@
        "strategy": {
         "id": "graham",
         "name": "Graham",
-        "version": 4,
+        "version": 6,
         "values_version": 3,
         "contract": 5
        }
@@ -1633,7 +1633,7 @@
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 4,
+       "version": 6,
        "values_version": 3,
        "contract": 5
       },
@@ -1787,7 +1787,7 @@
         "profitable_years_10y"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2025-06-12 could be consulted; 15 hand-entered values on record by 2025-06-12; judged by Graham v4 as it stands today (values v3) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2025-06-12 could be consulted; 15 hand-entered values on record by 2025-06-12; judged by Graham v6 as it stands today (values v3) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": null,
       "valuation": null,
@@ -2698,7 +2698,7 @@
        "strategy": {
         "id": "graham",
         "name": "Graham",
-        "version": 4,
+        "version": 6,
         "values_version": 3,
         "contract": 5
        }
@@ -2706,7 +2706,7 @@
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 4,
+       "version": 6,
        "values_version": 3,
        "contract": 5
       },
@@ -2860,7 +2860,7 @@
         "profitable_years_10y"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2025-02-10 could be consulted; 15 hand-entered values on record by 2025-02-10; judged by Graham v4 as it stands today (values v3) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2025-02-10 could be consulted; 15 hand-entered values on record by 2025-02-10; judged by Graham v6 as it stands today (values v3) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": null,
       "valuation": null,
@@ -3783,7 +3783,7 @@
        "strategy": {
         "id": "graham",
         "name": "Graham",
-        "version": 4,
+        "version": 6,
         "values_version": 3,
         "contract": 5
        }
@@ -3791,7 +3791,7 @@
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 4,
+       "version": 6,
        "values_version": 3,
        "contract": 5
       },
@@ -3945,7 +3945,7 @@
         "profitable_years_10y"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2024-03-08 could be consulted; 15 hand-entered values on record by 2024-03-08; judged by Graham v4 as it stands today (values v3) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2024-03-08 could be consulted; 15 hand-entered values on record by 2024-03-08; judged by Graham v6 as it stands today (values v3) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": {
        "seq": 1,
@@ -4103,7 +4103,7 @@
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 4,
+       "version": 6,
        "values_version": 3,
        "contract": 5
       },
@@ -4718,7 +4718,7 @@
        "strategy": {
         "id": "graham",
         "name": "Graham",
-        "version": 4,
+        "version": 6,
         "values_version": 3,
         "contract": 5
        }
@@ -4726,7 +4726,7 @@
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 4,
+       "version": 6,
        "values_version": 3,
        "contract": 5
       },
@@ -4873,7 +4873,7 @@
        "manual_withheld": [
         "consecutive_annual_loss_years"
        ],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2024-11-19 could be consulted; 14 hand-entered values on record by 2024-11-19; 1 hand-entered value not on record by 2024-11-19, so it took no part in this; judged by Graham v4 as it stands today (values v3) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2024-11-19 could be consulted; 14 hand-entered values on record by 2024-11-19; 1 hand-entered value not on record by 2024-11-19, so it took no part in this; judged by Graham v6 as it stands today (values v3) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": null,
       "valuation": null,
@@ -5101,7 +5101,7 @@
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 4,
+       "version": 6,
        "values_version": 3,
        "contract": 5
       },
@@ -5167,7 +5167,7 @@
         "label": "Price to earnings on three-year average EPS"
        }
       ],
-      "note": "no company is linked to this ticker, so no stored filing or price from 2025-08-20 could be consulted; judged by Graham v4 as it stands today (values v3) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+      "note": "no company is linked to this ticker, so no stored filing or price from 2025-08-20 could be consulted; judged by Graham v6 as it stands today (values v3) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
      },
      "snapshot": {
       "frozen": "2025-08-20T12:00:00-04:00",
@@ -5694,7 +5694,7 @@
        "strategy": {
         "id": "graham",
         "name": "Graham",
-        "version": 4,
+        "version": 6,
         "values_version": 3,
         "contract": 5
        }
@@ -5702,7 +5702,7 @@
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 4,
+       "version": 6,
        "values_version": 3,
        "contract": 5
       },
@@ -5719,7 +5719,7 @@
        "priced": null,
        "manual_on_record": [],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2025-08-20 could be consulted; judged by Graham v4 as it stands today (values v3) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2025-08-20 could be consulted; judged by Graham v6 as it stands today (values v3) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": {
        "seq": 1,
@@ -6085,7 +6085,7 @@
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 4,
+       "version": 6,
        "values_version": 3,
        "contract": 5
       },
@@ -6704,7 +6704,7 @@
        "strategy": {
         "id": "graham",
         "name": "Graham",
-        "version": 4,
+        "version": 6,
         "values_version": 3,
         "contract": 5
        }
@@ -6712,7 +6712,7 @@
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 4,
+       "version": 6,
        "values_version": 3,
        "contract": 5
       },
@@ -6866,7 +6866,7 @@
         "profitable_years_10y"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2024-06-04 could be consulted; 15 hand-entered values on record by 2024-06-04; judged by Graham v4 as it stands today (values v3) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2024-06-04 could be consulted; 15 hand-entered values on record by 2024-06-04; judged by Graham v6 as it stands today (values v3) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": {
        "seq": 1,
@@ -6899,7 +6899,7 @@
      "strategy": {
       "id": "graham",
       "name": "Graham",
-      "version": 4,
+      "version": 6,
       "values_version": 3,
       "contract": 5
      },
@@ -7309,7 +7309,7 @@
        "strategy": {
         "id": "graham",
         "name": "Graham",
-        "version": 4,
+        "version": 6,
         "values_version": 3,
         "contract": 5
        }
@@ -7317,7 +7317,7 @@
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 4,
+       "version": 6,
        "values_version": 3,
        "contract": 5
       },
@@ -7471,7 +7471,7 @@
         "profitable_years_10y"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2025-10-15 could be consulted; 15 hand-entered values on record by 2025-10-15; judged by Graham v4 as it stands today (values v3) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2025-10-15 could be consulted; 15 hand-entered values on record by 2025-10-15; judged by Graham v6 as it stands today (values v3) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": {
        "seq": 1,
