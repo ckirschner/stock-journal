@@ -39,24 +39,10 @@ losses, because two consecutive losing years are already two consecutive
 annual filings. BRENT demonstrates it.
 """
 
-import json
-import os
-import sys
-import tempfile
-from datetime import datetime, timezone
-from pathlib import Path
+from sample_kit import (buy, expect, journal, securities,
+                        security, sell, state_of, write)
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
-
-# A scratch data directory, so building the sample can never touch a real
-# journal. Set before anything imports the store.
-os.environ["LEDGER_DATA"] = tempfile.mkdtemp(prefix="ledger-sample-")
-
-from app import Api                                            # noqa: E402
-from engine import dated, portfolio                            # noqa: E402
-
-TEMPLATE = ROOT / "data.template" / "sample.json"
+from engine import portfolio
 
 # The day the stories were written against. Dates below are fixed rather
 # than relative, so the sample reads the same on the day it is built and a
@@ -65,106 +51,15 @@ TODAY = "2026-08-09"
 
 FREE_CASH = 62_000.0
 
-api = Api()
-
-
-class writing_on:
-    """Write dated entries as though on a chosen day.
-
-    Every record the user supplies is stamped by the host at the moment of
-    writing and no caller can hand in its own date — that guarantee is what
-    makes "what did I know then" answerable, and it is not weakened for a
-    sample. So the generator does what a test does: it moves the clock the
-    host reads, rather than asking politely for a date.
-    """
-
-    def __init__(self, day):
-        # Local noon, because that is what the real stamp records: the day
-        # the writer was standing on. A fixed UTC hour lands on the following
-        # calendar day east of about UTC+10, which would build a sample whose
-        # entries are dated a day after the story says they were.
-        self.day = (datetime.fromisoformat(f"{day}T12:00:00")
-                    .astimezone().isoformat(timespec="seconds"))
-
-    def __enter__(self):
-        self._dated, self._stamp = dated.stamp, portfolio._stamp
-        dated.stamp = lambda: self.day
-        portfolio._stamp = lambda: self.day
-
-    def __exit__(self, *exc):
-        dated.stamp, portfolio._stamp = self._dated, self._stamp
-
-
-def call(fn, *a, **kw):
-    r = fn(*a, **kw)
-    assert r.get("ok"), f"{fn.__name__}: {r.get('error')}"
-    return r
-
-
-def security(ticker, name, price, values, on, thesis=None, notes=(),
-             earlier=None):
-    """One invented company: its figures on the record, dated, with the
-    thesis and notes that go with them."""
-    call(api.add_security, ticker, name)
-    if earlier:
-        day, figures, then_price = earlier
-        with writing_on(day):
-            call(api.save_metrics, ticker, figures, then_price)
-    with writing_on(on):
-        call(api.save_metrics, ticker, values, price)
-        if thesis:
-            call(api.amend_thesis, ticker, thesis[0], thesis[1])
-    for day, text in notes:
-        with writing_on(day):
-            call(api.add_note, ticker, text)
-
-
-def buy(ticker, shares, cost, opened, override_reason="", recollection=""):
-    """One purchase, dated.
-
-    `recollection` is what the buyer remembers thinking, on a purchase entered
-    out of their own records rather than captured at the time. It is never a
-    thesis and never counted as one — see engine/portfolio._recollection — and
-    it is the only thing here that may be offered where an override reason
-    cannot be, because there was no verdict to go against.
-    """
-    with writing_on(opened):
-        return call(api.open_position, ticker, shares, cost, opened,
-                    override_reason, None, recollection)
-
-
-def sell(ticker, reason, price, exited, shares=None):
-    with writing_on(exited):
-        return call(api.sell_shares, ticker, reason, price, exited, shares)
-
-
-def state_of(ticker):
-    journal, record, chain, _ = api._open()
-    s = api._find(journal, ticker)
-    decision = api._decide(s, journal["securities"], journal, record, chain)
-    return decision["state"]["id"], decision
-
-
-def expect(ticker, want):
-    got, decision = state_of(ticker)
-    assert got == want, (f"{ticker}: expected {want}, got {got} — "
-                         f"{decision['reason']['summary']}")
-    return decision
 
 
 # ===========================================================================
 # The journal
 # ===========================================================================
 
-# Created before the earliest entry in it. What a journal has been told
-# begins on the day it was created — free cash, and every figure measured
-# against the account — so a journal stamped today could not size a purchase
-# it is being told about from 2024, and every frozen verdict below would read
-# "waiting on setup" instead of the state its own note describes. The sample
-# is a journal that has been kept for a while, and it is built as one.
-with writing_on("2024-01-02"):
-    call(api.create_journal, "Sample — Graham", "graham",
-         {"free-cash": FREE_CASH})
+# Created before the earliest entry in it — see sample_kit.journal for why
+# that matters and what breaks when a sample journal is stamped today.
+journal("Sample — Graham", "graham", {"free-cash": FREE_CASH})
 
 
 # -- a holding with nothing happening ---------------------------------------
@@ -512,12 +407,8 @@ STORIES = {
     "STANM": "cannot-screen",
 }
 
-for ticker, want in STORIES.items():
-    expect(ticker, want)
-
-journal, *_ = api._open()
-securities = journal["securities"]
-by_ticker = {s["ticker"]: s for s in securities}
+rows = securities()
+by_ticker = {s["ticker"]: s for s in rows}
 
 # A verdict gone against, and an evaluation that could not be rebuilt at all.
 # They are different records, not two flavours of one, and the whole learning
@@ -560,16 +451,8 @@ assert portfolio.backfilled(by_ticker["LOWFD"])
 
 # The weight rule needs an account, and the account needs the free cash the
 # strategy asked for. If this stops being true the sizing states go quiet.
-held = [s for s in securities if portfolio.shares_held(s) > 0]
+held = [s for s in rows if portfolio.shares_held(s) > 0]
 assert len(held) == 6, len(held)
 
-TEMPLATE.parent.mkdir(parents=True, exist_ok=True)
-TEMPLATE.write_text(json.dumps(
-    {"built": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-     "as_of": TODAY,
-     "free_cash": FREE_CASH,
-     "strategy": "graham",
-     "securities": securities}, indent=1, ensure_ascii=False) + "\n",
-    encoding="utf-8")
-print(f"wrote {TEMPLATE.relative_to(ROOT)}: {len(securities)} securities, "
-      f"{len(set(STORIES.values()))} distinct states")
+# Every story asserted against the real evaluator, and only then the file.
+write("sample-graham.json", "graham", FREE_CASH, TODAY, STORIES)

@@ -30,7 +30,8 @@ from pathlib import Path
 import pytest
 from conftest import balance_face, dur, filing, inst, open_since
 
-from engine import facts_store, journals, price_store, strategy_loader
+from engine import contract, facts_store, journals, price_store
+from engine import strategy_loader
 
 import app as app_mod
 
@@ -273,33 +274,45 @@ def test_every_screen_renders(strategies, tmp_path):
     assert r.returncode == 0, r.stdout + r.stderr
 
 
-def test_the_sample_journal_renders(tmp_path):
+def test_the_sample_journals_render(tmp_path):
     """The other half of the render surface, which no fixture strategy
     reaches.
 
     The awkward fixture above only ever produces hold, blocked and unknown,
     so three of the host's six render types have never been drawn: a commit
     with a size, a reduce with a level to reduce to, and a close with the
-    day the exit is due. The shipped sample is the only thing in the
-    repository that produces all three, and an exit that renders as
+    day the exit is due. The shipped samples are the only thing in the
+    repository that produces all six, and an exit that renders as
     "Exit due undefined" would reach a user before it reached a test.
+
+    Both journals are drawn, and every render type has to appear across
+    them rather than within either. No single strategy owes the host all
+    six — one that never trims has no `reduce` to draw, and demanding one
+    would be this test asking a strategy to declare vocabulary it does not
+    believe in.
     """
     api = app_mod.Api()
-    assert api.load_sample()["ok"]
-    state = api.get_state()
-    assert state["ok"], state
-    drawn = {s["_decision"]["render"] for s in state["securities"]}
-    assert {"commit", "reduce", "close", "hold", "unknown"} <= drawn, drawn
+    loaded = api.load_sample()
+    assert loaded["ok"], loaded.get("error")
+    assert not loaded["skipped"], loaded["skipped"]
 
-    state["__previews"] = {s["ticker"]: api.preview_purchase(s["ticker"])
-                           for s in state["securities"]}
-    state["__coverage"] = {s["ticker"]: api.get_coverage(s["ticker"])
-                           for s in state["securities"]}
-    # The harness scans the rendered markup for `undefined`, `[object
-    # Object]` and NaN and fails on any of them, which is the shape this
-    # defect takes: "Exit due undefined" does not throw, it just prints.
-    r = _render(state, tmp_path, "render-only")
-    assert r.returncode == 0, r.stdout + r.stderr
+    drawn = set()
+    for row in journals.list_journals():
+        journals.set_open(row["id"])
+        state = api.get_state()
+        assert state["ok"], state
+        drawn |= {s["_decision"]["render"] for s in state["securities"]}
+        state["__previews"] = {s["ticker"]: api.preview_purchase(s["ticker"])
+                               for s in state["securities"]}
+        state["__coverage"] = {s["ticker"]: api.get_coverage(s["ticker"])
+                               for s in state["securities"]}
+        # The harness scans the rendered markup for `undefined`, `[object
+        # Object]` and NaN and fails on any of them, which is the shape this
+        # defect takes: "Exit due undefined" does not throw, it just prints.
+        r = _render(state, tmp_path, "render-only")
+        assert r.returncode == 0, (row["id"], r.stdout + r.stderr)
+
+    assert drawn == set(contract.RENDER_TYPES), drawn
 
 
 def test_every_screen_reads_one_shape_for_one_document(strategies):

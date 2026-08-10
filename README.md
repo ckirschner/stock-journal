@@ -288,23 +288,42 @@ thirteen states, thirty-four settings and one answer it needs from you, and
 every threshold in it carries what it means, why that number and where it
 misfires.
 
+**`strategies/buffett/` is the second.** It buys a business good enough to
+be worth owning for decades, at a price that leaves something on the table,
+and sells only when the business breaks — never when the price gets high and
+never because time has passed. It declares twelve states and twenty-seven
+settings, and two things about the shape of it are the point rather than
+gaps. There is no state that trims, so a holding that compounds to half the
+account is left alone. And three of the things it reads are not measurements
+at all: whether the moat holds, whether management can be taken at their
+word, and what has been done with spare cash are questions you answer
+yourself, in writing, and an unanswered one blocks a purchase rather than
+being read as agreement.
+
 **`strategies/proof/` is a scaffold, not a strategy.** It proves the boundary
 carries data both ways against real stored filings: it reads one measure,
 always holds, and holds no view about any security.
 
 ### Seeing it work without any of your own data
 
-**Data → Load sample journal** creates a separate journal of ten invented
-companies with history already on them — a holding with nothing to do, one
-that crossed a sell line and is waiting for a second filing before anything
-happens, one whose balance sheet came apart, one the two-year clock has run
-out on, one that grew too large a share of the account, a purchase made
-against the signal and one made without one. Its own journal, because a
-journal has one strategy and the sample is written against Graham.
+**Data → Load sample journals** creates one journal of invented companies
+per strategy, with history already on them — a holding with nothing to do,
+one that crossed a sell line and is waiting for a second filing before
+anything happens, one whose balance sheet came apart, one the two-year clock
+has run out on, one that grew to half the account and is deliberately left
+alone, a business that quietly stopped being worth owning, a verdict that
+refuses to decide until you have answered something, a purchase made against
+the signal and one made without one.
 
-Every company and figure in it is invented. It is built by
-`tools/make_sample.py`, which drives this same API and refuses to write the
-file if any security stops telling the story its notes claim.
+They are separate journals because a journal has exactly one strategy and it
+does not change. Loading them together is the fastest way to see what that
+costs and what it buys: a cheap, ordinary company is a candidate in one and a
+refusal in the other, a good business at a full price is the reverse, and
+neither journal is wrong.
+
+Every company and figure in them is invented. They are built by the scripts
+in `tools/`, which drive this same API and refuse to write a file if any
+security stops telling the story its notes claim.
 
 ### Changing what a strategy demands
 
@@ -725,11 +744,15 @@ config/metric-bank.yaml   what every measure IS — no thresholds live here
 config/concept-map.yaml   how bank inputs resolve onto XBRL concepts — the
                           tag-selection judgement, as reviewable data
 strategies/               one directory per strategy; discovered, not listed
-  graham/                 the first real one: strategy.py and values.yaml
+  graham/                 buys a statistical discount: strategy.py, values.yaml
+  buffett/                buys a wonderful business, and asks you three
+                          questions no filing can answer
   proof/                  the contract scaffold; holds no view about anything
-data.template/sample.json the demonstration journal — invented companies
-tools/make_sample.py      builds it by driving the real API, and refuses to
-                          write it if a story stops being true
+data.template/            one demonstration journal per strategy — invented
+                          companies, invented figures
+tools/sample_kit.py       the shared machinery every sample is built with
+tools/make_sample.py      builds them by driving the real API, and refuses to
+                          write one if a story stops being true
 engine/                   no UI imports live here
   contract.py             the host/strategy boundary: what a strategy
                           declares, receives and must return

@@ -1,0 +1,72 @@
+# Shipped defaults for Buffett's declared values.
+#
+# What each of these MEANS, why it sits where it does and where it misfires
+# lives in strategy.py beside the declaration. This file holds only the
+# numbers, so they can be read, compared and changed without touching logic
+# — and so a change to one of them is a recordable event rather than a diff
+# in a source file nobody reads.
+#
+# Every number below except `portfolio-slots` and `position-weight-cap` is
+# the expert report's, at the level it states. Nothing is rounded or
+# converted. Those two are attributed to Buffett's own documented practice,
+# because the report was scoped to selection and to exits and was never
+# asked about how much to buy — the same gap Graham had.
+#
+# One number is written in a form the report does not use, and it is the one
+# to check first: `exit-roic-fall` is the report's 33 with a minus sign in
+# front of it. The report states the level as a magnitude and puts the
+# direction in the sentence around it ("falls 33% below entry value"); the
+# host reads a limit as a signed number and compares it against a signed
+# change. The magnitude is untouched. See its `explain`.
+#
+# Bump `version` whenever any number here moves. That is what makes the
+# change appear on the rule-change record of every journal running this
+# strategy, with a before and an after.
+version: 1
+
+values:
+
+  # How the fifteen entry tests roll up
+  core-tests-required: 7
+
+  # How much, and how many — Buffett's practice, not the report
+  portfolio-slots: 10
+  position-weight-cap: 40
+
+  # The discipline that is not a measure. There is no holding period here
+  # and that is deliberate: nothing in this strategy closes a position for
+  # having been owned a long time.
+  sell-confirmation-filings: 2
+  fcf-exit-quarters: 4
+
+  # The three knockouts
+  min-roic: 15
+  max-debt-to-ebitda: 2.5
+  min-owner-earnings-yield: 5
+
+  # The nine core tests
+  min-interest-coverage: 8
+  max-gross-margin-range: 6
+  min-fcf-margin: 10
+  min-cash-conversion: 0.90
+  max-share-count-change: 0
+  min-roe: 15
+  min-revenue-cagr: 4
+  min-profit-growth-spread: -1
+  max-goodwill-to-assets: 40
+
+  # The three bonus tests. The tax band is one test in the report and two
+  # numbers here, because a band is two comparisons.
+  min-effective-tax-rate: 10
+  max-effective-tax-rate: 35
+  min-current-ratio: 1.0
+  max-payout-to-fcf: 80
+
+  # The five exits. Not one of them is a valuation measure, and that is the
+  # whole character of this strategy rather than an omission.
+  exit-roic-fall: -33
+  exit-roic-level: 12
+  exit-debt-to-ebitda: 4.0
+  exit-interest-coverage: 4
+  exit-fcf-margin: 0
+  exit-share-count-change: 10

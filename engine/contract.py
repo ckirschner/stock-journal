@@ -44,7 +44,8 @@ or the id of a setting, and "five points below what it was when you bought"
 is neither. The baseline comes off what the purchase froze rather than a
 recomputation of that day: a restatement must not be able to move the level
 a re-underwrite is measured against. See BASELINE_ANCHORS for why there are
-two of them and why averaging them is wrong.
+two of them and why averaging them is wrong, and CHANGE_FORMS for why "how
+far" has two honest answers and why a strategy has to say which it means.
 
 A strategy also declares what it needs *from the user*. Declared values are
 numbers it has an opinion about and ships a default for; declared inputs are
@@ -134,6 +135,21 @@ from types import MappingProxyType
 # key nobody reads decides nothing. Bumping anyway would refuse fifteen
 # correct bundles to no end, and a version number that moves for additions
 # stops being evidence that a meaning moved.
+#
+# Deliberately NOT bumped, again, for `change` — the second strategy's one
+# demand on the contract. A `since` citation may now say whether the move is
+# counted in the measure's own units or as a share of what the reading was at
+# that purchase (see CHANGE_FORMS), because a rule reading "the returns have
+# fallen by a third" is a claim about proportion, and no tolerance in points
+# says the same thing to a business earning 45% and one earning 15%.
+#
+# It passes the same test the additions above pass, and it is worth saying
+# exactly how, because this one changes arithmetic rather than adding a key
+# nobody reads. Left out, `change` is `distance` — bit for bit the subtraction
+# every existing citation already got. A bundle written before this key
+# existed cannot ask for the other form and cannot be handed it by accident,
+# so the meaning that moved is reachable only from a citation that names it,
+# and a strategy that names nothing is owed no version.
 CONTRACT_VERSION = 5
 
 # A strategy may declare at most this many states. The cap is deliberate:
@@ -359,6 +375,65 @@ BASELINE_ANCHORS = MappingProxyType({
 })
 
 
+# ---------------------------------------------------------------------------
+# How far is "how far" — the two ways a move from a baseline is measured.
+#
+# `since` used to answer one question: subtract the reading then from the
+# reading now. That is the right answer for a measure whose levels mean
+# something on their own — a current ratio going from 2.6 to 2.1 has lost half
+# a turn, and half a turn is half a turn wherever it started.
+#
+# It is the wrong answer for a measure whose levels do not. A rule saying "the
+# returns this business earns have fallen by a third" is a claim about
+# proportion, and a third of 22% is seven and a half points while a third of
+# 45% is fifteen. One tolerance in points either fires on a decline the
+# high-return business shrugs off, or never fires on the low-return one. The
+# same rule stated as a share of what it was is one number that means the same
+# thing to both.
+#
+# A strategy could not express that at all before this table existed, and the
+# hole was exactly where it is least visible. It cannot cite the proportion,
+# because a limit is a number stated outright or the id of a setting, and "a
+# third below what it was when you bought" is neither. It could work the
+# number out privately and state the answer — but the answer is built from a
+# figure the host owns, so a strategy stating it is a strategy quoting the
+# host, which is the one thing the evidence split exists to prevent. So the
+# strategy owns the question, the form of the comparison included, and the
+# host owns every number in the row.
+#
+# Adding a form is a host change in this one table.
+# ---------------------------------------------------------------------------
+
+CHANGE_FORMS = MappingProxyType({
+    "distance": MappingProxyType({
+        "suffix": "",
+        "explain":
+            "How far this has moved, counted in the units the figure itself "
+            "is in. A ratio that went from 2.6 to 2.1 has moved by 0.5.",
+    }),
+    "proportion": MappingProxyType({
+        "suffix": ", as a share of what it was then",
+        "explain":
+            "How far this has moved, as a percentage of what it was at that "
+            "purchase rather than as a number of units. A return on capital "
+            "that went from 21% to 14% has fallen by a third — and reads as "
+            "-33%, not as -7.\n\n"
+            "It is the honest way to compare a move on a measure whose level "
+            "means nothing on its own. Seven points off a business earning "
+            "45% is an ordinary year; seven points off one earning 15% is "
+            "most of the reason you owned it. A limit in points cannot say "
+            "both, and a limit stated this way says the same thing to "
+            "either.\n\n"
+            "Measured against the size of the reading at that purchase and "
+            "not its sign, so a figure that was negative and got more "
+            "negative reads as a fall rather than as a rise. Where the "
+            "reading at that purchase was nought there is no share of it to "
+            "take, and this is absent rather than being reported as an "
+            "infinite move.",
+    }),
+})
+
+
 def _cmp(phrase, fn, numeric_only):
     return MappingProxyType({"phrase": phrase, "fn": fn,
                              "numeric_only": numeric_only})
@@ -555,7 +630,7 @@ INPUT_ROLES = MappingProxyType({
 # Exactly one of these names the subject of an evidence item.
 _SUBJECT_KEYS = ("measure", "fact", "input", "value", "label")
 _ITEM_KEYS = {"measure", "fact", "input", "value", "label", "unit", "actual",
-              "absent", "at", "since", "comparator", "threshold",
+              "absent", "at", "since", "change", "comparator", "threshold",
               "threshold_from", "group"}
 
 # What a group may demand of its members. Three words, host-owned, and a
@@ -1759,6 +1834,19 @@ def _check_evidence_item(record, item, where, errors) -> None:
                 "anchor to. A strategy never invents one; anything missing "
                 "is a request against the host.")
 
+    if "change" in item:
+        if "since" not in item:
+            errors.append(
+                f"{where}: `change` says how a move from a baseline is "
+                "counted, so it only means something alongside `since`. On "
+                "its own there are not two readings to have moved between.")
+        elif item["change"] not in CHANGE_FORMS:
+            errors.append(
+                f'{where}: `change` must be one of '
+                f"{', '.join(CHANGE_FORMS)} — the ways the host counts a "
+                "move. A strategy never invents one; anything missing is a "
+                "request against the host.")
+
     has_cmp = "comparator" in item
     limits = [k for k in ("threshold", "threshold_from") if k in item]
     if has_cmp:
@@ -1902,6 +1990,19 @@ def _measure_observation(ctx, item):
                      + list(hit.get("provenance") or [])), None
 
 
+def _change_form(item) -> str:
+    """Which of the two ways a move from a baseline is measured.
+
+    Left out, it is `distance` — what every citation written before this key
+    existed meant, and what it goes on meaning. A default that changed the
+    arithmetic would be the silent misreading the contract version exists to
+    refuse, so the default is the old behaviour and the new one is asked for
+    by name.
+    """
+    form = item.get("change") if _is_mapping(item) else None
+    return form if form in CHANGE_FORMS else "distance"
+
+
 def _baseline_observation(ctx, item):
     """How far a measure has moved since a purchase.
 
@@ -1939,6 +2040,19 @@ def _baseline_observation(ctx, item):
         return None, (f'the baseline "{anchor_id}", which the host does not '
                       "anchor to. It anchors to: "
                       f"{', '.join(BASELINE_ANCHORS)}.")
+    # Refused here and not left to `_change_form`, which has to keep handing
+    # back a usable key because the rendering path indexes CHANGE_FORMS with
+    # it. A form the host does not have is a fault in the strategy, exactly
+    # like an anchor it does not have, and it has to be loud in the same
+    # place: `test` is asked how a comparison came out *while the strategy is
+    # deciding*, before any validation runs, so a misspelling that quietly
+    # fell back to `distance` would change the arithmetic a verdict was
+    # chosen by and leave nothing on screen saying so.
+    if "change" in item and item["change"] not in CHANGE_FORMS:
+        return None, (f'how "{mid}" has moved counted as '
+                      f'"{item["change"]}", which is not one of the ways the '
+                      f"host counts a move. It counts: "
+                      f"{', '.join(CHANGE_FORMS)}.")
     entry = (ctx.get("measures") or {}).get(mid)
     if entry is None:
         return None, (f'the measure "{mid}", which is not in the metric '
@@ -1980,10 +2094,30 @@ def _baseline_observation(ctx, item):
     cautions = [f"the reading now — {c}" for c in (now.get("cautions") or [])]
     cautions += [f"the reading you bought at — {c}"
                  for c in (then.get("cautions") or [])]
-    return _observed(
-        after - before, "baseline", cautions,
-        [f"{before:g} on {when}, frozen at that purchase and not worked out "
-         f"again, against {after:g} now"]), None
+    frozen = (f"{before:g} on {when}, frozen at that purchase and not worked "
+              f"out again, against {after:g} now")
+
+    if _change_form(item) == "proportion":
+        # Against the SIZE of the reading then, never its sign. A margin that
+        # was -4% and is now -8% has got twice as bad, and dividing by a
+        # negative would report that as +100% — a worsening rendered as an
+        # improvement, in a figure an exit rule fires on.
+        #
+        # Nought has no share of it to take. Not a very large number, not a
+        # zero, not carried over from the distance: absent, with the reason,
+        # exactly as principle 4 asks of every value the host cannot honestly
+        # reach.
+        if before == 0:
+            return _unobserved(
+                f"this was nought on {when}, and a share of nought is not a "
+                "quantity — how far it has moved in proportion cannot be "
+                "worked out from it", "baseline"), None
+        return _observed(
+            (after - before) / abs(before) * 100, "baseline", cautions,
+            [frozen + f", which is a move of {(after - before) / abs(before) * 100:+.1f}% "
+                      "against what it was then"]), None
+
+    return _observed(after - before, "baseline", cautions, [frozen]), None
 
 
 def _fact_observation(ctx, item):
@@ -2198,7 +2332,10 @@ def _cited_as(item) -> str:
     at = f' at {item["at"]}' if "at" in item else ""
     if "since" in item:
         anchor = BASELINE_ANCHORS.get(item["since"]) or {}
-        at = f' {anchor.get("label", item["since"])}'
+        form = _change_form(item)
+        at = (f' {anchor.get("label", item["since"])}'
+              + (" as a share of what it was"
+                 if form == "proportion" else ""))
     return f'the test of "{named}"{at}'
 
 
@@ -2295,12 +2432,15 @@ def resolve_evidence(record: dict, ctx: dict, items: list):
                 # points" — the two render side by side on a re-underwrite
                 # screen and the second is the one deciding something.
                 anchor = BASELINE_ANCHORS.get(item["since"]) or {}
+                form = _change_form(item)
                 view = {"kind": "change", "id": item["measure"],
                         "label": f'{_bank_label(item["measure"])}, change '
-                                 f'{anchor.get("label", "")}'.strip(),
-                        "unit": _change_unit(item["measure"]),
-                        "since": item["since"],
-                        "explain": _change_explain(item["measure"], anchor)}
+                                 f'{anchor.get("label", "")}'.strip()
+                                 + CHANGE_FORMS[form]["suffix"],
+                        "unit": _change_unit(item["measure"], form),
+                        "since": item["since"], "change": form,
+                        "explain": _change_explain(item["measure"], anchor,
+                                                   form)}
             else:
                 view = {"kind": "judgement" if judged else "measure",
                         "id": item["measure"],
@@ -2500,28 +2640,40 @@ def _bank_unit(measure_id):
     return unit if unit in EVIDENCE_UNITS else "none"
 
 
-def _change_unit(measure_id):
-    """How a distance between two readings renders.
+def _change_unit(measure_id, form="distance"):
+    """How a move between two readings renders.
 
-    A change in a percentage is not a percentage. Gross margin going from 40%
-    to 34% is six percentage points, and rendering that as "6%" invites the
-    reader to take it for a relative move — which is a different number
+    A distance in a percentage is not a percentage. Gross margin going from
+    40% to 34% is six percentage points, and rendering that as "6%" invites
+    the reader to take it for a relative move — which is a different number
     (fifteen percent of the original) pointing the same way, so the mistake
     survives a sanity check. Everything else keeps its own unit, because the
     distance between two ratios is a ratio and the distance between two
     dollar figures is dollars.
+
+    A proportion is a percent whatever it was taken of, because it is no
+    longer in the measure's units at all — it is the share of the old reading
+    the move came to. That is the same distinction the paragraph above turns
+    on, which is why the two forms must never share a unit: "-6" and "-15%"
+    describing one decline is the whole point, and a screen that rendered
+    both as "6" would make the two forms indistinguishable in the one place
+    the difference decides something.
     """
+    if form == "proportion":
+        return "percent"
     unit = _bank_unit(measure_id)
     return "percentage_points" if unit == "percent" else unit
 
 
-def _change_explain(measure_id, anchor):
-    """What a change row means, and what the thing changing is. Both, because
-    a reader who has never valued a company needs the second before the first
-    is worth anything — and the bank's account of the measure is the only
-    place either of them is written down once."""
+def _change_explain(measure_id, anchor, form="distance"):
+    """What a change row means, how it is counted, and what the thing
+    changing is. All three, because a reader who has never valued a company
+    needs the last before the first two are worth anything — and the bank's
+    account of the measure is the only place any of them is written down
+    once."""
     entry = _bank_entry(measure_id) or {}
-    parts = [anchor.get("explain"), entry.get("plain")]
+    parts = [anchor.get("explain"), (CHANGE_FORMS.get(form) or {}).get(
+        "explain") if form != "distance" else None, entry.get("plain")]
     return "\n\n".join(p for p in parts if p) or None
 
 
