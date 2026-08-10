@@ -1,0 +1,40 @@
+# Shipped defaults for the worked example's declared values.
+#
+# Every number here is invented to demonstrate a mechanism. None of them is a
+# recommendation, none came from anywhere, and the `source` beside each one in
+# strategy.py says exactly that — which is the honest answer for a figure with
+# nothing behind it, and the case that field exists to make visible.
+#
+# What each of these MEANS lives in strategy.py beside its declaration. This
+# file holds only the numbers, so they can be read, compared and changed
+# without touching logic — and so a change to one is a recordable event rather
+# than a diff in a source file nobody reads.
+#
+# Bump `version` whenever any number below moves. That is what puts the change
+# on the rule-change record of every journal running this bundle, with a
+# before and an after. Move a number and leave the version alone and the host
+# still catches it, and reports it as the louder thing it is.
+version: 1
+
+values:
+
+  # The two knockouts. One of these failing ends it, whatever else passed.
+  min-roic: 12
+  max-debt-to-ebitda: 3.0
+
+  # How the second tier rolls up. Two of three, so one test may fail.
+  core-tests-required: 2
+
+  # The three core tests.
+  min-current-ratio: 1.2
+  min-fcf-margin: 5
+  min-interest-coverage: 8
+
+  # The exit, and what confirms it. The exit level sits well below the entry
+  # level on the same measure on purpose: what it takes to be bought is not
+  # what it takes to be kept.
+  exit-interest-coverage: 4
+  exit-confirmation-filings: 2
+
+  # How much goes in.
+  position-weight-cap: 10
