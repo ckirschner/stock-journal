@@ -196,11 +196,30 @@ host, not something to work around.
 
 `engine/contract.py` is the full specification and is written to be read.
 
+**`strategies/graham/` is the first real one.** It buys a statistical
+discount on a business it forms no opinion about, and sells when the discount
+closes, when the balance sheet stops being safe, or when two years are up. It
+declares eleven states, twenty-eight settings and one answer it needs from
+you, and every threshold in it carries what it means, why that number and
+where it misfires.
+
 **`strategies/proof/` is a scaffold, not a strategy.** It proves the boundary
-carries data both ways: it reads one measure, always holds, and holds no view
-about any security. Real strategies are being ported from the rulesets kept
-in `dev_reference_docs/legacy-profiles/`; until they land, the app produces
-only the scaffold's verdicts.
+carries data both ways against real stored filings: it reads one measure,
+always holds, and holds no view about any security.
+
+### Seeing it work without any of your own data
+
+**Data → Load sample journal** creates a separate journal of ten invented
+companies with history already on them — a holding with nothing to do, one
+that crossed a sell line and is waiting for a second filing before anything
+happens, one whose balance sheet came apart, one the two-year clock has run
+out on, one that grew too large a share of the account, a purchase made
+against the signal and one made without one. Its own journal, because a
+journal has one strategy and the sample is written against Graham.
+
+Every company and figure in it is invented. It is built by
+`tools/make_sample.py`, which drives this same API and refuses to write the
+file if any security stops telling the story its notes claim.
 
 ### Changing what a strategy demands
 
@@ -441,6 +460,11 @@ config/metric-bank.yaml   what every measure IS — no thresholds live here
 config/concept-map.yaml   how bank inputs resolve onto XBRL concepts — the
                           tag-selection judgement, as reviewable data
 strategies/               one directory per strategy; discovered, not listed
+  graham/                 the first real one: strategy.py and values.yaml
+  proof/                  the contract scaffold; holds no view about anything
+data.template/sample.json the demonstration journal — invented companies
+tools/make_sample.py      builds it by driving the real API, and refuses to
+                          write it if a story stops being true
 engine/                   no UI imports live here
   contract.py             the host/strategy boundary: what a strategy
                           declares, receives and must return
@@ -536,7 +560,8 @@ preference.
 ```
 pip install pyinstaller
 pyinstaller --noconfirm --windowed --name Ledger ^
-  --add-data "ui;ui" --add-data "config;config" --add-data "strategies;strategies" app.py
+  --add-data "ui;ui" --add-data "config;config" --add-data "strategies;strategies" ^
+  --add-data "data.template;data.template" app.py
 ```
 
 Use `:` instead of `;` in `--add-data` on macOS and Linux.
@@ -551,8 +576,13 @@ with Windows 10 and 11, so the build stays around 20 MB rather than the
 
 ## What isn't built yet
 
-- **Real strategies.** Only the contract scaffold ships. The rulesets in
-  `dev_reference_docs/legacy-profiles/` are the input to writing them.
+- **Three of the four strategies.** Graham ships; Buffett, Lynch and Discount
+  Closure do not. The rulesets in `dev_reference_docs/legacy-profiles/` are
+  the input to writing them.
+- **A risk-free rate.** One strategy test — the earnings yield against what a
+  government bond pays — needs a number that is in no filing and is not price
+  data, and nothing here can be told it. The measure reads absent, which is
+  honest, and the test never passes.
 - **Adding to a position, in the interface.** The lot record and the engine
   serve several buys and partial sales against named lots, but the screens
   offer no way to add to a position that is already open — that carries the

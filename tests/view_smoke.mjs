@@ -15,7 +15,14 @@
 import fs from "node:fs";
 import vm from "node:vm";
 
-const [statePath, appPath] = process.argv.slice(2);
+const [statePath, appPath, mode] = process.argv.slice(2);
+/* Two jobs, one harness. "coverage" (the default) also insists the payload
+   reaches every surface the view draws — that is what stops a screen being
+   silently unexercised. "render-only" drops those complaints and keeps the
+   real ones, for a payload that exists to draw the branches the coverage
+   fixture cannot reach and is not expected to reach the ones it can. A gap
+   is not a defect; an unrendered screen is. */
+const DEMAND_COVERAGE = mode !== "render-only";
 const state = JSON.parse(fs.readFileSync(statePath, "utf8"));
 
 const els = {};
@@ -56,6 +63,10 @@ run(`window.pywebview = { api: {
 ["view", "maststats", "subtitle", "foot", "tabs"].forEach(mkEl);
 
 const problems = [];
+/* A surface the payload never reached. Only a defect when this run is the one that is supposed to reach everything. */
+const gap = (...parts) => {
+  if (DEMAND_COVERAGE) problems.push(parts.join(""));
+};
 const out = {};
 
 function check(label, code) {
@@ -202,8 +213,8 @@ const stamped = run(`(() => {
   return { ticker: s.ticker, cited };
 })();`);
 if (!stamped) {
-  problems.push("no security in the payload has a computed value, so the "
-                + "qualified-figure rendering is unexercised");
+  gap("no security in the payload has a computed value, so the "
+      + "qualified-figure rendering is unexercised");
 } else {
   check("qualified:detail", "detailView(__qs)");
   dlg("qualified:values", "dlgMetrics(__qs)");
@@ -288,8 +299,8 @@ for (const s of state.securities) {
   }
 }
 if (spoke && !attributed) {
-  problems.push("no verdict in the harness cites a limit by the setting it "
-                + "came from — the attribution renders against nothing");
+  gap("no verdict in the harness cites a limit by the setting it "
+      + "came from — the attribution renders against nothing");
 }
 
 // The questions no filing answers. Three renderings have to work: an
@@ -299,8 +310,8 @@ if (spoke && !attributed) {
 // keeping them and are invisible if only the newest one draws.
 const judged = state.securities.filter((s) => (s._judgements || []).length);
 if (spoke && !judged.length) {
-  problems.push("no security in the payload has a judgement to answer, so "
-                + "the whole judgement surface renders against nothing");
+  gap("no security in the payload has a judgement to answer, so "
+      + "the whole judgement surface renders against nothing");
 }
 let answered = 0, unanswered = 0, revised = 0;
 for (const s of judged) {
@@ -333,10 +344,52 @@ for (const s of judged) {
 for (const [n, what] of [[answered, "answered"], [unanswered, "unanswered"],
                          [revised, "revised"]]) {
   if (spoke && !n) {
-    problems.push(`no ${what} judgement in the payload — that rendering is `
-                  + "unexercised and would pass however broken it is");
+    gap(`no ${what} judgement in the payload — that rendering is `
+        + "unexercised and would pass however broken it is");
   }
 }
+/* Every scalar a decision's payload carries has to reach the screen.
+
+   `esc(undefined)` is the empty string, so a payload key the view reads by
+   the wrong name does not throw and does not print the word "undefined" —
+   it prints nothing at all, and "Exit due" with no date beside it is a
+   scheduled exit whose day has silently gone missing. Checked generically,
+   over whatever keys the payload happens to carry, so a render type added
+   later is covered without this being edited. */
+for (const s of state.securities) {
+  const decision = s._decision || {};
+  const wanted = [];
+  const walk = (node) => {
+    if (node === null || node === undefined) return;
+    if (typeof node === "object") { Object.values(node).forEach(walk); return; }
+    if (typeof node === "boolean") return;
+    /* Figures, dates and prose — the parts that mean something on their own
+       and vanish silently when read by the wrong key. A payload's unit
+       discriminator ("weight", "shares") is not among them: the view turns
+       it into a phrase rather than printing the word. */
+    if (typeof node === "number" || /^\d{4}-\d{2}-\d{2}$/.test(node)
+        || String(node).includes(" ")) wanted.push(String(node));
+  };
+  walk(decision.payload);
+  if (!wanted.length) continue;
+  const html = String(run(`(() => { const was = openTicker;`
+    + ` openTicker = ${JSON.stringify(s.ticker)};`
+    + ` const h = decisionSection((find(${JSON.stringify(s.ticker)}) || {})._decision);`
+    + ` openTicker = was; return h; })()`));
+  /* The view escapes what it prints, so an apostrophe in a sentence is
+     `&#39;` on the page. Compared both ways rather than only raw. */
+  const escaped = (v) => v.replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+  for (const value of wanted) {
+    if (!html.includes(value) && !html.includes(escaped(value))) {
+      problems.push(`detail:${s.ticker}: the ${decision.render} payload `
+                    + `carries ${JSON.stringify(value)} and the screen does `
+                    + "not say it");
+    }
+  }
+}
+
 // Recorded history offers no actions. A lot's frozen decision renders
 // through the same row as the live one, and a purchase recorded in 2024
 // says what was unanswered THEN — a button inside it reads as though
@@ -346,8 +399,8 @@ const frozenJudged = state.securities.filter(
     (l) => ((((l.snapshot || {}).decision || {}).reason || {}).evidence || [])
       .some((e) => (e.subject || {}).kind === "judgement")));
 if (spoke && !frozenJudged.length) {
-  problems.push("no lot in the payload froze a judgement citation, so "
-                + "nothing checks what a frozen judgement row offers");
+  gap("no lot in the payload froze a judgement citation, so "
+      + "nothing checks what a frozen judgement row offers");
 }
 for (const s of frozenJudged) {
   const html = run(`(() => { const was = openTicker;`
@@ -487,8 +540,8 @@ if (held) {
 // in a gate on lot history rather than on shares held.
 const closed = state.securities.filter((s) => s.bucket === "previous");
 if (!closed.length) {
-  problems.push("the harness built no closed position — the previous screen "
-                + "renders against nothing and proves nothing");
+  gap("the harness built no closed position — the previous screen "
+      + "renders against nothing and proves nothing");
 } else {
   for (const s of closed) {
     must.push([`detail:${s.ticker}`, 'data-act="buy"',
@@ -514,9 +567,9 @@ if (!closed.length) {
 // groups the entries by holding, and no figure spanning them is unlabelled.
 const twice = state.securities.filter((s) => (s._cycles || []).length > 1);
 if (!twice.length) {
-  problems.push("the harness built no security held more than once — the "
-                + "grouping, the ordinals and the windowed since-exit are "
-                + "unexercised");
+  gap("the harness built no security held more than once — the "
+      + "grouping, the ordinals and the windowed since-exit are "
+      + "unexercised");
 }
 for (const s of twice) {
   must.push([`detail:${s.ticker}`, "First holding",

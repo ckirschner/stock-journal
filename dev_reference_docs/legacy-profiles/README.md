@@ -11,6 +11,14 @@ tier rollup, sell watch and the position clock were three separate paths that
 each reached a conclusion, and under the contract they become one decision
 matrix returning one state.
 
+**`graham.yaml` has been ported.** `strategies/graham/` is the result, and
+every threshold in it was taken from the expert report rather than from this
+file; this one was used to cross-check that nothing was dropped. Three
+remain. One thing the port needed and neither source carries: position
+sizing. The report was scoped to selection and to exits, so Graham's slot
+count and position weight cap come from Graham's own documented practice and
+say so where they are declared. Expect the same gap in the other three.
+
 Read them as a record of *what levels a strategy demanded*, and of the
 written reasoning beside each one (`why:` blocks), which is the part worth
 preserving. Do not read them as a description of how a strategy is now

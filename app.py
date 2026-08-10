@@ -16,6 +16,7 @@ every screen comes from one call to engine.contract.evaluate.
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import sys
 import threading
@@ -1409,6 +1410,50 @@ class Api:
         summary = backup.import_bundle(paths[0])
         journals.set_open(journals.resolve_open())
         return ok(summary=summary)
+
+    SAMPLE = Path(__file__).resolve().parent / "data.template" / "sample.json"
+
+    @guarded
+    @locked
+    def load_sample(self):
+        """Create a demonstration journal from invented companies.
+
+        A new journal rather than a fill of the open one, because a journal
+        has exactly one strategy: the sample is written against Graham, and
+        pouring its securities into a journal stamped with something else
+        would judge them by rules their stories were never about. Nothing
+        already here is touched.
+
+        The file holds securities exactly as a journal stores them —
+        appended lots, frozen entry snapshots, dated hand-entered figures
+        and dated notes — because it was built by driving this API against a
+        scratch directory (tools/make_sample.py). Every company and figure
+        in it is invented.
+        """
+        if not self.SAMPLE.exists():
+            return err("The sample file is not in this build. It is written "
+                       "by tools/make_sample.py.")
+        sample = json.loads(self.SAMPLE.read_text(encoding="utf-8"))
+        strategies, _ = self._strategies()
+        record = strategies.get(sample.get("strategy"))
+        if record is None:
+            return err(f'The sample is written against the '
+                       f'"{sample.get("strategy")}" strategy, which is not '
+                       "installed here, so its verdicts could not be "
+                       "produced.")
+        inputs, problems = contract.check_inputs(
+            record, {f["id"]: sample.get("free_cash")
+                     for f in record.get("inputs", [])
+                     if f.get("role") == "cash"},
+            strategy_values.resolve(record)["values"])
+        if problems:
+            return err(" ".join(problems))
+        journal = journals.create(f"Sample — {record['name']}", record,
+                                  inputs=inputs)
+        journal["securities"] = sample["securities"]
+        journals.save(journal)
+        journals.set_open(journal["id"])
+        return ok(name=journal["name"], n=len(sample["securities"]))
 
     @guarded
     @locked
