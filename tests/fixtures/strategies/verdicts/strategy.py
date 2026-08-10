@@ -14,7 +14,7 @@ STRATEGY = {
                "reaches a different state either side of it. It is not "
                "investment logic.",
     "version": 1,
-    "contract": 4,
+    "contract": 5,
     "changelog": {1: "First version: reads free cash flow against a floor."},
     "states": [
         {"id": "say-yes", "name": "Commit", "render": "commit",
@@ -33,6 +33,7 @@ STRATEGY = {
     "values": [
         {"id": "cash-floor", "label": "Cash flow floor", "type": "number",
          "unit": "usd",
+         "source": {"name": "a test fixture", "reasoning": True},
          "explain": "The trailing free cash flow a company must clear "
                     "before this fixture will propose anything."},
     ],

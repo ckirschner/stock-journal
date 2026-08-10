@@ -21,6 +21,21 @@ it is what lets the same evidence be compared across securities and counted
 over time. Prose that genuinely will not fit goes in `reason.note`, which is
 one string and deliberately harder to reach for.
 
+Evidence is gathered into *groups*, and a group says what it demands of its
+own members — all of them, at least so many of them, or nothing. Two things
+follow, and the second is why a group is more than a subheading. A reader
+looking at fifteen rows learns which four were disqualifying without being
+told in prose. And the host can count the passes itself, which means the
+rollup — "six of eight" — is derived from the same outcomes the rows render,
+and a state that puts capital in can be *refused* when the requirements it
+cites are not met. A verdict that contradicts its own evidence is the exact
+failure this contract exists to prevent, and until v5 nothing checked it.
+
+The same idea one level down is `test`: a strategy asks the host how one
+comparison came out rather than working it out itself. There is then one
+computation, not two that can disagree, and the comparators stay where the
+answers do.
+
 A strategy also declares what it needs *from the user*. Declared values are
 numbers it has an opinion about and ships a default for; declared inputs are
 facts about the account that no strategy could guess. Inputs build the setup
@@ -38,7 +53,6 @@ is why the host does it.
 
 from __future__ import annotations
 
-import copy
 import traceback
 from datetime import date
 from types import MappingProxyType
@@ -84,12 +98,32 @@ from types import MappingProxyType
 #    means the strategy may not attribute it. A v3 item supplying both is
 #    refused, which is loud — but refusing it at *load*, by version, beats
 #    refusing every verdict it produces at evaluation.
-CONTRACT_VERSION = 4
+# 5: a decision that puts capital in may no longer be contradicted by its own
+#    evidence. A v4 strategy could return a commit state beside a citation
+#    the host resolved as failed, and both rendered — the strategy having
+#    computed the comparison a second time, privately, and got a different
+#    answer. Under v5 the host derives every comparison once (see `test`),
+#    evidence is gathered into groups that say which rows are requirements,
+#    and a commit whose requirements are unmet is refused. A v4 bundle would
+#    keep working right up to the verdict it got wrong, so it is refused at
+#    load instead.
+#
+#    Bundled with it, because bumping once beats bumping twice: a declared
+#    value must now say where its number came from, the context is handed
+#    over frozen rather than copied, `position.months_held` joins HOST_FACTS,
+#    and the state cap moves to 16.
+CONTRACT_VERSION = 5
 
 # A strategy may declare at most this many states. The cap is deliberate:
 # states are user-facing vocabulary, and complexity must not creep back in
 # through the plugin door.
-MAX_STATES = 12
+#
+# Sixteen rather than twelve. The first real strategy needed eleven of the
+# twelve on the most mechanical style there is — a purely quantitative screen
+# with no view about any business — which is evidence rather than a guess:
+# whatever the right cap is, it is not one state above what the simplest case
+# already wanted.
+MAX_STATES = 16
 
 _ID_CHARS = "abcdefghijklmnopqrstuvwxyz0123456789-"
 
@@ -217,9 +251,15 @@ SPLIT_TEST = (
 # no need for. A strategy picks from this list; it never invents one.
 EVIDENCE_UNITS = (
     "percent", "percentage_points", "times", "ratio", "score", "usd",
-    "shares", "years", "days", "count", "times_own_median",
+    "shares", "years", "months", "days", "count", "times_own_median",
     "date", "text", "yes_no", "none",
 )
+
+# How a comparison came out. The host derives one of these and a strategy
+# never asserts one — but it does branch on them, so the words are here to
+# be imported rather than spelled out again inside a bundle.
+PASS, FAIL, UNKNOWN, NOTED = "pass", "fail", "unknown", "noted"
+OUTCOMES = (PASS, FAIL, UNKNOWN, NOTED)
 
 
 def _cmp(phrase, fn, numeric_only):
@@ -239,9 +279,10 @@ COMPARATORS = MappingProxyType({
 })
 
 
-def _fact(label, unit, path, bare=False, when_missing=None):
+def _fact(label, unit, path, explain, bare=False, when_missing=None):
     return MappingProxyType({"label": label, "unit": unit, "path": path,
-                             "bare": bare, "when_missing": when_missing})
+                             "explain": explain, "bare": bare,
+                             "when_missing": when_missing})
 
 
 # Host-provided facts a strategy may cite by name. These are the figures the
@@ -259,23 +300,81 @@ def _fact(label, unit, path, bare=False, when_missing=None):
 # company a buy for one person and a sell for another on the same day, and
 # averaging down is that bias in its purest form. Market value and weight
 # survive because they are price × shares, which is a fact about today.
+#
+# `position.months_held` is here for a duller reason: it is arithmetic over
+# two dates the host already owns, and every strategy with a clock in it
+# would otherwise write that arithmetic again. Month arithmetic looks trivial
+# and is not — 29 February plus twenty-four months is 28 February, and a
+# count that disagrees with that clamp reports a position as 23 months held
+# on the day it falls due. See `months_after`, which both directions derive
+# from so they cannot drift.
+#
+# Every one of them carries its own plain-language explanation, because a
+# figure on a screen that the reader cannot find out the meaning of is an
+# incomplete figure. These sit beside the bank's explanations for measures
+# and the author's for a declared setting, so a row of evidence can always
+# be asked what it is regardless of which kind of thing it cites.
 HOST_FACTS = MappingProxyType({
-    "position.weight": _fact("Position weight", "percent",
-                             ("position", "weight")),
-    "position.market_value": _fact("Position market value", "usd",
-                                   ("position", "market_value")),
-    "position.shares": _fact("Shares held", "shares",
-                             ("position", "shares"), bare=True),
-    "position.opened": _fact("Held since", "date",
-                             ("position", "opened"), bare=True,
-                             when_missing="no position is held"),
-    "portfolio.cash": _fact("Free cash", "usd", ("portfolio", "cash")),
-    "portfolio.account_value": _fact("Account value", "usd",
-                                     ("portfolio", "account_value")),
-    "portfolio.slots_occupied": _fact("Positions held", "count",
-                                      ("portfolio", "slots", "occupied"),
-                                      bare=True),
-    "price.latest": _fact("Latest price", "usd", ("price", "latest")),
+    "position.weight": _fact(
+        "Position weight", "percent", ("position", "weight"),
+        "How much of your whole account this one holding is, as a "
+        "percentage. It is what the shares are worth today divided by what "
+        "the account is worth today — free cash plus every holding at "
+        "market. It moves when the price moves, without you doing anything, "
+        "which is the reason a rule about it exists at all."),
+    "position.months_held": _fact(
+        "Months held", "months", ("position", "months_held"),
+        "How many whole months you have held this position, counted from "
+        "the purchase that took it up from nothing. Selling part of it does "
+        "not restart the clock; selling all of it and buying back later "
+        "does, because that is a new decision. Counted the same way a date "
+        "some number of months out is worked out, so \"twenty-four months "
+        "held\" and \"the day two years after you bought\" always land "
+        "together.", bare=True,
+        when_missing="no position is held, so there is nothing to count"),
+    "position.market_value": _fact(
+        "Position market value", "usd", ("position", "market_value"),
+        "What this holding is worth today: the shares you hold multiplied "
+        "by the latest price of the security you hold. Not what you paid — "
+        "nothing about what a position cost is available to a rule."),
+    "position.shares": _fact(
+        "Shares held", "shares", ("position", "shares"),
+        "How many shares of this security you hold now — every purchase the "
+        "journal has recorded, less everything you have sold. It is derived "
+        "from that list each time it is read rather than kept as a running "
+        "total, so it cannot drift away from the record it comes from.",
+        bare=True),
+    "position.opened": _fact(
+        "Held since", "date", ("position", "opened"),
+        "The day this holding began — the purchase that took the position "
+        "up from nothing. It does not move when you trim part of the "
+        "holding away, so it answers when you started owning this, not how "
+        "old your oldest remaining share is.", bare=True,
+        when_missing="no position is held"),
+    "portfolio.cash": _fact(
+        "Free cash", "usd", ("portfolio", "cash"),
+        "Money in the account this journal covers that is not in any "
+        "position. The journal cannot observe it, so it is only known where "
+        "the strategy asked you for it in settings."),
+    "portfolio.account_value": _fact(
+        "Account value", "usd", ("portfolio", "account_value"),
+        "What the whole account is worth: your free cash plus every holding "
+        "at today's price. Worked out rather than typed in, so when a "
+        "position's share of the account looks wrong you can see which "
+        "input was wrong. One holding with no price makes the whole total "
+        "unknown rather than quietly smaller."),
+    "portfolio.slots_occupied": _fact(
+        "Positions held", "count", ("portfolio", "slots", "occupied"),
+        "How many separate securities this journal currently holds. A "
+        "strategy that runs a fixed number of positions at once measures "
+        "against this to know whether there is room for another.",
+        bare=True),
+    "price.latest": _fact(
+        "Latest price", "usd", ("price", "latest"),
+        "The most recent closing price on record for the security this "
+        "journal holds — that share class and no other, because two classes "
+        "of one company trade at different prices. The day it closed and "
+        "the symbol it belongs to travel with it."),
 })
 
 
@@ -322,7 +421,30 @@ INPUT_ROLES = MappingProxyType({
 # Exactly one of these names the subject of an evidence item.
 _SUBJECT_KEYS = ("measure", "fact", "input", "value", "label")
 _ITEM_KEYS = {"measure", "fact", "input", "value", "label", "unit", "actual",
-              "absent", "at", "comparator", "threshold", "threshold_from"}
+              "absent", "at", "comparator", "threshold", "threshold_from",
+              "group"}
+
+# What a group may demand of its members. Three words, host-owned, and a
+# strategy picks one — it never writes a rule of its own here, because the
+# host has to be able to count the answer for itself.
+#
+#   all       every member carrying a test has to pass. The default, and the
+#             strict direction: an author who says nothing gets the rule
+#             that refuses a contradiction rather than the one that allows
+#             it.
+#   at_least  that many of them, named the way any other limit is — a figure
+#             stated outright or the id of one of the strategy's own
+#             settings, never both.
+#   noted     nothing is demanded. Reported so the reader can see them, or
+#             acted on by a rule the host cannot express — a run of
+#             consecutive filings, say. The host counts and does not judge.
+#
+# There is deliberately no fourth word separating "these never matter" from
+# "these matter by a rule of my own". The host would have to render a
+# sentence it cannot justify either way, and the group's own name and the
+# state's description say which is meant.
+GROUP_REQUIREMENTS = ("all", "at_least", "noted")
+_GROUP_KEYS = {"id", "name", "requires", "threshold", "threshold_from"}
 
 
 # ---------------------------------------------------------------------------
@@ -366,6 +488,69 @@ def _kind_of(v) -> str:
 
 def _is_scalar(v) -> bool:
     return isinstance(v, (bool, int, float, str))
+
+
+def _as_date(value):
+    """A YYYY-MM-DD string or a date, as a date. None where it is neither."""
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except (TypeError, ValueError):
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Month arithmetic — host-owned, and offered to strategies.
+#
+# A strategy with a clock in it needs two things: how long a position has
+# been held, and the day some number of months from when it opened. Both are
+# arithmetic over dates the host already has, and both have the same trap in
+# them. Adding months has to clamp — 31 January plus one month is 28
+# February, not 3 March — and counting months has to clamp the same way, or
+# a position opened on 29 February reads as 23 months held on the day its
+# 24-month clock falls due, and closes while its own evidence says the period
+# has not run.
+#
+# So they are one function and its inverse rather than two implementations
+# that happen to agree today. Strings in, strings out: nothing framework-
+# shaped crosses to a strategy, and the contract's own dates are ISO text.
+# ---------------------------------------------------------------------------
+
+def months_after(day, months) -> str | None:
+    """The same day of the month, that many months later, as YYYY-MM-DD.
+
+    Clamped where the later month is shorter. None where `day` is not a date
+    or `months` is not a whole number — an unanswerable question has no
+    answer, and inventing one is what principle 4 refuses.
+    """
+    start = _as_date(day)
+    if start is None or not isinstance(months, int) or isinstance(months,
+                                                                 bool):
+        return None
+    total = start.month - 1 + months
+    year, month = start.year + total // 12, total % 12 + 1
+    following = (date(year + 1, 1, 1) if month == 12
+                 else date(year, month + 1, 1))
+    last_day = date.fromordinal(following.toordinal() - 1).day
+    return date(year, month, min(start.day, last_day)).isoformat()
+
+
+def months_between(start, end) -> int | None:
+    """Whole months from `start` to `end`, counted by the rule `months_after`
+    adds by. None where either is not a date.
+
+    Derived from `months_after` rather than written beside it: `months >= n`
+    is then exactly `end >= months_after(start, n)`, for every start date and
+    every n, including the clamped ones.
+    """
+    a, b = _as_date(start), _as_date(end)
+    if a is None or b is None:
+        return None
+    months = (b.year - a.year) * 12 + (b.month - a.month)
+    if _as_date(months_after(a, months)) > b:
+        months -= 1
+    return months
 
 
 def _same(a, b) -> bool:
@@ -463,13 +648,18 @@ _DECL_KEYS = {"id", "name", "summary", "version", "contract", "changelog",
               "states", "inputs", "values", "reference"}
 _STATE_KEYS = {"id", "name", "description", "render"}
 _FIELD_KEYS = {"id", "label", "type", "unit", "required", "min", "max",
-               "explain", "options", "role", "when", "min_from", "max_from"}
+               "explain", "options", "role", "when", "min_from", "max_from",
+               "source"}
 # Keys only an input may carry. A value ships a default and is always in
 # force, so none of them can mean anything on one: a role is a fact about
 # the user, and a value that only sometimes applies is a value the strategy
 # can simply ignore.
 _INPUT_ONLY_KEYS = ("required", "role", "when", "min_from", "max_from")
+# And the reverse. An input has no number of its own — the user supplies it
+# — so there is nothing about it to attribute.
+_VALUE_ONLY_KEYS = ("source",)
 _WHEN_KEYS = {"input", "is"}
+_SOURCE_KEYS = {"name", "reasoning"}
 _NUMERIC_TYPES = ("integer", "number")
 
 
@@ -513,6 +703,50 @@ def _check_options(where: str, f: dict, errors: list) -> None:
             seen.append(o["value"])
 
 
+def _check_source(where: str, f: dict, errors: list) -> None:
+    """Where a declared value's number came from.
+
+    Every threshold in a strategy came from somewhere — a book, a report, a
+    piece of research, or the author. Before this was a field the only place
+    to say so was `explain`, which meant the claim was prose: it could be
+    made once at the top of a file and quietly cover six values it did not
+    fit, and nothing said which. That is the same integrity gap
+    `threshold_from` closed one level down — an attribution nothing checks.
+
+    Nothing here can verify that a number really is the report's; no host
+    could read the report. What it can do is refuse the three ways the claim
+    goes wrong on its own: being absent, being blanket, and being silent
+    about how far it reaches. So the field is required, it sits on the value
+    it describes, and `reasoning` says whether the account in `explain` is
+    also that source's or the author's own — which is the distinction an
+    auditor is actually trying to make, and the one prose blurs first.
+
+    `name` is free text and has to be: the second strategy's source is a
+    different document. A closed list would be wrong by the second bundle.
+    """
+    source = f["source"]
+    if not isinstance(source, dict) or set(source) != _SOURCE_KEYS:
+        errors.append(
+            f"{where}: `source` must be exactly "
+            "{name: where this number came from, reasoning: true if the "
+            "explanation is that source's too, false if the source states "
+            "the level and the reasoning below is this strategy's own}.")
+        return
+    if not _is_text(source.get("name")):
+        errors.append(f"{where}: `source.name` must name where this number "
+                      "came from, in words a reader could go and check — a "
+                      "book and a chapter, a report, a piece of research, or "
+                      "the strategy's own author.")
+    if not isinstance(source.get("reasoning"), bool):
+        errors.append(
+            f"{where}: `source.reasoning` must be true or false. True says "
+            f'the explanation above is {source.get("name") or "the source"}'
+            "'s own reasoning; false says the source gives the level and "
+            "nothing else, and the account in `explain` is this strategy's. "
+            "A level with borrowed authority and homemade reasoning is the "
+            "case worth being able to tell apart.")
+
+
 def _check_fields(kind: str, fields, errors: list) -> None:
     """Shared validation for declared inputs and declared values. `kind` is
     "input" or "value" — values never carry `required`, because every value
@@ -554,6 +788,23 @@ def _check_fields(kind: str, fields, errors: list) -> None:
                         f"{where} declares `{key}`, which only an input can. "
                         "A value ships a default and is always in force. "
                         + SPLIT_TEST)
+            if "source" not in f:
+                errors.append(
+                    f"{where} needs a `source` saying where its number came "
+                    "from and whether the reasoning in `explain` is that "
+                    "source's or this strategy's own. A threshold with no "
+                    "stated provenance is an attribution nobody can check, "
+                    "and the file-level version of the claim always ends up "
+                    "covering values it does not fit.")
+            else:
+                _check_source(where, f, errors)
+        else:
+            for key in _VALUE_ONLY_KEYS:
+                if key in f:
+                    errors.append(
+                        f"{where} declares `{key}`, which only a value can. "
+                        "The user supplies an input, so there is no number "
+                        "of the strategy's to attribute. " + SPLIT_TEST)
         if not _is_text(f.get("label")):
             errors.append(f"{where} needs a user-facing `label`.")
         if f.get("type") not in VALUE_TYPES:
@@ -999,7 +1250,7 @@ def input_roles(record: dict, effective: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 _DECISION_KEYS = {"state", "payload", "reason"}
-_REASON_KEYS = {"rule", "summary", "evidence", "note"}
+_REASON_KEYS = {"rule", "summary", "evidence", "groups", "note"}
 
 
 def _names(keys) -> str:
@@ -1064,6 +1315,148 @@ def _check_payload(render: str, payload, errors: list) -> None:
                           "saying what decision is owed from the user.")
 
 
+def _check_limit(record, spec, where, errors, *, what="`comparator`") -> None:
+    """A limit is either stated or cited, and the two are mutually exclusive.
+
+    Supplying both is what let a strategy attribute any number at all to a
+    setting: "at most your position cap of 5" while the cap held 20, with
+    nothing checking. That is the misquote the evidence split exists to
+    prevent, at the one place the split had a hole — so it is closed the way
+    principle 14 asks, by making the pair unrepresentable rather than by
+    comparing the two and complaining.
+
+    Shared by an evidence item and by a group's `at_least`, because a group
+    counting passes against a limit can misattribute one in exactly the same
+    way a row can.
+    """
+    limits = [k for k in ("threshold", "threshold_from") if k in spec]
+    if len(limits) != 1:
+        errors.append(
+            f"{where}: {what} needs exactly one of `threshold` (a figure the "
+            "strategy states outright) or `threshold_from` (the id of one of "
+            "its own settings, which the host reads for itself). It carries "
+            f"{_names(limits) or 'neither'}."
+            + (" Naming the setting AND supplying the number is how a limit "
+               "gets attributed to a setting that does not hold it — drop "
+               "the `threshold` and the host will read the setting."
+               if len(limits) == 2 else ""))
+    if "threshold" in spec and not _is_scalar(spec["threshold"]):
+        errors.append(f"{where}: `threshold` must be a number, a "
+                      "YYYY-MM-DD date, true/false, or text.")
+    if "threshold_from" in spec:
+        known = {f["id"] for f in record.get("values", [])} \
+            | {f["id"] for f in record.get("inputs", [])}
+        if spec["threshold_from"] not in known:
+            errors.append(
+                f'{where}: `threshold_from` names "'
+                f'{spec["threshold_from"]}", which this strategy declares as '
+                "neither a value nor an input. The host reads the limit out "
+                "of the setting you name, so it has to be one this strategy "
+                "owns.")
+
+
+def _check_groups(record, reason, errors) -> set:
+    """Every group a decision declares, and every way the set can be wrong.
+    Returns the ids that are usable, so an item naming one can be checked.
+
+    A group is where a strategy says which of its citations were
+    requirements. That is the only thing standing between "this row failed
+    and the verdict was buy" being a contradiction and being a bonus test
+    doing exactly what it is for, so the declaration is checked as hard as
+    anything else here.
+    """
+    groups = reason.get("groups")
+    if groups is None:
+        return set()
+    if not isinstance(groups, list) or not groups:
+        errors.append("`reason.groups` must be a non-empty list of the "
+                      "headings this decision's evidence is gathered under, "
+                      "or be left out entirely.")
+        return set()
+    ok, seen = set(), set()
+    for i, g in enumerate(groups):
+        where = f"group {i + 1}"
+        if not isinstance(g, dict):
+            errors.append(f"{where} must be a mapping.")
+            continue
+        gid = g.get("id")
+        if _is_id(gid):
+            where = f'group "{gid}"'
+            if gid in seen:
+                errors.append(f"{where} is declared twice.")
+                continue
+            seen.add(gid)
+        else:
+            errors.append(f"{where} needs an `id` in lowercase letters, "
+                          "digits and hyphens.")
+        unknown = set(g) - _GROUP_KEYS
+        if unknown:
+            errors.append(f"{where} has keys this contract does not know: "
+                          + _names(unknown) + ".")
+        if not _is_text(g.get("name")):
+            errors.append(f"{where} needs a `name` — the subheading a reader "
+                          "sees above these rows.")
+        requires = g.get("requires", "all")
+        if requires not in GROUP_REQUIREMENTS:
+            errors.append(
+                f"{where}: `requires` must be one of "
+                f"{', '.join(GROUP_REQUIREMENTS)}. Left out, it is `all` — "
+                "the strict reading, because a group that quietly demanded "
+                "nothing is how a contradiction gets through.")
+        elif requires == "at_least":
+            _check_limit(record, g, where, errors,
+                         what="`requires: at_least`")
+            limit = g.get("threshold")
+            if "threshold" in g and not (isinstance(limit, int)
+                                         and not isinstance(limit, bool)
+                                         and limit >= 0):
+                errors.append(f"{where}: `requires: at_least` counts rows, "
+                              "so its `threshold` must be a whole number of "
+                              "them, nought or more.")
+        elif any(k in g for k in ("threshold", "threshold_from")):
+            errors.append(
+                f'{where}: `requires: {requires}` sets no limit, so it '
+                "cannot carry one. Only `at_least` counts against a number.")
+        if _is_id(gid):
+            ok.add(gid)
+    return ok
+
+
+def _check_group_membership(evidence, declared, errors) -> None:
+    """Which rows sit under which heading, and the two ways that goes wrong.
+
+    An empty group is a subheading over nothing. A group whose rows are
+    scattered would have to reopen its heading further down the list, which
+    is not a thing a reader can follow or a screen can draw — so the rows of
+    one group are contiguous, and that is refused here rather than papered
+    over at render time.
+    """
+    order, runs = [], {}
+    for item in evidence:
+        gid = item.get("group") if isinstance(item, dict) else None
+        if not isinstance(gid, str):
+            gid = None
+        if not order or order[-1] != gid:
+            order.append(gid)
+        if gid is not None:
+            runs[gid] = runs.get(gid, 0) + 1
+    for gid in declared:
+        if gid not in runs:
+            errors.append(f'group "{gid}" is declared and nothing is cited '
+                          "under it. A heading over no rows is a heading the "
+                          "reader has to work out the meaning of.")
+    for gid in sorted(set(order) - {None} - set(declared)):
+        errors.append(f'evidence names the group "{gid}", which '
+                      "`reason.groups` does not declare. A heading has to say "
+                      "what it demands of the rows under it.")
+    scattered = sorted({gid for gid in set(order) - {None}
+                        if order.count(gid) > 1})
+    for gid in scattered:
+        errors.append(f'the rows in group "{gid}" are not together. A group '
+                      "renders as one heading over one run of rows, so its "
+                      "citations have to be consecutive.")
+
+
 def _check_evidence_item(record, item, where, errors) -> None:
     """One citation's own shape, without resolving it. Whether the thing
     cited exists is a separate question, answered in resolve_evidence."""
@@ -1074,6 +1467,9 @@ def _check_evidence_item(record, item, where, errors) -> None:
     if unknown:
         errors.append(f"{where} has keys this contract does not know: "
                       + _names(unknown) + ".")
+    if "group" in item and not isinstance(item["group"], str):
+        errors.append(f"{where}: `group` must name one of `reason.groups` by "
+                      "id.")
 
     named = [k for k in _SUBJECT_KEYS if k in item]
     if len(named) != 1:
@@ -1125,46 +1521,18 @@ def _check_evidence_item(record, item, where, errors) -> None:
             errors.append(f"{where}: `at` must be the YYYY-MM-DD period end "
                           "of the reading being cited.")
 
-    # A limit is either stated or cited, and the two are mutually exclusive.
-    # Supplying both is what let a strategy attribute any number at all to a
-    # setting: "at most your position cap of 5" while the cap held 20, with
-    # nothing checking. That is the misquote the evidence split exists to
-    # prevent, at the one place the split had a hole — so it is closed the
-    # way principle 14 asks, by making the pair unrepresentable rather than
-    # by comparing the two and complaining.
     has_cmp = "comparator" in item
     limits = [k for k in ("threshold", "threshold_from") if k in item]
-    if has_cmp and len(limits) != 1:
-        errors.append(
-            f"{where}: a `comparator` needs exactly one of `threshold` (a "
-            "figure the strategy states outright) or `threshold_from` (the "
-            "id of one of its own settings, which the host reads for "
-            f"itself). It carries {_names(limits) or 'neither'}."
-            + (" Naming the setting AND supplying the number is how a limit "
-               "gets attributed to a setting that does not hold it — drop "
-               "the `threshold` and the host will read the setting."
-               if len(limits) == 2 else ""))
-    elif not has_cmp and limits:
+    if has_cmp:
+        _check_limit(record, item, where, errors)
+        if item["comparator"] not in COMPARATORS:
+            errors.append(f"{where}: `comparator` must be one of "
+                          f"{', '.join(COMPARATORS)}.")
+    elif limits:
         errors.append(
             f"{where} carries {_names(limits)} with no `comparator` saying "
             "what the limit is. An item with neither is an observation, "
             "which is a fine thing to cite.")
-    if has_cmp and item["comparator"] not in COMPARATORS:
-        errors.append(f"{where}: `comparator` must be one of "
-                      f"{', '.join(COMPARATORS)}.")
-    if "threshold" in item and not _is_scalar(item["threshold"]):
-        errors.append(f"{where}: `threshold` must be a number, a "
-                      "YYYY-MM-DD date, true/false, or text.")
-    if "threshold_from" in item:
-        known = {f["id"] for f in record.get("values", [])} \
-            | {f["id"] for f in record.get("inputs", [])}
-        if item["threshold_from"] not in known:
-            errors.append(
-                f'{where}: `threshold_from` names "'
-                f'{item["threshold_from"]}", which this strategy declares as '
-                "neither a value nor an input. The host reads the limit out "
-                "of the setting you name, so it has to be one this strategy "
-                "owns.")
 
 
 def validate_decision(record: dict, decision) -> list[str]:
@@ -1220,6 +1588,8 @@ def validate_decision(record: dict, decision) -> list[str]:
                           "genuinely will not fit an evidence item. It must "
                           "be a sentence, None, or be left out.")
 
+        declared_groups = _check_groups(record, reason, errors)
+
         evidence = reason.get("evidence")
         if not isinstance(evidence, list):
             errors.append("`reason.evidence` must be a list of the figures "
@@ -1230,6 +1600,7 @@ def validate_decision(record: dict, decision) -> list[str]:
             for i, item in enumerate(evidence):
                 _check_evidence_item(record, item, f"evidence {i + 1}",
                                      errors)
+            _check_group_membership(evidence, declared_groups, errors)
             # A verdict about the security must say what it looked at. An
             # evaluation-tier state is allowed to cite nothing, because
             # "the strategy could not run" is not a claim about the company.
@@ -1257,21 +1628,20 @@ def _unobserved(reason, source) -> dict:
     return {"status": "absent", "reason": reason, "source": source}
 
 
-def _measure_observation(ctx, item, where, errors):
+def _measure_observation(ctx, item):
     mid = item["measure"]
     entry = (ctx.get("measures") or {}).get(mid)
     if entry is None:
-        errors.append(f'{where} cites the measure "{mid}", which is not in '
-                      "the metric bank. A strategy asks only for measures "
-                      "the host offers; anything missing is a request "
-                      "against the host, not something to work around.")
-        return None
+        return None, (f'the measure "{mid}", which is not in the metric '
+                      "bank. A strategy asks only for measures the host "
+                      "offers; anything missing is a request against the "
+                      "host, not something to work around.")
     if "at" not in item:
         cur = entry["current"]
         if cur["status"] == "known":
             return _observed(cur["value"], "measure", cur.get("cautions"),
-                             cur.get("provenance"))
-        return _unobserved(cur["reason"], "measure")
+                             cur.get("provenance")), None
+        return _unobserved(cur["reason"], "measure"), None
 
     points = entry["series"]["points"]
     hit = next((p for p in points if p["period_end"] == item["at"]), None)
@@ -1280,9 +1650,9 @@ def _measure_observation(ctx, item, where, errors):
         return _unobserved(
             f'no reading of this measure is on record for the period '
             f'ending {item["at"]} (the periods held are: {held})',
-            "measure")
+            "measure"), None
     if hit["value"] is None:
-        return _unobserved(hit["reason"], "measure")
+        return _unobserved(hit["reason"], "measure"), None
     # The filing this reading came from, then how the reading was built and
     # what qualifies it. A point is a measure like any other: citing one at
     # a past period must not be the way to get a figure with its cautions
@@ -1291,31 +1661,80 @@ def _measure_observation(ctx, item, where, errors):
     return _observed(hit["value"], "measure", hit.get("cautions"),
                      [f'{hit["form"]} for the period ending '
                       f'{hit["period_end"]}, filed {hit["filed"]}']
-                     + list(hit.get("provenance") or []))
+                     + list(hit.get("provenance") or [])), None
 
 
-def _fact_observation(ctx, item, where, errors):
+def _fact_observation(ctx, item):
     fid = item["fact"]
     spec = HOST_FACTS.get(fid)
     if spec is None:
-        errors.append(f'{where} cites the host fact "{fid}", which the host '
-                      f"does not report. It reports: {', '.join(HOST_FACTS)}.")
-        return None
+        return None, (f'the host fact "{fid}", which the host does not '
+                      f"report. It reports: {', '.join(HOST_FACTS)}.")
     node = ctx
     for step in spec["path"]:
-        node = (node or {}).get(step) if isinstance(node, dict) else None
+        node = _read(node, step)
     if spec["bare"]:
         if node is None:
             return _unobserved(spec["when_missing"]
-                               or "the journal does not record this", "fact")
-        return _observed(node, "fact")
-    if not isinstance(node, dict):
-        return _unobserved("the host did not report this figure", "fact")
+                               or "the journal does not record this",
+                               "fact"), None
+        return _observed(node, "fact"), None
+    if not _is_mapping(node):
+        return _unobserved("the host did not report this figure",
+                           "fact"), None
     if node.get("status") == "known":
         return _observed(node["value"], "fact", node.get("cautions"),
-                         node.get("provenance"))
+                         node.get("provenance")), None
     return _unobserved(node.get("reason")
-                       or "the host cannot report this figure", "fact")
+                       or "the host cannot report this figure", "fact"), None
+
+
+def _is_mapping(node) -> bool:
+    """A dict, or the read-only view of one a strategy is handed. Both are
+    mappings; only one is a `dict`, and the difference must not decide
+    whether a figure can be read."""
+    return isinstance(node, (dict, MappingProxyType))
+
+
+def _read(node, step):
+    return node.get(step) if _is_mapping(node) else None
+
+
+def _pool(ctx, kind) -> dict:
+    return (ctx.get("values") if kind == "value" else ctx.get("inputs")) or {}
+
+
+def _setting_observation(ctx, kind, fid):
+    """A declared value or an answered input, read out of the context."""
+    pool = _pool(ctx, kind)
+    if fid not in pool or pool[fid] is None:
+        return _unobserved("this setting has no value yet", kind), None
+    return _observed(pool[fid], kind), None
+
+
+def _subject_of(item) -> str | None:
+    named = [k for k in _SUBJECT_KEYS if k in item]
+    return named[0] if len(named) == 1 else None
+
+
+def _observation(ctx, item, subject):
+    """(observation, problem) — the figure a citation names, from the context
+    alone.
+
+    Context alone is the point: this is the one resolution, shared by the
+    host answering a citation on screen and by a strategy asking `test` how
+    a comparison came out while it decides. Two implementations of it could
+    disagree, and the whole reason v5 exists is that two of them did.
+    """
+    if subject == "measure":
+        return _measure_observation(ctx, item)
+    if subject == "fact":
+        return _fact_observation(ctx, item)
+    if subject == "label":
+        if "actual" in item:
+            return _observed(item["actual"], "stated"), None
+        return _unobserved(item.get("absent"), "stated"), None
+    return _setting_observation(ctx, subject, item[subject])
 
 
 def _declared_unit(spec) -> str:
@@ -1338,7 +1757,7 @@ def _declared_spec(record, fid):
     return None, None
 
 
-def _declared_observation(record, ctx, item, subject, where, errors):
+def _declared_observation(record, ctx, item, subject):
     """An input or a declared value, cited by id. Its label and unit come
     from the declaration, so a setting always reads on screen the way its
     author named it."""
@@ -1346,43 +1765,158 @@ def _declared_observation(record, ctx, item, subject, where, errors):
     spec = next((f for f in record.get(subject + "s", [])
                  if f["id"] == fid), None)
     if spec is None:
-        errors.append(f'{where} cites the {subject} "{fid}", which this '
-                      f"strategy does not declare.")
-        return None, None
-    subject_view = {"kind": subject, "id": fid, "label": spec["label"],
-                    "unit": _declared_unit(spec), "explain": spec["explain"]}
-    pool = ctx.get("values" if subject == "value" else "inputs") or {}
-    if fid not in pool or pool[fid] is None:
-        return subject_view, _unobserved(
-            "this setting has no value yet", subject)
-    return subject_view, _observed(pool[fid], subject)
+        return None, (f'the {subject} "{fid}", which this strategy does not '
+                      "declare.")
+    return {"kind": subject, "id": fid, "label": spec["label"],
+            "unit": _declared_unit(spec), "explain": spec["explain"]}, None
 
 
-def _outcome(observation, test, where, errors):
-    """pass, fail, unknown, or noted. Derived, never claimed: the strategy
-    chose the question, and arithmetic is not an opinion.
+def _limit(ctx, item):
+    """(threshold, absent-reason) — the limit a comparison is measured
+    against, read out of the context.
+
+    A limit is either stated by the strategy or read out of one of its own
+    settings, never both — the declaration refuses the pair. Where it is
+    cited, the number comes from this journal's resolved settings and not
+    from the strategy, for the same reason nothing else in an evidence item
+    does: a figure the strategy restates is a figure it can restate wrongly,
+    and "at most your position cap of 5" over a cap holding 20 is a sentence
+    the screen has no way to catch. The strategy owns the question — which
+    setting, which direction. The host owns the number.
+
+    An absent reason is not a failure: an optional input nobody answered
+    sets no limit, and a test with no limit is unknown rather than passed.
+    """
+    if "threshold_from" not in item:
+        return item.get("threshold"), None
+    fid = item["threshold_from"]
+    for kind in ("value", "input"):
+        pool = _pool(ctx, kind)
+        if fid in pool and pool[fid] is not None:
+            return pool[fid], None
+    return None, (f'"{fid}" has no answer in this journal, so the limit it '
+                  "sets cannot be read")
+
+
+def _test_view(record, ctx, item):
+    """What the strategy required, rendered — the same limit `_limit` reads,
+    with the setting's own label and unit beside it so the screen can say
+    whose limit it is and render it the way its author named it, rather than
+    in whatever unit the thing being measured happens to use."""
+    if "comparator" not in item:
+        return None
+    phrase = (COMPARATORS[item["comparator"]]["phrase"]
+              if item["comparator"] in COMPARATORS else None)
+    threshold, absent = _limit(ctx, item)
+    source = None
+    if "threshold_from" in item:
+        fid = item["threshold_from"]
+        kind, spec = _declared_spec(record, fid)
+        if spec is None:                   # refused by validate_decision
+            absent = (f'"{fid}" is not a setting this strategy declares, so '
+                      "there is no limit to read")
+        else:
+            source = {"kind": kind, "id": fid, "label": spec["label"],
+                      "unit": _declared_unit(spec)}
+            if absent is not None:
+                absent = (f'"{spec["label"]}" has no answer in this journal, '
+                          "so the limit it sets cannot be read")
+    return {"comparator": item["comparator"], "phrase": phrase,
+            "threshold": None if absent else threshold,
+            "threshold_from": source, "absent": absent}
+
+
+def _outcome(observation, comparator, threshold, absent):
+    """(outcome, problem) — pass, fail, unknown or noted. Derived, never
+    claimed: the strategy chose the question, and arithmetic is not an
+    opinion.
 
     Either side of the comparison can be missing and neither missing side is
     ever success. An absent figure is `unknown`, and so is a limit the host
     could not read out of the setting it was told to read — a test whose
     limit nobody has supplied has not been passed, it has not been run.
     """
-    if test is None:
-        return "noted"
-    if test["absent"] is not None or observation["status"] != "known":
-        return "unknown"
-    actual, threshold = observation["value"], test["threshold"]
-    cmp_ = COMPARATORS[test["comparator"]]
+    if comparator is None:
+        return NOTED, None
+    cmp_ = COMPARATORS.get(comparator)
+    if cmp_ is None:
+        return None, (f'"{comparator}" is not one of the comparisons this '
+                      f"host makes ({', '.join(COMPARATORS)}).")
+    if absent is not None or observation["status"] != "known":
+        return UNKNOWN, None
+    actual = observation["value"]
     if _kind_of(actual) != _kind_of(threshold):
-        errors.append(f"{where} compares {_kind_of(actual)} against "
-                      f"{_kind_of(threshold)}; the two have to be the same "
-                      "kind of thing.")
-        return None
+        return None, (f"it compares {_kind_of(actual)} against "
+                      f"{_kind_of(threshold)}, and the two have to be the "
+                      "same kind of thing.")
     if cmp_["numeric_only"] and _kind_of(actual) not in ("number", "date"):
-        errors.append(f'{where}: "{test["comparator"]}" only means something '
-                      "for numbers and dates.")
-        return None
-    return "pass" if cmp_["fn"](actual, threshold) else "fail"
+        return None, (f'"{comparator}" only means something for numbers and '
+                      "dates.")
+    return (PASS if cmp_["fn"](actual, threshold) else FAIL), None
+
+
+def _cited_as(item) -> str:
+    subject = _subject_of(item)
+    if subject is None:
+        return "this citation"
+    named = item[subject] if subject != "label" else item.get("label")
+    at = f' at {item["at"]}' if "at" in item else ""
+    return f'the test of "{named}"{at}'
+
+
+def test(ctx: dict, item: dict) -> str:
+    """How one comparison came out: "pass", "fail", "unknown" or "noted".
+
+    This is the host answering the same question it will answer again when
+    the citation reaches the screen, out of the same context, through the
+    same code. That is the entire point of it existing. Before it did, a
+    strategy had to compare the figure itself in order to choose a state —
+    the state is chosen before any evidence is resolved — so every strategy
+    carried a private copy of the comparators, nothing checked the two
+    agreed, and a verdict could be returned beside evidence saying the
+    opposite. Both halves rendered, and neither said which was wrong.
+
+    `item` is an evidence item, exactly as it will be cited: same subject,
+    same comparator, same limit. Pass the item you are going to cite and the
+    two cannot come apart.
+
+    Absence never comes out as success. A figure the host could not observe,
+    or a limit nobody has answered, is "unknown" — never "pass" and never
+    "fail". An item with no comparator is "noted": an observation, which is
+    a fine thing to cite.
+
+    Raises ValueError where the citation is not answerable at all — a
+    measure the bank does not hold, a fact the host does not report, a
+    comparison between a number and a date. That is a fault in the strategy
+    rather than a fact about the security, and `evaluate` contains it as an
+    error in place. It is deliberately not "unknown", which would let a
+    misspelled measure id read as a missing figure.
+
+    One case it cannot raise on: a `value` or `input` named by an id the
+    strategy does not declare. The context carries answers, not the
+    declaration, so an id that is missing from it is indistinguishable here
+    from an optional input nobody has answered — and that one is legitimate.
+    It comes back "unknown", which is the safe direction, and the same item
+    cited in the reason is refused loudly by `resolve_evidence`, which does
+    have the declaration to check against.
+    """
+    if not _is_mapping(item):
+        raise ValueError("a test needs an evidence item, which is a mapping.")
+    subject = _subject_of(item)
+    if subject is None:
+        raise ValueError(
+            "a test names exactly one subject — `measure`, `fact`, `input`, "
+            "`value`, or `label` with `unit` for something the strategy works "
+            "out itself.")
+    observation, problem = _observation(ctx, item, subject)
+    if problem is not None:
+        raise ValueError(f"this strategy tested {problem}")
+    threshold, absent = _limit(ctx, item)
+    outcome, problem = _outcome(observation, item.get("comparator"),
+                                threshold, absent)
+    if problem is not None:
+        raise ValueError(f"{_cited_as(item)}: {problem}")
+    return outcome
 
 
 def resolve_evidence(record: dict, ctx: dict, items: list):
@@ -1397,10 +1931,16 @@ def resolve_evidence(record: dict, ctx: dict, items: list):
     rendered, errors = [], []
     for i, item in enumerate(items):
         where = f"evidence {i + 1}"
-        subject = next(k for k in _SUBJECT_KEYS if k in item)
+        subject = _subject_of(item) if _is_mapping(item) else None
+        # Refused by validate_decision before this runs, and handled anyway:
+        # this is also called straight from a screen, and a citation with no
+        # subject must come back as a legible problem rather than as a raise
+        # inside the code whose job is answering it.
+        if subject is None:
+            errors.append(f"{where} names no subject the host can answer.")
+            continue
 
         if subject == "measure":
-            observation = _measure_observation(ctx, item, where, errors)
             entry = (ctx.get("measures") or {}).get(item["measure"]) or {}
             # Whether a figure is something the tool worked out or something
             # the user assessed is decided HERE, from the bank, and never by
@@ -1416,81 +1956,146 @@ def resolve_evidence(record: dict, ctx: dict, items: list):
                     "explain": meta.get("question") if judged else None}
             if "at" in item:
                 view["at"] = item["at"]
-                view["cadence"] = (entry.get("series") or {}).get("cadence")
+                view["cadence"] = _read(entry.get("series"), "cadence")
         elif subject == "fact":
-            observation = _fact_observation(ctx, item, where, errors)
             spec = HOST_FACTS.get(item["fact"])
             view = ({"kind": "fact", "id": item["fact"],
                      "label": spec["label"], "unit": spec["unit"],
-                     "explain": None} if spec else None)
+                     "explain": spec["explain"]} if spec else None)
         elif subject == "label":
             view = {"kind": "stated", "id": None, "label": item["label"],
                     "unit": item["unit"], "explain": None}
-            observation = (_observed(item["actual"], "stated")
-                           if "actual" in item
-                           else _unobserved(item["absent"], "stated"))
         else:
-            view, observation = _declared_observation(
-                record, ctx, item, subject, where, errors)
+            view, problem = _declared_observation(record, ctx, item, subject)
+            if problem is not None:
+                errors.append(f"{where} cites {problem}")
 
+        observation, problem = _observation(ctx, item, subject)
+        if problem is not None:
+            errors.append(f"{where} cites {problem}")
         if view is None or observation is None:
             continue
 
-        test = _test(record, ctx, item)
-        outcome = _outcome(observation, test, where, errors)
-        if outcome is None:
+        test_view = _test_view(record, ctx, item)
+        outcome, problem = _outcome(
+            observation, item.get("comparator"),
+            test_view["threshold"] if test_view else None,
+            test_view["absent"] if test_view else None)
+        if problem is not None:
+            errors.append(f"{where}: {problem}")
             continue
         rendered.append({"subject": view, "observed": observation,
-                         "test": test, "outcome": outcome})
+                         "test": test_view, "outcome": outcome,
+                         "group": item.get("group")})
     return rendered, errors
 
 
-def _test(record, ctx, item):
-    """What the strategy required, with the limit resolved by the host.
+def resolve_groups(record: dict, ctx: dict, groups, rendered: list) -> list:
+    """Every group with its rollup worked out from the rows under it.
 
-    A limit is either stated by the strategy or read out of one of its own
-    settings, never both — the declaration refuses the pair. Where it is
-    cited, the number comes from this journal's resolved settings and not
-    from the strategy, for the same reason nothing else in an evidence item
-    does: a figure the strategy restates is a figure it can restate wrongly,
-    and "at most your position cap of 5" over a cap holding 20 is a sentence
-    the screen has no way to catch. The strategy owns the question — which
-    setting, which direction. The host owns the number.
+    The count is the host's, not the strategy's. That is what lets "six of
+    eight core tests passed" render from the same outcomes the eight rows
+    render, instead of from a figure the strategy tallied separately and
+    could tally wrongly — and it is what lets `evaluate` refuse a commit
+    whose requirements are not met, because the host has an answer of its
+    own to compare the state against.
 
-    `threshold_from` carries the setting's own label and unit so the screen
-    can say whose limit it is and render it the way its author named it,
-    rather than in whatever unit the thing being measured happens to use.
-
-    `absent` is the limit's own missing-reason: an optional input nobody
-    answered sets no limit, and a test with no limit is unknown rather than
-    passed. Where the limit is stated it is never absent.
+    A group's own outcome uses the same four words a row does, and reaches
+    them the same way. Unreadable rows are neither passes nor failures: a
+    requirement six rows short of its bar with three rows unreadable has not
+    failed, it is undecided, and saying otherwise would let absence read as
+    a verdict in the one place a reader looks for the rollup.
     """
-    if "comparator" not in item:
-        return None
-    phrase = (COMPARATORS[item["comparator"]]["phrase"]
-              if item["comparator"] in COMPARATORS else None)
-    if "threshold_from" not in item:
-        return {"comparator": item["comparator"], "phrase": phrase,
-                "threshold": item.get("threshold"), "threshold_from": None,
-                "absent": None}
+    by_group: dict = {}
+    for row in rendered:
+        if row.get("group"):
+            by_group.setdefault(row["group"], []).append(row)
 
-    fid = item["threshold_from"]
-    kind, spec = _declared_spec(record, fid)
-    if spec is None:                       # refused by validate_decision
-        return {"comparator": item["comparator"], "phrase": phrase,
-                "threshold": None, "threshold_from": None,
-                "absent": f'"{fid}" is not a setting this strategy declares, '
-                          "so there is no limit to read"}
-    source = {"kind": kind, "id": fid, "label": spec["label"],
-              "unit": _declared_unit(spec)}
-    pool = (ctx.get("values") if kind == "value" else ctx.get("inputs")) or {}
-    if fid not in pool or pool[fid] is None:
-        return {"comparator": item["comparator"], "phrase": phrase,
-                "threshold": None, "threshold_from": source,
-                "absent": f'"{spec["label"]}" has no answer in this journal, '
-                          "so the limit it sets cannot be read"}
-    return {"comparator": item["comparator"], "phrase": phrase,
-            "threshold": pool[fid], "threshold_from": source, "absent": None}
+    out = []
+    for g in groups or []:
+        members = by_group.get(g.get("id"), [])
+        tested = [r for r in members if r["test"] is not None]
+        passed = sum(1 for r in tested if r["outcome"] == PASS)
+        failed = sum(1 for r in tested if r["outcome"] == FAIL)
+        unknown = sum(1 for r in tested if r["outcome"] == UNKNOWN)
+        requires = g.get("requires", "all")
+
+        view = {"id": g.get("id"), "name": g.get("name"),
+                "requires": requires, "test": None,
+                "members": len(members), "tested": len(tested),
+                "passed": passed, "failed": failed, "unknown": unknown}
+
+        if requires == "noted":
+            view["outcome"] = NOTED
+            out.append(view)
+            continue
+        if requires == "all":
+            need, view["test"] = len(tested), None
+        else:
+            view["test"] = _test_view(record, ctx,
+                                      {**g, "comparator": "at_least"})
+            need = view["test"]["threshold"]
+        if not isinstance(need, int) or isinstance(need, bool):
+            view["outcome"] = UNKNOWN
+        elif passed >= need:
+            view["outcome"] = PASS
+        elif passed + unknown < need:
+            view["outcome"] = FAIL
+        else:
+            view["outcome"] = UNKNOWN
+        out.append(view)
+    return out
+
+
+def _contradicted_commit(record, evidence, groups) -> list[str]:
+    """Why a state that puts capital in cannot stand beside this evidence.
+
+    The narrow half of the guarantee, and narrow by necessity. A hold may
+    legitimately cite failures — that is often why it is a hold — and an
+    exit rests on them by definition. It is `commit` alone that says capital
+    may go in, and a commit sitting beside a requirement the host resolved
+    as failed is the two halves of one decision disagreeing in public, with
+    nothing on screen saying which to believe.
+
+    How hard the check bites is exactly how much the strategy declared, and
+    that asymmetry is deliberate.
+
+    A group that states a requirement has to come out `pass`. Unreadable is
+    not good enough there: the strategy said all four of these must pass, or
+    six of these eight, and a figure nobody could compute has not met that
+    demand — treating it as though it had is absence reading as success in
+    the one place the reader looks for the rollup.
+
+    A citation with a comparator and no group only has to not have *failed*.
+    Nothing declared it a requirement, so the host refuses the outright
+    contradiction and nothing more. A rule that reads "respect the reserve,
+    if you keep one" honestly cites the reserve test on a buy and honestly
+    reports the limit as unset, and refusing that would forbid a true thing
+    in order to look strict.
+    """
+    problems = []
+    for g in groups:
+        if g["requires"] == "noted" or g["outcome"] == PASS:
+            continue
+        need = (f'all {g["tested"]}' if g["requires"] == "all"
+                else (g["test"] or {}).get("threshold"))
+        problems.append(
+            f'"{g["name"]}" needed {need} of its {g["tested"]} tests to '
+            f'pass and {g["passed"]} did'
+            + (f' ({g["unknown"]} could not be worked out)'
+               if g["unknown"] else "") + ".")
+    for r in evidence:
+        if not r.get("group") and r["outcome"] == FAIL:
+            problems.append(
+                f'"{r["subject"]["label"]}" came out failed and is not in a '
+                "group saying it need not pass.")
+    if not problems:
+        return []
+    return problems + [
+        f'{record["name"]} put capital in against its own evidence. A '
+        "citation the host resolved as failed or unreadable cannot sit "
+        "beside a decision to buy — one of the two is wrong, and showing "
+        "both would leave you to work out which."]
 
 
 _bank_cache: dict = {}
@@ -1578,8 +2183,29 @@ def host_result(state_id: str, summary: str, record: dict | None = None,
     payload = ({"needs": list(needs) if needs else [summary]}
                if state["render"] == "blocked" else {})
     reason = {"rule": state_id, "summary": summary,
-              "evidence": list(evidence or []), "note": None}
+              "evidence": list(evidence or []), "groups": [], "note": None}
     return _result(state_id, state, payload, reason, "host", record)
+
+
+def _frozen(node):
+    """A read-only view of plain data, all the way down.
+
+    Mappings become read-only proxies and lists become tuples, both of which
+    read exactly as the originals do — `.get`, `in`, indexing, slicing,
+    iteration, `len` — and neither of which can be written to. Anything else
+    is a scalar and already immutable.
+
+    This is what a strategy is handed. It is not defence against a hostile
+    plugin, which shares this process and could do as it liked; it is what
+    makes "the host owns the answer" true rather than merely intended. A
+    figure a strategy could edit is a figure it could quote back differently
+    from the one the screen renders.
+    """
+    if _is_mapping(node):
+        return MappingProxyType({k: _frozen(v) for k, v in node.items()})
+    if isinstance(node, list):
+        return tuple(_frozen(v) for v in node)
+    return node
 
 
 def _failure_location(exc: BaseException, bundle_dir: str) -> str | None:
@@ -1618,21 +2244,26 @@ def evaluate(record: dict, ctx: dict) -> dict:
     # being read off disk inside decide(): a strategy reaches nothing, not
     # even its own files, once it is running. Always present, so reading it
     # is never a surprise; frozen, so one evaluation cannot change what the
-    # next one sees; attached after the context was copied, because it is
-    # shared and must not be copied per security.
+    # next one sees.
     reference = record.get("reference") or _NO_REFERENCE
     ctx = {**ctx, "reference": reference}
 
-    # The strategy decides against its own copy, and the host resolves the
-    # citations below against the original. A strategy that edited what it
-    # was handed could otherwise change what the host then reports it looked
-    # at — precisely the restatement the evidence split exists to make
-    # impossible. The context is built per security and thrown away, so one
-    # more copy of it costs nothing that matters; the shipped reference data
-    # is still shared and frozen rather than copied, because that is the one
-    # part that is per strategy and could be large.
-    mine = {k: copy.deepcopy(v) for k, v in ctx.items() if k != "reference"}
-    mine["reference"] = reference
+    # The strategy decides against a frozen view, and the host resolves the
+    # citations below against the original. It used to be a deep copy, which
+    # stopped a strategy corrupting the host's caches but not much else. A
+    # frozen view is the stronger version of the same promise and the cheaper
+    # one: nothing to copy, and the wrong thing is refused rather than
+    # allowed and then ignored.
+    #
+    # What that buys, now that a strategy can ask the host how a comparison
+    # came out: `test` and the resolution below read the same figures, so
+    # they cannot disagree. Against a mutable copy they could — a strategy
+    # that edited its own context would be told one thing while the screen
+    # was told another, which is the exact divergence v5 exists to close, one
+    # level further down than the private comparators that made it visible.
+    mine = MappingProxyType(
+        {**{k: _frozen(v) for k, v in ctx.items() if k != "reference"},
+         "reference": reference})
 
     try:
         decision = record["decide"](mine)
@@ -1672,9 +2303,29 @@ def evaluate(record: dict, ctx: dict) -> dict:
             + " ".join(issues), record)
 
     state = next(s for s in record["states"] if s["id"] == decision["state"])
+    try:
+        groups = resolve_groups(record, ctx,
+                                decision["reason"].get("groups") or [],
+                                evidence)
+    except Exception as e:  # noqa: BLE001 — rolling up must not raise either
+        return host_result(
+            "host:invalid-decision",
+            f'{record["name"]} declared evidence groups the host could not '
+            f"roll up ({type(e).__name__}: {e}).", record)
+
+    # The one place the host compares a strategy's conclusion against its
+    # own arithmetic. Everything else here checks shape; this checks that
+    # the decision and the evidence say the same thing.
+    if state["render"] == "commit":
+        contradictions = _contradicted_commit(record, evidence, groups)
+        if contradictions:
+            return host_result("host:invalid-decision",
+                               " ".join(contradictions), record)
+
     reason = {"rule": decision["reason"]["rule"],
               "summary": decision["reason"]["summary"],
               "evidence": evidence,
+              "groups": groups,
               "note": decision["reason"].get("note")}
     return _result(decision["state"], state, decision["payload"],
                    reason, "strategy", record)

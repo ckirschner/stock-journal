@@ -86,6 +86,7 @@ const EV_UNIT = {
   usd: (n) => (n < 0 ? "−$" : "$") + num(Math.abs(n), 0),
   shares: (n) => num(n, 0) + " shares",
   years: (n) => num(n, 1) + " yrs",
+  months: (n) => num(n, 0) + (Number(n) === 1 ? " month" : " months"),
   days: (n) => num(n, 0) + " days",
   count: (n) => num(n, 0),
   yes_no: (v) => (v ? "Yes" : "No"),
@@ -644,6 +645,56 @@ function evidenceRow(item, i) {
     <div class="sstate"><span class="chip ${cls}">${esc(word)}</span></div></div>`;
 }
 
+/* The headings the rows are gathered under, and what each one demanded.
+   Rendered from the reason, never from a list in this file: a strategy that
+   groups its evidence differently arrives here with no view code changed.
+
+   The counts are the host's own, taken from the rows below the heading, so
+   a rollup and its rows cannot say different things. Where a group demanded
+   nothing, only the count shows — inventing "never blocks" for it would be
+   this file claiming to know why the strategy is not testing them, and an
+   exit awaiting a second filing is not the same as a bonus test. */
+function groupHead(g) {
+  const [word, cls] = OUTCOME[g.outcome] || [g.outcome, "s-none"];
+  const need = g.requires === "all"
+    ? (g.tested > 1 ? `all ${g.tested} must pass`
+      : g.tested === 1 ? "it must pass" : "")
+    : g.requires === "at_least"
+      ? ((g.test && g.test.absent)
+        ? "no bar is set — " + esc(g.test.absent)
+        : `at least ${esc(String((g.test || {}).threshold))} must pass`
+          + ((g.test || {}).threshold_from
+            ? ` — your ${esc(g.test.threshold_from.label)}` : ""))
+      : "";
+  const counted = g.tested
+    ? `${g.passed} of ${g.tested} passed`
+      + (g.unknown ? ` · ${g.unknown} could not be worked out` : "")
+    : "";
+  return `<div class="srow ghrow"><div class="sname"><b>${esc(g.name)}</b></div>
+    <div class="scond"><span class="dim">${counted}${counted && need ? " · " : ""}${need}</span></div>
+    <div class="sstate">${g.requires === "noted" ? ""
+      : `<span class="chip ${cls}">${esc(word)}</span>`}</div></div>`;
+}
+
+/* One list of rows, with a heading wherever a group starts. The order is the
+   strategy's — the contract refuses a group whose rows are not together, so
+   a heading is opened once and never reopened. */
+function evidenceList(decision, key) {
+  const reason = decision.reason || {};
+  const ev = reason.evidence || [];
+  const by = {};
+  (reason.groups || []).forEach((g) => { by[g.id] = g; });
+  let open = null;
+  return ev.map((item, i) => {
+    let head = "";
+    if (item.group !== open) {
+      open = item.group;
+      if (open && by[open]) head = groupHead(by[open]);
+    }
+    return head + evidenceRow(item, key + ":" + i);
+  }).join("");
+}
+
 /* A blocked verdict with nothing to click is a dead end, and the state that
    says "the strategy needs an answer you have not given" is exactly the one
    a user must be able to escape. The host names the screen that resolves
@@ -676,7 +727,7 @@ function decisionSection(d, title) {
       ${r.note ? `<div class="pe-why">${prose(r.note)}</div>` : ""}
       ${fixButton(d)}
     </div>
-    ${ev.length ? `<div class="slist" style="margin-top:14px">${ev.map(evidenceRow).join("")}</div>`
+    ${ev.length ? `<div class="slist" style="margin-top:14px">${evidenceList(d, "ev")}</div>`
       : '<p class="hint" style="margin-top:12px">No figures were cited — nothing about the security was read.</p>'}
   </section>`;
 }
@@ -1096,6 +1147,15 @@ function lotHistory(s) {
       ? `<p class="hint">Recorded under v${esc(st.version)}; the strategy is at v${esc((S.journal.strategy || {}).version)} now.
          Every change between them is on the Strategy tab.</p>` : "";
 
+    /* Keyed on the lot's own id, not its position in the list: grouped by
+       holding, two entries would otherwise share an index and one "what is
+       this?" would open two boxes on different periods.
+
+       A decision frozen before groups existed simply has none, and its rows
+       render in a flat list exactly as they were written. Nothing about an
+       old record is recomputed to acquire headings it never had. */
+    const frozenEvidence = evidenceList(d || {}, "lot" + lot.id);
+
     return `<div class="lot">
       <div class="lothead">
         <b>${buy ? "Bought" : "Sold"} ${esc(lot.shares)} at ${money(lot.price)}</b>
@@ -1110,11 +1170,7 @@ function lotHistory(s) {
           <div class="pe-head"><b>${esc((d.reason || {}).summary || "")}</b>
             <span class="chip s-none">${esc((d.state || {}).name || "")}</span></div>
           <div class="pe-sub" style="margin-top:6px">Rule <code>${esc((d.reason || {}).rule || "")}</code></div></div>
-        <div class="slist" style="margin-top:12px">${((d.reason || {}).evidence || []).map(
-          /* Keyed on the lot's own id, not its position in the list: grouped
-             by holding, two entries would otherwise share an index and one
-             "what is this?" would open two boxes on different periods. */
-          (item, j) => evidenceRow(item, "lot" + lot.id + ":" + j)).join("")}</div>`
+        <div class="slist" style="margin-top:12px">${frozenEvidence}</div>`
         : `<p class="hint">No verdict was recorded with this entry.</p>`}
     </div>`;
   };
@@ -1379,9 +1435,10 @@ function strategyView() {
         <div class="pe-head"><b>${esc(v.label)}</b><code>${esc(v.id)}</code>
           <span class="req">${esc(v.unit || v.type)}</span></div>
         <div class="pe-desc">${prose(v.explain)}</div>
+        ${valueSource(v)}
         <div class="pe-param"><b>${esc(fmtUnit(v.value, v.unit || (v.type === "boolean" ? "yes_no" : "none")))}</b>
-          <span class="dim">${v.source === "shipped default" ? "shipped default"
-            : `set by ${esc(v.source)} — shipped default ${esc(String(v.shipped))}`}</span></div>
+          <span class="dim">${v.set_by === "shipped default" ? "shipped default"
+            : `set by ${esc(v.set_by)} — shipped default ${esc(String(v.shipped))}`}</span></div>
       </div>`).join("")}</div>
       <div class="toolbar" style="justify-content:flex-start;margin-top:12px">
         <button class="btn" data-act="settings">Change these settings</button></div></section>`;
@@ -1396,6 +1453,19 @@ function strategyView() {
         ${(r.errors || []).map((e) => `<div class="greynote">${esc(e)}</div>`).join("")}</li>`).join("")}</ul></div>`;
   }
   return h;
+}
+
+/* Where a threshold came from, and whose reasoning the explanation above is.
+   Rendered from the declaration, never written by hand into the explanation:
+   the version that lived in prose could be stated once for a whole file and
+   silently fail to cover the value added afterwards, and a reader auditing a
+   number had no way to tell which kind of claim they were reading. */
+function valueSource(v) {
+  const s = v.source;
+  if (!s || !s.name) return "";
+  return `<div class="greynote">Level from ${esc(s.name)}. ${s.reasoning
+    ? "The explanation above is theirs too."
+    : "The explanation above is this strategy's own account of it, not theirs."}</div>`;
 }
 
 /* One declared field's answer, as words. A choice reads as its label, never
@@ -1805,9 +1875,16 @@ function dlgSettings() {
   const inputs = (st.inputs || []).map((f) =>
     declaredField(f, f.value, "in_",
       f.role ? `This journal reports it back to you as a figure: ${esc(((st.roles || {})[f.role] || {}).means || "")}.` : "")).join("");
+  /* The attribution belongs here above all: this is the screen where someone
+     is about to overwrite a number, and whose number it is — and whether the
+     reasoning they just read is that source's or the strategy author's — is
+     the thing that should give them pause. */
   const values = (st.values || []).map((v) =>
     declaredField({ ...v, required: false }, cfg[v.id], "cfg_",
-      `${esc(st.name)} ships <b>${esc(declaredText(v, v.shipped))}</b>. Leave blank to use it.`)).join("");
+      `${esc(st.name)} ships <b>${esc(declaredText(v, v.shipped))}</b>. Leave blank to use it.`
+      + (v.source && v.source.name
+        ? ` The level is ${esc(v.source.name)}'s${v.source.reasoning ? ""
+          : ", and the reasoning above is this strategy's own"}.` : ""))).join("");
   dialog({
     title: "Journal settings",
     blurb: `${st.name} · everything ${S.journal.name} tells it.`,

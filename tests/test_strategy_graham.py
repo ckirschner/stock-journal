@@ -106,6 +106,12 @@ def build(record, known=None, series=None, held=False, opened=None,
                   "closes": [], "events": []},
         "position": {
             "held": held, "shares": 100.0 if held else 0.0, "opened": opened,
+            # Built the way engine/context builds it — through the host's
+            # own month arithmetic, which is the only thing that knows about
+            # 29 February. The arithmetic itself is checked against a
+            # calendar in tests/test_contract.py, not here.
+            "months_held": (contract.months_between(opened, today)
+                            if held and opened else None),
             "lots": [], "disposals": [],
             "market_value": ({"status": "known", "value": 10_000.0,
                               "source": "computed", "cautions": [],
@@ -134,6 +140,11 @@ def outcomes(result):
             key = f'{key}@{item["subject"]["at"]}'
         out[key] = item["outcome"]
     return out
+
+
+def rollup(result):
+    """{group id: the rollup the HOST counted from the rows it resolved}."""
+    return {g["id"]: g for g in result["reason"]["groups"]}
 
 
 # ---------------------------------------------------------------------------
@@ -470,6 +481,145 @@ class TestWatchingAHolding:
         assert result["reason"]["note"] is None
 
 
+class TestTheRollupIsTheHostsAndNotItsOwn:
+    """The reasoning that used to live in the order of a list and a count
+    this strategy tallied itself. Four knockouts where all must pass, six of
+    eight core, three that never block — a reader with fifteen rows in front
+    of them needs to know which four were disqualifying."""
+
+    def test_the_screen_reads_as_headings_and_not_one_flat_list(self,
+                                                                graham):
+        result = verdict(graham, known=CLEARS_ENTRY)
+        assert [g["name"] for g in result["reason"]["groups"]] == [
+            "Tests this strategy will not bend", "Core tests",
+            "Reported, never blocking", "Room in the list, and how much"]
+        got = rollup(result)
+        assert got["knockouts"]["requires"] == "all"
+        assert got["knockouts"]["tested"] == 4
+        assert got["core"]["requires"] == "at_least"
+        assert got["bonus"]["requires"] == "noted"
+
+    def test_six_of_eight_is_counted_by_the_host_from_its_own_rows(self,
+                                                                   graham):
+        result = verdict(graham, known=CLEARS_ENTRY)
+        core = rollup(result)["core"]
+        rows = [e for e in result["reason"]["evidence"]
+                if e["group"] == "core"]
+        assert core["tested"] == len(rows) == 8
+        assert core["passed"] == sum(1 for r in rows
+                                     if r["outcome"] == "pass")
+        # The bar is cited, not stated: the host read it out of the setting.
+        assert core["test"]["threshold"] == 6
+        assert core["test"]["threshold_from"]["id"] == "core-tests-required"
+        assert core["outcome"] == "pass"
+
+    def test_a_journal_that_moves_the_bar_moves_the_rollup(self, graham):
+        strict = verdict(graham, known=CLEARS_ENTRY,
+                         **{"core-tests-required": 8})
+        assert rollup(strict)["core"]["test"]["threshold"] == 8
+
+    def test_the_bonus_heading_carries_its_failures_and_blocks_nothing(
+            self, graham):
+        result = verdict(graham, known={**CLEARS_ENTRY, "market_cap": 5e6})
+        assert result["state"]["id"] == "buy"
+        assert rollup(result)["bonus"]["failed"] == 1
+        assert rollup(result)["bonus"]["outcome"] == "noted"
+
+    def test_every_row_sits_under_a_heading(self, graham):
+        """A row with no heading is a row the reader cannot place, and on a
+        buy it is also a row the host has to treat strictly because nothing
+        said otherwise."""
+        for kw in ({"known": CLEARS_ENTRY},
+                   {"known": CLEARS_ENTRY, "occupied": 20},
+                   {"known": {**CLEARS_ENTRY, "price_to_book": 2.9}},
+                   {"known": CLEARS_EXITS, "held": True,
+                    "opened": "2025-09-01"}):
+            result = verdict(graham, **kw)
+            declared = {g["id"] for g in result["reason"]["groups"]}
+            for item in result["reason"]["evidence"]:
+                assert item["group"] in declared, item["subject"]
+
+
+class TestABuyCannotContradictItsOwnEvidence:
+    def test_the_shipped_bundle_never_trips_the_host_check(self, graham):
+        """Every route to a commit, checked against the host's own reading
+        of the rows it cited. A `host:invalid-decision` here would mean the
+        strategy and the host disagreed about what it had just looked at."""
+        for kw in ({"known": CLEARS_ENTRY},
+                   {"known": CLEARS_ENTRY, "portfolio-slots": 4},
+                   {"known": {**CLEARS_ENTRY, "market_cap": 5e6,
+                              "ncav_to_market_cap": 0.01}},
+                   {"known": {k: v for k, v in CLEARS_ENTRY.items()
+                              if k not in ("altman_z_score",
+                                           "accruals_ratio")}}):
+            result = verdict(graham, **kw)
+            assert result["state"]["id"] == "buy", kw
+            assert result["produced_by"] == "strategy"
+
+    def test_a_knockout_the_host_reads_as_failed_cannot_produce_a_buy(
+            self, graham, monkeypatch):
+        """The defect, staged. A strategy that decided a knockout had passed
+        while the host read it as failed used to return a buy beside a red
+        row, and both rendered. Now the host refuses the verdict.
+
+        Staged by making the strategy's own reading lie rather than by
+        editing the bundle, because the point is what the HOST does when the
+        two disagree — not that this bundle happens not to disagree.
+        """
+        from importlib import util
+        spec = util.spec_from_file_location(
+            "graham_liar", "strategies/graham/strategy.py")
+        module = util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        monkeypatch.setattr(module.contract, "test",
+                            lambda ctx, item: module.contract.PASS)
+        rec = dict(graham, decide=module.decide)
+        result = contract.evaluate(
+            rec, build(rec, known={**CLEARS_ENTRY, "price_to_book": 2.9}))
+        assert result["produced_by"] == "host"
+        assert result["state"]["id"] == "host:invalid-decision"
+        assert "Tests this strategy will not bend" in \
+            result["reason"]["summary"]
+
+
+class TestEveryValueSaysWhereItCameFrom:
+    def test_all_twenty_eight_carry_a_source(self, graham):
+        for spec in graham["values"]:
+            assert spec["source"]["name"], spec["id"]
+            assert isinstance(spec["source"]["reasoning"], bool), spec["id"]
+
+    def test_the_two_sizing_values_are_not_the_reports(self, graham):
+        """The report was scoped to selection and exits and says nothing
+        about size. Someone reading these later has to be able to tell that
+        they came from somewhere else — and that claim now sits on the value
+        rather than in a paragraph at the top of the file."""
+        declared = {v["id"]: v for v in graham["values"]}
+        for key in ("portfolio-slots", "position-weight-cap"):
+            assert "Graham" in declared[key]["source"]["name"]
+            assert "report" in declared[key]["source"]["name"]
+        assert values_for(graham)["portfolio-slots"] == 20
+        assert values_for(graham)["position-weight-cap"] == 10
+
+    def test_the_six_with_borrowed_levels_say_whose_reasoning_it_is(self,
+                                                                    graham):
+        """The report states these levels and gives no reasoning for them.
+        The account in `explain` is this strategy's, and that used to be a
+        paragraph pasted into six explanations — a claim nothing checked, on
+        a field where a seventh value could quietly be added without it."""
+        declared = {v["id"]: v for v in graham["values"]}
+        borrowed = {vid for vid, v in declared.items()
+                    if not v["source"]["reasoning"]}
+        assert borrowed == {"core-tests-required", "max-price-to-tangible",
+                            "exit-price-to-book", "exit-current-ratio",
+                            "exit-ltd-to-working-capital",
+                            "exit-debt-to-equity"}
+        # And the sentence they used to carry by hand is gone from all of
+        # them, so there is exactly one place the claim is made.
+        for spec in graham["values"]:
+            assert "states this level and not the reason" not in \
+                spec["explain"], spec["id"]
+
+
 class TestTheClock:
     def test_it_fires_on_the_anniversary_and_not_before(self, graham):
         before = verdict(graham, known=CLEARS_EXITS, held=True,
@@ -530,7 +680,7 @@ class TestWhatTheAuditCaught:
         result = verdict(graham, known=CLEARS_EXITS, held=True,
                          opened="2024-08-09", today="2026-08-09")
         assert result["state"]["id"] == "time-is-up"
-        assert outcomes(result)["Months held"] == "fail"
+        assert outcomes(result)["position.months_held"] == "fail"
 
     def test_the_clock_agrees_with_itself_on_a_clamped_date(self, graham):
         """29 February plus two years is 28 February. Counting elapsed
@@ -541,25 +691,37 @@ class TestWhatTheAuditCaught:
         assert result["state"]["id"] == "time-is-up"
         assert result["payload"]["when"] == "2026-02-28"
         assert "24 months" in result["reason"]["summary"]
-        assert outcomes(result)["Months held"] == "fail"
+        assert outcomes(result)["position.months_held"] == "fail"
 
     def test_an_unreadable_knockout_is_not_counted_as_a_failed_one(self,
                                                                   graham):
         """Grey propagates: an unreadable knockout makes the security grey,
         not red. The state obeyed that and the evidence did not — three
         passes with one unreadable and three passes with one failed both
-        cited "3, at least 4" and both rendered as a failure."""
+        cited "3, at least 4" and both rendered as a failure.
+
+        The rollup is the host's now, counted from the rows it resolved, and
+        the three-way answer falls out of that: three passes and one failure
+        is a settled no, three passes and one unreadable is undecided, and
+        the counts beside them say which is which.
+        """
         grey = verdict(graham, known={k: v for k, v in CLEARS_ENTRY.items()
                                       if k != "price_to_book"})
         red = verdict(graham, known={**CLEARS_ENTRY, "price_to_book": 2.9})
         assert grey["state"]["id"] == "cannot-screen"
         assert red["state"]["id"] == "not-cheap-enough"
-        # The failing one still states the test. The grey one states the
-        # count and says how many could not be worked out.
-        assert outcomes(red)["Knockout tests passed"] == "fail"
-        assert outcomes(grey)["Knockout tests passed"] == "noted"
-        assert "Tests that could not be worked out" in outcomes(grey)
-        assert "Tests that could not be worked out" not in outcomes(red)
+
+        assert rollup(red)["knockouts"]["outcome"] == "fail"
+        assert rollup(red)["knockouts"]["failed"] == 1
+        assert rollup(red)["knockouts"]["unknown"] == 0
+
+        assert rollup(grey)["knockouts"]["outcome"] == "unknown"
+        assert rollup(grey)["knockouts"]["failed"] == 0
+        assert rollup(grey)["knockouts"]["unknown"] == 1
+        # Both counted three passes. The count on its own was the thing that
+        # could not tell them apart.
+        assert rollup(red)["knockouts"]["passed"] == 3
+        assert rollup(grey)["knockouts"]["passed"] == 3
 
     def test_self_confirmation_is_derived_from_the_levels_not_declared(
             self, graham):
@@ -744,52 +906,37 @@ class TestThroughTheRealContext:
 
 def test_the_bundle_declares_fewer_states_than_the_cap(graham):
     """Not an assertion that eleven is right — a marker that the most
-    mechanical of the four strategies needs eleven of the twelve a strategy
-    is allowed, which is the only evidence anyone has about that cap."""
+    mechanical style of investing there is needs eleven states, which is the
+    only evidence anyone has about where that cap belongs. It sat at twelve
+    and this bundle used eleven of them; the cap moved to sixteen on the
+    strength of exactly that measurement."""
     assert len(graham["states"]) == 11
     assert len(graham["states"]) <= contract.MAX_STATES
 
 
-def test_the_clock_arithmetic_matches_the_calendar():
-    """Worked out on a calendar, not through the function under test."""
+def test_the_clock_reads_the_hosts_figure_and_does_no_arithmetic(graham):
+    """Both halves of the clock are the host's now.
+
+    The months-held figure is a host fact and the due date is
+    `contract.months_after`, so the two cannot be computed different ways —
+    which is what they were, and what made a position close on the day its
+    own evidence said the period had not run. The arithmetic itself is
+    checked against a calendar in tests/test_contract.py; this checks that
+    Graham no longer has any of its own.
+    """
     from importlib import util
     spec = util.spec_from_file_location(
         "graham_clock", "strategies/graham/strategy.py")
     module = util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    assert module._plus_months(date(2024, 5, 15), 24) == date(2026, 5, 15)
-    assert module._plus_months(date(2024, 2, 29), 24) == date(2026, 2, 28)
-    assert module._plus_months(date(2025, 1, 31), 1) == date(2025, 2, 28)
-    assert module._plus_months(date(2025, 12, 31), 24) == date(2027, 12, 31)
-    assert module._months_elapsed(date(2024, 5, 15), date(2026, 5, 14)) == 23
-    assert module._months_elapsed(date(2024, 5, 15), date(2026, 5, 15)) == 24
-    # The clamped case, where counting by day numbers disagrees with the due
-    # date: opened 29 February, due 28 February two years later, and on that
-    # day the position has been held 24 months and not 23.
-    assert module._plus_months(date(2024, 2, 29), 24) == date(2026, 2, 28)
-    assert module._months_elapsed(date(2024, 2, 29), date(2026, 2, 28)) == 24
+    assert not [n for n in vars(module)
+                if n in ("_plus_months", "_months_elapsed", "_iso")]
 
-
-def test_the_clock_and_the_evidence_can_never_disagree(graham):
-    """The figure that closes a position must not render as a passing test.
-
-    Two halves decide this — the due date and the months-held figure cited
-    beside it — and they used to be computed different ways. Swept over
-    every start date in four years against every holding period the setting
-    allows, because the disagreement only appeared on month ends.
-    """
-    from importlib import util
-    from datetime import timedelta
-    spec = util.spec_from_file_location(
-        "graham_clock2", "strategies/graham/strategy.py")
-    module = util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    start = date(2024, 1, 1)
-    for days in range(0, 4 * 365, 1):
-        opened = start + timedelta(days=days)
-        for limit in (1, 6, 18, 24, 36):
-            due = module._plus_months(opened, limit)
-            for probe in (due - timedelta(days=1), due, due + timedelta(days=1)):
-                elapsed = probe >= due
-                counted = module._months_elapsed(opened, probe) >= limit
-                assert elapsed == counted, (opened, limit, probe)
+    result = verdict(graham, known=CLEARS_EXITS, held=True,
+                     opened="2024-02-29", today="2026-02-28")
+    assert result["payload"]["when"] == contract.months_after("2024-02-29",
+                                                              24)
+    cited = next(e for e in result["reason"]["evidence"]
+                 if e["subject"]["id"] == "position.months_held")
+    assert cited["observed"]["value"] == contract.months_between(
+        "2024-02-29", "2026-02-28")

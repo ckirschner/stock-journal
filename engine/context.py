@@ -27,7 +27,7 @@ The shape, in full::
                    "events": [[date, "split"|"dividend", amount], ...]},
                   # All three describe the security this journal holds, and
                   # only it. See the reading rule on share classes below.
-      "position": {"held", "shares", "opened",
+      "position": {"held", "shares", "opened", "months_held",
                    "lots":      [{"date", "shares", "remaining", "open"}],
                    "disposals": [{"date", "shares"}],
                    "market_value": known-or-absent,
@@ -114,14 +114,19 @@ Reading rules a strategy can rely on:
 - **Unknown keys may appear** in future contract versions; a strategy reads
   what it declares an interest in and ignores the rest.
 - **`position` is the holding you have now, except where it says otherwise.**
-  `held`, `shares`, `opened`, `market_value` and `weight` are all about the
-  current holding period — the run from the purchase that took the position
-  up from nothing to now. `opened` is that period's first purchase and does
-  not move when a lot is trimmed away: it answers when this holding began,
-  not how old the oldest surviving share is. A rule that wants lot ages reads
-  `lots`, where every entry carries its own date, `remaining` and `open`.
-  A re-entry after a full exit opens a new period, so `opened` counts from
-  the re-entry.
+  `held`, `shares`, `opened`, `months_held`, `market_value` and `weight` are
+  all about the current holding period — the run from the purchase that took
+  the position up from nothing to now. `opened` is that period's first
+  purchase and does not move when a lot is trimmed away: it answers when this
+  holding began, not how old the oldest surviving share is. A rule that wants
+  lot ages reads `lots`, where every entry carries its own date, `remaining`
+  and `open`. A re-entry after a full exit opens a new period, so `opened`
+  counts from the re-entry, and `months_held` with it.
+
+  `months_held` is whole months from `opened` to `today`, clamped the way
+  `contract.months_after` adds them, so a rule can compare it against a
+  holding period without writing month arithmetic of its own. Absent — None
+  — where nothing is held.
 - **`lots` and `disposals` are the security's whole record, not the current
   holding's.** Every purchase this journal ever made in the name is in
   `lots`, and every sale in `disposals`, including those belonging to a
@@ -554,10 +559,19 @@ def _position(security, today, as_of, account_value) -> dict:
     held_lots = portfolio.open_lots(security, today)
     shares = round(sum(l["remaining"] for l in held_lots), 8)
     held = shares > 0
+    opened = portfolio.opened_on(security, today)
     out = {
         "held": held,
         "shares": shares,
-        "opened": portfolio.opened_on(security, today),
+        "opened": opened,
+        # Whole months from `opened` to the clock's today, counted by the
+        # host's own month arithmetic. It is here so that a strategy with a
+        # holding period in it does not have to write that arithmetic again:
+        # adding months and counting them both have to clamp the same way,
+        # and a count that disagrees with the clamp reports a position as 23
+        # months held on the day its two-year clock falls due.
+        "months_held": (contract.months_between(opened, today)
+                        if held and opened else None),
         "lots": [{"date": l["date"], "shares": float(l["shares"]),
                   "remaining": l["remaining"], "open": l["open"]}
                  for l in held_lots],

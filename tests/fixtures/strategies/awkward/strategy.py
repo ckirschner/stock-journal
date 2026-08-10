@@ -24,7 +24,7 @@ STRATEGY = {
                "asks every awkward question a declaration can ask. It is "
                "not investment logic.",
     "version": 1,
-    "contract": 4,
+    "contract": 5,
     "changelog": {
         1: "First version: sizes against account weight and a cap.",
     },
@@ -96,6 +96,8 @@ STRATEGY = {
     "values": [
         {"id": "cap", "label": "Largest a position may get", "type": "number",
          "unit": "percent", "min": 0.1, "max": 100,
+         "source": {"name": "invented for a test fixture, and not a claim about "
+                            "anything", "reasoning": False},
          "explain": "The most of the account this fixture will let one "
                     "position take up, as a percentage. It is an opinion "
                     "about concentration, which is why it ships a default "
@@ -104,9 +106,23 @@ STRATEGY = {
 }
 
 
-def _reason(rule, summary, evidence, note=None):
-    return {"rule": rule, "summary": summary, "evidence": evidence,
-            "note": note}
+# Two headings on the held path, and they demand different things on
+# purpose. The cap is a requirement: this fixture will not add to a position
+# that is already over it. The moat read is not — it is a question the user
+# may never have answered, and a fixture that refused to size anything until
+# they did would be proving a trap rather than the boundary.
+SIZE_GROUP = {"id": "against-the-cap", "name": "Against the cap",
+              "requires": "all"}
+READ_GROUP = {"id": "what-you-said", "name": "What you assessed yourself",
+              "requires": "noted"}
+
+
+def _reason(rule, summary, evidence, note=None, groups=None):
+    reason = {"rule": rule, "summary": summary, "evidence": evidence,
+              "note": note}
+    if groups:
+        reason["groups"] = groups
+    return reason
 
 
 def decide(ctx):
@@ -169,11 +185,14 @@ def decide(ctx):
     # unanswered judgement and the one that keeps the fixture usable.
     moat = ctx["measures"]["moat_durability"]["current"]
     evidence = [{"fact": "position.weight", "comparator": "at_most",
-                 "threshold_from": "cap"},
+                 "threshold_from": "cap", "group": SIZE_GROUP["id"]},
+                {"fact": "portfolio.account_value",
+                 "group": SIZE_GROUP["id"]},
+                {"fact": "position.opened", "group": SIZE_GROUP["id"]},
+                {"fact": "position.months_held", "group": SIZE_GROUP["id"]},
                 {"measure": "moat_durability", "comparator": "equals",
-                 "threshold": True},
-                {"fact": "portfolio.account_value"},
-                {"fact": "position.opened"}]
+                 "threshold": True, "group": READ_GROUP["id"]}]
+    groups = [SIZE_GROUP, READ_GROUP]
     if moat["status"] == "known" and moat["value"] is False:
         return {
             "state": "size-down",
@@ -181,7 +200,8 @@ def decide(ctx):
             "reason": _reason(
                 "moat-you-marked-broken",
                 "You assessed the moat as broken, so the fixture sizes the "
-                "position down regardless of what it weighs.", evidence),
+                "position down regardless of what it weighs.", evidence,
+                groups=groups),
         }
     if weight["status"] != "known":
         return {
@@ -190,7 +210,7 @@ def decide(ctx):
                 "needs-an-account",
                 "The share of the account this position takes up cannot be "
                 "worked out, so a cap on it has nothing to read.",
-                evidence + [cash_cite]),
+                evidence + [cash_cite], groups=groups),
         }
     if weight["value"] > cap:
         return {
@@ -199,14 +219,14 @@ def decide(ctx):
             "reason": _reason(
                 "over-the-cap",
                 "The position takes up more of the account than the cap "
-                "allows.", evidence),
+                "allows.", evidence, groups=groups),
         }
     if weight["value"] == cap:
         return {
             "state": "sit", "payload": {},
             "reason": _reason("at-the-cap",
                               "The position is exactly at its cap.",
-                              evidence),
+                              evidence, groups=groups),
         }
     return {
         "state": "size-up",
@@ -216,5 +236,5 @@ def decide(ctx):
         "reason": _reason(
             "room-under-the-cap",
             "The position is under its cap, so the difference is room to "
-            "add.", evidence),
+            "add.", evidence, groups=groups),
     }

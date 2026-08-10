@@ -6,7 +6,7 @@ STRATEGY = {
     "name": "Mistyped values fixture",
     "summary": "Declares `patience` but ships a default for `pateince`.",
     "version": 1,
-    "contract": 4,
+    "contract": 5,
     "changelog": {1: "First version."},
     "states": [
         {"id": "nothing", "name": "Nothing", "render": "hold",
@@ -15,6 +15,7 @@ STRATEGY = {
     "values": [
         {"id": "patience", "label": "Patience", "type": "integer",
          "min": 1, "max": 10,
+         "source": {"name": "a test fixture", "reasoning": True},
          "explain": "A fixture value that never gets used."},
     ],
 }

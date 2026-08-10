@@ -17,7 +17,7 @@ STRATEGY = {
     "summary": "A test fixture that reads market capitalization against a "
                "floor. It is not investment logic.",
     "version": 1,
-    "contract": 4,
+    "contract": 5,
     "changelog": {1: "First version."},
     "states": [
         {"id": "big-enough", "name": "Big enough", "render": "commit",
@@ -30,6 +30,7 @@ STRATEGY = {
     "values": [
         {"id": "floor", "label": "Smallest company", "type": "number",
          "unit": "usd", "min": 0,
+         "source": {"name": "a test fixture", "reasoning": True},
          "explain": "The smallest market capitalization the fixture will "
                     "stage an entry against."},
     ],

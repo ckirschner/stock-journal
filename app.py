@@ -196,12 +196,17 @@ class Api:
         One screen edits both, because a value and an input differ in where
         the default comes from rather than in how they are set.
         """
+        # `set_by` is which layer of the chain the value in force came from.
+        # It is deliberately not called `source`: a declared value already
+        # carries one of those, saying where its NUMBER came from, and the
+        # two answer different questions — "the expert report" and "this
+        # journal's override" would otherwise be one field.
         values = []
         for v in (record.get("values") or []):
             values.append({
                 **v,
                 "value": chain["values"].get(v["id"]),
-                "source": chain["sources"].get(v["id"]),
+                "set_by": chain["sources"].get(v["id"]),
                 "shipped": (record.get("defaults") or {}).get(v["id"]),
             })
         # Only what the strategy still declares, exactly as the decision

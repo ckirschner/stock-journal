@@ -27,23 +27,24 @@ for a security that simply stays cheap — which is the single most common way
 this style of investing fails.
 
 Sources, and which is which, because a reader auditing a number later has
-to be able to tell.
+to be able to tell. Every value carries its own `source` saying so, which
+is where to look rather than here: this paragraph is the version that used
+to have to be believed, and a claim made once at the top of a file is a
+claim nobody can check against the twenty-ninth value somebody adds.
 
-Every threshold below is the expert report's, verbatim: nothing is rounded,
-converted or adjusted, and the report is authoritative for what this
-strategy demands. Most also carry the report's own reasoning in their
-`explain`.
+Twenty-six of the twenty-eight thresholds below are the expert report's,
+verbatim — nothing is rounded, converted or adjusted. Six of those carry
+the report's level and this strategy's reasoning, and say so. The last two,
+`portfolio-slots` and `position-weight-cap`, come from Graham's own
+documented practice, because the report was scoped to selection and to exits
+and says nothing whatever about how much to buy.
 
-Two other kinds of sentence appear in those explanations and each says so
-where it appears. Where the report states a level but gives no reasoning for
-it, the explanation says so in its own last line and what stands in its
-place is this strategy's account, not the report's. Where the report is silent altogether — it was scoped to selection
-and to exits and says nothing whatever about how much to buy — the value is
-filled from Graham's own documented practice and marked as such. That is
-true of exactly two values, `portfolio-slots` and `position-weight-cap`.
+Nothing here computes a comparison. Every test is put to `contract.test` and
+then cited as the same item, so what a rule acted on and what the reader
+sees are one answer rather than two that agree until they do not.
 """
 
-from datetime import date
+from engine import contract
 
 # ---------------------------------------------------------------------------
 # The tests, as data.
@@ -51,7 +52,10 @@ from datetime import date
 # Each row is (bank measure, comparator, the declared value holding the
 # limit). The strategy names the measure and the direction; the host reads
 # the number out of the setting and answers with the figure, its unit and
-# whether the comparison was met. Nothing below restates a number.
+# whether the comparison was met. Nothing below restates a number, and
+# nothing below decides one either — `contract.test` is asked how each
+# comparison came out, and the same item is then cited, so the answer the
+# rule acted on and the answer the screen shows are one answer.
 # ---------------------------------------------------------------------------
 
 # Knockout. One failure kills the buy regardless of everything else.
@@ -125,6 +129,71 @@ EXITS_DISCOUNT = (
 # talking; it should send the reader to the filings, not to the sell button.
 DIVIDEND_RUN = "consecutive_dividend_years"
 
+# ---------------------------------------------------------------------------
+# The headings the evidence is gathered under, and what each demands.
+#
+# The grouping IS the rollup. Four knockouts where every one has to pass, six
+# of eight core tests, three that are reported and never block — that is the
+# whole shape of the entry rule, and before a group could say it the shape
+# lived in the order of the list plus a count the strategy tallied itself. A
+# reader looking at fifteen rows could not tell which four were
+# disqualifying, and nothing stopped the tally disagreeing with the rows.
+#
+# The host counts, so it cannot. `core-tests-required` is cited rather than
+# stated, for the same reason every other limit here is.
+# ---------------------------------------------------------------------------
+
+KNOCKOUTS = {"id": "knockouts", "name": "Tests this strategy will not bend",
+             "requires": "all"}
+CORE_GROUP = {"id": "core", "name": "Core tests", "requires": "at_least",
+              "threshold_from": "core-tests-required"}
+BONUS_GROUP = {"id": "bonus", "name": "Reported, never blocking",
+               "requires": "noted"}
+SIZING_GROUP = {"id": "sizing", "name": "Room in the list, and how much",
+                "requires": "all"}
+
+# On a holding, the two exit families demand nothing of a single reading —
+# that is the confirmation rule, and it counts filings, which is not
+# something the host can express. So they are `noted`: the host reports how
+# they came out and this strategy decides what a run of them means. What the
+# group names is which kind of news they are.
+SAFETY_GROUP = {"id": "safety",
+                "name": "The balance sheet and the earnings record",
+                "requires": "noted"}
+DISCOUNT_GROUP = {"id": "discount", "name": "The discount you bought",
+                  "requires": "noted"}
+CLOCK_GROUP = {"id": "clock", "name": "The holding period", "requires": "all"}
+SIZE_GROUP = {"id": "size", "name": "How big it has got", "requires": "all"}
+DIVIDEND_GROUP = {"id": "dividend", "name": "The dividend run",
+                  "requires": "noted"}
+
+
+# ---------------------------------------------------------------------------
+# Where the numbers came from.
+#
+# `name` is what to check a threshold against; `reasoning` says whether the
+# account in that value's own `explain` is the source's or this strategy's.
+#
+# The distinction is the whole reason these are fields and not prose. Six of
+# the twenty-eight values here have the report's level and an explanation
+# this strategy wrote, and that used to be a paragraph pasted into six
+# `explain` strings — which is a claim nothing checks, on a value it is easy
+# to add a seventh of and forget. Two more come from somewhere else
+# altogether. Now every value says which it is, in the same place, in a shape
+# a screen can render without reading English.
+# ---------------------------------------------------------------------------
+
+_REPORT = "the expert report commissioned for this strategy"
+
+REPORT = {"name": _REPORT, "reasoning": True}
+REPORT_LEVEL_ONLY = {"name": _REPORT, "reasoning": False}
+GRAHAM_PRACTICE = {
+    "name": "Graham's own documented practice in The Intelligent Investor. "
+            "The expert report was scoped to selection and to exits and says "
+            "nothing whatever about how much to buy, so its silence here is "
+            "a gap in the source rather than a decision it made",
+    "reasoning": True}
+
 
 STRATEGY = {
     "id": "graham",
@@ -133,8 +202,8 @@ STRATEGY = {
                "what its assets and its typical earnings justify, and sells "
                "when that gap closes, when the balance sheet stops being "
                "safe, or when two years are up — whichever comes first.",
-    "version": 1,
-    "contract": 4,
+    "version": 2,
+    "contract": 5,
     "changelog": {
         1: "First version. The fifteen entry tests, the four-knockout / "
            "six-of-eight rollup, the eight exits with two-filing "
@@ -142,6 +211,15 @@ STRATEGY = {
            "as stated in the expert report. Sizing by slot count and "
            "position weight cap, attributed to Graham's own practice "
            "because the report does not cover it.",
+        2: "No threshold and no rule changed. Every comparison is now put to "
+           "the host rather than worked out here, so the answer a rule acts "
+           "on and the answer shown beside it are one answer; the rollup is "
+           "counted by the host from the rows it resolved instead of being "
+           "tallied here; the holding period is counted from the host's own "
+           "months-held figure; and each value now says where its number "
+           "came from and whose reasoning stands behind it, which six of "
+           "them were saying in prose and twenty-two were not saying at "
+           "all.",
     },
 
     # -----------------------------------------------------------------
@@ -284,6 +362,7 @@ STRATEGY = {
         # -- how the tests roll up -----------------------------------------
         {"id": "core-tests-required", "label": "Core tests that must pass",
          "type": "integer", "unit": "count", "min": 0, "max": 8,
+         "source": REPORT_LEVEL_ONLY,
          "explain": "There are eight second-tier tests, and this is how "
                     "many of them have to come back clear before a buy is "
                     "possible. Six of eight is the report's figure. It is "
@@ -293,10 +372,7 @@ STRATEGY = {
                     "standard. A test that could not be worked out counts "
                     "as neither a pass nor a failure: if the ones that are "
                     "missing could still have got you to six, the verdict "
-                    "says it cannot tell rather than saying no."
-                    "\n\nThe report states this level and not the reason "
-                    "for it. What is above is this strategy's account "
-                    "of it, not the report's."},
+                    "says it cannot tell rather than saying no."},
 
         # -- how much, and how many ----------------------------------------
         #
@@ -307,6 +383,7 @@ STRATEGY = {
         # to Graham's own documented practice instead, and say so.
         {"id": "portfolio-slots", "label": "Names held at once",
          "type": "integer", "unit": "count", "min": 1, "max": 100,
+         "source": GRAHAM_PRACTICE,
          "explain": "How many separate companies this strategy holds at "
                     "one time. Each buy takes an equal share of the "
                     "account, so twenty names means about five percent "
@@ -332,6 +409,7 @@ STRATEGY = {
 
         {"id": "position-weight-cap", "label": "Largest one name may get",
          "type": "number", "unit": "percent", "min": 1, "max": 100,
+         "source": GRAHAM_PRACTICE,
          "explain": "The most of your account any single holding is "
                     "allowed to be. It almost never binds when you buy — an "
                     "equal share of twenty names is five percent, well "
@@ -355,6 +433,7 @@ STRATEGY = {
         # -- the discipline that is not a measure --------------------------
         {"id": "holding-period-months", "label": "Months before time is up",
          "type": "integer", "unit": "count", "min": 1, "max": 600,
+         "source": REPORT,
          "explain": "How long a position is given to work before it is "
                     "closed regardless of what any figure says. Twenty-four "
                     "months is the report's figure.\n\n"
@@ -373,6 +452,7 @@ STRATEGY = {
         {"id": "sell-confirmation-filings",
          "label": "Filings an exit must appear on",
          "type": "integer", "unit": "count", "min": 1, "max": 8,
+         "source": REPORT,
          "explain": "How many consecutive filings an exit level has to be "
                     "breached on before this strategy will act. Two is the "
                     "report's figure, and it applies to every exit here.\n\n"
@@ -395,6 +475,7 @@ STRATEGY = {
         {"id": "max-pe-3y-avg",
          "label": "Highest price to three-year average earnings",
          "type": "number", "unit": "times", "min": 0,
+         "source": REPORT,
          "explain": "What you are paying for a dollar of the company's "
                     "typical yearly profit. At 15 you are paying fifteen "
                     "dollars for each dollar it earns in an ordinary year. "
@@ -418,6 +499,7 @@ STRATEGY = {
 
         {"id": "max-price-to-book", "label": "Highest price to book value",
          "type": "number", "unit": "times", "min": 0,
+         "source": REPORT,
          "explain": "Book value is what the company's own accounts say it "
                     "is worth: everything it owns, less everything it owes. "
                     "This is what you pay for a dollar of that. At 1.5 you "
@@ -439,6 +521,7 @@ STRATEGY = {
         {"id": "max-combined-multiple",
          "label": "Highest combined earnings and book multiple",
          "type": "number", "unit": "ratio", "min": 0,
+         "source": REPORT,
          "explain": "What you pay for a dollar of typical earnings, "
                     "multiplied by what you pay for a dollar of the "
                     "company's accounting net worth — the two price tests "
@@ -457,6 +540,7 @@ STRATEGY = {
 
         {"id": "min-current-ratio", "label": "Lowest current ratio",
          "type": "number", "unit": "ratio", "min": 0,
+         "source": REPORT,
          "explain": "How much the company holds in things it can turn into "
                     "cash within a year — money in the bank, bills owed to "
                     "it, stock on the shelves — against the bills it has to "
@@ -480,6 +564,7 @@ STRATEGY = {
         {"id": "max-ltd-to-working-capital",
          "label": "Highest long-term debt against working capital",
          "type": "number", "unit": "ratio",
+         "source": REPORT,
          "explain": "Working capital is what is left of the short-term "
                     "assets once the short-term bills are paid — the liquid "
                     "cushion. This asks whether the company's long-term "
@@ -499,6 +584,7 @@ STRATEGY = {
         {"id": "min-profitable-years",
          "label": "Profitable years out of the last ten",
          "type": "integer", "unit": "count", "min": 0, "max": 10,
+         "source": REPORT,
          "explain": "How many of the last ten financial years the company "
                     "made a profit. Ten out of ten means it has never lost "
                     "money in a decade — not usually profitable, never lost "
@@ -519,6 +605,7 @@ STRATEGY = {
 
         {"id": "min-altman-z", "label": "Lowest bankruptcy score",
          "type": "number", "unit": "score",
+         "source": REPORT,
          "explain": "A single score built from five things about the "
                     "balance sheet and the profits, weighted by how well "
                     "each one predicted companies going broke in the study "
@@ -546,6 +633,7 @@ STRATEGY = {
         {"id": "min-eps-growth-10y",
          "label": "Lowest ten-year growth in earnings per share",
          "type": "number", "unit": "percent", "min": -100,
+         "source": REPORT,
          "explain": "How much more the company earns per share than it did "
                     "a decade ago, as a total rather than a yearly rate. A "
                     "third more over ten years is under 3% a year: a very "
@@ -568,6 +656,7 @@ STRATEGY = {
         {"id": "min-dividend-years",
          "label": "Lowest unbroken run of dividend years",
          "type": "integer", "unit": "years", "min": 0,
+         "source": REPORT,
          "explain": "How many years in a row the company has paid its "
                     "owners cash. A long unbroken run means it has come "
                     "through a full economic cycle and hands money back "
@@ -587,6 +676,7 @@ STRATEGY = {
 
         {"id": "max-debt-to-equity", "label": "Highest debt to equity",
          "type": "number", "unit": "ratio", "min": 0,
+         "source": REPORT,
          "explain": "How much of the company is financed by lenders against "
                     "how much by its owners. At 1.0 there is a dollar "
                     "borrowed for every dollar of shareholders' money.\n\n"
@@ -608,6 +698,7 @@ STRATEGY = {
         {"id": "max-price-to-tangible",
          "label": "Highest price to tangible assets",
          "type": "number", "unit": "times", "min": 0,
+         "source": REPORT_LEVEL_ONLY,
          "explain": "Price to book with the imaginary parts taken out — "
                     "goodwill and other intangibles removed, so what is "
                     "left is things that could actually be sold. At 2.0 you "
@@ -621,13 +712,11 @@ STRATEGY = {
                     "fail it by construction, because there is nothing "
                     "tangible to price. Companies with negative tangible "
                     "book, which is common after a large acquisition, "
-                    "produce a meaningless number."
-                    "\n\nThe report states this level and not the reason "
-                    "for it. What is above is this strategy's account "
-                    "of it, not the report's."},
+                    "produce a meaningless number."},
 
         {"id": "max-accruals-ratio", "label": "Highest accruals ratio",
          "type": "number", "unit": "ratio",
+         "source": REPORT,
          "explain": "How much of the reported profit is bookkeeping rather "
                     "than money that actually arrived. A company can book a "
                     "sale it has not been paid for, or record a cost as "
@@ -648,6 +737,7 @@ STRATEGY = {
         # -- the three bonus tests -----------------------------------------
         {"id": "min-market-cap", "label": "Smallest company worth buying",
          "type": "number", "unit": "usd", "min": 0,
+         "source": REPORT,
          "explain": "What the stock market says the whole company's shares "
                     "are worth: every share multiplied by the price of "
                     "one.\n\n"
@@ -666,6 +756,7 @@ STRATEGY = {
         {"id": "min-ncav-to-market-cap",
          "label": "Lowest liquid assets against the price",
          "type": "number", "unit": "ratio",
+         "source": REPORT,
          "explain": "How much of what you are paying is already covered by "
                     "assets that could be turned into cash within a year, "
                     "after settling every debt the company has. At 1.5 you "
@@ -687,6 +778,7 @@ STRATEGY = {
         {"id": "min-earnings-yield-multiple",
          "label": "Lowest earnings yield against the risk-free rate",
          "type": "number", "unit": "times", "min": 0,
+         "source": REPORT,
          "explain": "How many times more the company's earnings pay you "
                     "than lending the same money to the government would. "
                     "At 2.0 the stock's earnings yield is twice the "
@@ -710,6 +802,7 @@ STRATEGY = {
         {"id": "exit-pe-3y-avg",
          "label": "Exit level for price to typical earnings",
          "type": "number", "unit": "times", "min": 0,
+         "source": REPORT,
          "explain": "The point at which the discount you bought has "
                     "closed on the earnings side. You bought at fifteen "
                     "times typical earnings or less; at twenty-five the "
@@ -735,6 +828,7 @@ STRATEGY = {
         {"id": "exit-price-to-book",
          "label": "Exit level for price to book",
          "type": "number", "unit": "times", "min": 0,
+         "source": REPORT_LEVEL_ONLY,
          "explain": "Book value is what the company's own accounts say "
                     "it is worth: everything it owns, less everything it "
                     "owes. This is the level at which what you pay for a "
@@ -743,12 +837,12 @@ STRATEGY = {
                     "now being asked three dollars for every dollar of "
                     "it.\n\n"
                     "Roughly a doubling of the entry level, which is the "
-                    "discount closing by any reasonable reading."
-                    "\n\nThe report states this level and not the reason for it. What is above is this strategy's account of it, not the report's."},
+                    "discount closing by any reasonable reading."},
 
         {"id": "exit-combined-multiple",
          "label": "Exit level for the combined multiple",
          "type": "number", "unit": "ratio", "min": 0,
+         "source": REPORT,
          "explain": "The earnings multiple and the book multiple "
                     "multiplied together, so a security that has run hard "
                     "on one of them and only a little on the other is still "
@@ -760,6 +854,7 @@ STRATEGY = {
         {"id": "exit-current-ratio",
          "label": "Exit level for the current ratio",
          "type": "number", "unit": "ratio", "min": 0,
+         "source": REPORT_LEVEL_ONLY,
          "explain": "The cushion the whole thesis rests on has gone. You "
                     "required two dollars of short-term assets per dollar "
                     "of short-term bills when you bought; at 1.2 the liquid "
@@ -769,24 +864,20 @@ STRATEGY = {
                     "gap is deliberate: a company drifting from 2.0 to 1.8 "
                     "is not the same event as one arriving at 1.2, and an "
                     "exit set at the entry level would fire on ordinary "
-                    "drift."
-                    "\n\nThe report states this level and not the reason "
-                    "for it. What is above is this strategy's account "
-                    "of it, not the report's."},
+                    "drift."},
 
         {"id": "exit-ltd-to-working-capital",
          "label": "Exit level for long-term debt against working capital",
          "type": "number", "unit": "ratio",
+         "source": REPORT_LEVEL_ONLY,
          "explain": "Long-term borrowings at twice the liquid cushion means "
                     "the cushion has stopped covering them, which is the "
                     "specific thing this measure was in the entry tests to "
-                    "establish."
-                    "\n\nThe report states this level and not the reason "
-                    "for it. What is above is this strategy's account "
-                    "of it, not the report's."},
+                    "establish."},
 
         {"id": "exit-altman-z", "label": "Exit level for the bankruptcy score",
          "type": "number", "unit": "score",
+         "source": REPORT,
          "explain": "Below 1.8 is the distress zone of the score described "
                     "in the entry test above — the range in which companies "
                     "in the original study went broke.\n\n"
@@ -797,18 +888,17 @@ STRATEGY = {
         {"id": "exit-debt-to-equity",
          "label": "Exit level for debt to equity",
          "type": "number", "unit": "ratio", "min": 0,
+         "source": REPORT_LEVEL_ONLY,
          "explain": "At two turns of borrowing the lenders own more of the "
                     "outcome than the owners do, and the balance sheet has "
                     "stopped being the thing carrying the risk — which was "
                     "the entire reason an unremarkable business was "
-                    "acceptable."
-                    "\n\nThe report states this level and not the reason "
-                    "for it. What is above is this strategy's account "
-                    "of it, not the report's."},
+                    "acceptable."},
 
         {"id": "exit-loss-years",
          "label": "Losing years in a row that end the position",
          "type": "integer", "unit": "count", "min": 1,
+         "source": REPORT,
          "explain": "How many years in a row of losses end the position. "
                     "One loss year can be a write-down or a settlement. Two "
                     "in a row is the business, and the stability that was "
@@ -828,21 +918,8 @@ STRATEGY = {
 # reading what the host handed over
 # ---------------------------------------------------------------------------
 
-_COMPARE = {
-    "at_least": lambda a, b: a >= b,
-    "at_most": lambda a, b: a <= b,
-    "above": lambda a, b: a > b,
-    "below": lambda a, b: a < b,
-}
-
-PASS, FAIL, UNKNOWN = "pass", "fail", "unknown"
+PASS, FAIL, UNKNOWN = contract.PASS, contract.FAIL, contract.UNKNOWN
 FIRED, BREACHED, CLEAR, UNREADABLE = "fired", "breached", "clear", "unreadable"
-
-
-def _current(ctx, measure_id):
-    """The current reading of one bank measure, in the host's own shape."""
-    entry = (ctx.get("measures") or {}).get(measure_id) or {}
-    return entry.get("current") or {"status": "absent"}
 
 
 def _points(ctx, measure_id):
@@ -851,63 +928,61 @@ def _points(ctx, measure_id):
     return ((entry.get("series") or {}).get("points")) or []
 
 
-def _holds(value, comparator, limit):
-    """Whether one comparison is true, or None where it cannot be made.
+def _cite(measure_id, comparator, value_id, group, at=None):
+    """One citation: which measure, which direction, and the setting the
+    host reads the limit out of. Nothing here is a number."""
+    item = {"measure": measure_id, "comparator": comparator,
+            "threshold_from": value_id, "group": group}
+    if at is not None:
+        item["at"] = at
+    return item
 
-    The host runs this same comparison again when it resolves the citation,
-    and its answer is the one that reaches the screen. This copy exists only
-    because a state has to be chosen before any evidence is resolved.
+
+def _screen(ctx, rows, group):
+    """(citations, outcomes) for one family of tests.
+
+    The item that is tested is the item that is cited — the same dict, asked
+    once. There is no second comparison here to disagree with the first,
+    which is the point: this strategy used to carry its own comparators, the
+    host ran the comparison again when it resolved the citation, and nothing
+    checked the two agreed. A verdict could be returned beside evidence
+    saying the opposite of it.
     """
-    fn = _COMPARE.get(comparator)
-    if fn is None or not isinstance(value, (int, float)) \
-            or isinstance(value, bool) or not isinstance(limit, (int, float)):
-        return None
-    return fn(float(value), float(limit))
-
-
-def _test(ctx, measure_id, comparator, value_id):
-    """pass / fail / unknown for one entry test. Absence is neither."""
-    reading = _current(ctx, measure_id)
-    limit = (ctx.get("values") or {}).get(value_id)
-    if reading.get("status") != "known":
-        return UNKNOWN
-    held = _holds(reading.get("value"), comparator, limit)
-    if held is None:
-        return UNKNOWN
-    return PASS if held else FAIL
-
-
-def _cite(measure_id, comparator, value_id):
-    return {"measure": measure_id, "comparator": comparator,
-            "threshold_from": value_id}
+    cites = [_cite(m, c, v, group) for m, c, v in rows]
+    return cites, [contract.test(ctx, item) for item in cites]
 
 
 # ---------------------------------------------------------------------------
 # the exits, and the confirmation walk
 # ---------------------------------------------------------------------------
 
-def _confirmation_run(ctx, measure_id, comparator, limit):
+def _confirmation_run(ctx, measure_id, comparator, value_id, group):
     """(consecutive filings on which the requirement failed, counting back
     from the newest, and the period ends of those filings).
 
-    A filing whose reading could not be worked out neither advances the run
-    nor resets it. A gap must not confirm a breach nobody observed, and must
-    not grant an indefinite reprieve either — it pauses, and the periods
-    returned say which filings actually carried the breach.
+    Every reading is put to the host, at its own period, through the same
+    citation the reader will see beside it. A filing whose reading could not
+    be worked out neither advances the run nor resets it: a gap must not
+    confirm a breach nobody observed, and must not grant an indefinite
+    reprieve either — it pauses, and the periods returned say which filings
+    actually carried the breach.
     """
     run, periods = 0, []
     for point in reversed(_points(ctx, measure_id)):
-        if point.get("value") is None:
+        outcome = contract.test(
+            ctx, _cite(measure_id, comparator, value_id, group,
+                       at=point["period_end"]))
+        if outcome == UNKNOWN:
             continue
-        met = _holds(point["value"], comparator, limit)
-        if met is None or met:
+        if outcome != FAIL:
             break
         run += 1
         periods.append(point["period_end"])
     return run, periods
 
 
-def _exit_state(ctx, measure_id, comparator, value_id, self_confirming):
+def _exit_state(ctx, group, measure_id, comparator, value_id,
+                self_confirming):
     """One exit as fired / breached / clear / unreadable, with the filing
     periods that confirm it. `comparator` is what the holding must keep
     being true; the exit is that failing.
@@ -917,19 +992,19 @@ def _exit_state(ctx, measure_id, comparator, value_id, self_confirming):
     it does not report it as clear either, so the caller can tell the
     difference between an exit that was checked and one that was not.
     """
-    reading = _current(ctx, measure_id)
-    limit = (ctx.get("values") or {}).get(value_id)
-    if reading.get("status") != "known":
+    outcome = contract.test(ctx, _cite(measure_id, comparator, value_id,
+                                       group))
+    if outcome == UNKNOWN:
         return UNREADABLE, []
-    met = _holds(reading.get("value"), comparator, limit)
-    if met is None:
-        return UNREADABLE, []
-    if met:
+    if outcome != FAIL:
         return CLEAR, []
-    need = (ctx.get("values") or {}).get("sell-confirmation-filings")
-    if self_confirming and _counts_its_own_filings(limit, need):
+    values = ctx.get("values") or {}
+    need = values.get("sell-confirmation-filings")
+    if self_confirming and _counts_its_own_filings(values.get(value_id),
+                                                   need):
         return FIRED, []
-    run, periods = _confirmation_run(ctx, measure_id, comparator, limit)
+    run, periods = _confirmation_run(ctx, measure_id, comparator, value_id,
+                                     group)
     if isinstance(need, int) and run >= need:
         return FIRED, periods[:need]
     return BREACHED, periods
@@ -986,55 +1061,33 @@ def _dividend_cut(ctx):
 
 # ---------------------------------------------------------------------------
 # the clock
+#
+# Both halves are the host's arithmetic. How long the position has been held
+# is a fact the host reports, and the day the exit falls due is `months_after`
+# — the function that months-held is counted by. That is what stops them
+# disagreeing: a position opened on 29 February is due on 28 February two
+# years later, and by any other count it reads as 23 months held on exactly
+# that day, so the position closes while the evidence beside it says the
+# period has not run.
+#
+# Only the *limit* is this strategy's, and it is cited rather than compared
+# here: `below`, not `at_most`, because the clock fires ON the anniversary
+# and at exactly the limit the requirement has failed.
 # ---------------------------------------------------------------------------
 
-def _plus_months(day, months):
-    """The same day of the month, that many months later, clamped where the
-    later month is shorter — 31 January plus one month is 28 February. A
-    clock that silently rolled into March would move an exit date."""
-    total = day.month - 1 + months
-    year, month = day.year + total // 12, total % 12 + 1
-    following = date(year + 1, 1, 1) if month == 12 else date(year,
-                                                              month + 1, 1)
-    last_day = date.fromordinal(following.toordinal() - 1).day
-    return date(year, month, min(day.day, last_day))
-
-
-def _iso(value):
-    try:
-        return date.fromisoformat(str(value)[:10])
-    except (TypeError, ValueError):
-        return None
-
-
-def _months_elapsed(start, end):
-    """Whole months from start to end, counted by the same rule that sets
-    the due date.
-
-    Written against `_plus_months` rather than beside it. Counting months by
-    subtracting day numbers disagrees with a clamped due date — a position
-    opened on 29 February and due on 28 February reads as 23 months held on
-    the day it falls due — and a verdict that closes a position while
-    reporting the holding-period test as satisfied is worse than either half
-    being wrong on its own. Derived from the same function, the two cannot
-    drift: months >= the limit is exactly today >= the due date.
-    """
-    months = (end.year - start.year) * 12 + (end.month - start.month)
-    if _plus_months(start, months) > end:
-        months -= 1
-    return months
+CLOCK_CITE = {"fact": "position.months_held", "comparator": "below",
+              "threshold_from": "holding-period-months",
+              "group": CLOCK_GROUP["id"]}
 
 
 def _clock(ctx):
-    """(months held, the day the exit falls due, whether it has arrived), or
+    """(months held, the day the exit falls due, whether it has arrived).
     Nones where the journal does not say when the holding began."""
-    opened = _iso((ctx.get("position") or {}).get("opened"))
-    today = _iso(ctx.get("today"))
-    months = (ctx.get("values") or {}).get("holding-period-months")
-    if opened is None or today is None or not isinstance(months, int):
-        return None, None, False
-    due = _plus_months(opened, months)
-    return _months_elapsed(opened, today), due.isoformat(), today >= due
+    months = (ctx.get("position") or {}).get("months_held")
+    due = contract.months_after((ctx.get("position") or {}).get("opened"),
+                                (ctx.get("values") or {}).get(
+                                    "holding-period-months"))
+    return months, due, contract.test(ctx, CLOCK_CITE) == FAIL
 
 
 # ---------------------------------------------------------------------------
@@ -1058,56 +1111,37 @@ def decide(ctx):
 
 # -- a security you do not own ----------------------------------------------
 
-def _tally(ctx, tests):
-    outcomes = [_test(ctx, m, c, v) for m, c, v in tests]
-    return (outcomes,
-            outcomes.count(PASS), outcomes.count(FAIL),
-            outcomes.count(UNKNOWN))
+ROOM_CITE = {"fact": "portfolio.slots_occupied", "comparator": "below",
+             "threshold_from": "portfolio-slots", "group": SIZING_GROUP["id"]}
 
 
 def _on_a_candidate(ctx):
     values = ctx.get("values") or {}
     need = values.get("core-tests-required")
 
-    _, req_pass, req_fail, req_unknown = _tally(ctx, REQUIRED)
-    _, core_pass, _core_fail, core_unknown = _tally(ctx, CORE)
-    _, bonus_pass, _bf, _bu = _tally(ctx, BONUS)
+    req_cites, req_out = _screen(ctx, REQUIRED, KNOCKOUTS["id"])
+    core_cites, core_out = _screen(ctx, CORE, CORE_GROUP["id"])
+    bonus_cites, _bonus_out = _screen(ctx, BONUS, BONUS_GROUP["id"])
+
+    req_fail = req_out.count(FAIL)
+    req_unknown = req_out.count(UNKNOWN)
+    core_pass, core_unknown = core_out.count(PASS), core_out.count(UNKNOWN)
 
     could_still_reach = (core_pass + core_unknown >= need
                          if isinstance(need, int) else None)
     core_met = core_pass >= need if isinstance(need, int) else None
 
-    # The tallies. A count is only stated as a TEST where the count settles
-    # the question; where a reading nobody could work out is the difference
-    # between passing and not, the same figure is an observation and the
-    # unreadable ones are counted beside it.
-    #
-    # This is the grey rule reaching the evidence and not only the state.
-    # Three knockouts passing with one unreadable and three passing with one
-    # failed produce different verdicts, and cited as a bare "3, at least 4"
-    # they produced identical, failing-looking rows — absence rendering as a
-    # failure in the one place the reader actually looks.
-    knockouts = {"label": "Knockout tests passed", "unit": "count",
-                 "actual": req_pass}
-    if not req_unknown:
-        knockouts["comparator"] = "at_least"
-        knockouts["threshold"] = len(REQUIRED)
-    core_tally = {"label": "Core tests passed", "unit": "count",
-                  "actual": core_pass}
-    if core_unknown == 0 or core_pass >= (need if isinstance(need, int) else 0) \
-            or could_still_reach is False:
-        core_tally["comparator"] = "at_least"
-        core_tally["threshold_from"] = "core-tests-required"
-    evidence = [knockouts, core_tally,
-                {"label": "Bonus tests passed", "unit": "count",
-                 "actual": bonus_pass}]
-    if req_unknown or core_unknown:
-        evidence.append(
-            {"label": "Tests that could not be worked out", "unit": "count",
-             "actual": req_unknown + core_unknown})
-    evidence += [_cite(m, c, v) for m, c, v in REQUIRED]
-    evidence += [_cite(m, c, v) for m, c, v in CORE]
-    evidence += [_cite(m, c, v) for m, c, v in BONUS]
+    # No tallies are cited. The counts used to be evidence items this
+    # strategy worked out and stated — "Knockout tests passed, 3, at least
+    # 4" — which meant the rollup on screen came from a different
+    # computation than the rows under it, and had to carry its own careful
+    # handling of the grey case so that three passes with one unreadable did
+    # not render identically to three passes with one failed. Both of those
+    # are the host's now: it counts the outcomes it resolved, against the
+    # bar the group names, and an unreadable row is neither a pass nor a
+    # failure there for exactly the reason it is neither here.
+    groups = [KNOCKOUTS, CORE_GROUP, BONUS_GROUP]
+    evidence = req_cites + core_cites + bonus_cites
 
     # A knockout that failed, or a core count that cannot be reached even if
     # every unreadable test came back clear. Either is a settled no.
@@ -1123,7 +1157,7 @@ def _on_a_candidate(ctx):
                     f"Only {core_pass} of the {len(CORE)} core tests passed "
                     f"and {core_unknown} could not be worked out, so "
                     f"{need} is out of reach."),
-                "evidence": evidence,
+                "evidence": evidence, "groups": groups,
             },
         }
 
@@ -1139,21 +1173,17 @@ def _on_a_candidate(ctx):
                     f"{missing} of the tests that decide this could not be "
                     "worked out from the data on record, and the ones that "
                     "could do not settle it either way."),
-                "evidence": evidence,
+                "evidence": evidence, "groups": groups,
             },
         }
 
     # It passes. What remains is whether there is room for it, and how much.
     slots = values.get("portfolio-slots")
     cap = values.get("position-weight-cap")
-    occupied = ((ctx.get("portfolio") or {}).get("slots") or {}).get(
-        "occupied")
-    evidence.append({"fact": "portfolio.slots_occupied",
-                     "comparator": "below",
-                     "threshold_from": "portfolio-slots"})
+    evidence = evidence + [ROOM_CITE]
+    groups = groups + [SIZING_GROUP]
 
-    if isinstance(slots, int) and isinstance(occupied, int) \
-            and occupied >= slots:
+    if contract.test(ctx, ROOM_CITE) == FAIL:
         return {
             "state": "no-room", "payload": {},
             "reason": {
@@ -1163,7 +1193,7 @@ def _on_a_candidate(ctx):
                     "this strategy runs are taken. Nothing here swaps one "
                     "holding for another — a place opens when one of your "
                     "positions closes."),
-                "evidence": evidence,
+                "evidence": evidence, "groups": groups,
             },
         }
 
@@ -1177,10 +1207,11 @@ def _on_a_candidate(ctx):
     size = min(equal_share, float(cap))
     bound = ("an equal share of your places" if equal_share <= cap
              else "the cap on any one name")
-    evidence += [
-        {"value": "portfolio-slots"},
-        {"value": "position-weight-cap"},
-        {"label": "Size this buy", "unit": "percent", "actual": size},
+    evidence = evidence + [
+        {"value": "portfolio-slots", "group": SIZING_GROUP["id"]},
+        {"value": "position-weight-cap", "group": SIZING_GROUP["id"]},
+        {"label": "Size this buy", "unit": "percent", "actual": size,
+         "group": SIZING_GROUP["id"]},
     ]
     return {
         "state": "buy",
@@ -1192,57 +1223,59 @@ def _on_a_candidate(ctx):
                 f"Every knockout test passed and {core_pass} of "
                 f"{len(CORE)} core tests did, against a bar of {need}. "
                 f"The size is {size:g}% of the account, set by {bound}."),
-            "evidence": evidence,
+            "evidence": evidence, "groups": groups,
         },
     }
 
 
 # -- a security you own ------------------------------------------------------
 
-def _exit_evidence(ctx, rows, states):
+CAP_CITE = {"fact": "position.weight", "comparator": "at_most",
+            "threshold_from": "position-weight-cap",
+            "group": SIZE_GROUP["id"]}
+
+
+def _exit_evidence(group, rows, states):
     """Every exit test, cited, with the confirming filings named where an
     exit actually fired. Citing the confirming readings is what lets the
     reader check the two-filing rule instead of taking it on trust."""
     out = []
     for (measure_id, comparator, value_id, _self), (state, periods) in zip(
             rows, states):
-        out.append(_cite(measure_id, comparator, value_id))
+        out.append(_cite(measure_id, comparator, value_id, group))
         if state in (FIRED, BREACHED):
             for period in periods:
-                item = _cite(measure_id, comparator, value_id)
-                item["at"] = period
-                out.append(item)
+                out.append(_cite(measure_id, comparator, value_id, group,
+                                 at=period))
     return out
 
 
 def _on_a_holding(ctx):
     values = ctx.get("values") or {}
-    safety = [_exit_state(ctx, *row) for row in EXITS_SAFETY]
-    discount = [_exit_state(ctx, *row) for row in EXITS_DISCOUNT]
+    safety = [_exit_state(ctx, SAFETY_GROUP["id"], *row)
+              for row in EXITS_SAFETY]
+    discount = [_exit_state(ctx, DISCOUNT_GROUP["id"], *row)
+                for row in EXITS_DISCOUNT]
 
     months, due, elapsed = _clock(ctx)
-    weight = (ctx.get("position") or {}).get("weight") or {}
     cap = values.get("position-weight-cap")
 
-    evidence = _exit_evidence(ctx, EXITS_SAFETY, safety)
-    evidence += _exit_evidence(ctx, EXITS_DISCOUNT, discount)
-    evidence.append({"fact": "position.opened"})
-    if months is not None:
-        # `below`, not `at_most`: the clock fires ON the anniversary, so at
-        # exactly the limit the requirement has failed. `at_most` renders
-        # the one figure that produced a close verdict as a green pass.
-        evidence.append({"label": "Months held", "unit": "count",
-                         "actual": months, "comparator": "below",
-                         "threshold_from": "holding-period-months"})
-    evidence.append({"fact": "position.weight", "comparator": "at_most",
-                     "threshold_from": "position-weight-cap"})
+    evidence = _exit_evidence(SAFETY_GROUP["id"], EXITS_SAFETY, safety)
+    evidence += _exit_evidence(DISCOUNT_GROUP["id"], EXITS_DISCOUNT, discount)
+    evidence.append({"fact": "position.opened", "group": CLOCK_GROUP["id"]})
+    evidence.append(CLOCK_CITE)
+    evidence.append(CAP_CITE)
+    groups = [SAFETY_GROUP, DISCOUNT_GROUP, CLOCK_GROUP, SIZE_GROUP]
 
     cut = _dividend_cut(ctx)
     note = None
     if cut is not None:
         before, after = cut
-        evidence.append({"measure": DIVIDEND_RUN, "at": before})
-        evidence.append({"measure": DIVIDEND_RUN, "at": after})
+        evidence.append({"measure": DIVIDEND_RUN, "at": before,
+                         "group": DIVIDEND_GROUP["id"]})
+        evidence.append({"measure": DIVIDEND_RUN, "at": after,
+                         "group": DIVIDEND_GROUP["id"]})
+        groups.append(DIVIDEND_GROUP)
         note = ("The unbroken run of dividend years has reset since the "
                 f"filing for {before}. That is real information about "
                 "financial distress and it changes nothing here on its own "
@@ -1283,7 +1316,7 @@ def _on_a_holding(ctx):
                     + " failed on more than one reading, so this is a change "
                     "and not a wobble. The cushion that made an unremarkable "
                     "business acceptable is gone." + also_waiting()),
-                "evidence": evidence, "note": note,
+                "evidence": evidence, "groups": groups, "note": note,
             },
         }
 
@@ -1301,7 +1334,7 @@ def _on_a_holding(ctx):
                     "demands before acting. The gap you bought has closed, "
                     "which is this strategy working rather than failing."
                     + also_waiting()),
-                "evidence": evidence, "note": note,
+                "evidence": evidence, "groups": groups, "note": note,
             },
         }
 
@@ -1317,26 +1350,23 @@ def _on_a_holding(ctx):
                     "that: a discount that has not closed in the time you "
                     "gave it is the case this clock exists for."
                     + also_waiting()),
-                "evidence": evidence, "note": note,
+                "evidence": evidence, "groups": groups, "note": note,
             },
         }
 
-    over_cap = (weight.get("status") == "known"
-                and isinstance(cap, (int, float))
-                and weight["value"] > cap)
-    if over_cap:
+    if contract.test(ctx, CAP_CITE) == FAIL:
         return {
             "state": "too-big",
             "payload": {"to": {"unit": "weight", "value": float(cap)}},
             "reason": {
                 "rule": "over-position-cap",
                 "summary": (
-                    f"This holding is {weight['value']:.1f}% of the "
-                    f"account, past the {cap:g}% any one name is allowed "
-                    "here. Trimming it back to the cap restores the spread "
-                    "this strategy relies on instead of the business "
-                    "being good." + also_waiting()),
-                "evidence": evidence, "note": note,
+                    "This holding has grown past the largest share of the "
+                    "account any one name is allowed here — the figure and "
+                    "the cap are below. Trimming it back to the cap restores "
+                    "the spread this strategy relies on instead of the "
+                    "business being good." + also_waiting()),
+                "evidence": evidence, "groups": groups, "note": note,
             },
         }
 
@@ -1355,7 +1385,7 @@ def _on_a_holding(ctx):
                     "current reading and have not yet been crossed on "
                     "enough consecutive filings to act on. Nothing is owed "
                     "from you today."),
-                "evidence": evidence, "note": note,
+                "evidence": evidence, "groups": groups, "note": note,
             },
         }
 
@@ -1371,7 +1401,7 @@ def _on_a_holding(ctx):
                     " exit tests could be worked out from the data on "
                     "record, so this strategy has nothing to say about "
                     "whether to stay."),
-                "evidence": evidence, "note": note,
+                "evidence": evidence, "groups": groups, "note": note,
             },
         }
 
@@ -1386,6 +1416,6 @@ def _on_a_holding(ctx):
                 + (f" {unread} could not be worked out and are listed below "
                    "as unknown rather than as passing."
                    if unread else "")),
-            "evidence": evidence, "note": note,
+            "evidence": evidence, "groups": groups, "note": note,
         },
     }

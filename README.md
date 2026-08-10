@@ -80,6 +80,47 @@ exactly that attribution.
 A limit can be missing too. An answer you have not given sets no limit, and a
 test with no limit reads as *not run* — never as passed.
 
+### The figures are gathered under headings, and a heading has a rule
+
+Fifteen rows of evidence are fifteen rows. What a reader needs to know is
+which of them were disqualifying, and a flat list cannot say that. So a
+strategy gathers its citations under headings, and each heading says what it
+demands of the rows beneath it: **all** of them, **at least** so many of
+them, or nothing at all.
+
+The count under a heading is the host's, taken from the same rows you are
+looking at. A strategy cannot tally "six of eight core tests passed"
+separately from the eight rows underneath and have the two disagree, because
+it does not tally it at all. Where a heading demands a number, that number is
+read out of one of the strategy's own settings the way every other limit is.
+
+A row nobody could read counts as neither a pass nor a failure there, exactly
+as it does on its own. Five passed, one failed and two unreadable against a
+bar of six is not a failure — it could still get there — so the heading reads
+as undecided and says how many are missing.
+
+### A verdict cannot contradict its own evidence
+
+A strategy has to choose a state before any of its evidence is resolved,
+which used to mean every strategy compared the figures twice: once privately
+to decide, and once through the host to display. Nothing checked that the two
+agreed, and when they did not, a verdict to buy rendered beside a row saying
+the test had failed, with nothing on screen saying which was wrong.
+
+Both halves of that are closed. A strategy now asks the host how a comparison
+came out and cites the same question it asked, so there is one answer rather
+than two. And where a strategy puts capital in anyway — beside a row the host
+resolved as failed, or against a heading whose requirement was not met — the
+verdict is **refused**, and the reason says which heading and by how much.
+
+Refused, not shown with a warning. A screen carrying a buy and a red row
+leaves you to arbitrate, which is the judgement call this tool exists to have
+already made.
+
+The check is narrow on purpose. A hold may cite failures — that is often why
+it is a hold — and an exit rests on them by definition. It is `commit` alone
+that says capital may go in.
+
 ## What a journal tells its strategy
 
 Two kinds of thing, and the difference is where the default comes from.
@@ -193,6 +234,19 @@ and never invents vocabulary — an undeclared state, an unknown payload key,
 a render type or an input role of its own devising is an error in place.
 Anything it needs that the host does not offer is a request against the
 host, not something to work around.
+
+What it receives is **frozen**. Reads work exactly as they do on a plain
+dict; writes cannot happen at all. That is what makes "the host owns the
+answer" true rather than merely intended — a figure a strategy could edit is
+a figure it could quote back differently from the one on the screen.
+
+Every setting a strategy ships says **where its number came from** and
+whether the explanation beside it is that source's reasoning or the author's
+own. Nothing can verify that a level really is a particular book's; what this
+refuses is the three ways the claim goes wrong on its own — being absent,
+being made once for a whole file, and being silent about how far it reaches.
+A level with borrowed authority and homemade reasoning is the case worth
+being able to tell apart, and prose loses it first.
 
 `engine/contract.py` is the full specification and is written to be read.
 

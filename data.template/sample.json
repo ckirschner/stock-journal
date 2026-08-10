@@ -1,5 +1,5 @@
 {
- "built": "2026-08-09T23:31:43+00:00",
+ "built": "2026-08-10T01:56:35+00:00",
  "as_of": "2026-08-09",
  "free_cash": 62000.0,
  "strategy": "graham",
@@ -43,77 +43,6 @@
         "evidence": [
          {
           "subject": {
-           "kind": "stated",
-           "id": null,
-           "label": "Knockout tests passed",
-           "unit": "count",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": 4,
-           "source": "stated",
-           "cautions": [],
-           "provenance": []
-          },
-          "test": {
-           "comparator": "at_least",
-           "phrase": "at least",
-           "threshold": 4,
-           "threshold_from": null,
-           "absent": null
-          },
-          "outcome": "pass"
-         },
-         {
-          "subject": {
-           "kind": "stated",
-           "id": null,
-           "label": "Core tests passed",
-           "unit": "count",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": 8,
-           "source": "stated",
-           "cautions": [],
-           "provenance": []
-          },
-          "test": {
-           "comparator": "at_least",
-           "phrase": "at least",
-           "threshold": 6,
-           "threshold_from": {
-            "kind": "value",
-            "id": "core-tests-required",
-            "label": "Core tests that must pass",
-            "unit": "count"
-           },
-           "absent": null
-          },
-          "outcome": "pass"
-         },
-         {
-          "subject": {
-           "kind": "stated",
-           "id": null,
-           "label": "Bonus tests passed",
-           "unit": "count",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": 2,
-           "source": "stated",
-           "cautions": [],
-           "provenance": []
-          },
-          "test": null,
-          "outcome": "noted"
-         },
-         {
-          "subject": {
            "kind": "measure",
            "id": "pe_3y_avg_eps",
            "label": "Price to earnings on three-year average EPS",
@@ -141,7 +70,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "knockouts"
          },
          {
           "subject": {
@@ -172,7 +102,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "knockouts"
          },
          {
           "subject": {
@@ -203,7 +134,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "knockouts"
          },
          {
           "subject": {
@@ -234,7 +166,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "knockouts"
          },
          {
           "subject": {
@@ -265,7 +198,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -296,7 +230,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -327,7 +262,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -358,7 +294,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -389,7 +326,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -420,7 +358,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -451,7 +390,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -482,7 +422,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -513,7 +454,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "bonus"
          },
          {
           "subject": {
@@ -544,7 +486,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "bonus"
          },
          {
           "subject": {
@@ -571,7 +514,8 @@
            },
            "absent": null
           },
-          "outcome": "unknown"
+          "outcome": "unknown",
+          "group": "bonus"
          },
          {
           "subject": {
@@ -579,7 +523,7 @@
            "id": "portfolio.slots_occupied",
            "label": "Positions held",
            "unit": "count",
-           "explain": null
+           "explain": "How many separate securities this journal currently holds. A strategy that runs a fixed number of positions at once measures against this to know whether there is room for another."
           },
           "observed": {
            "status": "known",
@@ -600,7 +544,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "sizing"
          },
          {
           "subject": {
@@ -618,7 +563,8 @@
            "provenance": []
           },
           "test": null,
-          "outcome": "noted"
+          "outcome": "noted",
+          "group": "sizing"
          },
          {
           "subject": {
@@ -636,7 +582,8 @@
            "provenance": []
           },
           "test": null,
-          "outcome": "noted"
+          "outcome": "noted",
+          "group": "sizing"
          },
          {
           "subject": {
@@ -654,7 +601,69 @@
            "provenance": []
           },
           "test": null,
+          "outcome": "noted",
+          "group": "sizing"
+         }
+        ],
+        "groups": [
+         {
+          "id": "knockouts",
+          "name": "Tests this strategy will not bend",
+          "requires": "all",
+          "test": null,
+          "members": 4,
+          "tested": 4,
+          "passed": 4,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "core",
+          "name": "Core tests",
+          "requires": "at_least",
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 6,
+           "threshold_from": {
+            "kind": "value",
+            "id": "core-tests-required",
+            "label": "Core tests that must pass",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "members": 8,
+          "tested": 8,
+          "passed": 8,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "bonus",
+          "name": "Reported, never blocking",
+          "requires": "noted",
+          "test": null,
+          "members": 3,
+          "tested": 3,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 1,
           "outcome": "noted"
+         },
+         {
+          "id": "sizing",
+          "name": "Room in the list, and how much",
+          "requires": "all",
+          "test": null,
+          "members": 4,
+          "tested": 1,
+          "passed": 1,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
          }
         ],
         "note": null
@@ -663,17 +672,17 @@
        "strategy": {
         "id": "graham",
         "name": "Graham",
-        "version": 1,
+        "version": 2,
         "values_version": 1,
-        "contract": 4
+        "contract": 5
        }
       },
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 1,
+       "version": 2,
        "values_version": 1,
-       "contract": 4
+       "contract": 5
       },
       "metrics": {
        "pe_3y_avg_eps": {
@@ -988,77 +997,6 @@
         "evidence": [
          {
           "subject": {
-           "kind": "stated",
-           "id": null,
-           "label": "Knockout tests passed",
-           "unit": "count",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": 4,
-           "source": "stated",
-           "cautions": [],
-           "provenance": []
-          },
-          "test": {
-           "comparator": "at_least",
-           "phrase": "at least",
-           "threshold": 4,
-           "threshold_from": null,
-           "absent": null
-          },
-          "outcome": "pass"
-         },
-         {
-          "subject": {
-           "kind": "stated",
-           "id": null,
-           "label": "Core tests passed",
-           "unit": "count",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": 8,
-           "source": "stated",
-           "cautions": [],
-           "provenance": []
-          },
-          "test": {
-           "comparator": "at_least",
-           "phrase": "at least",
-           "threshold": 6,
-           "threshold_from": {
-            "kind": "value",
-            "id": "core-tests-required",
-            "label": "Core tests that must pass",
-            "unit": "count"
-           },
-           "absent": null
-          },
-          "outcome": "pass"
-         },
-         {
-          "subject": {
-           "kind": "stated",
-           "id": null,
-           "label": "Bonus tests passed",
-           "unit": "count",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": 1,
-           "source": "stated",
-           "cautions": [],
-           "provenance": []
-          },
-          "test": null,
-          "outcome": "noted"
-         },
-         {
-          "subject": {
            "kind": "measure",
            "id": "pe_3y_avg_eps",
            "label": "Price to earnings on three-year average EPS",
@@ -1086,7 +1024,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "knockouts"
          },
          {
           "subject": {
@@ -1117,7 +1056,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "knockouts"
          },
          {
           "subject": {
@@ -1148,7 +1088,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "knockouts"
          },
          {
           "subject": {
@@ -1179,7 +1120,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "knockouts"
          },
          {
           "subject": {
@@ -1210,7 +1152,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -1241,7 +1184,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -1272,7 +1216,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -1303,7 +1248,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -1334,7 +1280,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -1365,7 +1312,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -1396,7 +1344,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -1427,7 +1376,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -1458,7 +1408,8 @@
            },
            "absent": null
           },
-          "outcome": "fail"
+          "outcome": "fail",
+          "group": "bonus"
          },
          {
           "subject": {
@@ -1489,7 +1440,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "bonus"
          },
          {
           "subject": {
@@ -1516,7 +1468,8 @@
            },
            "absent": null
           },
-          "outcome": "unknown"
+          "outcome": "unknown",
+          "group": "bonus"
          },
          {
           "subject": {
@@ -1524,7 +1477,7 @@
            "id": "portfolio.slots_occupied",
            "label": "Positions held",
            "unit": "count",
-           "explain": null
+           "explain": "How many separate securities this journal currently holds. A strategy that runs a fixed number of positions at once measures against this to know whether there is room for another."
           },
           "observed": {
            "status": "known",
@@ -1545,7 +1498,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "sizing"
          },
          {
           "subject": {
@@ -1563,7 +1517,8 @@
            "provenance": []
           },
           "test": null,
-          "outcome": "noted"
+          "outcome": "noted",
+          "group": "sizing"
          },
          {
           "subject": {
@@ -1581,7 +1536,8 @@
            "provenance": []
           },
           "test": null,
-          "outcome": "noted"
+          "outcome": "noted",
+          "group": "sizing"
          },
          {
           "subject": {
@@ -1599,7 +1555,69 @@
            "provenance": []
           },
           "test": null,
+          "outcome": "noted",
+          "group": "sizing"
+         }
+        ],
+        "groups": [
+         {
+          "id": "knockouts",
+          "name": "Tests this strategy will not bend",
+          "requires": "all",
+          "test": null,
+          "members": 4,
+          "tested": 4,
+          "passed": 4,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "core",
+          "name": "Core tests",
+          "requires": "at_least",
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 6,
+           "threshold_from": {
+            "kind": "value",
+            "id": "core-tests-required",
+            "label": "Core tests that must pass",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "members": 8,
+          "tested": 8,
+          "passed": 8,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "bonus",
+          "name": "Reported, never blocking",
+          "requires": "noted",
+          "test": null,
+          "members": 3,
+          "tested": 3,
+          "passed": 1,
+          "failed": 1,
+          "unknown": 1,
           "outcome": "noted"
+         },
+         {
+          "id": "sizing",
+          "name": "Room in the list, and how much",
+          "requires": "all",
+          "test": null,
+          "members": 4,
+          "tested": 1,
+          "passed": 1,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
          }
         ],
         "note": null
@@ -1608,17 +1626,17 @@
        "strategy": {
         "id": "graham",
         "name": "Graham",
-        "version": 1,
+        "version": 2,
         "values_version": 1,
-        "contract": 4
+        "contract": 5
        }
       },
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 1,
+       "version": 2,
        "values_version": 1,
-       "contract": 4
+       "contract": 5
       },
       "metrics": {
        "pe_3y_avg_eps": {
@@ -2009,77 +2027,6 @@
         "evidence": [
          {
           "subject": {
-           "kind": "stated",
-           "id": null,
-           "label": "Knockout tests passed",
-           "unit": "count",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": 4,
-           "source": "stated",
-           "cautions": [],
-           "provenance": []
-          },
-          "test": {
-           "comparator": "at_least",
-           "phrase": "at least",
-           "threshold": 4,
-           "threshold_from": null,
-           "absent": null
-          },
-          "outcome": "pass"
-         },
-         {
-          "subject": {
-           "kind": "stated",
-           "id": null,
-           "label": "Core tests passed",
-           "unit": "count",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": 8,
-           "source": "stated",
-           "cautions": [],
-           "provenance": []
-          },
-          "test": {
-           "comparator": "at_least",
-           "phrase": "at least",
-           "threshold": 6,
-           "threshold_from": {
-            "kind": "value",
-            "id": "core-tests-required",
-            "label": "Core tests that must pass",
-            "unit": "count"
-           },
-           "absent": null
-          },
-          "outcome": "pass"
-         },
-         {
-          "subject": {
-           "kind": "stated",
-           "id": null,
-           "label": "Bonus tests passed",
-           "unit": "count",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": 1,
-           "source": "stated",
-           "cautions": [],
-           "provenance": []
-          },
-          "test": null,
-          "outcome": "noted"
-         },
-         {
-          "subject": {
            "kind": "measure",
            "id": "pe_3y_avg_eps",
            "label": "Price to earnings on three-year average EPS",
@@ -2107,7 +2054,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "knockouts"
          },
          {
           "subject": {
@@ -2138,7 +2086,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "knockouts"
          },
          {
           "subject": {
@@ -2169,7 +2118,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "knockouts"
          },
          {
           "subject": {
@@ -2200,7 +2150,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "knockouts"
          },
          {
           "subject": {
@@ -2231,7 +2182,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -2262,7 +2214,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -2293,7 +2246,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -2324,7 +2278,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -2355,7 +2310,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -2386,7 +2342,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -2417,7 +2374,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -2448,7 +2406,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -2479,7 +2438,8 @@
            },
            "absent": null
           },
-          "outcome": "fail"
+          "outcome": "fail",
+          "group": "bonus"
          },
          {
           "subject": {
@@ -2510,7 +2470,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "bonus"
          },
          {
           "subject": {
@@ -2537,7 +2498,8 @@
            },
            "absent": null
           },
-          "outcome": "unknown"
+          "outcome": "unknown",
+          "group": "bonus"
          },
          {
           "subject": {
@@ -2545,7 +2507,7 @@
            "id": "portfolio.slots_occupied",
            "label": "Positions held",
            "unit": "count",
-           "explain": null
+           "explain": "How many separate securities this journal currently holds. A strategy that runs a fixed number of positions at once measures against this to know whether there is room for another."
           },
           "observed": {
            "status": "known",
@@ -2566,7 +2528,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "sizing"
          },
          {
           "subject": {
@@ -2584,7 +2547,8 @@
            "provenance": []
           },
           "test": null,
-          "outcome": "noted"
+          "outcome": "noted",
+          "group": "sizing"
          },
          {
           "subject": {
@@ -2602,7 +2566,8 @@
            "provenance": []
           },
           "test": null,
-          "outcome": "noted"
+          "outcome": "noted",
+          "group": "sizing"
          },
          {
           "subject": {
@@ -2620,7 +2585,69 @@
            "provenance": []
           },
           "test": null,
+          "outcome": "noted",
+          "group": "sizing"
+         }
+        ],
+        "groups": [
+         {
+          "id": "knockouts",
+          "name": "Tests this strategy will not bend",
+          "requires": "all",
+          "test": null,
+          "members": 4,
+          "tested": 4,
+          "passed": 4,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "core",
+          "name": "Core tests",
+          "requires": "at_least",
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 6,
+           "threshold_from": {
+            "kind": "value",
+            "id": "core-tests-required",
+            "label": "Core tests that must pass",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "members": 8,
+          "tested": 8,
+          "passed": 8,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "bonus",
+          "name": "Reported, never blocking",
+          "requires": "noted",
+          "test": null,
+          "members": 3,
+          "tested": 3,
+          "passed": 1,
+          "failed": 1,
+          "unknown": 1,
           "outcome": "noted"
+         },
+         {
+          "id": "sizing",
+          "name": "Room in the list, and how much",
+          "requires": "all",
+          "test": null,
+          "members": 4,
+          "tested": 1,
+          "passed": 1,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
          }
         ],
         "note": null
@@ -2629,17 +2656,17 @@
        "strategy": {
         "id": "graham",
         "name": "Graham",
-        "version": 1,
+        "version": 2,
         "values_version": 1,
-        "contract": 4
+        "contract": 5
        }
       },
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 1,
+       "version": 2,
        "values_version": 1,
-       "contract": 4
+       "contract": 5
       },
       "metrics": {
        "pe_3y_avg_eps": {
@@ -3042,77 +3069,6 @@
         "evidence": [
          {
           "subject": {
-           "kind": "stated",
-           "id": null,
-           "label": "Knockout tests passed",
-           "unit": "count",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": 4,
-           "source": "stated",
-           "cautions": [],
-           "provenance": []
-          },
-          "test": {
-           "comparator": "at_least",
-           "phrase": "at least",
-           "threshold": 4,
-           "threshold_from": null,
-           "absent": null
-          },
-          "outcome": "pass"
-         },
-         {
-          "subject": {
-           "kind": "stated",
-           "id": null,
-           "label": "Core tests passed",
-           "unit": "count",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": 8,
-           "source": "stated",
-           "cautions": [],
-           "provenance": []
-          },
-          "test": {
-           "comparator": "at_least",
-           "phrase": "at least",
-           "threshold": 6,
-           "threshold_from": {
-            "kind": "value",
-            "id": "core-tests-required",
-            "label": "Core tests that must pass",
-            "unit": "count"
-           },
-           "absent": null
-          },
-          "outcome": "pass"
-         },
-         {
-          "subject": {
-           "kind": "stated",
-           "id": null,
-           "label": "Bonus tests passed",
-           "unit": "count",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": 2,
-           "source": "stated",
-           "cautions": [],
-           "provenance": []
-          },
-          "test": null,
-          "outcome": "noted"
-         },
-         {
-          "subject": {
            "kind": "measure",
            "id": "pe_3y_avg_eps",
            "label": "Price to earnings on three-year average EPS",
@@ -3140,7 +3096,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "knockouts"
          },
          {
           "subject": {
@@ -3171,7 +3128,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "knockouts"
          },
          {
           "subject": {
@@ -3202,7 +3160,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "knockouts"
          },
          {
           "subject": {
@@ -3233,7 +3192,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "knockouts"
          },
          {
           "subject": {
@@ -3264,7 +3224,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -3295,7 +3256,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -3326,7 +3288,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -3357,7 +3320,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -3388,7 +3352,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -3419,7 +3384,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -3450,7 +3416,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -3481,7 +3448,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -3512,7 +3480,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "bonus"
          },
          {
           "subject": {
@@ -3543,7 +3512,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "bonus"
          },
          {
           "subject": {
@@ -3570,7 +3540,8 @@
            },
            "absent": null
           },
-          "outcome": "unknown"
+          "outcome": "unknown",
+          "group": "bonus"
          },
          {
           "subject": {
@@ -3578,7 +3549,7 @@
            "id": "portfolio.slots_occupied",
            "label": "Positions held",
            "unit": "count",
-           "explain": null
+           "explain": "How many separate securities this journal currently holds. A strategy that runs a fixed number of positions at once measures against this to know whether there is room for another."
           },
           "observed": {
            "status": "known",
@@ -3599,7 +3570,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "sizing"
          },
          {
           "subject": {
@@ -3617,7 +3589,8 @@
            "provenance": []
           },
           "test": null,
-          "outcome": "noted"
+          "outcome": "noted",
+          "group": "sizing"
          },
          {
           "subject": {
@@ -3635,7 +3608,8 @@
            "provenance": []
           },
           "test": null,
-          "outcome": "noted"
+          "outcome": "noted",
+          "group": "sizing"
          },
          {
           "subject": {
@@ -3653,7 +3627,69 @@
            "provenance": []
           },
           "test": null,
+          "outcome": "noted",
+          "group": "sizing"
+         }
+        ],
+        "groups": [
+         {
+          "id": "knockouts",
+          "name": "Tests this strategy will not bend",
+          "requires": "all",
+          "test": null,
+          "members": 4,
+          "tested": 4,
+          "passed": 4,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "core",
+          "name": "Core tests",
+          "requires": "at_least",
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 6,
+           "threshold_from": {
+            "kind": "value",
+            "id": "core-tests-required",
+            "label": "Core tests that must pass",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "members": 8,
+          "tested": 8,
+          "passed": 8,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "bonus",
+          "name": "Reported, never blocking",
+          "requires": "noted",
+          "test": null,
+          "members": 3,
+          "tested": 3,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 1,
           "outcome": "noted"
+         },
+         {
+          "id": "sizing",
+          "name": "Room in the list, and how much",
+          "requires": "all",
+          "test": null,
+          "members": 4,
+          "tested": 1,
+          "passed": 1,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
          }
         ],
         "note": null
@@ -3662,17 +3698,17 @@
        "strategy": {
         "id": "graham",
         "name": "Graham",
-        "version": 1,
+        "version": 2,
         "values_version": 1,
-        "contract": 4
+        "contract": 5
        }
       },
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 1,
+       "version": 2,
        "values_version": 1,
-       "contract": 4
+       "contract": 5
       },
       "metrics": {
        "pe_3y_avg_eps": {
@@ -3977,15 +4013,11 @@
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 1,
+       "version": 2,
        "values_version": 1,
-       "contract": 4
+       "contract": 5
       },
       "failed": [
-       {
-        "key": "stated:Knockout tests passed",
-        "label": "Knockout tests passed"
-       },
        {
         "key": "value:max-price-to-book",
         "label": "Highest price to book value"
@@ -4029,77 +4061,6 @@
         "evidence": [
          {
           "subject": {
-           "kind": "stated",
-           "id": null,
-           "label": "Knockout tests passed",
-           "unit": "count",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": 2,
-           "source": "stated",
-           "cautions": [],
-           "provenance": []
-          },
-          "test": {
-           "comparator": "at_least",
-           "phrase": "at least",
-           "threshold": 4,
-           "threshold_from": null,
-           "absent": null
-          },
-          "outcome": "fail"
-         },
-         {
-          "subject": {
-           "kind": "stated",
-           "id": null,
-           "label": "Core tests passed",
-           "unit": "count",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": 7,
-           "source": "stated",
-           "cautions": [],
-           "provenance": []
-          },
-          "test": {
-           "comparator": "at_least",
-           "phrase": "at least",
-           "threshold": 6,
-           "threshold_from": {
-            "kind": "value",
-            "id": "core-tests-required",
-            "label": "Core tests that must pass",
-            "unit": "count"
-           },
-           "absent": null
-          },
-          "outcome": "pass"
-         },
-         {
-          "subject": {
-           "kind": "stated",
-           "id": null,
-           "label": "Bonus tests passed",
-           "unit": "count",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": 1,
-           "source": "stated",
-           "cautions": [],
-           "provenance": []
-          },
-          "test": null,
-          "outcome": "noted"
-         },
-         {
-          "subject": {
            "kind": "measure",
            "id": "pe_3y_avg_eps",
            "label": "Price to earnings on three-year average EPS",
@@ -4127,7 +4088,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "knockouts"
          },
          {
           "subject": {
@@ -4158,7 +4120,8 @@
            },
            "absent": null
           },
-          "outcome": "fail"
+          "outcome": "fail",
+          "group": "knockouts"
          },
          {
           "subject": {
@@ -4189,7 +4152,8 @@
            },
            "absent": null
           },
-          "outcome": "fail"
+          "outcome": "fail",
+          "group": "knockouts"
          },
          {
           "subject": {
@@ -4220,7 +4184,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "knockouts"
          },
          {
           "subject": {
@@ -4251,7 +4216,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -4282,7 +4248,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -4313,7 +4280,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -4344,7 +4312,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -4375,7 +4344,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -4406,7 +4376,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -4437,7 +4408,8 @@
            },
            "absent": null
           },
-          "outcome": "fail"
+          "outcome": "fail",
+          "group": "core"
          },
          {
           "subject": {
@@ -4468,7 +4440,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -4499,7 +4472,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "bonus"
          },
          {
           "subject": {
@@ -4530,7 +4504,8 @@
            },
            "absent": null
           },
-          "outcome": "fail"
+          "outcome": "fail",
+          "group": "bonus"
          },
          {
           "subject": {
@@ -4557,7 +4532,57 @@
            },
            "absent": null
           },
-          "outcome": "unknown"
+          "outcome": "unknown",
+          "group": "bonus"
+         }
+        ],
+        "groups": [
+         {
+          "id": "knockouts",
+          "name": "Tests this strategy will not bend",
+          "requires": "all",
+          "test": null,
+          "members": 4,
+          "tested": 4,
+          "passed": 2,
+          "failed": 2,
+          "unknown": 0,
+          "outcome": "fail"
+         },
+         {
+          "id": "core",
+          "name": "Core tests",
+          "requires": "at_least",
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 6,
+           "threshold_from": {
+            "kind": "value",
+            "id": "core-tests-required",
+            "label": "Core tests that must pass",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "members": 8,
+          "tested": 8,
+          "passed": 7,
+          "failed": 1,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "bonus",
+          "name": "Reported, never blocking",
+          "requires": "noted",
+          "test": null,
+          "members": 3,
+          "tested": 3,
+          "passed": 1,
+          "failed": 1,
+          "unknown": 1,
+          "outcome": "noted"
          }
         ],
         "note": null
@@ -4566,17 +4591,17 @@
        "strategy": {
         "id": "graham",
         "name": "Graham",
-        "version": 1,
+        "version": 2,
         "values_version": 1,
-        "contract": 4
+        "contract": 5
        }
       },
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 1,
+       "version": 2,
        "values_version": 1,
-       "contract": 4
+       "contract": 5
       },
       "metrics": {
        "pe_3y_avg_eps": {
@@ -4950,9 +4975,9 @@
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 1,
+       "version": 2,
        "values_version": 1,
-       "contract": 4
+       "contract": 5
       },
       "failed": [],
       "missing": [
@@ -5037,78 +5062,6 @@
         "evidence": [
          {
           "subject": {
-           "kind": "stated",
-           "id": null,
-           "label": "Knockout tests passed",
-           "unit": "count",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": 0,
-           "source": "stated",
-           "cautions": [],
-           "provenance": []
-          },
-          "test": null,
-          "outcome": "noted"
-         },
-         {
-          "subject": {
-           "kind": "stated",
-           "id": null,
-           "label": "Core tests passed",
-           "unit": "count",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": 0,
-           "source": "stated",
-           "cautions": [],
-           "provenance": []
-          },
-          "test": null,
-          "outcome": "noted"
-         },
-         {
-          "subject": {
-           "kind": "stated",
-           "id": null,
-           "label": "Bonus tests passed",
-           "unit": "count",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": 0,
-           "source": "stated",
-           "cautions": [],
-           "provenance": []
-          },
-          "test": null,
-          "outcome": "noted"
-         },
-         {
-          "subject": {
-           "kind": "stated",
-           "id": null,
-           "label": "Tests that could not be worked out",
-           "unit": "count",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": 12,
-           "source": "stated",
-           "cautions": [],
-           "provenance": []
-          },
-          "test": null,
-          "outcome": "noted"
-         },
-         {
-          "subject": {
            "kind": "measure",
            "id": "pe_3y_avg_eps",
            "label": "Price to earnings on three-year average EPS",
@@ -5132,7 +5085,8 @@
            },
            "absent": null
           },
-          "outcome": "unknown"
+          "outcome": "unknown",
+          "group": "knockouts"
          },
          {
           "subject": {
@@ -5159,7 +5113,8 @@
            },
            "absent": null
           },
-          "outcome": "unknown"
+          "outcome": "unknown",
+          "group": "knockouts"
          },
          {
           "subject": {
@@ -5186,7 +5141,8 @@
            },
            "absent": null
           },
-          "outcome": "unknown"
+          "outcome": "unknown",
+          "group": "knockouts"
          },
          {
           "subject": {
@@ -5213,7 +5169,8 @@
            },
            "absent": null
           },
-          "outcome": "unknown"
+          "outcome": "unknown",
+          "group": "knockouts"
          },
          {
           "subject": {
@@ -5240,7 +5197,8 @@
            },
            "absent": null
           },
-          "outcome": "unknown"
+          "outcome": "unknown",
+          "group": "core"
          },
          {
           "subject": {
@@ -5267,7 +5225,8 @@
            },
            "absent": null
           },
-          "outcome": "unknown"
+          "outcome": "unknown",
+          "group": "core"
          },
          {
           "subject": {
@@ -5294,7 +5253,8 @@
            },
            "absent": null
           },
-          "outcome": "unknown"
+          "outcome": "unknown",
+          "group": "core"
          },
          {
           "subject": {
@@ -5321,7 +5281,8 @@
            },
            "absent": null
           },
-          "outcome": "unknown"
+          "outcome": "unknown",
+          "group": "core"
          },
          {
           "subject": {
@@ -5348,7 +5309,8 @@
            },
            "absent": null
           },
-          "outcome": "unknown"
+          "outcome": "unknown",
+          "group": "core"
          },
          {
           "subject": {
@@ -5375,7 +5337,8 @@
            },
            "absent": null
           },
-          "outcome": "unknown"
+          "outcome": "unknown",
+          "group": "core"
          },
          {
           "subject": {
@@ -5402,7 +5365,8 @@
            },
            "absent": null
           },
-          "outcome": "unknown"
+          "outcome": "unknown",
+          "group": "core"
          },
          {
           "subject": {
@@ -5429,7 +5393,8 @@
            },
            "absent": null
           },
-          "outcome": "unknown"
+          "outcome": "unknown",
+          "group": "core"
          },
          {
           "subject": {
@@ -5456,7 +5421,8 @@
            },
            "absent": null
           },
-          "outcome": "unknown"
+          "outcome": "unknown",
+          "group": "bonus"
          },
          {
           "subject": {
@@ -5483,7 +5449,8 @@
            },
            "absent": null
           },
-          "outcome": "unknown"
+          "outcome": "unknown",
+          "group": "bonus"
          },
          {
           "subject": {
@@ -5510,7 +5477,57 @@
            },
            "absent": null
           },
+          "outcome": "unknown",
+          "group": "bonus"
+         }
+        ],
+        "groups": [
+         {
+          "id": "knockouts",
+          "name": "Tests this strategy will not bend",
+          "requires": "all",
+          "test": null,
+          "members": 4,
+          "tested": 4,
+          "passed": 0,
+          "failed": 0,
+          "unknown": 4,
           "outcome": "unknown"
+         },
+         {
+          "id": "core",
+          "name": "Core tests",
+          "requires": "at_least",
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 6,
+           "threshold_from": {
+            "kind": "value",
+            "id": "core-tests-required",
+            "label": "Core tests that must pass",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "members": 8,
+          "tested": 8,
+          "passed": 0,
+          "failed": 0,
+          "unknown": 8,
+          "outcome": "unknown"
+         },
+         {
+          "id": "bonus",
+          "name": "Reported, never blocking",
+          "requires": "noted",
+          "test": null,
+          "members": 3,
+          "tested": 3,
+          "passed": 0,
+          "failed": 0,
+          "unknown": 3,
+          "outcome": "noted"
          }
         ],
         "note": null
@@ -5519,17 +5536,17 @@
        "strategy": {
         "id": "graham",
         "name": "Graham",
-        "version": 1,
+        "version": 2,
         "values_version": 1,
-        "contract": 4
+        "contract": 5
        }
       },
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 1,
+       "version": 2,
        "values_version": 1,
-       "contract": 4
+       "contract": 5
       },
       "metrics": {},
       "price": null,
@@ -5906,15 +5923,11 @@
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 1,
+       "version": 2,
        "values_version": 1,
-       "contract": 4
+       "contract": 5
       },
       "failed": [
-       {
-        "key": "stated:Knockout tests passed",
-        "label": "Knockout tests passed"
-       },
        {
         "key": "value:max-pe-3y-avg",
         "label": "Highest price to three-year average earnings"
@@ -5962,77 +5975,6 @@
         "evidence": [
          {
           "subject": {
-           "kind": "stated",
-           "id": null,
-           "label": "Knockout tests passed",
-           "unit": "count",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": 1,
-           "source": "stated",
-           "cautions": [],
-           "provenance": []
-          },
-          "test": {
-           "comparator": "at_least",
-           "phrase": "at least",
-           "threshold": 4,
-           "threshold_from": null,
-           "absent": null
-          },
-          "outcome": "fail"
-         },
-         {
-          "subject": {
-           "kind": "stated",
-           "id": null,
-           "label": "Core tests passed",
-           "unit": "count",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": 7,
-           "source": "stated",
-           "cautions": [],
-           "provenance": []
-          },
-          "test": {
-           "comparator": "at_least",
-           "phrase": "at least",
-           "threshold": 6,
-           "threshold_from": {
-            "kind": "value",
-            "id": "core-tests-required",
-            "label": "Core tests that must pass",
-            "unit": "count"
-           },
-           "absent": null
-          },
-          "outcome": "pass"
-         },
-         {
-          "subject": {
-           "kind": "stated",
-           "id": null,
-           "label": "Bonus tests passed",
-           "unit": "count",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": 1,
-           "source": "stated",
-           "cautions": [],
-           "provenance": []
-          },
-          "test": null,
-          "outcome": "noted"
-         },
-         {
-          "subject": {
            "kind": "measure",
            "id": "pe_3y_avg_eps",
            "label": "Price to earnings on three-year average EPS",
@@ -6060,7 +6002,8 @@
            },
            "absent": null
           },
-          "outcome": "fail"
+          "outcome": "fail",
+          "group": "knockouts"
          },
          {
           "subject": {
@@ -6091,7 +6034,8 @@
            },
            "absent": null
           },
-          "outcome": "fail"
+          "outcome": "fail",
+          "group": "knockouts"
          },
          {
           "subject": {
@@ -6122,7 +6066,8 @@
            },
            "absent": null
           },
-          "outcome": "fail"
+          "outcome": "fail",
+          "group": "knockouts"
          },
          {
           "subject": {
@@ -6153,7 +6098,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "knockouts"
          },
          {
           "subject": {
@@ -6184,7 +6130,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -6215,7 +6162,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -6246,7 +6194,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -6277,7 +6226,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -6308,7 +6258,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -6339,7 +6290,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -6370,7 +6322,8 @@
            },
            "absent": null
           },
-          "outcome": "fail"
+          "outcome": "fail",
+          "group": "core"
          },
          {
           "subject": {
@@ -6401,7 +6354,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "core"
          },
          {
           "subject": {
@@ -6432,7 +6386,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "bonus"
          },
          {
           "subject": {
@@ -6463,7 +6418,8 @@
            },
            "absent": null
           },
-          "outcome": "fail"
+          "outcome": "fail",
+          "group": "bonus"
          },
          {
           "subject": {
@@ -6490,7 +6446,57 @@
            },
            "absent": null
           },
-          "outcome": "unknown"
+          "outcome": "unknown",
+          "group": "bonus"
+         }
+        ],
+        "groups": [
+         {
+          "id": "knockouts",
+          "name": "Tests this strategy will not bend",
+          "requires": "all",
+          "test": null,
+          "members": 4,
+          "tested": 4,
+          "passed": 1,
+          "failed": 3,
+          "unknown": 0,
+          "outcome": "fail"
+         },
+         {
+          "id": "core",
+          "name": "Core tests",
+          "requires": "at_least",
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 6,
+           "threshold_from": {
+            "kind": "value",
+            "id": "core-tests-required",
+            "label": "Core tests that must pass",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "members": 8,
+          "tested": 8,
+          "passed": 7,
+          "failed": 1,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "bonus",
+          "name": "Reported, never blocking",
+          "requires": "noted",
+          "test": null,
+          "members": 3,
+          "tested": 3,
+          "passed": 1,
+          "failed": 1,
+          "unknown": 1,
+          "outcome": "noted"
          }
         ],
         "note": null
@@ -6499,17 +6505,17 @@
        "strategy": {
         "id": "graham",
         "name": "Graham",
-        "version": 1,
+        "version": 2,
         "values_version": 1,
-        "contract": 4
+        "contract": 5
        }
       },
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 1,
+       "version": 2,
        "values_version": 1,
-       "contract": 4
+       "contract": 5
       },
       "metrics": {
        "pe_3y_avg_eps": {
@@ -6693,9 +6699,9 @@
      "strategy": {
       "id": "graham",
       "name": "Graham",
-      "version": 1,
+      "version": 2,
       "values_version": 1,
-      "contract": 4
+      "contract": 5
      },
      "snapshot": {
       "frozen": "2025-10-15T14:00:00+00:00",
@@ -6744,7 +6750,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "safety"
          },
          {
           "subject": {
@@ -6775,7 +6782,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "safety"
          },
          {
           "subject": {
@@ -6806,7 +6814,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "safety"
          },
          {
           "subject": {
@@ -6837,7 +6846,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "safety"
          },
          {
           "subject": {
@@ -6868,7 +6878,8 @@
            },
            "absent": null
           },
-          "outcome": "pass"
+          "outcome": "pass",
+          "group": "safety"
          },
          {
           "subject": {
@@ -6899,7 +6910,8 @@
            },
            "absent": null
           },
-          "outcome": "fail"
+          "outcome": "fail",
+          "group": "discount"
          },
          {
           "subject": {
@@ -6930,7 +6942,8 @@
            },
            "absent": null
           },
-          "outcome": "fail"
+          "outcome": "fail",
+          "group": "discount"
          },
          {
           "subject": {
@@ -6961,7 +6974,8 @@
            },
            "absent": null
           },
-          "outcome": "fail"
+          "outcome": "fail",
+          "group": "discount"
          },
          {
           "subject": {
@@ -6969,7 +6983,7 @@
            "id": "position.opened",
            "label": "Held since",
            "unit": "date",
-           "explain": null
+           "explain": "The day this holding began — the purchase that took the position up from nothing. It does not move when you trim part of the holding away, so it answers when you started owning this, not how old your oldest remaining share is."
           },
           "observed": {
            "status": "known",
@@ -6979,20 +6993,21 @@
            "provenance": []
           },
           "test": null,
-          "outcome": "noted"
+          "outcome": "noted",
+          "group": "clock"
          },
          {
           "subject": {
-           "kind": "stated",
-           "id": null,
+           "kind": "fact",
+           "id": "position.months_held",
            "label": "Months held",
-           "unit": "count",
-           "explain": null
+           "unit": "months",
+           "explain": "How many whole months you have held this position, counted from the purchase that took it up from nothing. Selling part of it does not restart the clock; selling all of it and buying back later does, because that is a new decision. Counted the same way a date some number of months out is worked out, so \"twenty-four months held\" and \"the day two years after you bought\" always land together."
           },
           "observed": {
            "status": "known",
            "value": 26,
-           "source": "stated",
+           "source": "fact",
            "cautions": [],
            "provenance": []
           },
@@ -7008,7 +7023,8 @@
            },
            "absent": null
           },
-          "outcome": "fail"
+          "outcome": "fail",
+          "group": "clock"
          },
          {
           "subject": {
@@ -7016,7 +7032,7 @@
            "id": "position.weight",
            "label": "Position weight",
            "unit": "percent",
-           "explain": null
+           "explain": "How much of your whole account this one holding is, as a percentage. It is what the shares are worth today divided by what the account is worth today — free cash plus every holding at market. It moves when the price moves, without you doing anything, which is the reason a rule about it exists at all."
           },
           "observed": {
            "status": "known",
@@ -7039,6 +7055,57 @@
            },
            "absent": null
           },
+          "outcome": "pass",
+          "group": "size"
+         }
+        ],
+        "groups": [
+         {
+          "id": "safety",
+          "name": "The balance sheet and the earnings record",
+          "requires": "noted",
+          "test": null,
+          "members": 5,
+          "tested": 5,
+          "passed": 5,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "noted"
+         },
+         {
+          "id": "discount",
+          "name": "The discount you bought",
+          "requires": "noted",
+          "test": null,
+          "members": 3,
+          "tested": 3,
+          "passed": 0,
+          "failed": 3,
+          "unknown": 0,
+          "outcome": "noted"
+         },
+         {
+          "id": "clock",
+          "name": "The holding period",
+          "requires": "all",
+          "test": null,
+          "members": 2,
+          "tested": 1,
+          "passed": 0,
+          "failed": 1,
+          "unknown": 0,
+          "outcome": "fail"
+         },
+         {
+          "id": "size",
+          "name": "How big it has got",
+          "requires": "all",
+          "test": null,
+          "members": 1,
+          "tested": 1,
+          "passed": 1,
+          "failed": 0,
+          "unknown": 0,
           "outcome": "pass"
          }
         ],
@@ -7048,17 +7115,17 @@
        "strategy": {
         "id": "graham",
         "name": "Graham",
-        "version": 1,
+        "version": 2,
         "values_version": 1,
-        "contract": 4
+        "contract": 5
        }
       },
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 1,
+       "version": 2,
        "values_version": 1,
-       "contract": 4
+       "contract": 5
       },
       "metrics": {
        "pe_3y_avg_eps": {

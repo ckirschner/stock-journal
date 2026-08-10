@@ -8,7 +8,7 @@ STRATEGY = {
     "name": "Eager fixture",
     "summary": "Raises the moment its logic is asked anything.",
     "version": 1,
-    "contract": 4,
+    "contract": 5,
     "changelog": {1: "First version."},
     "states": [
         {"id": "unreachable", "name": "Unreachable", "render": "hold",

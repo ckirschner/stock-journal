@@ -183,6 +183,13 @@ td.l{text-align:left}
 .srow{display:grid;grid-template-columns:220px 1fr auto;gap:12px;align-items:baseline;
   padding:11px 14px;border-bottom:1px solid var(--rule)}
 .srow:last-child{border-bottom:0}
+/* A group heading inside the evidence list. Set apart by weight and a tinted
+   band, never by colour alone: the rows under it already carry the semantic
+   colour, and a second coloured thing competing with them is how a reader
+   stops reading either. */
+.ghrow{background:var(--card-2);border-top:1px solid var(--rule);
+  padding-top:9px;padding-bottom:9px}
+.ghrow:first-child{border-top:0}
 .sname{font-size:13.5px}
 .scond{font-family:var(--mono);font-size:12px;color:var(--ink-2);line-height:1.6}
 .sstate{text-align:right}

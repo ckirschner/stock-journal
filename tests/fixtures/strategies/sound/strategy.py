@@ -8,7 +8,7 @@ STRATEGY = {
     "summary": "A test fixture that always stages a tiny commit. It is not "
                "investment logic.",
     "version": 2,
-    "contract": 4,
+    "contract": 5,
     "changelog": {
         1: "First version.",
         2: "Second version, to prove multi-entry changelogs load.",
@@ -27,6 +27,7 @@ STRATEGY = {
     "values": [
         {"id": "first-stage", "label": "First stage", "type": "number",
          "unit": "percent", "min": 0, "max": 100,
+         "source": {"name": "a test fixture", "reasoning": True},
          "explain": "What fraction of the target the first commit "
                     "stages."},
     ],
