@@ -212,16 +212,81 @@ RENDER_TYPES = MappingProxyType({
     "unknown": _rt("evaluation", "not enough data to say", 5, True, ()),
 })
 
+# ---------------------------------------------------------------------------
+# Where a blocked verdict sends someone — the host's list of ways out.
+#
+# `blocked` is the one render type that says the tool will not answer until
+# the user does something. A blocked verdict that does not say *where* that
+# something is done is a dead end: the user reads a sentence naming what is
+# owed and has nothing to click, anywhere, and no way to find out what the
+# author meant. It is the worst failure on this list, because it is the only
+# one where the program has stopped and is not saying how to start it again.
+#
+# So a blocked state names its way out, from this closed host-owned list, and
+# the host renders the button. That is the same arrangement as `render`: the
+# strategy picks a word the host owns and the host owns everything behind it.
+# A strategy cannot invent a destination, because a destination is a screen
+# and screens are the host's — anything missing from this list is a request
+# against the host, not something to work around.
+#
+# `cites` is the part that keeps a fix honest. Most destinations are fixed
+# screens and are reachable whatever the decision said. One is not: the
+# questions under "Your judgement" are built from the decision's own
+# citations, so a verdict that says "answer these" and cites none of them
+# sends the reader to an empty section — a dead end one screen further along,
+# which is worse than the first one because it looks like it worked. Where
+# `cites` names a subject kind, `evaluate` refuses a blocked verdict that
+# does not cite one. The author finds out the first time they run it; the
+# user never finds out at all.
+#
+# Adding a fix is a host change in this one table, and it means adding the
+# screen behind it.
+# ---------------------------------------------------------------------------
+
+STATE_FIXES = MappingProxyType({
+    "settings": MappingProxyType({
+        "label": "Fix this journal's settings",
+        "where": "this journal's setup screen",
+        "cites": None,
+        "explain": "The answers and settings this journal holds for its "
+                   "strategy. Where a strategy asks for something the "
+                   "journal has never been given, this is the one screen "
+                   "that supplies it."}),
+    "judgement": MappingProxyType({
+        "label": "Answer these questions",
+        "where": '"Your judgement" on this security\'s page',
+        "cites": "judgement",
+        "explain": "The questions no filing can answer, asked per security. "
+                   "They are built from what the decision cited, which is "
+                   "why a verdict that blocks on one has to cite it: the "
+                   "citation is what puts the question on the page with a "
+                   "way to answer it."}),
+    "thesis": MappingProxyType({
+        "label": "Write down what you think now",
+        "where": "this security's thesis record",
+        "cites": None,
+        "explain": "What you believe about this business and what would "
+                   "prove you wrong, in your own words. Where a strategy "
+                   "will not act again until a fresh view has been taken, "
+                   "this is where taking it is recorded."}),
+})
+
 # States the host itself may produce when no strategy verdict exists. They
 # are machinery, not opinion — "we could not ask the strategy" is a fact
 # about the evaluation, and the host is allowed to know it. The "host:"
 # prefix is reserved; a strategy declaring a state with it is refused.
 #
-# `fix` names the screen that resolves the state, or None where nothing in
-# the app can. A blocked verdict with nothing to click is a dead end, and a
-# strategy version that adds a required input would put every journal
-# stamped with it into exactly that trap. The view reads this rather than
-# recognising state ids, so a new host state arrives with its own way out.
+# `fix` names one of STATE_FIXES, or None where nothing in the app resolves
+# the state. The view reads this rather than recognising state ids, so a new
+# host state arrives with its own way out.
+#
+# One of these is blocked with no fix, and it is not the dead end a
+# strategy's would be. "The strategy is not installed" is resolved by putting
+# a directory back on disk, which is not a screen and never will be — naming
+# one would be the host offering a button that cannot exist. The rule that
+# every blocked state names a fix is therefore asked of what a *strategy*
+# declares, where the alternative is an author's oversight rather than an
+# honest absence, and the screen says the whole sentence instead.
 HOST_STATES = MappingProxyType({
     "host:inputs-missing": MappingProxyType({
         "render": "blocked", "name": "Waiting on setup", "fix": "settings",
@@ -855,7 +920,7 @@ def check_typed_value(spec: dict, value) -> str | None:
 
 _DECL_KEYS = {"id", "name", "summary", "version", "contract", "changelog",
               "states", "inputs", "values", "reference"}
-_STATE_KEYS = {"id", "name", "description", "render"}
+_STATE_KEYS = {"id", "name", "description", "render", "fix"}
 _FIELD_KEYS = {"id", "label", "type", "unit", "required", "min", "max",
                "explain", "options", "role", "when", "min_from", "max_from",
                "source"}
@@ -1168,6 +1233,40 @@ def _check_field_graph(decl: dict, errors: list) -> None:
             node = when.get("input") if isinstance(when, dict) else None
 
 
+def _check_state_fix(where: str, s: dict, errors: list) -> None:
+    """A blocked state names where its answer is given; nothing else may.
+
+    This is the load-time half of "a blocked verdict cannot become a dead
+    end", and it is deliberately the half that fires first. An author writing
+    a state that stops the program without saying how to start it again finds
+    out the moment the bundle is loaded, before any journal is stamped with
+    it and long before a user is standing in front of the verdict.
+
+    The reverse — a `fix` on anything else — is refused rather than ignored.
+    A hold does not stop, so there is nothing for a button to resolve, and a
+    key that silently does nothing is exactly what this contract refuses
+    everywhere else.
+    """
+    if s.get("render") != "blocked":
+        if "fix" in s:
+            errors.append(
+                f"{where}: `fix` names where a blocked verdict is answered, "
+                f'so only a `blocked` state carries one. This one is '
+                f'`{s.get("render")}`, which does not stop and has nothing '
+                "to resolve.")
+        return
+    if s.get("fix") not in STATE_FIXES:
+        errors.append(
+            f"{where} is `blocked`, so it must set `fix` to one of "
+            f"{', '.join(STATE_FIXES)} — the screens this host can send "
+            "someone to. A blocked verdict says the tool will not answer "
+            "until you do something; one that does not say where that is "
+            "done leaves the reader a sentence and nothing to click. Naming "
+            "what is needed in `payload.needs` is not the same thing: prose "
+            "cannot be clicked, and a screen cannot be guessed. Anything "
+            "missing from that list is a request against the host.")
+
+
 def validate_declaration(decl) -> list[str]:
     """Every problem with a STRATEGY declaration, as legible sentences.
 
@@ -1262,6 +1361,7 @@ def validate_declaration(decl) -> list[str]:
             errors.append(f"{where} must set `render` to one of the host's "
                           f"six types ({', '.join(RENDER_TYPES)}). A "
                           "strategy cannot add a render type.")
+        _check_state_fix(where, s, errors)
 
     _check_fields("input", decl.get("inputs", []), errors)
     _check_fields("value", decl.get("values", []), errors)
@@ -2591,6 +2691,43 @@ def _contradicted_commit(record, evidence, groups) -> list[str]:
         "both would leave you to work out which."]
 
 
+def _unanswerable_block(record, state, evidence) -> str | None:
+    """Why a blocked verdict has nothing behind the way out it names.
+
+    The evaluate-time half of "a blocked verdict cannot become a dead end".
+    The declaration check already refused a blocked state that names no
+    destination; this refuses one whose destination is built out of the
+    decision's own citations and was handed none.
+
+    Only one destination works that way, and it is the one an author reaches
+    for first. The questions under "Your judgement" are exactly the ones the
+    decision cited — that is the whole discovery mechanism for anything asked
+    per security, because a question about one security cannot be declared on
+    a setup screen before there is a security to ask it about. So a verdict
+    that says "answer these three questions" and cites none of them renders a
+    button leading to a section with nothing in it. That is a worse dead end
+    than the first, because it looks like it worked.
+
+    Naming the questions in `payload.needs` is not citing them. Prose is not
+    a citation, the host cannot read it, and a convention that lives in one
+    strategy's prose is not a guarantee — which is the whole reason this is
+    a refusal and not a paragraph of documentation.
+    """
+    spec = STATE_FIXES.get(state.get("fix")) or {}
+    kind = spec.get("cites")
+    if kind is None:
+        return None
+    if any((r.get("subject") or {}).get("kind") == kind for r in evidence):
+        return None
+    return (f'{record["name"]} blocked on "{state["name"]}" and sent the '
+            f'reader to {spec["where"]} without citing anything that is '
+            f"asked there. That section is built from what this decision "
+            f"cited, so it would be empty — the verdict would say something "
+            f"is owed and the page would offer no way to give it. Cite what "
+            f"is being waited on; naming it in `needs` puts it in a sentence "
+            f"and nowhere else.")
+
+
 _bank_cache: dict = {}
 _bank_doc = None
 
@@ -2695,9 +2832,11 @@ def _result(state_id, state, payload, reason, produced_by, record):
     return {
         "render": render,
         "tier": RENDER_TYPES[render]["tier"],
-        # `fix` is None for everything a strategy declares: only the host
-        # knows which of its own states has a screen behind it, and a
-        # strategy's blocked state asks for a decision, not for setup.
+        # `fix` names one of STATE_FIXES, or is None where nothing in the app
+        # resolves the state. Both sides fill it the same way — a strategy
+        # declares one on every blocked state it has, the host carries one on
+        # its own — so the view renders a way out without ever knowing whose
+        # state it is looking at.
         "state": {"id": state_id, "name": state["name"],
                   "description": state["description"],
                   "fix": state.get("fix")},
@@ -2849,14 +2988,20 @@ def evaluate(record: dict, ctx: dict) -> dict:
             f'{record["name"]} declared evidence groups the host could not '
             f"roll up ({type(e).__name__}: {e}).", record)
 
-    # The one place the host compares a strategy's conclusion against its
-    # own arithmetic. Everything else here checks shape; this checks that
-    # the decision and the evidence say the same thing.
+    # The two places the host compares a strategy's conclusion against its
+    # own arithmetic. Everything else here checks shape; these check that the
+    # decision and the evidence say the same thing — a commit that its own
+    # citations contradict, and a block whose way out its own citations do
+    # not open.
     if state["render"] == "commit":
         contradictions = _contradicted_commit(record, evidence, groups)
         if contradictions:
             return host_result("host:invalid-decision",
                                " ".join(contradictions), record)
+    elif state["render"] == "blocked":
+        dead_end = _unanswerable_block(record, state, evidence)
+        if dead_end:
+            return host_result("host:invalid-decision", dead_end, record)
 
     reason = {"rule": decision["reason"]["rule"],
               "summary": decision["reason"]["summary"],

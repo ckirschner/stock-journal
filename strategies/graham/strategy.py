@@ -280,7 +280,7 @@ STRATEGY = {
                "what its assets and its typical earnings justify, and sells "
                "when that gap closes, when the balance sheet stops being "
                "safe, or when two years are up — whichever comes first.",
-    "version": 4,
+    "version": 5,
     "contract": 5,
     "changelog": {
         1: "First version. The fifteen entry tests, the four-knockout / "
@@ -349,6 +349,14 @@ STRATEGY = {
            "would have read 'nothing to do' still does, unless it now has "
            "room and still screens — in which case it says so, and the "
            "reason names which of the several ways an add was refused.",
+        5: "No threshold and no rule changed, and no verdict moves. The one "
+           "state that stops and waits for you — the bar on adding to a "
+           "holding that has drifted — now says where what it asks for is "
+           "written down, so the host puts a button on the verdict instead "
+           "of the reader having to know which record a fresh read of a "
+           "business belongs in. Writing one still does not lift the bar: "
+           "nothing does but selling and buying again, which is what the "
+           "bar is for.",
     },
 
     # -----------------------------------------------------------------
@@ -415,6 +423,13 @@ STRATEGY = {
                         "knows or can know what you paid."},
 
         {"id": "re-underwrite-owed", "render": "blocked",
+         # What this state asks for is a fresh view of the business, and the
+         # place a fresh view is written down is the thesis. Writing one does
+         # not clear the bar — nothing does except selling and buying again,
+         # which is the point of the bar — but it is the thing being asked
+         # for, and the button says so rather than the reader having to find
+         # the record it belongs in.
+         "fix": "thesis",
          "name": "Read it again before adding",
          "description": "The measures this strategy watches have moved "
                         "further since your first purchase than it will put "

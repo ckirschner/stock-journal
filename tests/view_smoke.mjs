@@ -476,11 +476,22 @@ for (const v of (state.strategy || {}).values || []) {
 // A state the host says has a screen behind it must render the way in. A
 // blocked verdict with nothing to click is a trap, and it is the state a
 // strategy that gained a required input puts every journal into.
+//
+// The button is not enough on its own where the destination is built out of
+// the decision's own citations: a button leading to a section that is not on
+// the page is the same trap one click further along, and it looks like it
+// worked. The host refuses the verdict without the citation; this checks the
+// section the citation was supposed to produce actually rendered.
+const FIX_ANCHOR = { judgement: 'id="judgements"' };
 for (const s of state.securities) {
   const fix = ((s._decision || {}).state || {}).fix;
   if (fix) {
     must.push([`detail:${s.ticker}`, `data-act="${fix}"`,
                `a blocked verdict offers the "${fix}" screen that resolves it`]);
+    if (FIX_ANCHOR[fix]) {
+      must.push([`detail:${s.ticker}`, FIX_ANCHOR[fix],
+                 `the "${fix}" button has somewhere on this page to land`]);
+    }
   }
 }
 // Several of the emptiness guards below are only owed where a strategy

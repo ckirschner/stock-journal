@@ -958,16 +958,18 @@ function evidenceList(decision, key) {
   }).join("");
 }
 
-/* A blocked verdict with nothing to click is a dead end, and the state that
-   says "the strategy needs an answer you have not given" is exactly the one
-   a user must be able to escape. The host names the screen that resolves
-   each of its own states; the view is told, and never recognises an id. */
-const FIX_LABEL = { settings: "Fix this journal's settings" };
+/* A blocked verdict with nothing to click is a dead end, and a state that
+   says "the strategy will not answer until you do something" is exactly the
+   one a user must be able to escape. Every state that stops names the screen
+   that resolves it — a strategy's as much as the host's — and the label comes
+   with it. There is no list of fixes in this file: one lived here, it knew
+   about a single id, and a state naming any other drew no button at all. */
 function fixButton(d) {
   const fix = ((d || {}).state || {}).fix;
-  if (!fix || !FIX_LABEL[fix]) return "";
+  const spec = fix ? (S.state_fixes || {})[fix] : null;
+  if (!spec) return "";
   return `<div class="toolbar" style="justify-content:flex-start;margin:12px 0 0">
-    <button class="btn primary" data-act="${esc(fix)}">${esc(FIX_LABEL[fix])}</button></div>`;
+    <button class="btn primary" data-act="${esc(fix)}">${esc(spec.label)}</button></div>`;
 }
 
 function decisionSection(d, title) {
@@ -1046,7 +1048,11 @@ function judgementSection(s) {
           j.mark ? "Reassess" : "Answer this"}</button></div>`}
     </div>`;
   }).join("");
-  return `<section class="group" style="margin-top:26px">
+  /* Named, because a blocked verdict whose way out is "answer these" sends
+     the reader here from further up the page. The host refuses that verdict
+     unless it cited a question, so by the time the button exists this
+     section does too. */
+  return `<section class="group" id="judgements" style="margin-top:26px">
     <div class="ghead"><h3>Your judgement</h3>
       <span>${owed ? `${owed} unanswered` : "answered"}</span></div>
     <p class="hint" style="margin:8px 0 0">Questions the filings cannot answer, which
@@ -3410,6 +3416,15 @@ document.addEventListener("click", async (ev) => {
     }
     case "metrics": return dlgMetrics(s);
     case "judge": return dlgJudgement(s, act.dataset.jid);
+    /* The way out of a verdict blocked on something only you can answer.
+       It goes to the questions rather than opening one of them: which of
+       them is owed is the section's business, and a verdict that blocks on
+       three would otherwise have to pick one to be the button. */
+    case "judgement": {
+      const sec = $("judgements");
+      if (sec) sec.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
     case "thesis": return dlgThesis(s);
     case "note": return dlgNote(s);
     case "buy": return dlgBuy(s);
