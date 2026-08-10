@@ -50,6 +50,55 @@ def to_plain(node):
 
 _bank_cache: dict = {}
 
+# Kinds whose estimator reads a fixed-length window of annual observations, so
+# `observations` says something and its absence is a hole. A streak has no
+# fixed window and may leave it out; a reading at one date or over a trailing
+# window has no annual observations to count, and stating one would be noise.
+_WINDOWED = ("averaged", "median", "range")
+_UNWINDOWED = ("instant", "trailing", "assessed")
+
+
+def _check_estimator(entry) -> list:
+    """Everything wrong with one entry's estimator declaration.
+
+    Refused at load rather than tolerated, because what follows from it is
+    how much evidence a breach of that measure needs. A missing estimator
+    would have to fall back to something, and every fallback is either the
+    strict one — which silently stops exits firing — or the loose one, which
+    silently fires them on a single year. Both are quiet, and quiet is the
+    failure this file exists to refuse.
+    """
+    from .contract import ESTIMATORS               # local: bank loads first
+    eid = str(entry.get("id"))
+    node = entry.get("estimator")
+    if not isinstance(node, dict):
+        return [f'{eid} declares no `estimator`. Every entry says how it is '
+                f'read — one of {", ".join(ESTIMATORS)} — because how much '
+                "evidence a breach of it needs is derived from that."]
+    kind = str(node.get("kind") or "")
+    if kind not in ESTIMATORS:
+        return [f'{eid} declares estimator kind "{kind or "nothing"}", which '
+                f'is not one of {", ".join(ESTIMATORS)}. Adding a kind is a '
+                "host change in engine/contract.py, never a new word here."]
+    unknown = set(node) - {"kind", "observations"}
+    if unknown:
+        return [f"{eid}: an estimator carries `kind` and `observations` and "
+                "nothing else; found " + ", ".join(sorted(unknown)) + "."]
+    obs = node.get("observations")
+    if obs is not None and (not isinstance(obs, int) or isinstance(obs, bool)
+                            or obs < 2):
+        return [f"{eid}: `observations` counts the annual observations the "
+                "estimator reads, so it is a whole number of at least two."]
+    if kind in _WINDOWED and obs is None:
+        return [f"{eid}: a {kind} estimator reads a window of fixed length, "
+                "so it has to say how many annual observations are in it — "
+                "a three-point median and a five-point one do not resist an "
+                "outlier equally."]
+    if kind in _UNWINDOWED and obs is not None:
+        return [f"{eid}: a {kind} estimator reads no window of annual "
+                "observations, so `observations` says nothing about it."]
+    return []
+
 
 def load_bank(name: str = "metric-bank"):
     path = bank_path(name)
@@ -69,6 +118,11 @@ def load_bank(name: str = "metric-bank"):
         raise ValueError(
             f'{path.name} does not declare a metric-bank schema '
             f'(found "{schema or "nothing"}").')
+    problems = [p for e in (doc.get("entries") or [])
+                for p in _check_estimator(e)]
+    if problems:
+        raise ValueError(f"{path.name} cannot be loaded:\n  "
+                         + "\n  ".join(problems))
     _bank_cache[name] = (mtime, doc)
     return doc
 

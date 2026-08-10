@@ -16,7 +16,7 @@
 # Bump `version` whenever any number here moves. That is what makes the
 # change appear on the rule-change record of every journal running this
 # strategy, with a before and an after.
-version: 3
+version: 4
 
 values:
 
@@ -27,9 +27,15 @@ values:
   portfolio-slots: 20
   position-weight-cap: 10
 
-  # The discipline that is not a measure
+  # The discipline that is not a measure.
+  #
+  # `sell-confirmation-filings: 2` used to sit here and no longer does. How
+  # many readings it takes to believe one is a property of the measure — the
+  # host derives it from what the metric bank declares about each — and the
+  # report's "two consecutive filings" survives unchanged wherever the measure
+  # is one a second filing tells you anything new about. See the exits in
+  # strategy.py.
   holding-period-months: 24
-  sell-confirmation-filings: 2
 
   # The five knockouts
   max-pe-3y-avg: 15

@@ -131,6 +131,24 @@ def _industry_classes() -> str:
          for k, v in contract.INDUSTRY_CLASSES.items()])
 
 
+def _estimators() -> str:
+    return _table(
+        ["`kind`", "reads as", "filings a breach needs",
+         "must survive dropping a year"],
+        [(f"`{k}`", v["label"], v["confirmations"],
+          {"no": "—", "always": "yes",
+           "short-window":
+               f'under {contract.BREAKDOWN_OBSERVATIONS} observations'}
+          [v["robustness"]])
+         for k, v in contract.ESTIMATORS.items()])
+
+
+def _robustness() -> str:
+    return _table(
+        ["`without`", "reads as"],
+        [(f"`{k}`", v["label"]) for k, v in contract.ROBUSTNESS.items()])
+
+
 def _input_roles() -> str:
     return _table(
         ["`role`", "declared as", "means", "unlocks"],
@@ -154,6 +172,12 @@ def _vocabulary() -> str:
         f"- **How a comparison can come out** — {_code(contract.OUTCOMES)}. "
         "The host derives one; a strategy branches on it and never asserts "
         "one.",
+        f"- **How an established breach can come out** — "
+        f"{_code(contract.CONFIRMATIONS)}. `contract.confirm` derives one; a "
+        "strategy branches on it and never asserts one.",
+        f"- **Observations at which a median stops needing help** — "
+        f"`{contract.BREAKDOWN_OBSERVATIONS}`. Below it, a breach of a "
+        "median must also survive dropping a year.",
         f"- **What a group may demand** — "
         f"{_code(contract.GROUP_REQUIREMENTS)}.",
     ])
@@ -167,6 +191,8 @@ BLOCKS = {
     "host-facts": _host_facts,
     "baseline-anchors": _baseline_anchors,
     "change-forms": _change_forms,
+    "estimators": _estimators,
+    "robustness": _robustness,
     "industry-classes": _industry_classes,
     "input-roles": _input_roles,
     "vocabulary": _vocabulary,

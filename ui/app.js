@@ -120,7 +120,8 @@ function fmtUnit(v, unit) {
    a measure reads the same in a strategy's reason as it does anywhere else,
    and through the contract's unit list otherwise. */
 function fmtSubject(subj, v) {
-  const b = subj.kind === "measure" ? bankMeta(subj.id) : null;
+  const b = ["measure", "robustness"].includes(subj.kind)
+    ? bankMeta(subj.id) : null;
   if (b && b.format) return fmtBank(v, b.format);
   const out = fmtUnit(v, subj.unit);
   /* A distance between two readings always shows its sign. The bank's format
@@ -886,7 +887,8 @@ function evidenceRow(item, i) {
   const warn = cautionLines(obs.cautions);
 
   const explain = subj.explain
-    || (subj.kind === "measure" && bankMeta(subj.id) ? bankMeta(subj.id).plain : null);
+    || (["measure", "robustness"].includes(subj.kind) && bankMeta(subj.id)
+      ? bankMeta(subj.id).plain : null);
   const tipId = "ev:" + i;
   const tip = explain
     ? `<button class="tip" data-tip="${esc(tipId)}" aria-expanded="${tipOpen === tipId}"
@@ -899,6 +901,7 @@ function evidenceRow(item, i) {
          : subj.kind === "input" ? "Something you told this journal at setup"
          : subj.kind === "fact" ? "A figure the journal reports about your position"
          : subj.kind === "change" ? `How far this has moved since one of your own purchases. Both readings are the journal's — the one frozen at that purchase and the one on record now — and the distance between them is worked out here, not stated by the strategy. Bank entry <code>${esc(subj.id)}</code>`
+         : subj.kind === "robustness" ? `The same figure worked out again with one fiscal year taken out — the single year whose removal most helps the test be met. It is here because this measure is read over a window of years, so waiting for another filing would mostly re-read the same years; taking the flattering year out asks whether the rest of the record says the same thing. Bank entry <code>${esc(subj.id)}</code>`
          : "A figure the strategy worked out itself"}</span></div>` : "";
 
   /* No action here, deliberately. A verdict waiting on a question nobody
@@ -2085,6 +2088,21 @@ const UNIT_WORD = {
   times_own_median: "times its own median",
 };
 
+/* How a measure is READ, which is not what it measures. It decides how much
+   evidence a breach of somebody's level needs, so a reader who sees an exit
+   fire on one reading has to be able to find out why here. The words are the
+   host's own (engine/contract.py, ESTIMATORS) said in plain language. */
+const ESTIMATOR_WORD = {
+  instant: "read at one date",
+  trailing: "a trailing window",
+  endpoint: "two readings, one at each end",
+  averaged: "means at both ends",
+  median: "the middle of a window",
+  range: "the spread across a window",
+  count: "a count of annual reports",
+  assessed: "assessed, not measured",
+};
+
 function bankCard(e) {
   const pol = e.polarity === "higher_is_better" ? "higher is better"
     : e.polarity === "lower_is_better" ? "lower is better"
@@ -2094,7 +2112,8 @@ function bankCard(e) {
     <div class="pe-head"><b>${esc(e.label || e.id)}</b><code>${esc(e.id)}</code>
       <span class="req">${esc(e.kind || "")}</span>
       ${pol ? `<span class="req">${esc(pol)}</span>` : ""}
-      ${e.unit ? `<span class="req">${esc(UNIT_WORD[e.unit] || e.unit)}</span>` : ""}</div>`;
+      ${e.unit ? `<span class="req">${esc(UNIT_WORD[e.unit] || e.unit)}</span>` : ""}
+      ${e.estimator ? `<span class="req">${esc(ESTIMATOR_WORD[e.estimator.kind] || e.estimator.kind)}</span>` : ""}</div>`;
   if (x.plain) h += `<div class="pe-desc">${prose(x.plain)}</div>`;
   if (e.polarity_note) h += `<div class="pe-block"><i>Why no direction</i>
     <div class="pe-why" style="margin-top:0">${prose(e.polarity_note)}</div></div>`;

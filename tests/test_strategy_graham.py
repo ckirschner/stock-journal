@@ -211,9 +211,8 @@ class TestTheThresholdsAreTheReports:
         "exit-combined-multiple": 50, "exit-current-ratio": 1.2,
         "exit-ltd-to-working-capital": 2.0, "exit-altman-z": 1.8,
         "exit-debt-to-equity": 2.0, "exit-loss-years": 2,
-        # the rollup, the clock and the confirmation rule
+        # the rollup and the clock
         "core-tests-required": 6, "holding-period-months": 24,
-        "sell-confirmation-filings": 2,
     }
 
     def test_every_shipped_default_is_the_reports_number(self, graham):
@@ -697,8 +696,8 @@ class TestABuyCannotContradictItsOwnEvidence:
 
 
 class TestEveryValueSaysWhereItCameFrom:
-    def test_all_thirty_four_carry_a_source(self, graham):
-        assert len(graham["values"]) == 34
+    def test_all_thirty_three_carry_a_source(self, graham):
+        assert len(graham["values"]) == 33
         for spec in graham["values"]:
             assert spec["source"]["name"], spec["id"]
             assert isinstance(spec["source"]["reasoning"], bool), spec["id"]
@@ -853,35 +852,36 @@ class TestWhatTheAuditCaught:
         assert rollup(red)["knockouts"]["passed"] == 4
         assert rollup(grey)["knockouts"]["passed"] == 4
 
-    def test_self_confirmation_is_derived_from_the_levels_not_declared(
+    def test_a_run_of_losses_acts_on_its_own_level_and_nothing_on_top(
             self, graham):
-        """Two losing years span two annual filings, which is why that one
-        exit does not pay the confirmation rule twice. Lower the exit to one
-        losing year and the reasoning evaporates — so the carve-out has to
-        be worked out from the two settings rather than hardcoded, or a
-        single reading closes a position while the verdict claims a
-        confirmation that never happened."""
+        """A measure whose unit is annual reports already says how many
+        filings it takes, so the host asks for none on top.
+
+        This used to be a carve-out worked out inside the strategy from two
+        of its settings. It is now a property of the measure, declared in
+        the metric bank, and the difference shows at the level the carve-out
+        could not reach: an exit lowered to ONE losing year now acts on one
+        losing year. Under the old rule it silently waited for a second
+        annual filing showing a one-year streak — which is two losing years
+        — so the setting did not mean what it said.
+        """
         shipped = verdict(graham, known={**CLEARS_EXITS,
                                          "consecutive_annual_loss_years": 2},
                           **self.HELD)
         assert shipped["state"]["id"] == "safety-gone"
 
-        # One losing year, exit lowered to one: no longer self-confirming,
-        # so it needs the filings like everything else and has none.
         lowered = verdict(graham,
                           known={**CLEARS_EXITS,
                                  "consecutive_annual_loss_years": 1},
                           **self.HELD, **{"exit-loss-years": 1})
-        assert lowered["state"]["id"] == "one-reading-past"
+        assert lowered["state"]["id"] == "safety-gone"
 
-        # And with the filings behind it, it closes.
-        confirmed = verdict(
-            graham, known={**CLEARS_EXITS,
-                           "consecutive_annual_loss_years": 1},
-            series={"consecutive_annual_loss_years": [(QUARTERS[3], 1),
-                                                      (QUARTERS[4], 1)]},
-            **self.HELD, **{"exit-loss-years": 1})
-        assert confirmed["state"]["id"] == "safety-gone"
+        # And one below the level is still nothing at all.
+        clear = verdict(graham,
+                        known={**CLEARS_EXITS,
+                               "consecutive_annual_loss_years": 1},
+                        **self.HELD)
+        assert clear["state"]["id"] != "safety-gone"
 
     def test_a_dividend_cut_stays_flagged_after_the_next_filing(self,
                                                                graham):

@@ -26,6 +26,28 @@ schema: ledger.metric-bank/1
 #   computed      derived from filings, prices, or other entries
 #   qualitative   not computed; the user writes prose and marks it
 #
+# estimator       HOW the value is read, which is not the same as what it
+#                 measures. `kind` names one of the host's estimator kinds
+#                 (engine/contract.py, ESTIMATORS) and `observations` says how
+#                 many annual observations it reads, where the estimator reads
+#                 a window of fixed length.
+#
+#                 It is here because it is a property of the measure and of
+#                 nothing else — the same fact as `unit`, and as intrinsic as
+#                 `polarity`. It is NOT a threshold and NOT a judgement: it
+#                 says what one more filing can do to this reading, which is
+#                 arithmetic. What follows from it is how much evidence a
+#                 breach of a level needs, and the host derives that so an
+#                 author cannot get it wrong on a new measure — see the
+#                 comment above ESTIMATORS for why that stopped being a
+#                 setting a strategy states.
+#
+#                 Where a measure combines legs read differently, the kind
+#                 names the noisiest one: the leg a new filing replaces. A
+#                 price divided by a three-year average earnings is `instant`,
+#                 because the price is a new number every day and the average
+#                 is not.
+#
 # polarity        Which direction is favourable, as an intrinsic property of
 #                 the measure. NEVER a statement about any particular level.
 #   higher_is_better
@@ -68,6 +90,9 @@ entries:
 
   - id: roic_median_5y
     kind: computed
+    estimator:
+      kind: median
+      observations: 5
     label: Return on invested capital, 5-year median
     unit: percent
     format: "0.0%"
@@ -116,6 +141,9 @@ entries:
 
   - id: roe_median_5y
     kind: computed
+    estimator:
+      kind: median
+      observations: 5
     label: Return on equity, 5-year median
     unit: percent
     format: "0.0%"
@@ -154,6 +182,8 @@ entries:
 
   - id: total_debt_to_ebitda
     kind: computed
+    estimator:
+      kind: instant
     label: Total debt to EBITDA
     unit: times
     format: "0.0x"
@@ -192,6 +222,8 @@ entries:
 
   - id: net_debt_to_ebitda
     kind: computed
+    estimator:
+      kind: instant
     label: Net debt to EBITDA
     unit: times
     format: "0.0x"
@@ -229,6 +261,8 @@ entries:
 
   - id: debt_to_equity
     kind: computed
+    estimator:
+      kind: instant
     label: Debt to equity
     unit: ratio
     format: "0.00"
@@ -260,6 +294,8 @@ entries:
 
   - id: interest_coverage
     kind: computed
+    estimator:
+      kind: trailing
     label: Interest coverage
     unit: times
     format: "0.0x"
@@ -292,6 +328,8 @@ entries:
 
   - id: ltd_to_working_capital
     kind: computed
+    estimator:
+      kind: instant
     label: Long-term debt to working capital
     unit: ratio
     format: "0.00"
@@ -325,6 +363,8 @@ entries:
 
   - id: current_ratio
     kind: computed
+    estimator:
+      kind: instant
     label: Current ratio
     unit: ratio
     format: "0.00"
@@ -359,6 +399,8 @@ entries:
 
   - id: altman_z_score
     kind: computed
+    estimator:
+      kind: instant
     label: Altman Z-score
     unit: score
     format: "0.00"
@@ -408,6 +450,8 @@ entries:
 
   - id: gross_margin_ttm
     kind: computed
+    estimator:
+      kind: trailing
     label: Gross margin, trailing twelve months
     unit: percent
     format: "0.0%"
@@ -444,6 +488,9 @@ entries:
 
   - id: gross_margin_range_5y
     kind: computed
+    estimator:
+      kind: range
+      observations: 5
     label: Gross margin range, 5-year
     unit: percentage_points
     format: "0.0 pp"
@@ -482,6 +529,8 @@ entries:
 
   - id: gross_margin_change_3y
     kind: computed
+    estimator:
+      kind: endpoint
     label: Gross margin change over three years
     unit: percentage_points
     format: "+0.0 pp"
@@ -515,6 +564,8 @@ entries:
 
   - id: gross_margin_vs_3y_median
     kind: computed
+    estimator:
+      kind: trailing
     label: Gross margin versus its own three-year median
     unit: percentage_points
     format: "+0.0 pp"
@@ -552,6 +603,8 @@ entries:
 
   - id: fcf_ttm
     kind: computed
+    estimator:
+      kind: trailing
     label: Free cash flow, trailing twelve months
     unit: usd
     format: "$0,0"
@@ -581,6 +634,8 @@ entries:
 
   - id: fcf_margin_ttm
     kind: computed
+    estimator:
+      kind: trailing
     label: Free cash flow margin, trailing twelve months
     unit: percent
     format: "0.0%"
@@ -611,6 +666,9 @@ entries:
 
   - id: fcf_margin_median_5y
     kind: computed
+    estimator:
+      kind: median
+      observations: 5
     label: Free cash flow margin, 5-year median
     unit: percent
     format: "0.0%"
@@ -646,6 +704,8 @@ entries:
 
   - id: fcf_yield_on_ev
     kind: computed
+    estimator:
+      kind: instant
     label: Free cash flow yield on enterprise value
     unit: percent
     format: "0.0%"
@@ -683,6 +743,9 @@ entries:
 
   - id: cash_conversion_median_5y
     kind: computed
+    estimator:
+      kind: median
+      observations: 5
     label: Cash conversion, 5-year median
     unit: ratio
     format: "0.00"
@@ -721,6 +784,8 @@ entries:
 
   - id: accruals_ratio
     kind: computed
+    estimator:
+      kind: trailing
     label: Accruals ratio
     unit: ratio
     format: "0.00"
@@ -749,6 +814,9 @@ entries:
 
   - id: effective_tax_rate_median_5y
     kind: computed
+    estimator:
+      kind: median
+      observations: 5
     label: Effective tax rate, 5-year median
     unit: percent
     format: "0.0%"
@@ -785,6 +853,9 @@ entries:
 
   - id: payout_to_fcf_median_5y
     kind: computed
+    estimator:
+      kind: median
+      observations: 5
     label: Total payout over free cash flow, 5-year median
     unit: percent
     format: "0.0%"
@@ -824,6 +895,8 @@ entries:
 
   - id: operating_income_ttm
     kind: computed
+    estimator:
+      kind: trailing
     label: Operating income, trailing twelve months
     unit: usd
     format: "$0,0"
@@ -855,6 +928,8 @@ entries:
 
   - id: market_cap
     kind: computed
+    estimator:
+      kind: instant
     label: Market capitalization
     unit: usd
     format: "$0,0"
@@ -886,6 +961,8 @@ entries:
 
   - id: enterprise_value
     kind: computed
+    estimator:
+      kind: instant
     label: Enterprise value
     unit: usd
     format: "$0,0"
@@ -916,6 +993,8 @@ entries:
 
   - id: pe_ttm
     kind: computed
+    estimator:
+      kind: instant
     label: Price to earnings, trailing twelve months
     unit: times
     format: "0.0x"
@@ -948,6 +1027,8 @@ entries:
 
   - id: pe_3y_avg_eps
     kind: computed
+    estimator:
+      kind: instant
     label: Price to earnings on three-year average EPS
     unit: times
     format: "0.0x"
@@ -982,6 +1063,8 @@ entries:
 
   - id: price_to_book
     kind: computed
+    estimator:
+      kind: instant
     label: Price to book
     unit: times
     format: "0.00x"
@@ -1017,6 +1100,8 @@ entries:
 
   - id: price_to_net_tangible_assets
     kind: computed
+    estimator:
+      kind: instant
     label: Price to net tangible assets
     unit: times
     format: "0.00x"
@@ -1052,6 +1137,8 @@ entries:
 
   - id: graham_combined_multiple
     kind: computed
+    estimator:
+      kind: instant
     label: Graham combined multiple
     unit: ratio
     format: "0.0"
@@ -1086,6 +1173,8 @@ entries:
 
   - id: owner_earnings_yield
     kind: computed
+    estimator:
+      kind: instant
     label: Owner earnings yield
     unit: percent
     format: "0.0%"
@@ -1125,6 +1214,8 @@ entries:
 
   - id: ev_to_ebit
     kind: computed
+    estimator:
+      kind: instant
     label: Enterprise value to EBIT
     unit: times
     format: "0.0x"
@@ -1163,6 +1254,8 @@ entries:
 
   - id: ev_ebit_to_own_5y_median
     kind: computed
+    estimator:
+      kind: instant
     label: EV/EBIT versus its own five-year median
     unit: times_own_median
     format: "0.00x"
@@ -1207,6 +1300,8 @@ entries:
 
   - id: pe_to_own_5y_median_pe
     kind: computed
+    estimator:
+      kind: instant
     label: P/E versus its own five-year median P/E
     unit: times_own_median
     format: "0.00x"
@@ -1245,6 +1340,8 @@ entries:
 
   - id: peg_trailing
     kind: computed
+    estimator:
+      kind: instant
     label: PEG ratio, trailing
     unit: ratio
     format: "0.00"
@@ -1290,6 +1387,8 @@ entries:
 
   - id: dividend_adjusted_peg
     kind: computed
+    estimator:
+      kind: instant
     label: Dividend-adjusted PEG
     unit: ratio
     format: "0.00"
@@ -1329,6 +1428,8 @@ entries:
 
   - id: dividend_yield
     kind: computed
+    estimator:
+      kind: instant
     label: Dividend yield
     unit: percent
     format: "0.00%"
@@ -1360,6 +1461,8 @@ entries:
 
   - id: ncav_to_market_cap
     kind: computed
+    estimator:
+      kind: instant
     label: Net current asset value over market capitalization
     unit: ratio
     format: "0.00"
@@ -1392,6 +1495,8 @@ entries:
 
   - id: net_cash_to_market_cap
     kind: computed
+    estimator:
+      kind: instant
     label: Net cash over market capitalization
     unit: ratio
     format: "0.00"
@@ -1428,14 +1533,22 @@ entries:
 
   - id: revenue_cagr_5y
     kind: computed
+    estimator:
+      kind: averaged
+      observations: 8
     label: Revenue CAGR, 5-year
     unit: percent
     format: "0.0%"
     polarity: higher_is_better
     derivation:
       formula: |
-        (revenue_t ÷ revenue_{t−5})^(1/5) − 1
-      window: five fiscal years, endpoint to endpoint
+        base = mean( revenue, the 3 fiscal years ending 5 years before the
+                     most recent 3 )
+        end  = mean( revenue, the most recent 3 fiscal years )
+
+        value = (end ÷ base)^(1/5) − 1
+      window: eight fiscal years, three-year means at each end, five years
+        centre to centre
     inputs:
       filings:
         - revenue
@@ -1450,26 +1563,47 @@ entries:
         A large divestiture drops revenue permanently without anything being
         wrong. Companies that shifted from gross to net revenue recognition
         under ASC 606 show artificial declines across the 2018 boundary.
+        The three-year means need eight fiscal years on one accounting
+        basis, which is a real cost: measured across a broad sample of
+        filers it is unavailable for about one company in six that a
+        single-year version could answer for, split between recent listings
+        and restatements that were never carried back through the older
+        years.
       attribution: |
         More Lynch than Buffett. Buffett would accept it as sensible but
         wouldn't lead with it; he's held slow growers happily when the returns
         on capital were high enough.
     not_meaningful_when:
-      - test: revenue five fiscal years ago is zero or negative
+      - test: mean revenue over the three base years is zero or negative
         because: |
           The compound growth rate has no interpretation from a zero or negative
           base.
+      - test: fewer than eight fiscal years of revenue are available on one
+          accounting basis
+        because: |
+          The window cannot be constructed. There is deliberately no
+          shorter-window fallback: a measure that quietly becomes a weaker
+          estimator when the data thins reads the same on screen and means
+          something else.
 
   - id: revenue_cagr_3y
     kind: computed
+    estimator:
+      kind: averaged
+      observations: 6
     label: Revenue CAGR, 3-year
     unit: percent
     format: "0.0%"
     polarity: higher_is_better
     derivation:
       formula: |
-        (revenue_t ÷ revenue_{t−3})^(1/3) − 1
-      window: three fiscal years, endpoint to endpoint
+        base = mean( revenue, the 3 fiscal years ending 3 years before the
+                     most recent 3 )
+        end  = mean( revenue, the most recent 3 fiscal years )
+
+        value = (end ÷ base)^(1/3) − 1
+      window: six fiscal years, three-year means at each end, three years
+        centre to centre
     inputs:
       filings:
         - revenue
@@ -1479,21 +1613,31 @@ entries:
       plain: |
         How fast sales have grown per year over three years. The shorter window
         is the faster-moving signal: it shows whether the top line has
-        decelerated recently, which a five-year window would smooth away.
+        decelerated recently, which a five-year window would smooth away. The
+        two three-year averages it compares do not overlap, so it is still a
+        statement about recent years rather than a slower version of the
+        five-year measure.
       misfires: |
         Same divestiture and revenue-recognition distortions as the five-year
         measure, and more exposed to them because there are fewer years to
-        dilute a single bad one.
+        dilute a single bad one. Six fiscal years on one accounting basis are
+        needed, which is two more than the endpoint version wanted.
       attribution: |
         Lynch. Recency over smoothness.
     not_meaningful_when:
-      - test: revenue three fiscal years ago is zero or negative
+      - test: mean revenue over the three base years is zero or negative
         because: |
           The compound growth rate has no interpretation from a zero or negative
           base.
+      - test: fewer than six fiscal years of revenue are available on one
+          accounting basis
+        because: |
+          The window cannot be constructed.
 
   - id: revenue_change_yoy
     kind: computed
+    estimator:
+      kind: endpoint
     label: Revenue change, year over year
     unit: percent
     format: "+0.0%"
@@ -1523,14 +1667,22 @@ entries:
 
   - id: net_income_cagr_5y
     kind: computed
+    estimator:
+      kind: averaged
+      observations: 8
     label: Net income CAGR, 5-year
     unit: percent
     format: "0.0%"
     polarity: higher_is_better
     derivation:
       formula: |
-        (net income_t ÷ net income_{t−5})^(1/5) − 1
-      window: five fiscal years, endpoint to endpoint
+        base = mean( net income, the 3 fiscal years ending 5 years before
+                     the most recent 3 )
+        end  = mean( net income, the most recent 3 fiscal years )
+
+        value = (end ÷ base)^(1/5) − 1
+      window: eight fiscal years, three-year means at each end, five years
+        centre to centre
     inputs:
       filings:
         - net income
@@ -1541,28 +1693,64 @@ entries:
         How fast the company's bottom-line profit has grown per year over five
         years.
       misfires: |
-        One-time charges at either endpoint of the window swing this wildly. The
-        2017 tax act permanently changed effective rates and distorts any
-        five-year window spanning it.
+        The three-year means are what make this usable at all. On single
+        years, a one-off charge in the base year is the single most damaging
+        thing that can happen to it — not because the answer looks wrong,
+        but because it does not: a company growing at 7% whose base year
+        carried a charge reads around 20%, which sits comfortably inside any
+        plausible band and passes.
+
+        The 2017 tax act permanently changed effective rates and distorts any
+        window spanning it. Eight fiscal years on one accounting basis are
+        needed, so this is absent for recent listings and for companies whose
+        older years were never re-reported after a restatement.
       attribution: |
         Standard. Defined here as an input to
         [ni_minus_revenue_cagr_spread_5y].
     not_meaningful_when:
-      - test: net income five fiscal years ago is zero or negative
+      - test: mean net income over the three base years is zero or negative
         because: |
           The compound growth rate has no interpretation from a zero or negative
           base.
+      - test: mean net income over the three base years is at most a tenth
+          of the mean over the three end years, AND the base years' net
+          margin is under half the end years'
+        because: |
+          Both together say the earnings did not grow, they appeared — a
+          margin recovery or a turnaround rather than a business selling
+          more. A compound rate then measures the recovery, which has a
+          ceiling that selling more does not.
+
+          Neither half is enough alone, and that is measured rather than
+          assumed. The margin half on its own is algebraically a
+          margin-expansion test — which this bank already publishes as
+          [ni_minus_revenue_cagr_spread_5y] — and across a broad sample of
+          filers it fires on companies whose base-period earnings were
+          substantial. The multiple half on its own fires on a company whose
+          revenue multiplied about as fast as its earnings, which is growth.
+      - test: fewer than eight fiscal years of net income are available on
+          one accounting basis
+        because: |
+          The window cannot be constructed.
 
   - id: eps_cagr_5y
     kind: computed
+    estimator:
+      kind: averaged
+      observations: 8
     label: Diluted EPS CAGR, 5-year
     unit: percent
     format: "0.0%"
     polarity: higher_is_better
     derivation:
       formula: |
-        (diluted EPS_t ÷ diluted EPS_{t−5})^(1/5) − 1
-      window: five fiscal years, endpoint to endpoint
+        base = mean( diluted EPS, the 3 fiscal years ending 5 years before
+                     the most recent 3 )
+        end  = mean( diluted EPS, the most recent 3 fiscal years )
+
+        value = (end ÷ base)^(1/5) − 1
+      window: eight fiscal years, three-year means at each end, five years
+        centre to centre
     inputs:
       filings:
         - diluted earnings per share
@@ -1575,17 +1763,41 @@ entries:
         grew by issuing stock gets no credit for it.
       misfires: |
         Buyback-heavy companies show EPS growth that isn't operating growth.
-        Single-year endpoints make any compound rate sensitive to which two
-        years happen to sit at the ends.
+        The three-year means at each end are what stop the answer depending
+        on which two years happen to sit at the ends, and they cost eight
+        fiscal years of history on one accounting basis.
       attribution: |
         Lynch. The growth input to his PEG.
     not_meaningful_when:
-      - test: diluted EPS five fiscal years ago is zero, negative or very small
+      - test: mean diluted EPS over the three base years is zero or negative
         because: |
-          A negative or tiny base-year EPS breaks the compound rate entirely.
+          A zero or negative base mean breaks the compound rate entirely.
+      - test: mean net income over the three base years is at most a tenth
+          of the mean over the three end years, AND the base years' net
+          margin is under half the end years'
+        because: |
+          Both together say the earnings did not grow, they appeared — a
+          margin recovery or a turnaround rather than a business selling
+          more. A compound rate then measures the recovery, which has a
+          ceiling that selling more does not.
+
+          Neither half is enough alone, and that is measured rather than
+          assumed. The margin half on its own is algebraically a
+          margin-expansion test — which this bank already publishes as
+          [ni_minus_revenue_cagr_spread_5y] — and across a broad sample of
+          filers it fires on companies whose base-period earnings were
+          substantial. The multiple half on its own fires on a company whose
+          revenue multiplied about as fast as its earnings, which is growth.
+      - test: fewer than eight fiscal years of diluted EPS are available on
+          one accounting basis
+        because: |
+          The window cannot be constructed.
 
   - id: eps_growth_10y
     kind: computed
+    estimator:
+      kind: averaged
+      observations: 10
     label: Ten-year EPS growth, three-year averages at both ends
     unit: percent
     format: "0.0%"
@@ -1618,9 +1830,28 @@ entries:
       - test: fewer than ten fiscal years of EPS are available
         because: |
           The window cannot be constructed.
+      - test: mean net income over the three base years is at most a tenth
+          of the mean over the three end years, AND the base years' net
+          margin is under half the end years'
+        because: |
+          Both together say the earnings did not grow, they appeared — a
+          margin recovery or a turnaround rather than a business selling
+          more. A compound rate then measures the recovery, which has a
+          ceiling that selling more does not.
+
+          Neither half is enough alone, and that is measured rather than
+          assumed. The margin half on its own is algebraically a
+          margin-expansion test — which this bank already publishes as
+          [ni_minus_revenue_cagr_spread_5y] — and across a broad sample of
+          filers it fires on companies whose base-period earnings were
+          substantial. The multiple half on its own fires on a company whose
+          revenue multiplied about as fast as its earnings, which is growth.
 
   - id: ni_minus_revenue_cagr_spread_5y
     kind: computed
+    estimator:
+      kind: averaged
+      observations: 8
     label: Net income CAGR minus revenue CAGR, 5-year
     unit: percentage_points
     format: "+0.0 pp"
@@ -1632,7 +1863,7 @@ entries:
     derivation:
       formula: |
         (5-yr net income CAGR) − (5-yr revenue CAGR), in percentage points
-      window: five fiscal years, endpoint to endpoint, both series
+      window: eight fiscal years, three-year means at each end, both series
     inputs:
       filings: []
       prices: []
@@ -1646,9 +1877,10 @@ entries:
         margin.
       misfires: |
         The 2017 tax act permanently changed effective rates and distorts any
-        five-year window spanning it. One-time charges at either endpoint of the
-        window swing this wildly; three-year averages at each end would be
-        steadier if too many false readings appear.
+        window spanning it. Both components now average three fiscal years at
+        each end, so a one-time charge in a single year no longer swings this
+        — at the cost of needing eight years of both series over the same
+        fiscal years.
       attribution: |
         Buffett's margin-discipline thinking, expressed as a spread.
     not_meaningful_when:
@@ -1658,6 +1890,9 @@ entries:
 
   - id: eps_minus_revenue_cagr_spread_5y
     kind: computed
+    estimator:
+      kind: averaged
+      observations: 8
     label: Diluted EPS CAGR minus revenue CAGR, 5-year
     unit: percentage_points
     format: "+0.0 pp"
@@ -1669,7 +1904,7 @@ entries:
     derivation:
       formula: |
         (5-yr diluted EPS CAGR) − (5-yr revenue CAGR), in percentage points
-      window: five fiscal years, endpoint to endpoint, both series
+      window: eight fiscal years, three-year means at each end, both series
     inputs:
       filings: []
       prices: []
@@ -1683,9 +1918,10 @@ entries:
         legitimate, but a company growing EPS at 30% on 4% revenue growth has
         nearly exhausted both, and there is no third act.
       misfires: |
-        Inherits the endpoint sensitivity of both compound rates. A large
-        buyback programme inside the window widens the spread without any
-        operating change.
+        A large buyback programme inside the window widens the spread without
+        any operating change. Both components average three fiscal years at
+        each end, so what it no longer inherits is either one's sensitivity
+        to a single year.
       attribution: |
         Lynch. The check on where growth in earnings per share is coming from.
     not_meaningful_when:
@@ -1695,6 +1931,8 @@ entries:
 
   - id: inventory_minus_revenue_growth_yoy
     kind: computed
+    estimator:
+      kind: endpoint
     label: Inventory growth minus revenue growth, year over year
     unit: percentage_points
     format: "+0.0 pp"
@@ -1733,6 +1971,8 @@ entries:
 
   - id: receivables_minus_revenue_growth_yoy
     kind: computed
+    estimator:
+      kind: endpoint
     label: Receivables growth minus revenue growth, year over year
     unit: percentage_points
     format: "+0.0 pp"
@@ -1771,6 +2011,9 @@ entries:
 
   - id: profitable_years_10y
     kind: computed
+    estimator:
+      kind: count
+      observations: 10
     label: Years of positive net income out of the last ten
     unit: count
     format: "0 of 10"
@@ -1803,6 +2046,8 @@ entries:
 
   - id: consecutive_annual_loss_years
     kind: computed
+    estimator:
+      kind: count
     label: Consecutive annual losses, most recent backward
     unit: count
     format: "0"
@@ -1831,6 +2076,8 @@ entries:
 
   - id: consecutive_dividend_years
     kind: computed
+    estimator:
+      kind: count
     label: Consecutive years paying a dividend
     unit: years
     format: "0 yrs"
@@ -1860,6 +2107,8 @@ entries:
 
   - id: diluted_share_count_change_5y
     kind: computed
+    estimator:
+      kind: endpoint
     label: Diluted share count change, 5-year
     unit: percent
     format: "+0.0%"
@@ -1891,6 +2140,8 @@ entries:
 
   - id: diluted_share_count_change_3y
     kind: computed
+    estimator:
+      kind: endpoint
     label: Diluted share count change, 3-year
     unit: percent
     format: "+0.0%"
@@ -1920,6 +2171,8 @@ entries:
 
   - id: diluted_share_count_change_ttm
     kind: computed
+    estimator:
+      kind: endpoint
     label: Diluted share count change, trailing twelve months
     unit: percent
     format: "+0.0%"
@@ -1947,6 +2200,8 @@ entries:
 
   - id: goodwill_intangibles_to_assets
     kind: computed
+    estimator:
+      kind: instant
     label: Goodwill plus intangibles over total assets
     unit: percent
     format: "0.0%"
@@ -1986,6 +2241,8 @@ entries:
 
   - id: insider_net_buying_6m
     kind: computed
+    estimator:
+      kind: trailing
     label: Insider net buying, trailing six months
     unit: shares
     format: "+0,0 sh"
@@ -2024,6 +2281,8 @@ entries:
 
   - id: institutional_ownership_pct
     kind: computed
+    estimator:
+      kind: instant
     label: Institutional ownership
     unit: percent
     format: "0.0%"
@@ -2080,6 +2339,8 @@ entries:
 
   - id: moat_durability
     kind: qualitative
+    estimator:
+      kind: assessed
     label: Moat durability
     unit: yes_no
     question: |
@@ -2107,6 +2368,8 @@ entries:
 
   - id: management_integrity
     kind: qualitative
+    estimator:
+      kind: assessed
     label: Management integrity
     unit: yes_no
     question: |
@@ -2134,6 +2397,8 @@ entries:
 
   - id: capital_allocation
     kind: qualitative
+    estimator:
+      kind: assessed
     label: Capital allocation
     unit: yes_no
     question: |

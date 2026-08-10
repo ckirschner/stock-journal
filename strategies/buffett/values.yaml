@@ -22,7 +22,7 @@
 # Bump `version` whenever any number here moves. That is what makes the
 # change appear on the rule-change record of every journal running this
 # strategy, with a before and an after.
-version: 1
+version: 2
 
 values:
 
@@ -33,11 +33,15 @@ values:
   portfolio-slots: 10
   position-weight-cap: 40
 
-  # The discipline that is not a measure. There is no holding period here
-  # and that is deliberate: nothing in this strategy closes a position for
-  # having been owned a long time.
-  sell-confirmation-filings: 2
-  fcf-exit-quarters: 4
+  # There is no holding period here and that is deliberate: nothing in this
+  # strategy closes a position for having been owned a long time.
+  #
+  # `sell-confirmation-filings: 2` and `fcf-exit-quarters: 4` used to sit
+  # here and no longer do. How much evidence a breach needs is a property of
+  # the measure — the host derives it from what the metric bank declares
+  # about each — and neither setting could tell a five-year median from a
+  # trailing twelve months. See the changelog in strategy.py: the free cash
+  # flow window is the one that changed against its source.
 
   # The three knockouts
   min-roic: 15

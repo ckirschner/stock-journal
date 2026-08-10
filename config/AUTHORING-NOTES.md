@@ -86,11 +86,27 @@ between the repo and the user data directory is the next task's problem.
    Whether they compose or the per-entry window replaces the default is not
    stated. Configured as: `sustained_for` replaces the default where present.
 
+   > **Settled since, and not the way this describes.** Neither a global
+   > default nor a per-entry window survives: how much evidence a breach needs
+   > is derived from how the measure is read, which the bank now declares as
+   > `estimator` on every entry. The report's "two consecutive filings" holds
+   > wherever a second filing brings new data — a balance-sheet reading, a
+   > trailing window — and does not where it brings four fifths of the same
+   > years. The one place this departs from the report is the four-quarter free
+   > cash flow window, which is now two filings; the reasoning is in the
+   > Buffett changelog.
+
 7. **Graham "2 consecutive annual losses" and the confirmation default.** Set to
    `sell_confirmation: {form: inherent}` on the grounds that the two-year streak
    *is* two consecutive filings. That is an interpretation; the report does not
    address it. Without it, the default would require two consecutive filings each
    showing a two-year loss streak.
+
+   > **Settled since, and the interpretation was right for a better reason.**
+   > It is not a carve-out for one entry: a measure whose unit is a count of
+   > annual reports carries its persistence in its own level, which the bank
+   > says with `estimator: {kind: count}` and the host reads. The version that
+   > needed remembering is gone.
 
 8. **Cross-profile comparative reasoning could not be carried.** The report
    justifies several thresholds by comparison with a sibling profile: "Why 2.0

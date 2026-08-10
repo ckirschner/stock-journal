@@ -286,12 +286,19 @@ class TestTheConfirmedExit:
                     series={"interest_coverage": falling(9.0, 3.0, None, 2.0)})
         assert r["state"]["id"] == "exit-confirmed"
 
-    def test_the_journal_decides_how_many_filings_confirm(self, example):
+    def test_the_measure_decides_how_many_filings_confirm(self, example):
+        """Not the journal, and not the bundle. Interest coverage is a
+        trailing twelve months, so a second filing rolls a quarter and is
+        worth waiting for; the number two is nowhere in the bundle and there
+        is no setting to retune it with. A strategy that wants to be slower
+        to sell says so with the level, which is a claim about the business.
+        """
+        assert not any(v["id"].endswith("confirmation-filings")
+                       for v in example["values"])
         r = verdict(example, held=True, weight=8.0,
                     known={**CLEARS, "interest_coverage": 2.0},
-                    series={"interest_coverage": falling(9.0, 9.0, 8.0, 2.0)},
-                    **{"exit-confirmation-filings": 1})
-        assert r["state"]["id"] == "exit-confirmed"
+                    series={"interest_coverage": falling(9.0, 9.0, 3.0, 2.0)})
+        assert "2 consecutive filings" in r["reason"]["summary"]
 
     def test_a_healthy_holding_renders_as_passes_and_not_as_failures(
             self, example):
