@@ -1,946 +1,2657 @@
 {
-  "method": "Each history is stated in plain terms, worked out on paper, and transcribed here. No figure in this file was produced by running this program. Every expected value carries the arithmetic that produced it, so a reader can check the number without trusting the code — deriving an expectation through the machinery under test proves only that it agrees with itself, which is what let the bugs these histories catch survive.",
-  "companies": "Invented. Nothing here is a real security and nothing here is a recommendation. Real-company evidence lives only in tests/fixtures/groundtruth, where a hand-read figure can be checked against its filing.",
-  "conventions": {
-    "clock": "Every history is read live, on whatever day the suite runs. Every lot and every stored close is dated on or before 2026-08-07, so no figure here depends on the run date and none of them can drift.",
-    "returns": "Percent numbers, rounded to 2 decimal places by the host. 17.5 means 17.5%.",
-    "weight": "A percent number, unrounded by the host. Compared to 6 decimal places.",
-    "absent": "null means the host must serve an absence. It must never serve 0, and never a figure carried over from anything else.",
-    "must_not_be": "The answer the code gave, or would give, when the defect this history was built for is present. A history whose must_not_be is what comes back has caught a regression, not a rounding difference."
-  },
-
-  "histories": [
+ "method": "Each history is stated in plain terms, worked out on paper, and transcribed here. No figure in this file was produced by running this program. Every expected value carries the arithmetic that produced it, so a reader can check the number without trusting the code — deriving an expectation through the machinery under test proves only that it agrees with itself, which is what let the bugs these histories catch survive.",
+ "companies": "Invented. Nothing here is a real security and nothing here is a recommendation. Real-company evidence lives only in tests/fixtures/groundtruth, where a hand-read figure can be checked against its filing.",
+ "conventions": {
+  "clock": "Every history is read live, on whatever day the suite runs. Every lot and every stored close is dated on or before 2026-08-07, so no figure here depends on the run date and none of them can drift.",
+  "returns": "Percent numbers, rounded to 2 decimal places by the host. 17.5 means 17.5%.",
+  "weight": "A percent number, unrounded by the host. Compared to 6 decimal places.",
+  "absent": "null means the host must serve an absence. It must never serve 0, and never a figure carried over from anything else.",
+  "must_not_be": "The answer the code gave, or would give, when the defect this history was built for is present. A history whose must_not_be is what comes back has caught a regression, not a rounding difference."
+ },
+ "histories": [
+  {
+   "id": "class-held-is-not-class-priced",
+   "why": "The class held is not the class priced. Two symbols map to one CIK; the class the journal does not hold has the newer close, so a max-by-date pick across every mapped symbol takes it. Twenty shares of the cheap class then read as the dear one, and the error propagates into market value, the account total, and every weight measured against it.",
+   "story": [
+    "Northwind Systems has two listed share classes. The SEC maps both NWND (Class A) and NWND.B (Class B) to CIK 700001.",
+    "This journal holds the Class B security, NWND.B.",
+    "On 2026-01-05, 20 shares of NWND.B were bought at $400.00 each.",
+    "The stored price history has NWND closing at $705,000.00 on 2026-08-07, and NWND.B closing at $470.00 on 2026-08-06.",
+    "The Class A close is one day newer. That is what makes the wrong answer win.",
+    "Free cash in this journal is $600.00."
+   ],
+   "cash": 600.0,
+   "securities": [
     {
-      "id": "class-held-is-not-class-priced",
-      "why": "The class held is not the class priced. Two symbols map to one CIK; the class the journal does not hold has the newer close, so a max-by-date pick across every mapped symbol takes it. Twenty shares of the cheap class then read as the dear one, and the error propagates into market value, the account total, and every weight measured against it.",
-      "story": [
-        "Northwind Systems has two listed share classes. The SEC maps both NWND (Class A) and NWND.B (Class B) to CIK 700001.",
-        "This journal holds the Class B security, NWND.B.",
-        "On 2026-01-05, 20 shares of NWND.B were bought at $400.00 each.",
-        "The stored price history has NWND closing at $705,000.00 on 2026-08-07, and NWND.B closing at $470.00 on 2026-08-06.",
-        "The Class A close is one day newer. That is what makes the wrong answer win.",
-        "Free cash in this journal is $600.00."
+     "ticker": "NWND.B",
+     "name": "Northwind Systems Class B",
+     "cik": 700001,
+     "maps_to_cik": [
+      "NWND",
+      "NWND.B"
+     ],
+     "prices": {
+      "NWND": [
+       [
+        "2026-08-07",
+        705000.0
+       ]
       ],
-      "cash": 600.0,
-      "securities": [
-        {
-          "ticker": "NWND.B",
-          "name": "Northwind Systems Class B",
-          "cik": 700001,
-          "maps_to_cik": ["NWND", "NWND.B"],
-          "prices": {
-            "NWND": [["2026-08-07", 705000.0]],
-            "NWND.B": [["2026-08-06", 470.0]]
-          },
-          "lots": [
-            {"id": "l1", "seq": 1, "kind": "buy", "date": "2026-01-05", "shares": 20, "price": 400.0}
-          ],
-          "expect": {
-            "shares_held": {"value": 20.0, "how": "20 bought, none sold"},
-            "cost_basis": {"value": 400.0, "how": "one open lot of 20 at $400.00"},
-            "opened_on": {"value": "2026-01-05", "how": "the only purchase"},
-            "bucket": {"value": "holdings", "how": "shares are still held"},
-            "price": {
-              "value": 470.0, "ticker": "NWND.B", "date": "2026-08-06",
-              "how": "the close of the security actually held. NWND is a different instrument and its close is not this security's price at any date."
-            },
-            "market_value": {"value": 9400.0, "how": "20 x 470.00"},
-            "weight": {"value": 94.0, "how": "9,400.00 / 10,000.00 x 100"},
-            "lot_returns": {"l1": {"value": 17.5, "how": "20 x (470.00 - 400.00) = 1,400.00 gain on a cost of 20 x 400.00 = 8,000.00; 1,400 / 8,000 x 100"}},
-            "position_return": {"value": 17.5, "how": "one lot, so the lifetime figure is that lot's"},
-            "cycles": [
-              {"seq": 1, "opened": "2026-01-05", "closed": null, "open": true, "shares": 20.0,
-               "return": {"value": 17.5, "how": "one purchase in the period; same arithmetic as the lot"}}
-            ],
-            "sales": {}
-          },
-          "must_not_be": {
-            "market_value": {"value": 14100000.0, "how": "20 x 705,000.00 — the Class A close against a Class B holding"},
-            "position_return": {"value": 176150.0, "how": "20 x (705,000.00 - 400.00) = 14,092,000.00 on a cost of 8,000.00"},
-            "price_ticker": {"value": "NWND", "how": "the class the journal does not hold, chosen because its close was one day newer"}
-          }
-        }
-      ],
-      "account": {
-        "value": {"value": 10000.0, "how": "600.00 free cash + 9,400.00 of NWND.B at market"},
-        "must_not_be": {"value": 14100600.0, "how": "600.00 + 14,100,000.00"}
-      }
-    },
-
-    {
-      "id": "trim-then-close",
-      "why": "Per-sale and per-period figures diverge, and they must both be right at once. Two sales out of one purchase: one up 50%, one down 25%, and the holding period they belong to up 5%. A layer that reported the period figure per sale, or averaged the sales into the period, would be plausible and wrong in both directions.",
-      "story": [
-        "On 2025-01-10, 100 shares of Calder Foods (CALD) were bought at $20.00.",
-        "On 2025-06-10, 40 of them were sold at $30.00 — a trim, on 'Hit valuation'.",
-        "On 2025-11-10, the remaining 60 were sold at $15.00 — the close, on 'Thesis broke'.",
-        "CALD last closed at $18.00 on 2026-08-07.",
-        "Free cash in this journal is $1,000.00."
-      ],
-      "cash": 1000.0,
-      "securities": [
-        {
-          "ticker": "CALD",
-          "name": "Calder Foods",
-          "cik": 700002,
-          "maps_to_cik": ["CALD"],
-          "prices": {"CALD": [["2026-08-07", 18.0]]},
-          "lots": [
-            {"id": "l1", "seq": 1, "kind": "buy", "date": "2025-01-10", "shares": 100, "price": 20.0},
-            {"id": "l2", "seq": 2, "kind": "sell", "date": "2025-06-10", "shares": 40, "price": 30.0,
-             "against": [{"lot": "l1", "shares": 40}], "reason": "Hit valuation"},
-            {"id": "l3", "seq": 3, "kind": "sell", "date": "2025-11-10", "shares": 60, "price": 15.0,
-             "against": [{"lot": "l1", "shares": 60}], "reason": "Thesis broke"}
-          ],
-          "expect": {
-            "shares_held": {"value": 0.0, "how": "100 bought, 40 + 60 sold"},
-            "cost_basis": {"value": null, "how": "nothing is held, so there is no average cost of what is held"},
-            "opened_on": {"value": null, "how": "no holding is in progress"},
-            "bucket": {"value": "previous", "how": "lots exist and all are closed"},
-            "price": {"value": 18.0, "ticker": "CALD", "date": "2026-08-07", "how": "the only class"},
-            "market_value": {"value": null, "how": "no position is held"},
-            "weight": {"value": null, "how": "no position is held"},
-            "lot_returns": {
-              "l1": {"value": 5.0, "how": "40 x (30.00 - 20.00) = +400.00 and 60 x (15.00 - 20.00) = -300.00, so +100.00 on a cost of 100 x 20.00 = 2,000.00; 100 / 2,000 x 100"}
-            },
-            "position_return": {"value": 5.0, "how": "one lot over the security's whole life"},
-            "cycles": [
-              {"seq": 1, "opened": "2025-01-10", "closed": "2025-11-10", "open": false, "shares": 0.0,
-               "return": {"value": 5.0, "how": "the period holds one purchase; +100.00 on 2,000.00. NOT the average of +50% and -25%, and NOT either sale's figure."}}
-            ],
-            "sales": {
-              "l2": {
-                "sale_return": {"value": 50.0, "how": "40 x 30.00 = 1,200.00 proceeds against 40 x 20.00 = 800.00 cost; 1,200 / 800 - 1"},
-                "since_sale": {"value": -40.0, "until": "today", "date": null,
-                               "how": "no purchase followed, so the window runs to the last close: 18.00 / 30.00 - 1"}
-              },
-              "l3": {
-                "sale_return": {"value": -25.0, "how": "60 x 15.00 = 900.00 proceeds against 60 x 20.00 = 1,200.00 cost; 900 / 1,200 - 1"},
-                "since_sale": {"value": 20.0, "until": "today", "date": null,
-                               "how": "18.00 / 15.00 - 1"}
-              }
-            }
-          }
-        }
-      ],
-      "account": {
-        "value": {"value": 1000.0, "how": "1,000.00 free cash and no holdings at market"}
-      },
-      "exit_scorecard": {
-        "Hit valuation": {"n": 1, "n_held": 1, "n_after": 1, "avg_held": 50.0, "avg_after": -40.0, "bought_again": 0},
-        "Thesis broke": {"n": 1, "n_held": 1, "n_after": 1, "avg_held": -25.0, "avg_after": 20.0, "bought_again": 0}
-      }
-    },
-
-    {
-      "id": "re-entry-two-periods",
-      "why": "A name bought, closed and bought back is two trades. One percentage covering both describes neither, and the date the holding began must count from the re-entry. The window on the first sale has to end at the re-purchase, not run on to today, or the sell rule gets credited with a stretch spent holding.",
-      "story": [
-        "On 2025-02-03, 50 shares of Harlow Instruments (HRLW) were bought at $10.00.",
-        "On 2025-05-05, all 50 were sold at $14.00, on 'Hit valuation'. The position was closed.",
-        "On 2025-09-09, 30 shares were bought back at $12.00.",
-        "HRLW last closed at $18.00 on 2026-08-07.",
-        "Free cash in this journal is $1,000.00."
-      ],
-      "cash": 1000.0,
-      "securities": [
-        {
-          "ticker": "HRLW",
-          "name": "Harlow Instruments",
-          "cik": 700003,
-          "maps_to_cik": ["HRLW"],
-          "prices": {"HRLW": [["2026-08-07", 18.0]]},
-          "lots": [
-            {"id": "l1", "seq": 1, "kind": "buy", "date": "2025-02-03", "shares": 50, "price": 10.0},
-            {"id": "l2", "seq": 2, "kind": "sell", "date": "2025-05-05", "shares": 50, "price": 14.0,
-             "against": [{"lot": "l1", "shares": 50}], "reason": "Hit valuation"},
-            {"id": "l3", "seq": 3, "kind": "buy", "date": "2025-09-09", "shares": 30, "price": 12.0}
-          ],
-          "expect": {
-            "shares_held": {"value": 30.0, "how": "the second purchase, untouched"},
-            "cost_basis": {"value": 12.0, "how": "the only open lot is 30 at $12.00"},
-            "opened_on": {"value": "2025-09-09", "how": "the holding you have now began at the re-entry, not at the first purchase"},
-            "bucket": {"value": "holdings", "how": "shares are held again"},
-            "price": {"value": 18.0, "ticker": "HRLW", "date": "2026-08-07"},
-            "market_value": {"value": 540.0, "how": "30 x 18.00"},
-            "weight": {"value": 35.064935, "how": "540.00 / 1,540.00 x 100"},
-            "lot_returns": {
-              "l1": {"value": 40.0, "how": "50 x (14.00 - 10.00) = 200.00 on a cost of 500.00"},
-              "l3": {"value": 50.0, "how": "30 x (18.00 - 12.00) = 180.00 on a cost of 360.00"}
-            },
-            "position_return": {"value": 44.19, "how": "lifetime, weighted by cost: (200.00 + 180.00) / (500.00 + 360.00) x 100 = 44.1860...; never presented as the current position's return"},
-            "cycles": [
-              {"seq": 1, "opened": "2025-02-03", "closed": "2025-05-05", "open": false, "shares": 0.0,
-               "return": {"value": 40.0, "how": "the first round trip, entirely realised"}},
-              {"seq": 2, "opened": "2025-09-09", "closed": null, "open": true, "shares": 30.0,
-               "return": {"value": 50.0, "how": "the current holding, marked at 18.00"}}
-            ],
-            "sales": {
-              "l2": {
-                "sale_return": {"value": 40.0, "how": "50 x 14.00 = 700.00 against 50 x 10.00 = 500.00"},
-                "since_sale": {"value": -14.29, "until": "purchase", "date": "2025-09-09",
-                               "how": "the window ends at the re-purchase price actually paid: 12.00 / 14.00 - 1 = -14.2857...; running it to today's 18.00 would credit the sell rule with a stretch spent holding"}
-              }
-            }
-          },
-          "must_not_be": {
-            "opened_on": {"value": "2025-02-03", "how": "the first purchase of a holding that has since closed"},
-            "since_sale_l2": {"value": 28.57, "how": "18.00 / 14.00 - 1 — the window run on to today, past the re-purchase"}
-          }
-        }
-      ],
-      "account": {"value": {"value": 1540.0, "how": "1,000.00 free cash + 540.00 at market"}}
-    },
-
-    {
-      "id": "backdated-buy-before-an-exit",
-      "why": "A purchase entered late but dated before an earlier exit means the position never reached nothing — so it never was two holding periods, and no stored boundary could have known that in advance. The period has to be derived from the running total on read.",
-      "story": [
-        "On 2025-01-15, 100 shares of Merrow Optics (MRRW) were bought at $10.00.",
-        "On 2025-03-20, all 100 were sold at $16.00, on 'Risk limit'. At that moment the position read as closed.",
-        "Afterwards the user recorded a purchase they had forgotten: 50 shares at $11.00, dated 2025-02-10 — between the other two.",
-        "Read in date order the position went 100, then 150, then 50. It never touched nothing.",
-        "MRRW last closed at $9.00 on 2026-08-07.",
-        "Free cash in this journal is $1,000.00."
-      ],
-      "cash": 1000.0,
-      "securities": [
-        {
-          "ticker": "MRRW",
-          "name": "Merrow Optics",
-          "cik": 700004,
-          "maps_to_cik": ["MRRW"],
-          "prices": {"MRRW": [["2026-08-07", 9.0]]},
-          "lots": [
-            {"id": "l1", "seq": 1, "kind": "buy", "date": "2025-01-15", "shares": 100, "price": 10.0},
-            {"id": "l2", "seq": 2, "kind": "sell", "date": "2025-03-20", "shares": 100, "price": 16.0,
-             "against": [{"lot": "l1", "shares": 100}], "reason": "Risk limit"},
-            {"id": "l3", "seq": 3, "kind": "buy", "date": "2025-02-10", "shares": 50, "price": 11.0}
-          ],
-          "expect": {
-            "shares_held": {"value": 50.0, "how": "100 + 50 bought, 100 sold"},
-            "cost_basis": {"value": 11.0, "how": "the sale drew entirely on the first lot, so the 50 still held cost $11.00 each"},
-            "opened_on": {"value": "2025-01-15", "how": "one unbroken holding period, opened at the first purchase"},
-            "bucket": {"value": "holdings", "how": "shares are held"},
-            "price": {"value": 9.0, "ticker": "MRRW", "date": "2026-08-07"},
-            "market_value": {"value": 450.0, "how": "50 x 9.00"},
-            "weight": {"value": 31.034483, "how": "450.00 / 1,450.00 x 100"},
-            "lot_returns": {
-              "l1": {"value": 60.0, "how": "100 x (16.00 - 10.00) = 600.00 on a cost of 1,000.00"},
-              "l3": {"value": -18.18, "how": "50 x (9.00 - 11.00) = -100.00 on a cost of 550.00; -100 / 550 x 100 = -18.1818..."}
-            },
-            "position_return": {"value": 32.26, "how": "(600.00 - 100.00) / (1,000.00 + 550.00) x 100 = 32.2580..."},
-            "cycles": [
-              {"seq": 1, "opened": "2025-01-15", "closed": null, "open": true, "shares": 50.0,
-               "return": {"value": 32.26, "how": "one period holding both purchases and the sale"}}
-            ],
-            "sales": {
-              "l2": {
-                "sale_return": {"value": 60.0, "how": "100 x 16.00 = 1,600.00 against 100 x 10.00 = 1,000.00"},
-                "since_sale": {"value": -43.75, "until": "today", "date": null,
-                               "how": "the backdated purchase is dated BEFORE the sale, so no purchase follows it and the window runs to the last close: 9.00 / 16.00 - 1"}
-              }
-            }
-          },
-          "must_not_be": {
-            "cycle_count": {"value": 2, "how": "two periods, as if the position had closed on 2025-03-20 and reopened — which the backdated purchase means never happened"},
-            "opened_on": {"value": "2025-02-10", "how": "the backdated purchase read as opening a second holding"}
-          }
-        }
-      ],
-      "account": {"value": {"value": 1450.0, "how": "1,000.00 free cash + 450.00 at market"}}
-    },
-
-    {
-      "id": "specific-lots-and-a-spanning-sale",
-      "why": "One sale drawing on two lots at different costs, and a second taking the rest of one of them at a loss. A lot sold in two pieces at two prices must net correctly — here to exactly zero, which is a computed answer and not an absence.",
-      "story": [
-        "Three purchases of Ashgrove Mining (ASHG): 100 at $8.00 on 2025-01-06, 100 at $12.00 on 2025-02-06, and 100 at $10.00 on 2025-03-06.",
-        "On 2025-06-06, 150 shares were sold at $15.00 on 'Hit valuation', drawn from the first lot in full and 50 of the second.",
-        "On 2025-09-06, 50 shares were sold at $9.00 on 'Risk limit', taking the rest of the second lot.",
-        "The third lot is untouched. ASHG last closed at $11.00 on 2026-08-07.",
-        "Free cash in this journal is $1,000.00."
-      ],
-      "cash": 1000.0,
-      "securities": [
-        {
-          "ticker": "ASHG",
-          "name": "Ashgrove Mining",
-          "cik": 700005,
-          "maps_to_cik": ["ASHG"],
-          "prices": {"ASHG": [["2026-08-07", 11.0]]},
-          "lots": [
-            {"id": "l1", "seq": 1, "kind": "buy", "date": "2025-01-06", "shares": 100, "price": 8.0},
-            {"id": "l2", "seq": 2, "kind": "buy", "date": "2025-02-06", "shares": 100, "price": 12.0},
-            {"id": "l3", "seq": 3, "kind": "buy", "date": "2025-03-06", "shares": 100, "price": 10.0},
-            {"id": "l4", "seq": 4, "kind": "sell", "date": "2025-06-06", "shares": 150, "price": 15.0,
-             "against": [{"lot": "l1", "shares": 100}, {"lot": "l2", "shares": 50}], "reason": "Hit valuation"},
-            {"id": "l5", "seq": 5, "kind": "sell", "date": "2025-09-06", "shares": 50, "price": 9.0,
-             "against": [{"lot": "l2", "shares": 50}], "reason": "Risk limit"}
-          ],
-          "expect": {
-            "shares_held": {"value": 100.0, "how": "300 bought, 200 sold"},
-            "cost_basis": {"value": 10.0, "how": "the only lot with shares left is the third, 100 at $10.00"},
-            "opened_on": {"value": "2025-01-06", "how": "the position never reached nothing, so one period opened at the first purchase"},
-            "bucket": {"value": "holdings", "how": "shares are held"},
-            "price": {"value": 11.0, "ticker": "ASHG", "date": "2026-08-07"},
-            "market_value": {"value": 1100.0, "how": "100 x 11.00"},
-            "weight": {"value": 52.380952, "how": "1,100.00 / 2,100.00 x 100"},
-            "open_lots_remaining": {"value": {"l1": 0.0, "l2": 0.0, "l3": 100.0},
-                                    "how": "the first lot gave 100 to the spanning sale; the second gave 50 to each sale; the third gave nothing"},
-            "allocate_60_default": {"value": [{"lot": "l3", "shares": 60.0}],
-                                    "how": "oldest-first over what is left, and only the third lot has anything left"},
-            "lot_returns": {
-              "l1": {"value": 87.5, "how": "100 x (15.00 - 8.00) = 700.00 on a cost of 800.00"},
-              "l2": {"value": 0.0, "how": "50 x (15.00 - 12.00) = +150.00 and 50 x (9.00 - 12.00) = -150.00, netting to nothing on a cost of 1,200.00. A computed zero, not an absence."},
-              "l3": {"value": 10.0, "how": "100 x (11.00 - 10.00) = 100.00 on a cost of 1,000.00"}
-            },
-            "position_return": {"value": 26.67, "how": "(700.00 + 0.00 + 100.00) / (800.00 + 1,200.00 + 1,000.00) x 100 = 26.6666..."},
-            "cycles": [
-              {"seq": 1, "opened": "2025-01-06", "closed": null, "open": true, "shares": 100.0,
-               "return": {"value": 26.67, "how": "one period holding all three purchases and both sales"}}
-            ],
-            "sales": {
-              "l4": {
-                "sale_return": {"value": 60.71, "how": "150 x 15.00 = 2,250.00 proceeds against 100 x 8.00 + 50 x 12.00 = 1,400.00 cost; 2,250 / 1,400 - 1 = 60.7142...  Weighted across the lots it drew on, not against either lot's price alone."},
-                "since_sale": {"value": -26.67, "until": "today", "date": null, "how": "11.00 / 15.00 - 1 = -26.6666..."}
-              },
-              "l5": {
-                "sale_return": {"value": -25.0, "how": "50 x 9.00 = 450.00 against 50 x 12.00 = 600.00"},
-                "since_sale": {"value": 22.22, "until": "today", "date": null, "how": "11.00 / 9.00 - 1 = 22.2222..."}
-              }
-            }
-          },
-          "must_not_be": {
-            "sale_return_l4": {"value": 87.5, "how": "priced against the oldest lot alone, ignoring the 50 shares that cost $12.00"},
-            "lot_return_l2": {"value": null, "how": "a net of exactly nothing reported as an absence"}
-          }
-        }
-      ],
-      "account": {"value": {"value": 2100.0, "how": "1,000.00 free cash + 1,100.00 at market"}}
-    },
-
-    {
-      "id": "an-unpriced-holding-darkens-the-account",
-      "why": "One holding with no price must make the account total absent. Treating the missing price as zero understates the account and inflates every weight measured against it — a confident wrong answer in the number a sizing rule binds on.",
-      "story": [
-        "Two holdings. Vellum Press (VELL): 40 shares bought at $25.00 on 2025-04-01, last close $30.00 on 2026-08-07.",
-        "Draycot Rail (DRAY): 10 shares bought at $50.00 on 2025-04-02. No price history is stored for it at all.",
-        "Free cash in this journal is $800.00."
-      ],
-      "cash": 800.0,
-      "securities": [
-        {
-          "ticker": "VELL",
-          "name": "Vellum Press",
-          "cik": 700006,
-          "maps_to_cik": ["VELL"],
-          "prices": {"VELL": [["2026-08-07", 30.0]]},
-          "lots": [
-            {"id": "l1", "seq": 1, "kind": "buy", "date": "2025-04-01", "shares": 40, "price": 25.0}
-          ],
-          "expect": {
-            "shares_held": {"value": 40.0, "how": "40 bought, none sold"},
-            "cost_basis": {"value": 25.0, "how": "one open lot"},
-            "opened_on": {"value": "2025-04-01", "how": "the only purchase"},
-            "bucket": {"value": "holdings", "how": "shares are held"},
-            "price": {"value": 30.0, "ticker": "VELL", "date": "2026-08-07"},
-            "market_value": {"value": 1200.0, "how": "40 x 30.00 — this security's own value is knowable and is served"},
-            "weight": {"value": null, "how": "its own value is known, but the account it would be a share of is not"},
-            "lot_returns": {"l1": {"value": 20.0, "how": "40 x (30.00 - 25.00) = 200.00 on a cost of 1,000.00"}},
-            "position_return": {"value": 20.0, "how": "one lot"},
-            "cycles": [
-              {"seq": 1, "opened": "2025-04-01", "closed": null, "open": true, "shares": 40.0,
-               "return": {"value": 20.0, "how": "one purchase in the period"}}
-            ],
-            "sales": {}
-          },
-          "must_not_be": {
-            "weight": {"value": 60.0, "how": "1,200.00 / 2,000.00 x 100, with the unpriced holding silently counted as nothing"}
-          }
-        },
-        {
-          "ticker": "DRAY",
-          "name": "Draycot Rail",
-          "cik": 700007,
-          "maps_to_cik": ["DRAY"],
-          "prices": {},
-          "lots": [
-            {"id": "l1", "seq": 1, "kind": "buy", "date": "2025-04-02", "shares": 10, "price": 50.0}
-          ],
-          "expect": {
-            "shares_held": {"value": 10.0, "how": "10 bought, none sold"},
-            "cost_basis": {"value": 50.0, "how": "one open lot — what it cost is known even though what it is worth is not"},
-            "opened_on": {"value": "2025-04-02", "how": "the only purchase"},
-            "bucket": {"value": "holdings", "how": "shares are held"},
-            "price": {"value": null, "ticker": null, "date": null, "how": "no close is stored for DRAY"},
-            "market_value": {"value": null, "how": "no price, so no value — never 0, and never a neighbour's price"},
-            "weight": {"value": null, "how": "no value to take a share of"},
-            "lot_returns": {"l1": {"value": null, "how": "shares are still open and there is no price to mark them at"}},
-            "position_return": {"value": null, "how": "the only lot has no return"},
-            "cycles": [
-              {"seq": 1, "opened": "2025-04-02", "closed": null, "open": true, "shares": 10.0,
-               "return": {"value": null, "how": "an open period with no price cannot be scored"}}
-            ],
-            "sales": {}
-          },
-          "must_not_be": {
-            "market_value": {"value": 0.0, "how": "an unknown price read as free shares"},
-            "position_return": {"value": -100.0, "how": "an unknown price read as a total loss"}
-          }
-        }
-      ],
-      "account": {
-        "value": {"value": null, "how": "one of two holdings has no price, so the total cannot be reached without inventing one"},
-        "reason_names": ["DRAY"],
-        "must_not_be": {"value": 2000.0, "how": "800.00 + 1,200.00 + nothing for DRAY"}
-      },
-      "override_scorecard": {
-        "compliant": {"n": 1, "n_purchases": 2, "n_unscored": 1, "win_rate": 100, "avg": 20.0,
-                      "how": "two purchases, both recorded with the signal, but only VELL's can be scored — DRAY has no price, so its return is not knowable. The average rests on one figure and the panel says so: the population that was counted (2) and the population that was averaged (1) are reported apart. Collapsing them would put a win rate of 100% beside a count of 2."},
-        "override": {"n": 0, "n_purchases": 0, "n_unscored": 0, "win_rate": null, "avg": null, "how": "nothing was overridden"}
-      }
-    },
-
-    {
-      "id": "four-holding-periods",
-      "why": "Held, closed and held again more than twice. Three finished round trips and one in progress: each period has its own answer, the lifetime figure spans them and is never any of them, and each sale's window ends at the purchase that followed it.",
-      "story": [
-        "Pellow Chemical (PELL), four round trips.",
-        "2024-01-15: bought 100 at $10.00. 2024-04-15: sold all 100 at $13.00 on 'Hit valuation'.",
-        "2024-07-15: bought 80 at $12.00. 2024-10-15: sold all 80 at $9.00 on 'Thesis broke'.",
-        "2025-01-15: bought 60 at $11.00. 2025-04-15: sold all 60 at $22.00 on 'Hit valuation'.",
-        "2025-07-15: bought 40 at $16.00. Still held.",
-        "PELL last closed at $14.00 on 2026-08-07.",
-        "Free cash in this journal is $1,000.00."
-      ],
-      "cash": 1000.0,
-      "securities": [
-        {
-          "ticker": "PELL",
-          "name": "Pellow Chemical",
-          "cik": 700008,
-          "maps_to_cik": ["PELL"],
-          "prices": {"PELL": [["2026-08-07", 14.0]]},
-          "lots": [
-            {"id": "l1", "seq": 1, "kind": "buy", "date": "2024-01-15", "shares": 100, "price": 10.0},
-            {"id": "l2", "seq": 2, "kind": "sell", "date": "2024-04-15", "shares": 100, "price": 13.0,
-             "against": [{"lot": "l1", "shares": 100}], "reason": "Hit valuation"},
-            {"id": "l3", "seq": 3, "kind": "buy", "date": "2024-07-15", "shares": 80, "price": 12.0},
-            {"id": "l4", "seq": 4, "kind": "sell", "date": "2024-10-15", "shares": 80, "price": 9.0,
-             "against": [{"lot": "l3", "shares": 80}], "reason": "Thesis broke"},
-            {"id": "l5", "seq": 5, "kind": "buy", "date": "2025-01-15", "shares": 60, "price": 11.0},
-            {"id": "l6", "seq": 6, "kind": "sell", "date": "2025-04-15", "shares": 60, "price": 22.0,
-             "against": [{"lot": "l5", "shares": 60}], "reason": "Hit valuation"},
-            {"id": "l7", "seq": 7, "kind": "buy", "date": "2025-07-15", "shares": 40, "price": 16.0}
-          ],
-          "expect": {
-            "shares_held": {"value": 40.0, "how": "only the fourth purchase is untouched"},
-            "cost_basis": {"value": 16.0, "how": "40 at $16.00"},
-            "opened_on": {"value": "2025-07-15", "how": "the fourth period's first purchase"},
-            "bucket": {"value": "holdings", "how": "shares are held"},
-            "price": {"value": 14.0, "ticker": "PELL", "date": "2026-08-07"},
-            "market_value": {"value": 560.0, "how": "40 x 14.00"},
-            "weight": {"value": 35.897436, "how": "560.00 / 1,560.00 x 100"},
-            "lot_returns": {
-              "l1": {"value": 30.0, "how": "100 x (13.00 - 10.00) = 300.00 on 1,000.00"},
-              "l3": {"value": -25.0, "how": "80 x (9.00 - 12.00) = -240.00 on 960.00"},
-              "l5": {"value": 100.0, "how": "60 x (22.00 - 11.00) = 660.00 on 660.00"},
-              "l7": {"value": -12.5, "how": "40 x (14.00 - 16.00) = -80.00 on 640.00"}
-            },
-            "position_return": {"value": 19.63, "how": "lifetime: (300.00 - 240.00 + 660.00 - 80.00) / (1,000.00 + 960.00 + 660.00 + 640.00) x 100 = 640 / 3,260 x 100 = 19.6319...; it blends three finished trades into a live one and is never the current position's return"},
-            "cycles": [
-              {"seq": 1, "opened": "2024-01-15", "closed": "2024-04-15", "open": false, "shares": 0.0,
-               "return": {"value": 30.0, "how": "realised"}},
-              {"seq": 2, "opened": "2024-07-15", "closed": "2024-10-15", "open": false, "shares": 0.0,
-               "return": {"value": -25.0, "how": "realised"}},
-              {"seq": 3, "opened": "2025-01-15", "closed": "2025-04-15", "open": false, "shares": 0.0,
-               "return": {"value": 100.0, "how": "realised"}},
-              {"seq": 4, "opened": "2025-07-15", "closed": null, "open": true, "shares": 40.0,
-               "return": {"value": -12.5, "how": "marked at 14.00"}}
-            ],
-            "sales": {
-              "l2": {
-                "sale_return": {"value": 30.0, "how": "1,300.00 against 1,000.00"},
-                "since_sale": {"value": -7.69, "until": "purchase", "date": "2024-07-15",
-                               "how": "12.00 / 13.00 - 1 = -7.6923..."}
-              },
-              "l4": {
-                "sale_return": {"value": -25.0, "how": "720.00 against 960.00"},
-                "since_sale": {"value": 22.22, "until": "purchase", "date": "2025-01-15",
-                               "how": "11.00 / 9.00 - 1 = 22.2222...  Selling at 9.00 and buying back at 11.00 is a rule that cost money, and the window says so."}
-              },
-              "l6": {
-                "sale_return": {"value": 100.0, "how": "1,320.00 against 660.00"},
-                "since_sale": {"value": -27.27, "until": "purchase", "date": "2025-07-15",
-                               "how": "16.00 / 22.00 - 1 = -27.2727..."}
-              }
-            }
-          },
-          "must_not_be": {
-            "cycle_count": {"value": 1, "how": "one running story instead of four round trips"},
-            "opened_on": {"value": "2024-01-15", "how": "the first purchase this security ever had, three closed holdings ago"}
-          }
-        }
-      ],
-      "account": {"value": {"value": 1560.0, "how": "1,000.00 free cash + 560.00 at market"}},
-      "exit_scorecard": {
-        "Hit valuation": {"n": 2, "n_held": 2, "n_after": 2, "avg_held": 65.0, "avg_after": -17.5, "bought_again": 2,
-                          "how": "held: (30.0 + 100.0) / 2. after: (-7.69 + -27.27) / 2 = -17.48, rounded to one place. Both windows ended at a later purchase."},
-        "Thesis broke": {"n": 1, "n_held": 1, "n_after": 1, "avg_held": -25.0, "avg_after": 22.2, "bought_again": 1,
-                         "how": "one sale; 22.22 rounded to one place"}
-      },
-      "override_scorecard": {
-        "compliant": {"n": 4, "n_purchases": 4, "n_unscored": 0, "win_rate": 50, "avg": 23.1,
-                      "how": "every purchase was recorded with the signal, and every one of them can be scored. Returns 30.0, -25.0, 100.0, -12.5: two above zero of four, and (30.0 - 25.0 + 100.0 - 12.5) / 4 = 23.125 rounded to one place"},
-        "override": {"n": 0, "n_purchases": 0, "n_unscored": 0, "win_rate": null, "avg": null, "how": "nothing was overridden"}
-      }
-    },
-
-    {
-      "id": "zero-and-negative-cash",
-      "why": "Cash of nothing is an answer, not an absence, and an account on margin is a real account. The boundary is where the account reaches nothing: above it a weight is arithmetic however large, at or below it there is no share to express. None of the three may collapse into each other.",
-      "story": [
-        "10 shares of Sable Textiles (SABL) bought at $10.00 on 2025-05-01. SABL last closed at $20.00 on 2026-08-07, so the holding is worth $200.00.",
-        "The same holding is read against five different answers to the free-cash question."
-      ],
-      "securities": [
-        {
-          "ticker": "SABL",
-          "name": "Sable Textiles",
-          "cik": 700009,
-          "maps_to_cik": ["SABL"],
-          "prices": {"SABL": [["2026-08-07", 20.0]]},
-          "lots": [
-            {"id": "l1", "seq": 1, "kind": "buy", "date": "2025-05-01", "shares": 10, "price": 10.0}
-          ],
-          "expect": {
-            "shares_held": {"value": 10.0, "how": "10 bought, none sold"},
-            "cost_basis": {"value": 10.0, "how": "one open lot"},
-            "opened_on": {"value": "2025-05-01", "how": "the only purchase"},
-            "bucket": {"value": "holdings", "how": "shares are held"},
-            "price": {"value": 20.0, "ticker": "SABL", "date": "2026-08-07"},
-            "market_value": {"value": 200.0, "how": "10 x 20.00"},
-            "lot_returns": {"l1": {"value": 100.0, "how": "10 x (20.00 - 10.00) = 100.00 on a cost of 100.00"}},
-            "position_return": {"value": 100.0, "how": "one lot"},
-            "cycles": [
-              {"seq": 1, "opened": "2025-05-01", "closed": null, "open": true, "shares": 10.0,
-               "return": {"value": 100.0, "how": "one purchase in the period"}}
-            ],
-            "sales": {}
-          }
-        }
-      ],
-      "cash_cases": [
-        {"cash": 0.0, "account": 200.0, "weight": 100.0,
-         "how": "nothing in cash is a stated answer. The account is the holding alone, and the holding is all of it."},
-        {"cash": -199.0, "account": 1.0, "weight": 20000.0,
-         "how": "200.00 of an account of 1.00. Arithmetically true on margin and reported as it stands — the host holds no view that a weight cannot exceed 100."},
-        {"cash": -200.0, "account": 0.0, "weight": null,
-         "how": "the account works out to exactly nothing, so there is no share of it to express. Not a division by zero, and not 0%."},
-        {"cash": -500.0, "account": -300.0, "weight": null,
-         "how": "an account of less than nothing has no share to express"},
-        {"cash": null, "account": null, "weight": null, "account_reason_mentions": "free cash",
-         "how": "the cash question was never answered, so the account is absent for that reason — not because a price is missing"}
+      "NWND.B": [
+       [
+        "2026-08-06",
+        470.0
+       ]
       ]
-    },
-
-    {
-      "id": "same-day-exit-and-re-entry",
-      "why": "Closing a position and opening a new one on the same day. Two periods that share a date, told apart only by the order the entries were recorded — and the window on the sale has to end at that same-day purchase, not run to today.",
-      "story": [
-        "On 2025-03-01, 50 shares of Orrin Freight (ORRN) were bought at $10.00.",
-        "On 2025-06-01, all 50 were sold at $12.00, on 'Better opportunity'.",
-        "Later the same day, 50 shares were bought back at $12.50.",
-        "ORRN last closed at $9.00 on 2026-08-07.",
-        "Free cash in this journal is $1,000.00."
-      ],
-      "cash": 1000.0,
-      "securities": [
-        {
-          "ticker": "ORRN",
-          "name": "Orrin Freight",
-          "cik": 700010,
-          "maps_to_cik": ["ORRN"],
-          "prices": {"ORRN": [["2026-08-07", 9.0]]},
-          "lots": [
-            {"id": "l1", "seq": 1, "kind": "buy", "date": "2025-03-01", "shares": 50, "price": 10.0},
-            {"id": "l2", "seq": 2, "kind": "sell", "date": "2025-06-01", "shares": 50, "price": 12.0,
-             "against": [{"lot": "l1", "shares": 50}], "reason": "Better opportunity"},
-            {"id": "l3", "seq": 3, "kind": "buy", "date": "2025-06-01", "shares": 50, "price": 12.5}
-          ],
-          "expect": {
-            "shares_held": {"value": 50.0, "how": "the second purchase"},
-            "cost_basis": {"value": 12.5, "how": "the only open lot"},
-            "opened_on": {"value": "2025-06-01", "how": "the re-entry, which is also the day the first holding ended"},
-            "bucket": {"value": "holdings", "how": "shares are held"},
-            "price": {"value": 9.0, "ticker": "ORRN", "date": "2026-08-07"},
-            "market_value": {"value": 450.0, "how": "50 x 9.00"},
-            "weight": {"value": 31.034483, "how": "450.00 / 1,450.00 x 100"},
-            "lot_returns": {
-              "l1": {"value": 20.0, "how": "50 x (12.00 - 10.00) = 100.00 on 500.00"},
-              "l3": {"value": -28.0, "how": "50 x (9.00 - 12.50) = -175.00 on 625.00"}
-            },
-            "position_return": {"value": -6.67, "how": "(100.00 - 175.00) / (500.00 + 625.00) x 100 = -6.6666..."},
-            "cycles": [
-              {"seq": 1, "opened": "2025-03-01", "closed": "2025-06-01", "open": false, "shares": 0.0,
-               "return": {"value": 20.0, "how": "the sale took the position to nothing, so the period closed — on the same day the next one opened"}},
-              {"seq": 2, "opened": "2025-06-01", "closed": null, "open": true, "shares": 50.0,
-               "return": {"value": -28.0, "how": "the re-entry, marked at 9.00"}}
-            ],
-            "sales": {
-              "l2": {
-                "sale_return": {"value": 20.0, "how": "600.00 against 500.00"},
-                "since_sale": {"value": 4.17, "until": "purchase", "date": "2025-06-01",
-                               "how": "the same-day re-purchase ends the window: 12.50 / 12.00 - 1 = 4.1666...  It counts because it was recorded after the sale, which is the only thing that distinguishes them."}
-              }
-            }
-          },
-          "must_not_be": {
-            "cycle_count": {"value": 1, "how": "the same-day close and re-entry collapsed into one holding"},
-            "since_sale_l2": {"value": -25.0, "how": "9.00 / 12.00 - 1 — the window run to today, past a re-purchase made the same day"}
-          }
-        }
-      ],
-      "account": {"value": {"value": 1450.0, "how": "1,000.00 free cash + 450.00 at market"}}
-    },
-
-    {
-      "id": "overrides-and-the-rule-they-went-against",
-      "why": "The panel that is supposed to be able to indict a rule rather than the person. It counted only the overrides that happened to have a price, so a rule overridden twice and priceable once reported 'overridden once' — and a data gap read as a settled result in the one place it would be believed.",
-      "story": [
-        "Two purchases were made against the signal, both stopped by the same rule — the journal's declared maximum P/E.",
-        "Kaldeen Systems (KLDN): 10 shares at $100.00 on 2025-02-01. KLDN last closed at $130.00 on 2026-08-07, so that override is up 30%.",
-        "Petrel Marine (PTRL): 10 shares at $50.00 on 2025-02-01. No price history is stored for it, so how that override turned out is not knowable.",
-        "One purchase was made with the signal: Sundry Optics (SNDR), 10 shares at $20.00 on 2025-02-01, last close $25.00.",
-        "Free cash in this journal is $1,000.00."
-      ],
-      "cash": 1000.0,
-      "securities": [
-        {
-          "ticker": "KLDN",
-          "name": "Kaldeen Systems",
-          "cik": 700015,
-          "maps_to_cik": ["KLDN"],
-          "prices": {"KLDN": [["2026-08-07", 130.0]]},
-          "lots": [
-            {"id": "l1", "seq": 1, "kind": "buy", "date": "2025-02-01", "shares": 10, "price": 100.0,
-             "override": {"date": "2025-02-01", "kind": "against", "state": "Too expensive",
-                          "failed": [{"key": "value:max-pe", "label": "Your maximum P/E"}],
-                          "missing": [], "basis": "live", "as_of": "2025-02-01",
-                          "reason": "I think the market is wrong about this one."}}
-          ],
-          "expect": {
-            "shares_held": {"value": 10.0, "how": "10 bought, none sold"},
-            "cost_basis": {"value": 100.0, "how": "one open lot"},
-            "opened_on": {"value": "2025-02-01", "how": "the only purchase"},
-            "bucket": {"value": "holdings", "how": "shares are held"},
-            "price": {"value": 130.0, "ticker": "KLDN", "date": "2026-08-07"},
-            "market_value": {"value": 1300.0, "how": "10 x 130.00"},
-            "weight": {"value": null, "how": "its own value is known; the account it would be a share of is not"},
-            "lot_returns": {"l1": {"value": 30.0, "how": "10 x (130.00 - 100.00) = 300.00 on a cost of 1,000.00"}},
-            "position_return": {"value": 30.0, "how": "one lot"},
-            "cycles": [
-              {"seq": 1, "opened": "2025-02-01", "closed": null, "open": true, "shares": 10.0,
-               "return": {"value": 30.0, "how": "one purchase in the period"}}
-            ],
-            "sales": {}
-          }
-        },
-        {
-          "ticker": "PTRL",
-          "name": "Petrel Marine",
-          "cik": 700016,
-          "maps_to_cik": ["PTRL"],
-          "prices": {},
-          "lots": [
-            {"id": "l1", "seq": 1, "kind": "buy", "date": "2025-02-01", "shares": 10, "price": 50.0,
-             "override": {"date": "2025-02-01", "kind": "against", "state": "Too expensive",
-                          "failed": [{"key": "value:max-pe", "label": "Your maximum P/E"}],
-                          "missing": [], "basis": "live", "as_of": "2025-02-01",
-                          "reason": "Same call, different name."}}
-          ],
-          "expect": {
-            "shares_held": {"value": 10.0, "how": "10 bought, none sold"},
-            "cost_basis": {"value": 50.0, "how": "one open lot — what it cost is known even though what it is worth is not"},
-            "opened_on": {"value": "2025-02-01", "how": "the only purchase"},
-            "bucket": {"value": "holdings", "how": "shares are held"},
-            "price": {"value": null, "ticker": null, "date": null, "how": "no close is stored for PTRL"},
-            "market_value": {"value": null, "how": "no price, so no value"},
-            "weight": {"value": null, "how": "no value to take a share of"},
-            "lot_returns": {"l1": {"value": null, "how": "open shares with no price to mark them at. The override is still a decision that happened; only its outcome is unknowable."}},
-            "position_return": {"value": null, "how": "the only lot has no return"},
-            "cycles": [
-              {"seq": 1, "opened": "2025-02-01", "closed": null, "open": true, "shares": 10.0,
-               "return": {"value": null, "how": "an open period with no price cannot be scored"}}
-            ],
-            "sales": {}
-          }
-        },
-        {
-          "ticker": "SNDR",
-          "name": "Sundry Optics",
-          "cik": 700017,
-          "maps_to_cik": ["SNDR"],
-          "prices": {"SNDR": [["2026-08-07", 25.0]]},
-          "lots": [
-            {"id": "l1", "seq": 1, "kind": "buy", "date": "2025-02-01", "shares": 10, "price": 20.0}
-          ],
-          "expect": {
-            "shares_held": {"value": 10.0, "how": "10 bought, none sold"},
-            "cost_basis": {"value": 20.0, "how": "one open lot"},
-            "opened_on": {"value": "2025-02-01", "how": "the only purchase"},
-            "bucket": {"value": "holdings", "how": "shares are held"},
-            "price": {"value": 25.0, "ticker": "SNDR", "date": "2026-08-07"},
-            "market_value": {"value": 250.0, "how": "10 x 25.00"},
-            "weight": {"value": null, "how": "the account is absent, so no share of it can be expressed"},
-            "lot_returns": {"l1": {"value": 25.0, "how": "10 x (25.00 - 20.00) = 50.00 on a cost of 200.00"}},
-            "position_return": {"value": 25.0, "how": "one lot"},
-            "cycles": [
-              {"seq": 1, "opened": "2025-02-01", "closed": null, "open": true, "shares": 10.0,
-               "return": {"value": 25.0, "how": "one purchase in the period"}}
-            ],
-            "sales": {}
-          }
-        }
-      ],
-      "account": {
-        "value": {"value": null, "how": "PTRL has no price, so the total cannot be reached without inventing one"},
-        "reason_names": ["PTRL"]
-      },
-      "override_scorecard": {
-        "override": {"n": 1, "n_purchases": 2, "n_unscored": 1, "win_rate": 100, "avg": 30.0,
-                     "how": "two purchases were made against the signal. Only KLDN's outcome is knowable, so the average and the win rate rest on one figure while the count says two. Reporting a win rate of 100% beside a count of 2 would say the user was right both times, when the second time is simply not known."},
-        "compliant": {"n": 1, "n_purchases": 1, "n_unscored": 0, "win_rate": 100, "avg": 25.0,
-                      "how": "the one purchase recorded with the signal, up 25%"}
-      },
-      "kinds": {"against": 2, "without": 0, "unevaluated": 0,
-                "how": "both overrides were taken in the face of a verdict, not in the absence of one — averaging those two kinds together would make a data gap look like defiance"},
-      "per_rule": {
-        "value:max-pe": {"label": "Your maximum P/E", "n": 2, "n_scored": 1, "wins": 1, "avg": 30.0,
-                         "how": "the rule was overridden twice and one of those can be scored. Both figures are reported, because 'your maximum P/E kept being overridden and it kept working out' is the finding this panel exists to be able to make — and it cannot be made honestly off a count that silently dropped the override nobody could price."}
-      },
-      "must_not_be": {
-        "per_rule_n": {"value": 1, "how": "the rule overridden twice, counted once, because only one override had a price"}
+     },
+     "lots": [
+      {
+       "id": "l1",
+       "seq": 1,
+       "kind": "buy",
+       "date": "2026-01-05",
+       "shares": 20,
+       "price": 400.0
       }
-    },
-
-    {
-      "id": "a-price-entered-by-hand",
-      "why": "A price typed into the journal is the only price for a security the SEC does not match, and it is the one price nobody validated. A positive one has to be used and labelled as undated; a price of nothing, or less than nothing, is not a price at all — served as one it produces a $0 market value, a 0% weight and a -100% on every open share, four confident answers resting on a claim the market never made.",
-      "story": [
-        "Wrenfield Ltd (WRNF) is not matched to a company at the SEC, so nothing has been fetched for it. The user typed a price of $18.00. 25 shares were bought at $12.00 on 2025-06-01.",
-        "Torrance Glass (TRNC) is in the same position, but the price on record for it is $0.00 — typed before the field refused it, or left over from an import.",
-        "Free cash in this journal is $500.00."
-      ],
-      "cash": 500.0,
-      "securities": [
-        {
-          "ticker": "WRNF",
-          "name": "Wrenfield Ltd",
-          "cik": null,
-          "manual_price": 18.0,
-          "maps_to_cik": [],
-          "prices": {},
-          "lots": [
-            {"id": "l1", "seq": 1, "kind": "buy", "date": "2025-06-01", "shares": 25, "price": 12.0}
-          ],
-          "expect": {
-            "shares_held": {"value": 25.0, "how": "25 bought, none sold"},
-            "cost_basis": {"value": 12.0, "how": "one open lot"},
-            "opened_on": {"value": "2025-06-01", "how": "the only purchase"},
-            "bucket": {"value": "holdings", "how": "shares are held"},
-            "price": {"value": 18.0, "ticker": "WRNF", "date": null, "how": "the price entered by hand, which carries no date"},
-            "market_value": {"value": 450.0, "how": "25 x 18.00"},
-            "weight": {"value": 47.368421, "how": "450.00 / 950.00 x 100"},
-            "lot_returns": {"l1": {"value": 50.0, "how": "25 x (18.00 - 12.00) = 150.00 on a cost of 300.00"}},
-            "position_return": {"value": 50.0, "how": "one lot"},
-            "cycles": [
-              {"seq": 1, "opened": "2025-06-01", "closed": null, "open": true, "shares": 25.0,
-               "return": {"value": 50.0, "how": "one purchase in the period"}}
-            ],
-            "sales": {}
-          }
-        }
-      ],
-      "account": {
-        "value": {"value": 950.0, "how": "500.00 free cash + 450.00 at the hand-entered price"}
+     ],
+     "expect": {
+      "shares_held": {
+       "value": 20.0,
+       "how": "20 bought, none sold"
       },
-      "refused_price": {
-        "ticker": "TRNC",
-        "name": "Torrance Glass",
-        "manual_price": 0.0,
-        "lots": [
-          {"id": "l1", "seq": 1, "kind": "buy", "date": "2025-06-01", "shares": 25, "price": 12.0}
-        ],
-        "price": {"value": null, "reason_mentions": "not a price"},
-        "market_value": {"value": null, "how": "no price, so no value"},
-        "lot_return": {"value": null, "how": "open shares with nothing to mark them at"},
-        "lot_return_asked_at_zero": {
-          "value": null,
-          "how": "the same answer when a price of nothing is handed straight to the return arithmetic, rather than arriving as an absence. Two layers refuse it, because a zero that reaches the second one from anywhere would report a confident total loss on a position nobody has valued."
-        },
-        "must_not_be": {
-          "market_value": {"value": 0.0, "how": "25 x 0.00 — a holding reported as worth nothing"},
-          "lot_return": {"value": -100.0, "how": "25 x (0.00 - 12.00) on a cost of 300.00 — a total loss nobody observed"}
-        },
-        "how": "A price of nothing on record is refused on read as well as at the field, because a journal written before the field refused it must not still read as a fact."
+      "cost_basis": {
+       "value": 400.0,
+       "how": "one open lot of 20 at $400.00"
+      },
+      "opened_on": {
+       "value": "2026-01-05",
+       "how": "the only purchase"
+      },
+      "bucket": {
+       "value": "holdings",
+       "how": "shares are still held"
+      },
+      "price": {
+       "value": 470.0,
+       "ticker": "NWND.B",
+       "date": "2026-08-06",
+       "how": "the close of the security actually held. NWND is a different instrument and its close is not this security's price at any date."
+      },
+      "market_value": {
+       "value": 9400.0,
+       "how": "20 x 470.00"
+      },
+      "weight": {
+       "value": 94.0,
+       "how": "9,400.00 / 10,000.00 x 100"
+      },
+      "lot_returns": {
+       "l1": {
+        "value": 17.5,
+        "how": "20 x (470.00 - 400.00) = 1,400.00 gain on a cost of 20 x 400.00 = 8,000.00; 1,400 / 8,000 x 100"
+       }
+      },
+      "position_return": {
+       "value": 17.5,
+       "how": "one lot, so the lifetime figure is that lot's"
+      },
+      "cycles": [
+       {
+        "seq": 1,
+        "opened": "2026-01-05",
+        "closed": null,
+        "open": true,
+        "shares": 20.0,
+        "return": {
+         "value": 17.5,
+         "how": "one purchase in the period; same arithmetic as the lot"
+        }
+       }
+      ],
+      "sales": {}
+     },
+     "must_not_be": {
+      "market_value": {
+       "value": 14100000.0,
+       "how": "20 x 705,000.00 — the Class A close against a Class B holding"
+      },
+      "position_return": {
+       "value": 176150.0,
+       "how": "20 x (705,000.00 - 400.00) = 14,092,000.00 on a cost of 8,000.00"
+      },
+      "price_ticker": {
+       "value": "NWND",
+       "how": "the class the journal does not hold, chosen because its close was one day newer"
       }
-    },
-
-    {
-      "id": "an-aggregate-is-not-a-sum-of-rounded-parts",
-      "why": "A holding period's return is built from its purchases. Rebuilding each purchase's money from its already-rounded percentage, and then dividing once more, is not the same arithmetic as adding up the money — and it lets a period report a figure its own lots do not add up to. Off in the last place only, which is exactly the kind of wrong number nobody notices.",
-      "story": [
-        "Two purchases of Vasker Minerals (VSKR), both still held: 100 shares at $1.25 on 2025-04-01, and 100 shares at $1.75 on 2025-05-01.",
-        "VSKR last closed at $1.00 on 2026-08-07.",
-        "The two lots return -20.00% and -42.86%. Weighted by what each cost, the position is down 33.33% — but only if the money is added up. Adding the rounded percentages back into money first gives 33.34%.",
-        "Free cash in this journal is $1,000.00."
-      ],
-      "cash": 1000.0,
-      "securities": [
-        {
-          "ticker": "VSKR",
-          "name": "Vasker Minerals",
-          "cik": 700014,
-          "maps_to_cik": ["VSKR"],
-          "prices": {"VSKR": [["2026-08-07", 1.0]]},
-          "lots": [
-            {"id": "l1", "seq": 1, "kind": "buy", "date": "2025-04-01", "shares": 100, "price": 1.25},
-            {"id": "l2", "seq": 2, "kind": "buy", "date": "2025-05-01", "shares": 100, "price": 1.75}
-          ],
-          "expect": {
-            "shares_held": {"value": 200.0, "how": "200 bought, none sold"},
-            "cost_basis": {"value": 1.5, "how": "(100 x 1.25 + 100 x 1.75) / 200 = 300.00 / 200"},
-            "opened_on": {"value": "2025-04-01", "how": "the first purchase of the one open period"},
-            "bucket": {"value": "holdings", "how": "shares are held"},
-            "price": {"value": 1.0, "ticker": "VSKR", "date": "2026-08-07"},
-            "market_value": {"value": 200.0, "how": "200 x 1.00"},
-            "weight": {"value": 16.666667, "how": "200.00 / 1,200.00 x 100"},
-            "lot_returns": {
-              "l1": {"value": -20.0, "how": "100 x (1.00 - 1.25) = -25.00 on a cost of 125.00"},
-              "l2": {"value": -42.86, "how": "100 x (1.00 - 1.75) = -75.00 on a cost of 175.00; -75 / 175 x 100 = -42.857142..."}
-            },
-            "position_return": {"value": -33.33, "how": "(-25.00 - 75.00) / (125.00 + 175.00) x 100 = -100 / 300 x 100 = -33.3333..."},
-            "cycles": [
-              {"seq": 1, "opened": "2025-04-01", "closed": null, "open": true, "shares": 200.0,
-               "return": {"value": -33.33, "how": "the same money, added up once"}}
-            ],
-            "sales": {}
-          },
-          "must_not_be": {
-            "position_return": {"value": -33.34, "how": "125.00 x -0.2000 + 175.00 x -0.4286 = -100.005, divided by 300.00 — the lots' displayed percentages expanded back into money"}
-          }
-        }
-      ],
-      "account": {"value": {"value": 1200.0, "how": "1,000.00 free cash + 200.00 at market"}}
-    },
-
-    {
-      "id": "recorded-at-nothing",
-      "why": "Shares that cost nothing and a sale that fetched nothing are real entries, not missing ones — but neither can stand for a price. A change measured from nothing has no value, and free shares say nothing about the market. Reporting either as a percentage would put a fabricated figure into the evidence that judges the sell rules, which is the one place it would be believed.",
-      "story": [
-        "Ilbry Holdings (ILBR): 100 shares received at $0.00 on 2025-02-01 and sold at $5.00 on 2025-08-01, on 'Hit valuation'. ILBR last closed at $4.00 on 2026-08-07.",
-        "Kestrel Paper (KSTR): 100 shares bought at $4.00 on 2025-02-01 and written off — sold at $0.00 on 2025-08-01, on 'Thesis broke'. KSTR last closed at $1.00 on 2026-08-07."
-      ],
-      "cash": 1000.0,
-      "securities": [
-        {
-          "ticker": "ILBR",
-          "name": "Ilbry Holdings",
-          "cik": 700011,
-          "maps_to_cik": ["ILBR"],
-          "prices": {"ILBR": [["2026-08-07", 4.0]]},
-          "lots": [
-            {"id": "l1", "seq": 1, "kind": "buy", "date": "2025-02-01", "shares": 100, "price": 0.0},
-            {"id": "l2", "seq": 2, "kind": "sell", "date": "2025-08-01", "shares": 100, "price": 5.0,
-             "against": [{"lot": "l1", "shares": 100}], "reason": "Hit valuation"}
-          ],
-          "expect": {
-            "shares_held": {"value": 0.0, "how": "100 received, 100 sold"},
-            "cost_basis": {"value": null, "how": "nothing is held"},
-            "opened_on": {"value": null, "how": "no holding is in progress"},
-            "bucket": {"value": "previous", "how": "lots exist and all are closed"},
-            "price": {"value": 4.0, "ticker": "ILBR", "date": "2026-08-07"},
-            "market_value": {"value": null, "how": "no position is held"},
-            "weight": {"value": null, "how": "no position is held"},
-            "lot_returns": {"l1": {"value": null, "how": "the lot cost nothing, so there is no base to express a return against — never 0, and never an infinite gain"}},
-            "position_return": {"value": null, "how": "the only lot has no return"},
-            "cycles": [
-              {"seq": 1, "opened": "2025-02-01", "closed": "2025-08-01", "open": false, "shares": 0.0,
-               "return": {"value": null, "how": "the period's only purchase cost nothing"}}
-            ],
-            "sales": {
-              "l2": {
-                "sale_return": {"value": null, "how": "the shares cost nothing, so what they returned cannot be expressed"},
-                "since_sale": {"value": -20.0, "until": "today", "date": null,
-                               "how": "the SALE price is a real 5.00, so the window after it is knowable: 4.00 / 5.00 - 1. What the shares cost has nothing to do with it."}
-              }
-            }
-          },
-          "must_not_be": {
-            "lot_return_l1": {"value": 0.0, "how": "an unexpressable return read as break-even"}
-          }
-        },
-        {
-          "ticker": "KSTR",
-          "name": "Kestrel Paper",
-          "cik": 700012,
-          "maps_to_cik": ["KSTR"],
-          "prices": {"KSTR": [["2026-08-07", 1.0]]},
-          "lots": [
-            {"id": "l1", "seq": 1, "kind": "buy", "date": "2025-02-01", "shares": 100, "price": 4.0},
-            {"id": "l2", "seq": 2, "kind": "sell", "date": "2025-08-01", "shares": 100, "price": 0.0,
-             "against": [{"lot": "l1", "shares": 100}], "reason": "Thesis broke"}
-          ],
-          "expect": {
-            "shares_held": {"value": 0.0, "how": "100 bought, 100 sold"},
-            "cost_basis": {"value": null, "how": "nothing is held"},
-            "opened_on": {"value": null, "how": "no holding is in progress"},
-            "bucket": {"value": "previous", "how": "lots exist and all are closed"},
-            "price": {"value": 1.0, "ticker": "KSTR", "date": "2026-08-07"},
-            "market_value": {"value": null, "how": "no position is held"},
-            "weight": {"value": null, "how": "no position is held"},
-            "lot_returns": {"l1": {"value": -100.0, "how": "100 x (0.00 - 4.00) = -400.00 on a cost of 400.00. A real total loss, computed, and it must not be confused with the absences above."}},
-            "position_return": {"value": -100.0, "how": "one lot"},
-            "cycles": [
-              {"seq": 1, "opened": "2025-02-01", "closed": "2025-08-01", "open": false, "shares": 0.0,
-               "return": {"value": -100.0, "how": "realised in full"}}
-            ],
-            "sales": {
-              "l2": {
-                "sale_return": {"value": -100.0, "how": "0.00 proceeds against 400.00 cost"},
-                "since_sale": {"value": null, "until": "today", "date": null,
-                               "reason_mentions": "recorded at nothing",
-                               "how": "the sale is recorded at nothing, so what the price did against it cannot be expressed. Reporting the move from 0.00 to 1.00 as a percentage would be a fabricated figure in the evidence that judges the sell rules."}
-              }
-            }
-          },
-          "must_not_be": {
-            "since_sale_l2": {"value": -100.0, "how": "an unexpressable window read as a total loss"}
-          }
-        }
-      ],
-      "account": {
-        "value": {"value": 1000.0, "how": "1,000.00 free cash; both securities were closed out, so neither is a holding at market"}
-      },
-      "since_sale_at_no_price": {
-        "sale": "l2", "security": "ILBR", "price": 0.0,
-        "reason_mentions": "nothing or less",
-        "must_not_mention": "the purchase on None",
-        "how": "asked with a price of nothing while the window runs to today. Two different things end a window and the reason has to say which — naming a purchase that ends it is a sentence about an entry the user never made, and sends them looking for it."
-      },
-      "exit_scorecard": {
-        "Hit valuation": {"n": 1, "n_held": 0, "n_after": 1, "avg_held": null, "avg_after": -20.0, "bought_again": 0,
-                          "how": "one sale, and what it returned while held cannot be expressed because the shares cost nothing. The count is a true figure on its own — the sale happened — and the average beside it is absent rather than a guess."},
-        "Thesis broke": {"n": 1, "n_held": 1, "n_after": 0, "avg_held": -100.0, "avg_after": null, "bought_again": 0,
-                         "how": "the mirror: what it returned while held is a real -100%, and what happened after cannot be expressed because the sale itself is recorded at nothing"}
-      },
-      "override_scorecard": {
-        "compliant": {"n": 1, "n_purchases": 2, "n_unscored": 1, "win_rate": 0, "avg": -100.0,
-                      "how": "two purchases; ILBR's cost nothing so it has no return, KSTR's is a real total loss. One scored of two counted, no wins."},
-        "override": {"n": 0, "n_purchases": 0, "n_unscored": 0, "win_rate": null, "avg": null, "how": "nothing was overridden"}
-      }
+     }
     }
-  ]
+   ],
+   "account": {
+    "value": {
+     "value": 10000.0,
+     "how": "600.00 free cash + 9,400.00 of NWND.B at market"
+    },
+    "must_not_be": {
+     "value": 14100600.0,
+     "how": "600.00 + 14,100,000.00"
+    }
+   }
+  },
+  {
+   "id": "trim-then-close",
+   "why": "Per-sale and per-period figures diverge, and they must both be right at once. Two sales out of one purchase: one up 50%, one down 25%, and the holding period they belong to up 5%. A layer that reported the period figure per sale, or averaged the sales into the period, would be plausible and wrong in both directions.",
+   "story": [
+    "On 2025-01-10, 100 shares of Calder Foods (CALD) were bought at $20.00.",
+    "On 2025-06-10, 40 of them were sold at $30.00 — a trim, on 'Hit valuation'.",
+    "On 2025-11-10, the remaining 60 were sold at $15.00 — the close, on 'Thesis broke'.",
+    "CALD last closed at $18.00 on 2026-08-07.",
+    "Free cash in this journal is $1,000.00."
+   ],
+   "cash": 1000.0,
+   "securities": [
+    {
+     "ticker": "CALD",
+     "name": "Calder Foods",
+     "cik": 700002,
+     "maps_to_cik": [
+      "CALD"
+     ],
+     "prices": {
+      "CALD": [
+       [
+        "2026-08-07",
+        18.0
+       ]
+      ]
+     },
+     "lots": [
+      {
+       "id": "l1",
+       "seq": 1,
+       "kind": "buy",
+       "date": "2025-01-10",
+       "shares": 100,
+       "price": 20.0
+      },
+      {
+       "id": "l2",
+       "seq": 2,
+       "kind": "sell",
+       "date": "2025-06-10",
+       "shares": 40,
+       "price": 30.0,
+       "against": [
+        {
+         "lot": "l1",
+         "shares": 40
+        }
+       ],
+       "reason": "Hit valuation"
+      },
+      {
+       "id": "l3",
+       "seq": 3,
+       "kind": "sell",
+       "date": "2025-11-10",
+       "shares": 60,
+       "price": 15.0,
+       "against": [
+        {
+         "lot": "l1",
+         "shares": 60
+        }
+       ],
+       "reason": "Thesis broke"
+      }
+     ],
+     "expect": {
+      "shares_held": {
+       "value": 0.0,
+       "how": "100 bought, 40 + 60 sold"
+      },
+      "cost_basis": {
+       "value": null,
+       "how": "nothing is held, so there is no average cost of what is held"
+      },
+      "opened_on": {
+       "value": null,
+       "how": "no holding is in progress"
+      },
+      "bucket": {
+       "value": "previous",
+       "how": "lots exist and all are closed"
+      },
+      "price": {
+       "value": 18.0,
+       "ticker": "CALD",
+       "date": "2026-08-07",
+       "how": "the only class"
+      },
+      "market_value": {
+       "value": null,
+       "how": "no position is held"
+      },
+      "weight": {
+       "value": null,
+       "how": "no position is held"
+      },
+      "lot_returns": {
+       "l1": {
+        "value": 5.0,
+        "how": "40 x (30.00 - 20.00) = +400.00 and 60 x (15.00 - 20.00) = -300.00, so +100.00 on a cost of 100 x 20.00 = 2,000.00; 100 / 2,000 x 100"
+       }
+      },
+      "position_return": {
+       "value": 5.0,
+       "how": "one lot over the security's whole life"
+      },
+      "cycles": [
+       {
+        "seq": 1,
+        "opened": "2025-01-10",
+        "closed": "2025-11-10",
+        "open": false,
+        "shares": 0.0,
+        "return": {
+         "value": 5.0,
+         "how": "the period holds one purchase; +100.00 on 2,000.00. NOT the average of +50% and -25%, and NOT either sale's figure."
+        },
+        "exit": {
+         "date": "2025-11-10",
+         "sales": 2,
+         "shares": 100,
+         "price": {
+          "value": 21.0,
+          "how": "40 x 30.00 + 60 x 15.00 = 2,100.00, over 100 shares. NOT the last sale's price, which is one sliver of the exit"
+         },
+         "reasons": [
+          {
+           "reason": "Hit valuation",
+           "shares": 40.0,
+           "share": 40.0
+          },
+          {
+           "reason": "Thesis broke",
+           "shares": 60.0,
+           "share": 60.0
+          }
+         ],
+         "how": "share-weighted across every sale that closed the period. The date is the LAST sale's, because that is the day nothing was held — the one thing the final sale settles on its own."
+        }
+       }
+      ],
+      "sales": {
+       "l2": {
+        "sale_return": {
+         "value": 50.0,
+         "how": "40 x 30.00 = 1,200.00 proceeds against 40 x 20.00 = 800.00 cost; 1,200 / 800 - 1"
+        },
+        "since_sale": {
+         "value": -40.0,
+         "until": "today",
+         "date": null,
+         "how": "no purchase followed, so the window runs to the last close: 18.00 / 30.00 - 1"
+        }
+       },
+       "l3": {
+        "sale_return": {
+         "value": -25.0,
+         "how": "60 x 15.00 = 900.00 proceeds against 60 x 20.00 = 1,200.00 cost; 900 / 1,200 - 1"
+        },
+        "since_sale": {
+         "value": 20.0,
+         "until": "today",
+         "date": null,
+         "how": "18.00 / 15.00 - 1"
+        }
+       }
+      }
+     }
+    }
+   ],
+   "account": {
+    "value": {
+     "value": 1000.0,
+     "how": "1,000.00 free cash and no holdings at market"
+    }
+   },
+   "exit_scorecard": {
+    "Hit valuation": {
+     "n": 1,
+     "n_held": 1,
+     "n_after": 1,
+     "avg_held": 50.0,
+     "avg_after": -40.0,
+     "bought_again": 0
+    },
+    "Thesis broke": {
+     "n": 1,
+     "n_held": 1,
+     "n_after": 1,
+     "avg_held": -25.0,
+     "avg_after": 20.0,
+     "bought_again": 0
+    }
+   }
+  },
+  {
+   "id": "re-entry-two-periods",
+   "why": "A name bought, closed and bought back is two trades. One percentage covering both describes neither, and the date the holding began must count from the re-entry. The window on the first sale has to end at the re-purchase, not run on to today, or the sell rule gets credited with a stretch spent holding.",
+   "story": [
+    "On 2025-02-03, 50 shares of Harlow Instruments (HRLW) were bought at $10.00.",
+    "On 2025-05-05, all 50 were sold at $14.00, on 'Hit valuation'. The position was closed.",
+    "On 2025-09-09, 30 shares were bought back at $12.00.",
+    "HRLW last closed at $18.00 on 2026-08-07.",
+    "Free cash in this journal is $1,000.00."
+   ],
+   "cash": 1000.0,
+   "securities": [
+    {
+     "ticker": "HRLW",
+     "name": "Harlow Instruments",
+     "cik": 700003,
+     "maps_to_cik": [
+      "HRLW"
+     ],
+     "prices": {
+      "HRLW": [
+       [
+        "2026-08-07",
+        18.0
+       ]
+      ]
+     },
+     "lots": [
+      {
+       "id": "l1",
+       "seq": 1,
+       "kind": "buy",
+       "date": "2025-02-03",
+       "shares": 50,
+       "price": 10.0
+      },
+      {
+       "id": "l2",
+       "seq": 2,
+       "kind": "sell",
+       "date": "2025-05-05",
+       "shares": 50,
+       "price": 14.0,
+       "against": [
+        {
+         "lot": "l1",
+         "shares": 50
+        }
+       ],
+       "reason": "Hit valuation"
+      },
+      {
+       "id": "l3",
+       "seq": 3,
+       "kind": "buy",
+       "date": "2025-09-09",
+       "shares": 30,
+       "price": 12.0
+      }
+     ],
+     "expect": {
+      "shares_held": {
+       "value": 30.0,
+       "how": "the second purchase, untouched"
+      },
+      "cost_basis": {
+       "value": 12.0,
+       "how": "the only open lot is 30 at $12.00"
+      },
+      "opened_on": {
+       "value": "2025-09-09",
+       "how": "the holding you have now began at the re-entry, not at the first purchase"
+      },
+      "bucket": {
+       "value": "holdings",
+       "how": "shares are held again"
+      },
+      "price": {
+       "value": 18.0,
+       "ticker": "HRLW",
+       "date": "2026-08-07"
+      },
+      "market_value": {
+       "value": 540.0,
+       "how": "30 x 18.00"
+      },
+      "weight": {
+       "value": 35.064935,
+       "how": "540.00 / 1,540.00 x 100"
+      },
+      "lot_returns": {
+       "l1": {
+        "value": 40.0,
+        "how": "50 x (14.00 - 10.00) = 200.00 on a cost of 500.00"
+       },
+       "l3": {
+        "value": 50.0,
+        "how": "30 x (18.00 - 12.00) = 180.00 on a cost of 360.00"
+       }
+      },
+      "position_return": {
+       "value": 44.19,
+       "how": "lifetime, weighted by cost: (200.00 + 180.00) / (500.00 + 360.00) x 100 = 44.1860...; never presented as the current position's return"
+      },
+      "cycles": [
+       {
+        "seq": 1,
+        "opened": "2025-02-03",
+        "closed": "2025-05-05",
+        "open": false,
+        "shares": 0.0,
+        "return": {
+         "value": 40.0,
+         "how": "the first round trip, entirely realised"
+        },
+        "exit": {
+         "date": "2025-05-05",
+         "sales": 1,
+         "shares": 50,
+         "price": {
+          "value": 14.0,
+          "how": "50 x 14.00 = 700.00, over 50 shares"
+         },
+         "reasons": [
+          {
+           "reason": "Hit valuation",
+           "shares": 50.0,
+           "share": 100.0
+          }
+         ],
+         "how": "share-weighted across every sale that closed the period. The date is the LAST sale's, because that is the day nothing was held — the one thing the final sale settles on its own."
+        }
+       },
+       {
+        "seq": 2,
+        "opened": "2025-09-09",
+        "closed": null,
+        "open": true,
+        "shares": 30.0,
+        "return": {
+         "value": 50.0,
+         "how": "the current holding, marked at 18.00"
+        }
+       }
+      ],
+      "sales": {
+       "l2": {
+        "sale_return": {
+         "value": 40.0,
+         "how": "50 x 14.00 = 700.00 against 50 x 10.00 = 500.00"
+        },
+        "since_sale": {
+         "value": -14.29,
+         "until": "purchase",
+         "date": "2025-09-09",
+         "how": "the window ends at the re-purchase price actually paid: 12.00 / 14.00 - 1 = -14.2857...; running it to today's 18.00 would credit the sell rule with a stretch spent holding"
+        }
+       }
+      }
+     },
+     "must_not_be": {
+      "opened_on": {
+       "value": "2025-02-03",
+       "how": "the first purchase of a holding that has since closed"
+      },
+      "since_sale_l2": {
+       "value": 28.57,
+       "how": "18.00 / 14.00 - 1 — the window run on to today, past the re-purchase"
+      }
+     }
+    }
+   ],
+   "account": {
+    "value": {
+     "value": 1540.0,
+     "how": "1,000.00 free cash + 540.00 at market"
+    }
+   }
+  },
+  {
+   "id": "backdated-buy-before-an-exit",
+   "why": "A purchase entered late but dated before an earlier exit means the position never reached nothing — so it never was two holding periods, and no stored boundary could have known that in advance. The period has to be derived from the running total on read.",
+   "story": [
+    "On 2025-01-15, 100 shares of Merrow Optics (MRRW) were bought at $10.00.",
+    "On 2025-03-20, all 100 were sold at $16.00, on 'Risk limit'. At that moment the position read as closed.",
+    "Afterwards the user recorded a purchase they had forgotten: 50 shares at $11.00, dated 2025-02-10 — between the other two.",
+    "Read in date order the position went 100, then 150, then 50. It never touched nothing.",
+    "MRRW last closed at $9.00 on 2026-08-07.",
+    "Free cash in this journal is $1,000.00."
+   ],
+   "cash": 1000.0,
+   "securities": [
+    {
+     "ticker": "MRRW",
+     "name": "Merrow Optics",
+     "cik": 700004,
+     "maps_to_cik": [
+      "MRRW"
+     ],
+     "prices": {
+      "MRRW": [
+       [
+        "2026-08-07",
+        9.0
+       ]
+      ]
+     },
+     "lots": [
+      {
+       "id": "l1",
+       "seq": 1,
+       "kind": "buy",
+       "date": "2025-01-15",
+       "shares": 100,
+       "price": 10.0
+      },
+      {
+       "id": "l2",
+       "seq": 2,
+       "kind": "sell",
+       "date": "2025-03-20",
+       "shares": 100,
+       "price": 16.0,
+       "against": [
+        {
+         "lot": "l1",
+         "shares": 100
+        }
+       ],
+       "reason": "Risk limit"
+      },
+      {
+       "id": "l3",
+       "seq": 3,
+       "kind": "buy",
+       "date": "2025-02-10",
+       "shares": 50,
+       "price": 11.0
+      }
+     ],
+     "expect": {
+      "shares_held": {
+       "value": 50.0,
+       "how": "100 + 50 bought, 100 sold"
+      },
+      "cost_basis": {
+       "value": 11.0,
+       "how": "the sale drew entirely on the first lot, so the 50 still held cost $11.00 each"
+      },
+      "opened_on": {
+       "value": "2025-01-15",
+       "how": "one unbroken holding period, opened at the first purchase"
+      },
+      "bucket": {
+       "value": "holdings",
+       "how": "shares are held"
+      },
+      "price": {
+       "value": 9.0,
+       "ticker": "MRRW",
+       "date": "2026-08-07"
+      },
+      "market_value": {
+       "value": 450.0,
+       "how": "50 x 9.00"
+      },
+      "weight": {
+       "value": 31.034483,
+       "how": "450.00 / 1,450.00 x 100"
+      },
+      "lot_returns": {
+       "l1": {
+        "value": 60.0,
+        "how": "100 x (16.00 - 10.00) = 600.00 on a cost of 1,000.00"
+       },
+       "l3": {
+        "value": -18.18,
+        "how": "50 x (9.00 - 11.00) = -100.00 on a cost of 550.00; -100 / 550 x 100 = -18.1818..."
+       }
+      },
+      "position_return": {
+       "value": 32.26,
+       "how": "(600.00 - 100.00) / (1,000.00 + 550.00) x 100 = 32.2580..."
+      },
+      "cycles": [
+       {
+        "seq": 1,
+        "opened": "2025-01-15",
+        "closed": null,
+        "open": true,
+        "shares": 50.0,
+        "return": {
+         "value": 32.26,
+         "how": "one period holding both purchases and the sale"
+        }
+       }
+      ],
+      "sales": {
+       "l2": {
+        "sale_return": {
+         "value": 60.0,
+         "how": "100 x 16.00 = 1,600.00 against 100 x 10.00 = 1,000.00"
+        },
+        "since_sale": {
+         "value": -43.75,
+         "until": "today",
+         "date": null,
+         "how": "the backdated purchase is dated BEFORE the sale, so no purchase follows it and the window runs to the last close: 9.00 / 16.00 - 1"
+        }
+       }
+      }
+     },
+     "must_not_be": {
+      "cycle_count": {
+       "value": 2,
+       "how": "two periods, as if the position had closed on 2025-03-20 and reopened — which the backdated purchase means never happened"
+      },
+      "opened_on": {
+       "value": "2025-02-10",
+       "how": "the backdated purchase read as opening a second holding"
+      }
+     }
+    }
+   ],
+   "account": {
+    "value": {
+     "value": 1450.0,
+     "how": "1,000.00 free cash + 450.00 at market"
+    }
+   }
+  },
+  {
+   "id": "specific-lots-and-a-spanning-sale",
+   "why": "One sale drawing on two lots at different costs, and a second taking the rest of one of them at a loss. A lot sold in two pieces at two prices must net correctly — here to exactly zero, which is a computed answer and not an absence.",
+   "story": [
+    "Three purchases of Ashgrove Mining (ASHG): 100 at $8.00 on 2025-01-06, 100 at $12.00 on 2025-02-06, and 100 at $10.00 on 2025-03-06.",
+    "On 2025-06-06, 150 shares were sold at $15.00 on 'Hit valuation', drawn from the first lot in full and 50 of the second.",
+    "On 2025-09-06, 50 shares were sold at $9.00 on 'Risk limit', taking the rest of the second lot.",
+    "The third lot is untouched. ASHG last closed at $11.00 on 2026-08-07.",
+    "Free cash in this journal is $1,000.00."
+   ],
+   "cash": 1000.0,
+   "securities": [
+    {
+     "ticker": "ASHG",
+     "name": "Ashgrove Mining",
+     "cik": 700005,
+     "maps_to_cik": [
+      "ASHG"
+     ],
+     "prices": {
+      "ASHG": [
+       [
+        "2026-08-07",
+        11.0
+       ]
+      ]
+     },
+     "lots": [
+      {
+       "id": "l1",
+       "seq": 1,
+       "kind": "buy",
+       "date": "2025-01-06",
+       "shares": 100,
+       "price": 8.0
+      },
+      {
+       "id": "l2",
+       "seq": 2,
+       "kind": "buy",
+       "date": "2025-02-06",
+       "shares": 100,
+       "price": 12.0
+      },
+      {
+       "id": "l3",
+       "seq": 3,
+       "kind": "buy",
+       "date": "2025-03-06",
+       "shares": 100,
+       "price": 10.0
+      },
+      {
+       "id": "l4",
+       "seq": 4,
+       "kind": "sell",
+       "date": "2025-06-06",
+       "shares": 150,
+       "price": 15.0,
+       "against": [
+        {
+         "lot": "l1",
+         "shares": 100
+        },
+        {
+         "lot": "l2",
+         "shares": 50
+        }
+       ],
+       "reason": "Hit valuation"
+      },
+      {
+       "id": "l5",
+       "seq": 5,
+       "kind": "sell",
+       "date": "2025-09-06",
+       "shares": 50,
+       "price": 9.0,
+       "against": [
+        {
+         "lot": "l2",
+         "shares": 50
+        }
+       ],
+       "reason": "Risk limit"
+      }
+     ],
+     "expect": {
+      "shares_held": {
+       "value": 100.0,
+       "how": "300 bought, 200 sold"
+      },
+      "cost_basis": {
+       "value": 10.0,
+       "how": "the only lot with shares left is the third, 100 at $10.00"
+      },
+      "opened_on": {
+       "value": "2025-01-06",
+       "how": "the position never reached nothing, so one period opened at the first purchase"
+      },
+      "bucket": {
+       "value": "holdings",
+       "how": "shares are held"
+      },
+      "price": {
+       "value": 11.0,
+       "ticker": "ASHG",
+       "date": "2026-08-07"
+      },
+      "market_value": {
+       "value": 1100.0,
+       "how": "100 x 11.00"
+      },
+      "weight": {
+       "value": 52.380952,
+       "how": "1,100.00 / 2,100.00 x 100"
+      },
+      "open_lots_remaining": {
+       "value": {
+        "l1": 0.0,
+        "l2": 0.0,
+        "l3": 100.0
+       },
+       "how": "the first lot gave 100 to the spanning sale; the second gave 50 to each sale; the third gave nothing"
+      },
+      "allocate_60_default": {
+       "value": [
+        {
+         "lot": "l3",
+         "shares": 60.0
+        }
+       ],
+       "how": "oldest-first over what is left, and only the third lot has anything left"
+      },
+      "lot_returns": {
+       "l1": {
+        "value": 87.5,
+        "how": "100 x (15.00 - 8.00) = 700.00 on a cost of 800.00"
+       },
+       "l2": {
+        "value": 0.0,
+        "how": "50 x (15.00 - 12.00) = +150.00 and 50 x (9.00 - 12.00) = -150.00, netting to nothing on a cost of 1,200.00. A computed zero, not an absence."
+       },
+       "l3": {
+        "value": 10.0,
+        "how": "100 x (11.00 - 10.00) = 100.00 on a cost of 1,000.00"
+       }
+      },
+      "position_return": {
+       "value": 26.67,
+       "how": "(700.00 + 0.00 + 100.00) / (800.00 + 1,200.00 + 1,000.00) x 100 = 26.6666..."
+      },
+      "cycles": [
+       {
+        "seq": 1,
+        "opened": "2025-01-06",
+        "closed": null,
+        "open": true,
+        "shares": 100.0,
+        "return": {
+         "value": 26.67,
+         "how": "one period holding all three purchases and both sales"
+        }
+       }
+      ],
+      "sales": {
+       "l4": {
+        "sale_return": {
+         "value": 60.71,
+         "how": "150 x 15.00 = 2,250.00 proceeds against 100 x 8.00 + 50 x 12.00 = 1,400.00 cost; 2,250 / 1,400 - 1 = 60.7142...  Weighted across the lots it drew on, not against either lot's price alone."
+        },
+        "since_sale": {
+         "value": -26.67,
+         "until": "today",
+         "date": null,
+         "how": "11.00 / 15.00 - 1 = -26.6666..."
+        }
+       },
+       "l5": {
+        "sale_return": {
+         "value": -25.0,
+         "how": "50 x 9.00 = 450.00 against 50 x 12.00 = 600.00"
+        },
+        "since_sale": {
+         "value": 22.22,
+         "until": "today",
+         "date": null,
+         "how": "11.00 / 9.00 - 1 = 22.2222..."
+        }
+       }
+      }
+     },
+     "must_not_be": {
+      "sale_return_l4": {
+       "value": 87.5,
+       "how": "priced against the oldest lot alone, ignoring the 50 shares that cost $12.00"
+      },
+      "lot_return_l2": {
+       "value": null,
+       "how": "a net of exactly nothing reported as an absence"
+      }
+     }
+    }
+   ],
+   "account": {
+    "value": {
+     "value": 2100.0,
+     "how": "1,000.00 free cash + 1,100.00 at market"
+    }
+   }
+  },
+  {
+   "id": "an-unpriced-holding-darkens-the-account",
+   "why": "One holding with no price must make the account total absent. Treating the missing price as zero understates the account and inflates every weight measured against it — a confident wrong answer in the number a sizing rule binds on.",
+   "story": [
+    "Two holdings. Vellum Press (VELL): 40 shares bought at $25.00 on 2025-04-01, last close $30.00 on 2026-08-07.",
+    "Draycot Rail (DRAY): 10 shares bought at $50.00 on 2025-04-02. No price history is stored for it at all.",
+    "Free cash in this journal is $800.00."
+   ],
+   "cash": 800.0,
+   "securities": [
+    {
+     "ticker": "VELL",
+     "name": "Vellum Press",
+     "cik": 700006,
+     "maps_to_cik": [
+      "VELL"
+     ],
+     "prices": {
+      "VELL": [
+       [
+        "2026-08-07",
+        30.0
+       ]
+      ]
+     },
+     "lots": [
+      {
+       "id": "l1",
+       "seq": 1,
+       "kind": "buy",
+       "date": "2025-04-01",
+       "shares": 40,
+       "price": 25.0
+      }
+     ],
+     "expect": {
+      "shares_held": {
+       "value": 40.0,
+       "how": "40 bought, none sold"
+      },
+      "cost_basis": {
+       "value": 25.0,
+       "how": "one open lot"
+      },
+      "opened_on": {
+       "value": "2025-04-01",
+       "how": "the only purchase"
+      },
+      "bucket": {
+       "value": "holdings",
+       "how": "shares are held"
+      },
+      "price": {
+       "value": 30.0,
+       "ticker": "VELL",
+       "date": "2026-08-07"
+      },
+      "market_value": {
+       "value": 1200.0,
+       "how": "40 x 30.00 — this security's own value is knowable and is served"
+      },
+      "weight": {
+       "value": null,
+       "how": "its own value is known, but the account it would be a share of is not"
+      },
+      "lot_returns": {
+       "l1": {
+        "value": 20.0,
+        "how": "40 x (30.00 - 25.00) = 200.00 on a cost of 1,000.00"
+       }
+      },
+      "position_return": {
+       "value": 20.0,
+       "how": "one lot"
+      },
+      "cycles": [
+       {
+        "seq": 1,
+        "opened": "2025-04-01",
+        "closed": null,
+        "open": true,
+        "shares": 40.0,
+        "return": {
+         "value": 20.0,
+         "how": "one purchase in the period"
+        }
+       }
+      ],
+      "sales": {}
+     },
+     "must_not_be": {
+      "weight": {
+       "value": 60.0,
+       "how": "1,200.00 / 2,000.00 x 100, with the unpriced holding silently counted as nothing"
+      }
+     }
+    },
+    {
+     "ticker": "DRAY",
+     "name": "Draycot Rail",
+     "cik": 700007,
+     "maps_to_cik": [
+      "DRAY"
+     ],
+     "prices": {},
+     "lots": [
+      {
+       "id": "l1",
+       "seq": 1,
+       "kind": "buy",
+       "date": "2025-04-02",
+       "shares": 10,
+       "price": 50.0
+      }
+     ],
+     "expect": {
+      "shares_held": {
+       "value": 10.0,
+       "how": "10 bought, none sold"
+      },
+      "cost_basis": {
+       "value": 50.0,
+       "how": "one open lot — what it cost is known even though what it is worth is not"
+      },
+      "opened_on": {
+       "value": "2025-04-02",
+       "how": "the only purchase"
+      },
+      "bucket": {
+       "value": "holdings",
+       "how": "shares are held"
+      },
+      "price": {
+       "value": null,
+       "ticker": null,
+       "date": null,
+       "how": "no close is stored for DRAY"
+      },
+      "market_value": {
+       "value": null,
+       "how": "no price, so no value — never 0, and never a neighbour's price"
+      },
+      "weight": {
+       "value": null,
+       "how": "no value to take a share of"
+      },
+      "lot_returns": {
+       "l1": {
+        "value": null,
+        "how": "shares are still open and there is no price to mark them at"
+       }
+      },
+      "position_return": {
+       "value": null,
+       "how": "the only lot has no return"
+      },
+      "cycles": [
+       {
+        "seq": 1,
+        "opened": "2025-04-02",
+        "closed": null,
+        "open": true,
+        "shares": 10.0,
+        "return": {
+         "value": null,
+         "how": "an open period with no price cannot be scored"
+        }
+       }
+      ],
+      "sales": {}
+     },
+     "must_not_be": {
+      "market_value": {
+       "value": 0.0,
+       "how": "an unknown price read as free shares"
+      },
+      "position_return": {
+       "value": -100.0,
+       "how": "an unknown price read as a total loss"
+      }
+     }
+    }
+   ],
+   "account": {
+    "value": {
+     "value": null,
+     "how": "one of two holdings has no price, so the total cannot be reached without inventing one"
+    },
+    "reason_names": [
+     "DRAY"
+    ],
+    "must_not_be": {
+     "value": 2000.0,
+     "how": "800.00 + 1,200.00 + nothing for DRAY"
+    }
+   },
+   "override_scorecard": {
+    "compliant": {
+     "n": 1,
+     "n_purchases": 2,
+     "n_unscored": 1,
+     "win_rate": 100,
+     "avg": 20.0,
+     "how": "two purchases, both recorded with the signal, but only VELL's can be scored — DRAY has no price, so its return is not knowable. The average rests on one figure and the panel says so: the population that was counted (2) and the population that was averaged (1) are reported apart. Collapsing them would put a win rate of 100% beside a count of 2."
+    },
+    "override": {
+     "n": 0,
+     "n_purchases": 0,
+     "n_unscored": 0,
+     "win_rate": null,
+     "avg": null,
+     "how": "nothing was overridden"
+    }
+   }
+  },
+  {
+   "id": "four-holding-periods",
+   "why": "Held, closed and held again more than twice. Three finished round trips and one in progress: each period has its own answer, the lifetime figure spans them and is never any of them, and each sale's window ends at the purchase that followed it.",
+   "story": [
+    "Pellow Chemical (PELL), four round trips.",
+    "2024-01-15: bought 100 at $10.00. 2024-04-15: sold all 100 at $13.00 on 'Hit valuation'.",
+    "2024-07-15: bought 80 at $12.00. 2024-10-15: sold all 80 at $9.00 on 'Thesis broke'.",
+    "2025-01-15: bought 60 at $11.00. 2025-04-15: sold all 60 at $22.00 on 'Hit valuation'.",
+    "2025-07-15: bought 40 at $16.00. Still held.",
+    "PELL last closed at $14.00 on 2026-08-07.",
+    "Free cash in this journal is $1,000.00."
+   ],
+   "cash": 1000.0,
+   "securities": [
+    {
+     "ticker": "PELL",
+     "name": "Pellow Chemical",
+     "cik": 700008,
+     "maps_to_cik": [
+      "PELL"
+     ],
+     "prices": {
+      "PELL": [
+       [
+        "2026-08-07",
+        14.0
+       ]
+      ]
+     },
+     "lots": [
+      {
+       "id": "l1",
+       "seq": 1,
+       "kind": "buy",
+       "date": "2024-01-15",
+       "shares": 100,
+       "price": 10.0
+      },
+      {
+       "id": "l2",
+       "seq": 2,
+       "kind": "sell",
+       "date": "2024-04-15",
+       "shares": 100,
+       "price": 13.0,
+       "against": [
+        {
+         "lot": "l1",
+         "shares": 100
+        }
+       ],
+       "reason": "Hit valuation"
+      },
+      {
+       "id": "l3",
+       "seq": 3,
+       "kind": "buy",
+       "date": "2024-07-15",
+       "shares": 80,
+       "price": 12.0
+      },
+      {
+       "id": "l4",
+       "seq": 4,
+       "kind": "sell",
+       "date": "2024-10-15",
+       "shares": 80,
+       "price": 9.0,
+       "against": [
+        {
+         "lot": "l3",
+         "shares": 80
+        }
+       ],
+       "reason": "Thesis broke"
+      },
+      {
+       "id": "l5",
+       "seq": 5,
+       "kind": "buy",
+       "date": "2025-01-15",
+       "shares": 60,
+       "price": 11.0
+      },
+      {
+       "id": "l6",
+       "seq": 6,
+       "kind": "sell",
+       "date": "2025-04-15",
+       "shares": 60,
+       "price": 22.0,
+       "against": [
+        {
+         "lot": "l5",
+         "shares": 60
+        }
+       ],
+       "reason": "Hit valuation"
+      },
+      {
+       "id": "l7",
+       "seq": 7,
+       "kind": "buy",
+       "date": "2025-07-15",
+       "shares": 40,
+       "price": 16.0
+      }
+     ],
+     "expect": {
+      "shares_held": {
+       "value": 40.0,
+       "how": "only the fourth purchase is untouched"
+      },
+      "cost_basis": {
+       "value": 16.0,
+       "how": "40 at $16.00"
+      },
+      "opened_on": {
+       "value": "2025-07-15",
+       "how": "the fourth period's first purchase"
+      },
+      "bucket": {
+       "value": "holdings",
+       "how": "shares are held"
+      },
+      "price": {
+       "value": 14.0,
+       "ticker": "PELL",
+       "date": "2026-08-07"
+      },
+      "market_value": {
+       "value": 560.0,
+       "how": "40 x 14.00"
+      },
+      "weight": {
+       "value": 35.897436,
+       "how": "560.00 / 1,560.00 x 100"
+      },
+      "lot_returns": {
+       "l1": {
+        "value": 30.0,
+        "how": "100 x (13.00 - 10.00) = 300.00 on 1,000.00"
+       },
+       "l3": {
+        "value": -25.0,
+        "how": "80 x (9.00 - 12.00) = -240.00 on 960.00"
+       },
+       "l5": {
+        "value": 100.0,
+        "how": "60 x (22.00 - 11.00) = 660.00 on 660.00"
+       },
+       "l7": {
+        "value": -12.5,
+        "how": "40 x (14.00 - 16.00) = -80.00 on 640.00"
+       }
+      },
+      "position_return": {
+       "value": 19.63,
+       "how": "lifetime: (300.00 - 240.00 + 660.00 - 80.00) / (1,000.00 + 960.00 + 660.00 + 640.00) x 100 = 640 / 3,260 x 100 = 19.6319...; it blends three finished trades into a live one and is never the current position's return"
+      },
+      "cycles": [
+       {
+        "seq": 1,
+        "opened": "2024-01-15",
+        "closed": "2024-04-15",
+        "open": false,
+        "shares": 0.0,
+        "return": {
+         "value": 30.0,
+         "how": "realised"
+        },
+        "exit": {
+         "date": "2024-04-15",
+         "sales": 1,
+         "shares": 100,
+         "price": {
+          "value": 13.0,
+          "how": "100 x 13.00 = 1,300.00, over 100 shares"
+         },
+         "reasons": [
+          {
+           "reason": "Hit valuation",
+           "shares": 100.0,
+           "share": 100.0
+          }
+         ],
+         "how": "share-weighted across every sale that closed the period. The date is the LAST sale's, because that is the day nothing was held — the one thing the final sale settles on its own."
+        }
+       },
+       {
+        "seq": 2,
+        "opened": "2024-07-15",
+        "closed": "2024-10-15",
+        "open": false,
+        "shares": 0.0,
+        "return": {
+         "value": -25.0,
+         "how": "realised"
+        },
+        "exit": {
+         "date": "2024-10-15",
+         "sales": 1,
+         "shares": 80,
+         "price": {
+          "value": 9.0,
+          "how": "80 x 9.00 = 720.00, over 80 shares"
+         },
+         "reasons": [
+          {
+           "reason": "Thesis broke",
+           "shares": 80.0,
+           "share": 100.0
+          }
+         ],
+         "how": "share-weighted across every sale that closed the period. The date is the LAST sale's, because that is the day nothing was held — the one thing the final sale settles on its own."
+        }
+       },
+       {
+        "seq": 3,
+        "opened": "2025-01-15",
+        "closed": "2025-04-15",
+        "open": false,
+        "shares": 0.0,
+        "return": {
+         "value": 100.0,
+         "how": "realised"
+        },
+        "exit": {
+         "date": "2025-04-15",
+         "sales": 1,
+         "shares": 60,
+         "price": {
+          "value": 22.0,
+          "how": "60 x 22.00 = 1,320.00, over 60 shares"
+         },
+         "reasons": [
+          {
+           "reason": "Hit valuation",
+           "shares": 60.0,
+           "share": 100.0
+          }
+         ],
+         "how": "share-weighted across every sale that closed the period. The date is the LAST sale's, because that is the day nothing was held — the one thing the final sale settles on its own."
+        }
+       },
+       {
+        "seq": 4,
+        "opened": "2025-07-15",
+        "closed": null,
+        "open": true,
+        "shares": 40.0,
+        "return": {
+         "value": -12.5,
+         "how": "marked at 14.00"
+        }
+       }
+      ],
+      "sales": {
+       "l2": {
+        "sale_return": {
+         "value": 30.0,
+         "how": "1,300.00 against 1,000.00"
+        },
+        "since_sale": {
+         "value": -7.69,
+         "until": "purchase",
+         "date": "2024-07-15",
+         "how": "12.00 / 13.00 - 1 = -7.6923..."
+        }
+       },
+       "l4": {
+        "sale_return": {
+         "value": -25.0,
+         "how": "720.00 against 960.00"
+        },
+        "since_sale": {
+         "value": 22.22,
+         "until": "purchase",
+         "date": "2025-01-15",
+         "how": "11.00 / 9.00 - 1 = 22.2222...  Selling at 9.00 and buying back at 11.00 is a rule that cost money, and the window says so."
+        }
+       },
+       "l6": {
+        "sale_return": {
+         "value": 100.0,
+         "how": "1,320.00 against 660.00"
+        },
+        "since_sale": {
+         "value": -27.27,
+         "until": "purchase",
+         "date": "2025-07-15",
+         "how": "16.00 / 22.00 - 1 = -27.2727..."
+        }
+       }
+      }
+     },
+     "must_not_be": {
+      "cycle_count": {
+       "value": 1,
+       "how": "one running story instead of four round trips"
+      },
+      "opened_on": {
+       "value": "2024-01-15",
+       "how": "the first purchase this security ever had, three closed holdings ago"
+      }
+     }
+    }
+   ],
+   "account": {
+    "value": {
+     "value": 1560.0,
+     "how": "1,000.00 free cash + 560.00 at market"
+    }
+   },
+   "exit_scorecard": {
+    "Hit valuation": {
+     "n": 2,
+     "n_held": 2,
+     "n_after": 2,
+     "avg_held": 65.0,
+     "avg_after": -17.5,
+     "bought_again": 2,
+     "how": "held: (30.0 + 100.0) / 2. after: (-7.69 + -27.27) / 2 = -17.48, rounded to one place. Both windows ended at a later purchase."
+    },
+    "Thesis broke": {
+     "n": 1,
+     "n_held": 1,
+     "n_after": 1,
+     "avg_held": -25.0,
+     "avg_after": 22.2,
+     "bought_again": 1,
+     "how": "one sale; 22.22 rounded to one place"
+    }
+   },
+   "override_scorecard": {
+    "compliant": {
+     "n": 4,
+     "n_purchases": 4,
+     "n_unscored": 0,
+     "win_rate": 50,
+     "avg": 23.1,
+     "how": "every purchase was recorded with the signal, and every one of them can be scored. Returns 30.0, -25.0, 100.0, -12.5: two above zero of four, and (30.0 - 25.0 + 100.0 - 12.5) / 4 = 23.125 rounded to one place"
+    },
+    "override": {
+     "n": 0,
+     "n_purchases": 0,
+     "n_unscored": 0,
+     "win_rate": null,
+     "avg": null,
+     "how": "nothing was overridden"
+    }
+   }
+  },
+  {
+   "id": "zero-and-negative-cash",
+   "why": "Cash of nothing is an answer, not an absence, and an account on margin is a real account. The boundary is where the account reaches nothing: above it a weight is arithmetic however large, at or below it there is no share to express. None of the three may collapse into each other.",
+   "story": [
+    "10 shares of Sable Textiles (SABL) bought at $10.00 on 2025-05-01. SABL last closed at $20.00 on 2026-08-07, so the holding is worth $200.00.",
+    "The same holding is read against five different answers to the free-cash question."
+   ],
+   "securities": [
+    {
+     "ticker": "SABL",
+     "name": "Sable Textiles",
+     "cik": 700009,
+     "maps_to_cik": [
+      "SABL"
+     ],
+     "prices": {
+      "SABL": [
+       [
+        "2026-08-07",
+        20.0
+       ]
+      ]
+     },
+     "lots": [
+      {
+       "id": "l1",
+       "seq": 1,
+       "kind": "buy",
+       "date": "2025-05-01",
+       "shares": 10,
+       "price": 10.0
+      }
+     ],
+     "expect": {
+      "shares_held": {
+       "value": 10.0,
+       "how": "10 bought, none sold"
+      },
+      "cost_basis": {
+       "value": 10.0,
+       "how": "one open lot"
+      },
+      "opened_on": {
+       "value": "2025-05-01",
+       "how": "the only purchase"
+      },
+      "bucket": {
+       "value": "holdings",
+       "how": "shares are held"
+      },
+      "price": {
+       "value": 20.0,
+       "ticker": "SABL",
+       "date": "2026-08-07"
+      },
+      "market_value": {
+       "value": 200.0,
+       "how": "10 x 20.00"
+      },
+      "lot_returns": {
+       "l1": {
+        "value": 100.0,
+        "how": "10 x (20.00 - 10.00) = 100.00 on a cost of 100.00"
+       }
+      },
+      "position_return": {
+       "value": 100.0,
+       "how": "one lot"
+      },
+      "cycles": [
+       {
+        "seq": 1,
+        "opened": "2025-05-01",
+        "closed": null,
+        "open": true,
+        "shares": 10.0,
+        "return": {
+         "value": 100.0,
+         "how": "one purchase in the period"
+        }
+       }
+      ],
+      "sales": {}
+     }
+    }
+   ],
+   "cash_cases": [
+    {
+     "cash": 0.0,
+     "account": 200.0,
+     "weight": 100.0,
+     "how": "nothing in cash is a stated answer. The account is the holding alone, and the holding is all of it."
+    },
+    {
+     "cash": -199.0,
+     "account": 1.0,
+     "weight": 20000.0,
+     "how": "200.00 of an account of 1.00. Arithmetically true on margin and reported as it stands — the host holds no view that a weight cannot exceed 100."
+    },
+    {
+     "cash": -200.0,
+     "account": 0.0,
+     "weight": null,
+     "how": "the account works out to exactly nothing, so there is no share of it to express. Not a division by zero, and not 0%."
+    },
+    {
+     "cash": -500.0,
+     "account": -300.0,
+     "weight": null,
+     "how": "an account of less than nothing has no share to express"
+    },
+    {
+     "cash": null,
+     "account": null,
+     "weight": null,
+     "account_reason_mentions": "free cash",
+     "how": "the cash question was never answered, so the account is absent for that reason — not because a price is missing"
+    }
+   ]
+  },
+  {
+   "id": "same-day-exit-and-re-entry",
+   "why": "Closing a position and opening a new one on the same day. Two periods that share a date, told apart only by the order the entries were recorded — and the window on the sale has to end at that same-day purchase, not run to today.",
+   "story": [
+    "On 2025-03-01, 50 shares of Orrin Freight (ORRN) were bought at $10.00.",
+    "On 2025-06-01, all 50 were sold at $12.00, on 'Better opportunity'.",
+    "Later the same day, 50 shares were bought back at $12.50.",
+    "ORRN last closed at $9.00 on 2026-08-07.",
+    "Free cash in this journal is $1,000.00."
+   ],
+   "cash": 1000.0,
+   "securities": [
+    {
+     "ticker": "ORRN",
+     "name": "Orrin Freight",
+     "cik": 700010,
+     "maps_to_cik": [
+      "ORRN"
+     ],
+     "prices": {
+      "ORRN": [
+       [
+        "2026-08-07",
+        9.0
+       ]
+      ]
+     },
+     "lots": [
+      {
+       "id": "l1",
+       "seq": 1,
+       "kind": "buy",
+       "date": "2025-03-01",
+       "shares": 50,
+       "price": 10.0
+      },
+      {
+       "id": "l2",
+       "seq": 2,
+       "kind": "sell",
+       "date": "2025-06-01",
+       "shares": 50,
+       "price": 12.0,
+       "against": [
+        {
+         "lot": "l1",
+         "shares": 50
+        }
+       ],
+       "reason": "Better opportunity"
+      },
+      {
+       "id": "l3",
+       "seq": 3,
+       "kind": "buy",
+       "date": "2025-06-01",
+       "shares": 50,
+       "price": 12.5
+      }
+     ],
+     "expect": {
+      "shares_held": {
+       "value": 50.0,
+       "how": "the second purchase"
+      },
+      "cost_basis": {
+       "value": 12.5,
+       "how": "the only open lot"
+      },
+      "opened_on": {
+       "value": "2025-06-01",
+       "how": "the re-entry, which is also the day the first holding ended"
+      },
+      "bucket": {
+       "value": "holdings",
+       "how": "shares are held"
+      },
+      "price": {
+       "value": 9.0,
+       "ticker": "ORRN",
+       "date": "2026-08-07"
+      },
+      "market_value": {
+       "value": 450.0,
+       "how": "50 x 9.00"
+      },
+      "weight": {
+       "value": 31.034483,
+       "how": "450.00 / 1,450.00 x 100"
+      },
+      "lot_returns": {
+       "l1": {
+        "value": 20.0,
+        "how": "50 x (12.00 - 10.00) = 100.00 on 500.00"
+       },
+       "l3": {
+        "value": -28.0,
+        "how": "50 x (9.00 - 12.50) = -175.00 on 625.00"
+       }
+      },
+      "position_return": {
+       "value": -6.67,
+       "how": "(100.00 - 175.00) / (500.00 + 625.00) x 100 = -6.6666..."
+      },
+      "cycles": [
+       {
+        "seq": 1,
+        "opened": "2025-03-01",
+        "closed": "2025-06-01",
+        "open": false,
+        "shares": 0.0,
+        "return": {
+         "value": 20.0,
+         "how": "the sale took the position to nothing, so the period closed — on the same day the next one opened"
+        },
+        "exit": {
+         "date": "2025-06-01",
+         "sales": 1,
+         "shares": 50,
+         "price": {
+          "value": 12.0,
+          "how": "50 x 12.00 = 600.00, over 50 shares"
+         },
+         "reasons": [
+          {
+           "reason": "Better opportunity",
+           "shares": 50.0,
+           "share": 100.0
+          }
+         ],
+         "how": "share-weighted across every sale that closed the period. The date is the LAST sale's, because that is the day nothing was held — the one thing the final sale settles on its own."
+        }
+       },
+       {
+        "seq": 2,
+        "opened": "2025-06-01",
+        "closed": null,
+        "open": true,
+        "shares": 50.0,
+        "return": {
+         "value": -28.0,
+         "how": "the re-entry, marked at 9.00"
+        }
+       }
+      ],
+      "sales": {
+       "l2": {
+        "sale_return": {
+         "value": 20.0,
+         "how": "600.00 against 500.00"
+        },
+        "since_sale": {
+         "value": 4.17,
+         "until": "purchase",
+         "date": "2025-06-01",
+         "how": "the same-day re-purchase ends the window: 12.50 / 12.00 - 1 = 4.1666...  It counts because it was recorded after the sale, which is the only thing that distinguishes them."
+        }
+       }
+      }
+     },
+     "must_not_be": {
+      "cycle_count": {
+       "value": 1,
+       "how": "the same-day close and re-entry collapsed into one holding"
+      },
+      "since_sale_l2": {
+       "value": -25.0,
+       "how": "9.00 / 12.00 - 1 — the window run to today, past a re-purchase made the same day"
+      }
+     }
+    }
+   ],
+   "account": {
+    "value": {
+     "value": 1450.0,
+     "how": "1,000.00 free cash + 450.00 at market"
+    }
+   }
+  },
+  {
+   "id": "overrides-and-the-rule-they-went-against",
+   "why": "The panel that is supposed to be able to indict a rule rather than the person. It counted only the overrides that happened to have a price, so a rule overridden twice and priceable once reported 'overridden once' — and a data gap read as a settled result in the one place it would be believed.",
+   "story": [
+    "Two purchases were made against the signal, both stopped by the same rule — the journal's declared maximum P/E.",
+    "Kaldeen Systems (KLDN): 10 shares at $100.00 on 2025-02-01. KLDN last closed at $130.00 on 2026-08-07, so that override is up 30%.",
+    "Petrel Marine (PTRL): 10 shares at $50.00 on 2025-02-01. No price history is stored for it, so how that override turned out is not knowable.",
+    "One purchase was made with the signal: Sundry Optics (SNDR), 10 shares at $20.00 on 2025-02-01, last close $25.00.",
+    "Free cash in this journal is $1,000.00."
+   ],
+   "cash": 1000.0,
+   "securities": [
+    {
+     "ticker": "KLDN",
+     "name": "Kaldeen Systems",
+     "cik": 700015,
+     "maps_to_cik": [
+      "KLDN"
+     ],
+     "prices": {
+      "KLDN": [
+       [
+        "2026-08-07",
+        130.0
+       ]
+      ]
+     },
+     "lots": [
+      {
+       "id": "l1",
+       "seq": 1,
+       "kind": "buy",
+       "date": "2025-02-01",
+       "shares": 10,
+       "price": 100.0,
+       "override": {
+        "date": "2025-02-01",
+        "kind": "against",
+        "state": "Too expensive",
+        "failed": [
+         {
+          "key": "value:max-pe",
+          "label": "Your maximum P/E"
+         }
+        ],
+        "missing": [],
+        "basis": "live",
+        "as_of": "2025-02-01",
+        "reason": "I think the market is wrong about this one."
+       }
+      }
+     ],
+     "expect": {
+      "shares_held": {
+       "value": 10.0,
+       "how": "10 bought, none sold"
+      },
+      "cost_basis": {
+       "value": 100.0,
+       "how": "one open lot"
+      },
+      "opened_on": {
+       "value": "2025-02-01",
+       "how": "the only purchase"
+      },
+      "bucket": {
+       "value": "holdings",
+       "how": "shares are held"
+      },
+      "price": {
+       "value": 130.0,
+       "ticker": "KLDN",
+       "date": "2026-08-07"
+      },
+      "market_value": {
+       "value": 1300.0,
+       "how": "10 x 130.00"
+      },
+      "weight": {
+       "value": null,
+       "how": "its own value is known; the account it would be a share of is not"
+      },
+      "lot_returns": {
+       "l1": {
+        "value": 30.0,
+        "how": "10 x (130.00 - 100.00) = 300.00 on a cost of 1,000.00"
+       }
+      },
+      "position_return": {
+       "value": 30.0,
+       "how": "one lot"
+      },
+      "cycles": [
+       {
+        "seq": 1,
+        "opened": "2025-02-01",
+        "closed": null,
+        "open": true,
+        "shares": 10.0,
+        "return": {
+         "value": 30.0,
+         "how": "one purchase in the period"
+        }
+       }
+      ],
+      "sales": {}
+     }
+    },
+    {
+     "ticker": "PTRL",
+     "name": "Petrel Marine",
+     "cik": 700016,
+     "maps_to_cik": [
+      "PTRL"
+     ],
+     "prices": {},
+     "lots": [
+      {
+       "id": "l1",
+       "seq": 1,
+       "kind": "buy",
+       "date": "2025-02-01",
+       "shares": 10,
+       "price": 50.0,
+       "override": {
+        "date": "2025-02-01",
+        "kind": "against",
+        "state": "Too expensive",
+        "failed": [
+         {
+          "key": "value:max-pe",
+          "label": "Your maximum P/E"
+         }
+        ],
+        "missing": [],
+        "basis": "live",
+        "as_of": "2025-02-01",
+        "reason": "Same call, different name."
+       }
+      }
+     ],
+     "expect": {
+      "shares_held": {
+       "value": 10.0,
+       "how": "10 bought, none sold"
+      },
+      "cost_basis": {
+       "value": 50.0,
+       "how": "one open lot — what it cost is known even though what it is worth is not"
+      },
+      "opened_on": {
+       "value": "2025-02-01",
+       "how": "the only purchase"
+      },
+      "bucket": {
+       "value": "holdings",
+       "how": "shares are held"
+      },
+      "price": {
+       "value": null,
+       "ticker": null,
+       "date": null,
+       "how": "no close is stored for PTRL"
+      },
+      "market_value": {
+       "value": null,
+       "how": "no price, so no value"
+      },
+      "weight": {
+       "value": null,
+       "how": "no value to take a share of"
+      },
+      "lot_returns": {
+       "l1": {
+        "value": null,
+        "how": "open shares with no price to mark them at. The override is still a decision that happened; only its outcome is unknowable."
+       }
+      },
+      "position_return": {
+       "value": null,
+       "how": "the only lot has no return"
+      },
+      "cycles": [
+       {
+        "seq": 1,
+        "opened": "2025-02-01",
+        "closed": null,
+        "open": true,
+        "shares": 10.0,
+        "return": {
+         "value": null,
+         "how": "an open period with no price cannot be scored"
+        }
+       }
+      ],
+      "sales": {}
+     }
+    },
+    {
+     "ticker": "SNDR",
+     "name": "Sundry Optics",
+     "cik": 700017,
+     "maps_to_cik": [
+      "SNDR"
+     ],
+     "prices": {
+      "SNDR": [
+       [
+        "2026-08-07",
+        25.0
+       ]
+      ]
+     },
+     "lots": [
+      {
+       "id": "l1",
+       "seq": 1,
+       "kind": "buy",
+       "date": "2025-02-01",
+       "shares": 10,
+       "price": 20.0
+      }
+     ],
+     "expect": {
+      "shares_held": {
+       "value": 10.0,
+       "how": "10 bought, none sold"
+      },
+      "cost_basis": {
+       "value": 20.0,
+       "how": "one open lot"
+      },
+      "opened_on": {
+       "value": "2025-02-01",
+       "how": "the only purchase"
+      },
+      "bucket": {
+       "value": "holdings",
+       "how": "shares are held"
+      },
+      "price": {
+       "value": 25.0,
+       "ticker": "SNDR",
+       "date": "2026-08-07"
+      },
+      "market_value": {
+       "value": 250.0,
+       "how": "10 x 25.00"
+      },
+      "weight": {
+       "value": null,
+       "how": "the account is absent, so no share of it can be expressed"
+      },
+      "lot_returns": {
+       "l1": {
+        "value": 25.0,
+        "how": "10 x (25.00 - 20.00) = 50.00 on a cost of 200.00"
+       }
+      },
+      "position_return": {
+       "value": 25.0,
+       "how": "one lot"
+      },
+      "cycles": [
+       {
+        "seq": 1,
+        "opened": "2025-02-01",
+        "closed": null,
+        "open": true,
+        "shares": 10.0,
+        "return": {
+         "value": 25.0,
+         "how": "one purchase in the period"
+        }
+       }
+      ],
+      "sales": {}
+     }
+    }
+   ],
+   "account": {
+    "value": {
+     "value": null,
+     "how": "PTRL has no price, so the total cannot be reached without inventing one"
+    },
+    "reason_names": [
+     "PTRL"
+    ]
+   },
+   "override_scorecard": {
+    "override": {
+     "n": 1,
+     "n_purchases": 2,
+     "n_unscored": 1,
+     "win_rate": 100,
+     "avg": 30.0,
+     "how": "two purchases were made against the signal. Only KLDN's outcome is knowable, so the average and the win rate rest on one figure while the count says two. Reporting a win rate of 100% beside a count of 2 would say the user was right both times, when the second time is simply not known."
+    },
+    "compliant": {
+     "n": 1,
+     "n_purchases": 1,
+     "n_unscored": 0,
+     "win_rate": 100,
+     "avg": 25.0,
+     "how": "the one purchase recorded with the signal, up 25%"
+    }
+   },
+   "kinds": {
+    "against": 2,
+    "without": 0,
+    "unevaluated": 0,
+    "how": "both overrides were taken in the face of a verdict, not in the absence of one — averaging those two kinds together would make a data gap look like defiance"
+   },
+   "per_rule": {
+    "value:max-pe": {
+     "label": "Your maximum P/E",
+     "n": 2,
+     "n_scored": 1,
+     "wins": 1,
+     "avg": 30.0,
+     "how": "the rule was overridden twice and one of those can be scored. Both figures are reported, because 'your maximum P/E kept being overridden and it kept working out' is the finding this panel exists to be able to make — and it cannot be made honestly off a count that silently dropped the override nobody could price."
+    }
+   },
+   "must_not_be": {
+    "per_rule_n": {
+     "value": 1,
+     "how": "the rule overridden twice, counted once, because only one override had a price"
+    }
+   }
+  },
+  {
+   "id": "a-price-entered-by-hand",
+   "why": "A price typed into the journal is the only price for a security the SEC does not match, and it is the one price nobody validated. A positive one has to be used and labelled as undated; a price of nothing, or less than nothing, is not a price at all — served as one it produces a $0 market value, a 0% weight and a -100% on every open share, four confident answers resting on a claim the market never made.",
+   "story": [
+    "Wrenfield Ltd (WRNF) is not matched to a company at the SEC, so nothing has been fetched for it. The user typed a price of $18.00. 25 shares were bought at $12.00 on 2025-06-01.",
+    "Torrance Glass (TRNC) is in the same position, but the price on record for it is $0.00 — typed before the field refused it, or left over from an import.",
+    "Free cash in this journal is $500.00."
+   ],
+   "cash": 500.0,
+   "securities": [
+    {
+     "ticker": "WRNF",
+     "name": "Wrenfield Ltd",
+     "cik": null,
+     "manual_price": 18.0,
+     "maps_to_cik": [],
+     "prices": {},
+     "lots": [
+      {
+       "id": "l1",
+       "seq": 1,
+       "kind": "buy",
+       "date": "2025-06-01",
+       "shares": 25,
+       "price": 12.0
+      }
+     ],
+     "expect": {
+      "shares_held": {
+       "value": 25.0,
+       "how": "25 bought, none sold"
+      },
+      "cost_basis": {
+       "value": 12.0,
+       "how": "one open lot"
+      },
+      "opened_on": {
+       "value": "2025-06-01",
+       "how": "the only purchase"
+      },
+      "bucket": {
+       "value": "holdings",
+       "how": "shares are held"
+      },
+      "price": {
+       "value": 18.0,
+       "ticker": "WRNF",
+       "date": null,
+       "how": "the price entered by hand, which carries no date"
+      },
+      "market_value": {
+       "value": 450.0,
+       "how": "25 x 18.00"
+      },
+      "weight": {
+       "value": 47.368421,
+       "how": "450.00 / 950.00 x 100"
+      },
+      "lot_returns": {
+       "l1": {
+        "value": 50.0,
+        "how": "25 x (18.00 - 12.00) = 150.00 on a cost of 300.00"
+       }
+      },
+      "position_return": {
+       "value": 50.0,
+       "how": "one lot"
+      },
+      "cycles": [
+       {
+        "seq": 1,
+        "opened": "2025-06-01",
+        "closed": null,
+        "open": true,
+        "shares": 25.0,
+        "return": {
+         "value": 50.0,
+         "how": "one purchase in the period"
+        }
+       }
+      ],
+      "sales": {}
+     }
+    }
+   ],
+   "account": {
+    "value": {
+     "value": 950.0,
+     "how": "500.00 free cash + 450.00 at the hand-entered price"
+    }
+   },
+   "refused_price": {
+    "ticker": "TRNC",
+    "name": "Torrance Glass",
+    "manual_price": 0.0,
+    "lots": [
+     {
+      "id": "l1",
+      "seq": 1,
+      "kind": "buy",
+      "date": "2025-06-01",
+      "shares": 25,
+      "price": 12.0
+     }
+    ],
+    "price": {
+     "value": null,
+     "reason_mentions": "not a price"
+    },
+    "market_value": {
+     "value": null,
+     "how": "no price, so no value"
+    },
+    "lot_return": {
+     "value": null,
+     "how": "open shares with nothing to mark them at"
+    },
+    "lot_return_asked_at_zero": {
+     "value": null,
+     "how": "the same answer when a price of nothing is handed straight to the return arithmetic, rather than arriving as an absence. Two layers refuse it, because a zero that reaches the second one from anywhere would report a confident total loss on a position nobody has valued."
+    },
+    "must_not_be": {
+     "market_value": {
+      "value": 0.0,
+      "how": "25 x 0.00 — a holding reported as worth nothing"
+     },
+     "lot_return": {
+      "value": -100.0,
+      "how": "25 x (0.00 - 12.00) on a cost of 300.00 — a total loss nobody observed"
+     }
+    },
+    "how": "A price of nothing on record is refused on read as well as at the field, because a journal written before the field refused it must not still read as a fact."
+   }
+  },
+  {
+   "id": "an-aggregate-is-not-a-sum-of-rounded-parts",
+   "why": "A holding period's return is built from its purchases. Rebuilding each purchase's money from its already-rounded percentage, and then dividing once more, is not the same arithmetic as adding up the money — and it lets a period report a figure its own lots do not add up to. Off in the last place only, which is exactly the kind of wrong number nobody notices.",
+   "story": [
+    "Two purchases of Vasker Minerals (VSKR), both still held: 100 shares at $1.25 on 2025-04-01, and 100 shares at $1.75 on 2025-05-01.",
+    "VSKR last closed at $1.00 on 2026-08-07.",
+    "The two lots return -20.00% and -42.86%. Weighted by what each cost, the position is down 33.33% — but only if the money is added up. Adding the rounded percentages back into money first gives 33.34%.",
+    "Free cash in this journal is $1,000.00."
+   ],
+   "cash": 1000.0,
+   "securities": [
+    {
+     "ticker": "VSKR",
+     "name": "Vasker Minerals",
+     "cik": 700014,
+     "maps_to_cik": [
+      "VSKR"
+     ],
+     "prices": {
+      "VSKR": [
+       [
+        "2026-08-07",
+        1.0
+       ]
+      ]
+     },
+     "lots": [
+      {
+       "id": "l1",
+       "seq": 1,
+       "kind": "buy",
+       "date": "2025-04-01",
+       "shares": 100,
+       "price": 1.25
+      },
+      {
+       "id": "l2",
+       "seq": 2,
+       "kind": "buy",
+       "date": "2025-05-01",
+       "shares": 100,
+       "price": 1.75
+      }
+     ],
+     "expect": {
+      "shares_held": {
+       "value": 200.0,
+       "how": "200 bought, none sold"
+      },
+      "cost_basis": {
+       "value": 1.5,
+       "how": "(100 x 1.25 + 100 x 1.75) / 200 = 300.00 / 200"
+      },
+      "opened_on": {
+       "value": "2025-04-01",
+       "how": "the first purchase of the one open period"
+      },
+      "bucket": {
+       "value": "holdings",
+       "how": "shares are held"
+      },
+      "price": {
+       "value": 1.0,
+       "ticker": "VSKR",
+       "date": "2026-08-07"
+      },
+      "market_value": {
+       "value": 200.0,
+       "how": "200 x 1.00"
+      },
+      "weight": {
+       "value": 16.666667,
+       "how": "200.00 / 1,200.00 x 100"
+      },
+      "lot_returns": {
+       "l1": {
+        "value": -20.0,
+        "how": "100 x (1.00 - 1.25) = -25.00 on a cost of 125.00"
+       },
+       "l2": {
+        "value": -42.86,
+        "how": "100 x (1.00 - 1.75) = -75.00 on a cost of 175.00; -75 / 175 x 100 = -42.857142..."
+       }
+      },
+      "position_return": {
+       "value": -33.33,
+       "how": "(-25.00 - 75.00) / (125.00 + 175.00) x 100 = -100 / 300 x 100 = -33.3333..."
+      },
+      "cycles": [
+       {
+        "seq": 1,
+        "opened": "2025-04-01",
+        "closed": null,
+        "open": true,
+        "shares": 200.0,
+        "return": {
+         "value": -33.33,
+         "how": "the same money, added up once"
+        }
+       }
+      ],
+      "sales": {}
+     },
+     "must_not_be": {
+      "position_return": {
+       "value": -33.34,
+       "how": "125.00 x -0.2000 + 175.00 x -0.4286 = -100.005, divided by 300.00 — the lots' displayed percentages expanded back into money"
+      }
+     }
+    }
+   ],
+   "account": {
+    "value": {
+     "value": 1200.0,
+     "how": "1,000.00 free cash + 200.00 at market"
+    }
+   }
+  },
+  {
+   "id": "recorded-at-nothing",
+   "why": "Shares that cost nothing and a sale that fetched nothing are real entries, not missing ones — but neither can stand for a price. A change measured from nothing has no value, and free shares say nothing about the market. Reporting either as a percentage would put a fabricated figure into the evidence that judges the sell rules, which is the one place it would be believed.",
+   "story": [
+    "Ilbry Holdings (ILBR): 100 shares received at $0.00 on 2025-02-01 and sold at $5.00 on 2025-08-01, on 'Hit valuation'. ILBR last closed at $4.00 on 2026-08-07.",
+    "Kestrel Paper (KSTR): 100 shares bought at $4.00 on 2025-02-01 and written off — sold at $0.00 on 2025-08-01, on 'Thesis broke'. KSTR last closed at $1.00 on 2026-08-07."
+   ],
+   "cash": 1000.0,
+   "securities": [
+    {
+     "ticker": "ILBR",
+     "name": "Ilbry Holdings",
+     "cik": 700011,
+     "maps_to_cik": [
+      "ILBR"
+     ],
+     "prices": {
+      "ILBR": [
+       [
+        "2026-08-07",
+        4.0
+       ]
+      ]
+     },
+     "lots": [
+      {
+       "id": "l1",
+       "seq": 1,
+       "kind": "buy",
+       "date": "2025-02-01",
+       "shares": 100,
+       "price": 0.0
+      },
+      {
+       "id": "l2",
+       "seq": 2,
+       "kind": "sell",
+       "date": "2025-08-01",
+       "shares": 100,
+       "price": 5.0,
+       "against": [
+        {
+         "lot": "l1",
+         "shares": 100
+        }
+       ],
+       "reason": "Hit valuation"
+      }
+     ],
+     "expect": {
+      "shares_held": {
+       "value": 0.0,
+       "how": "100 received, 100 sold"
+      },
+      "cost_basis": {
+       "value": null,
+       "how": "nothing is held"
+      },
+      "opened_on": {
+       "value": null,
+       "how": "no holding is in progress"
+      },
+      "bucket": {
+       "value": "previous",
+       "how": "lots exist and all are closed"
+      },
+      "price": {
+       "value": 4.0,
+       "ticker": "ILBR",
+       "date": "2026-08-07"
+      },
+      "market_value": {
+       "value": null,
+       "how": "no position is held"
+      },
+      "weight": {
+       "value": null,
+       "how": "no position is held"
+      },
+      "lot_returns": {
+       "l1": {
+        "value": null,
+        "how": "the lot cost nothing, so there is no base to express a return against — never 0, and never an infinite gain"
+       }
+      },
+      "position_return": {
+       "value": null,
+       "how": "the only lot has no return"
+      },
+      "cycles": [
+       {
+        "seq": 1,
+        "opened": "2025-02-01",
+        "closed": "2025-08-01",
+        "open": false,
+        "shares": 0.0,
+        "return": {
+         "value": null,
+         "how": "the period's only purchase cost nothing"
+        },
+        "exit": {
+         "date": "2025-08-01",
+         "sales": 1,
+         "shares": 100,
+         "price": {
+          "value": 5.0,
+          "how": "100 x 5.00 = 500.00, over 100 shares"
+         },
+         "reasons": [
+          {
+           "reason": "Hit valuation",
+           "shares": 100.0,
+           "share": 100.0
+          }
+         ],
+         "how": "share-weighted across every sale that closed the period. The date is the LAST sale's, because that is the day nothing was held — the one thing the final sale settles on its own."
+        }
+       }
+      ],
+      "sales": {
+       "l2": {
+        "sale_return": {
+         "value": null,
+         "how": "the shares cost nothing, so what they returned cannot be expressed"
+        },
+        "since_sale": {
+         "value": -20.0,
+         "until": "today",
+         "date": null,
+         "how": "the SALE price is a real 5.00, so the window after it is knowable: 4.00 / 5.00 - 1. What the shares cost has nothing to do with it."
+        }
+       }
+      }
+     },
+     "must_not_be": {
+      "lot_return_l1": {
+       "value": 0.0,
+       "how": "an unexpressable return read as break-even"
+      }
+     }
+    },
+    {
+     "ticker": "KSTR",
+     "name": "Kestrel Paper",
+     "cik": 700012,
+     "maps_to_cik": [
+      "KSTR"
+     ],
+     "prices": {
+      "KSTR": [
+       [
+        "2026-08-07",
+        1.0
+       ]
+      ]
+     },
+     "lots": [
+      {
+       "id": "l1",
+       "seq": 1,
+       "kind": "buy",
+       "date": "2025-02-01",
+       "shares": 100,
+       "price": 4.0
+      },
+      {
+       "id": "l2",
+       "seq": 2,
+       "kind": "sell",
+       "date": "2025-08-01",
+       "shares": 100,
+       "price": 0.0,
+       "against": [
+        {
+         "lot": "l1",
+         "shares": 100
+        }
+       ],
+       "reason": "Thesis broke"
+      }
+     ],
+     "expect": {
+      "shares_held": {
+       "value": 0.0,
+       "how": "100 bought, 100 sold"
+      },
+      "cost_basis": {
+       "value": null,
+       "how": "nothing is held"
+      },
+      "opened_on": {
+       "value": null,
+       "how": "no holding is in progress"
+      },
+      "bucket": {
+       "value": "previous",
+       "how": "lots exist and all are closed"
+      },
+      "price": {
+       "value": 1.0,
+       "ticker": "KSTR",
+       "date": "2026-08-07"
+      },
+      "market_value": {
+       "value": null,
+       "how": "no position is held"
+      },
+      "weight": {
+       "value": null,
+       "how": "no position is held"
+      },
+      "lot_returns": {
+       "l1": {
+        "value": -100.0,
+        "how": "100 x (0.00 - 4.00) = -400.00 on a cost of 400.00. A real total loss, computed, and it must not be confused with the absences above."
+       }
+      },
+      "position_return": {
+       "value": -100.0,
+       "how": "one lot"
+      },
+      "cycles": [
+       {
+        "seq": 1,
+        "opened": "2025-02-01",
+        "closed": "2025-08-01",
+        "open": false,
+        "shares": 0.0,
+        "return": {
+         "value": -100.0,
+         "how": "realised in full"
+        },
+        "exit": {
+         "date": "2025-08-01",
+         "sales": 1,
+         "shares": 100,
+         "price": {
+          "value": 0.0,
+          "how": "100 x 0.00 = 0.00, over 100 shares. A sale recorded at nothing is a real entry and weighs in at nothing"
+         },
+         "reasons": [
+          {
+           "reason": "Thesis broke",
+           "shares": 100.0,
+           "share": 100.0
+          }
+         ],
+         "how": "share-weighted across every sale that closed the period. The date is the LAST sale's, because that is the day nothing was held — the one thing the final sale settles on its own."
+        }
+       }
+      ],
+      "sales": {
+       "l2": {
+        "sale_return": {
+         "value": -100.0,
+         "how": "0.00 proceeds against 400.00 cost"
+        },
+        "since_sale": {
+         "value": null,
+         "until": "today",
+         "date": null,
+         "reason_mentions": "recorded at nothing",
+         "how": "the sale is recorded at nothing, so what the price did against it cannot be expressed. Reporting the move from 0.00 to 1.00 as a percentage would be a fabricated figure in the evidence that judges the sell rules."
+        }
+       }
+      }
+     },
+     "must_not_be": {
+      "since_sale_l2": {
+       "value": -100.0,
+       "how": "an unexpressable window read as a total loss"
+      }
+     }
+    }
+   ],
+   "account": {
+    "value": {
+     "value": 1000.0,
+     "how": "1,000.00 free cash; both securities were closed out, so neither is a holding at market"
+    }
+   },
+   "since_sale_at_no_price": {
+    "sale": "l2",
+    "security": "ILBR",
+    "price": 0.0,
+    "reason_mentions": "is not a price",
+    "must_not_mention": "the purchase on None",
+    "how": "asked with a price of nothing while the window runs to today. Two different things end a window and the reason has to say which — naming a purchase that ends it is a sentence about an entry the user never made, and sends them looking for it. The sentence is the host's own about the price, not a second one worded here, so what the return column says and what the price screen says are one answer."
+   },
+   "exit_scorecard": {
+    "Hit valuation": {
+     "n": 1,
+     "n_held": 0,
+     "n_after": 1,
+     "avg_held": null,
+     "avg_after": -20.0,
+     "bought_again": 0,
+     "how": "one sale, and what it returned while held cannot be expressed because the shares cost nothing. The count is a true figure on its own — the sale happened — and the average beside it is absent rather than a guess."
+    },
+    "Thesis broke": {
+     "n": 1,
+     "n_held": 1,
+     "n_after": 0,
+     "avg_held": -100.0,
+     "avg_after": null,
+     "bought_again": 0,
+     "how": "the mirror: what it returned while held is a real -100%, and what happened after cannot be expressed because the sale itself is recorded at nothing"
+    }
+   },
+   "override_scorecard": {
+    "compliant": {
+     "n": 1,
+     "n_purchases": 2,
+     "n_unscored": 1,
+     "win_rate": 0,
+     "avg": -100.0,
+     "how": "two purchases; ILBR's cost nothing so it has no return, KSTR's is a real total loss. One scored of two counted, no wins."
+    },
+    "override": {
+     "n": 0,
+     "n_purchases": 0,
+     "n_unscored": 0,
+     "win_rate": null,
+     "avg": null,
+     "how": "nothing was overridden"
+    }
+   }
+  }
+ ]
 }

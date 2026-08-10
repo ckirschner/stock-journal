@@ -43,7 +43,7 @@ deserve capital is the strategy's business, and this module never asks.
 from __future__ import annotations
 
 import copy
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 
 EXIT_REASONS = [
     "Thesis broke",
@@ -61,7 +61,20 @@ def _today():
 
 
 def _stamp():
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    """When something was recorded, on the calendar the user was standing on.
+
+    The same decision `dated.stamp` makes, for the same reason and at the same
+    time: a lot's `recorded`, a snapshot's `frozen` and a note's date all sit
+    beside dates the user typed — `lot["date"]`, a pin, `today` — and a stamp
+    on a different calendar is a stamp that reads a day out at the boundary.
+    A note written at seven in the evening west of Greenwich rendered as
+    tomorrow, which is a date that has not happened yet.
+
+    Left as UTC this would also keep the view guessing: ui/app.js compares a
+    snapshot's `frozen` against a purchase date to spot a backdated entry, and
+    had to allow a whole day of slack for the skew.
+    """
+    return datetime.now().astimezone().isoformat(timespec="seconds")
 
 
 def recorded_date(value, what: str) -> str:
@@ -779,10 +792,57 @@ def sell_lots(security: dict, decision: dict | None, reason: str,
 # with shares still open cannot be scored without a current price, and a
 # position that silently returned 0% would be the most confidently wrong
 # number on the screen.
+#
+# A return that cannot be worked out says WHY, in the shape every other figure
+# the host reports uses: {status: "known", value} or {status: "absent",
+# reason}. It used to be a bare `float | None`, and five different facts came
+# back as the same None — nobody has fetched a price, the price on record is
+# not a price, this purchase was recorded at nothing, one purchase of five
+# was, the security was never bought at all. Those have different fixes and
+# different blame, and a reader given one em-dash for all of them cannot act
+# on any of them.
+#
+# The price arrives as the host's own price view rather than as a bare float,
+# and that is the structural half. `price_view` already words each absence
+# precisely — naming the sibling share classes that ARE priced, or saying
+# that the figure on record is not a price and how to clear it — and those
+# sentences were dropped at the call site and re-guessed in the browser,
+# where the guess was wrong for every absence except one. The number cannot
+# travel without its reason if there is no way to hand over the number alone.
+
+def _known(value, provenance=None) -> dict:
+    return {"status": "known", "value": value,
+            "provenance": list(provenance or [])}
+
+
+def _absent(reason: str) -> dict:
+    return {"status": "absent", "reason": reason}
+
+
+def _price_of(price) -> tuple:
+    """(figure, why there isn't one) from the host's price view.
+
+    A bare number is still accepted, because a caller with a price and no
+    view of it is not lying about anything — it just has a duller sentence to
+    offer when there is nothing there.
+    """
+    if isinstance(price, dict):
+        value = price.get("value")
+        if value is None or float(value) <= 0:
+            return None, (price.get("reason")
+                          or "no price is on record for this security")
+        return float(value), None
+    if price is None:
+        return None, "no price is on record for this security"
+    if float(price) <= 0:
+        return None, (f"the price on record is {float(price):g}, which is "
+                      "not a price")
+    return float(price), None
+
 
 def _gain_and_cost(security: dict, lot: dict, price):
-    """One acquisition as (gain, cost) in currency, or None when it cannot be
-    worked out honestly.
+    """One acquisition as (gain, cost) in currency, or an absence with the
+    reason it could not be worked out honestly.
 
     The realised part comes from the sales that drew on this lot, at the price
     each of them got. The open part is marked at the price passed in. A lot
@@ -796,7 +856,10 @@ def _gain_and_cost(security: dict, lot: dict, price):
     """
     cost = float(lot["shares"]) * float(lot["price"])
     if cost <= 0:
-        return None
+        return _absent(
+            f'the purchase on {lot["date"]} is recorded at '
+            f'{float(lot["price"]):g} a share, so there is nothing to measure '
+            "a change against — check what it actually cost")
     gain, sold = 0.0, 0.0
     for sale in lots(security, "sell"):
         for alloc in sale.get("against") or []:
@@ -811,24 +874,33 @@ def _gain_and_cost(security: dict, lot: dict, price):
         # one. Marking them at zero would report a confident -100% on a
         # position nobody has valued, which is the most believable wrong number
         # this module can produce.
-        if price is None or float(price) <= 0:
-            return None
-        gain += left * (float(price) - float(lot["price"]))
+        mark, why = _price_of(price)
+        if mark is None:
+            return _absent(f"{left:g} of these shares are still held and "
+                           f"{why}")
+        gain += left * (mark - float(lot["price"]))
     return gain, cost
 
 
-def lot_return(security: dict, lot: dict, price) -> float | None:
-    """One acquisition's return, in percent, or None when it cannot be
-    computed honestly."""
+def _is_absent(x) -> bool:
+    return isinstance(x, dict) and x.get("status") == "absent"
+
+
+def lot_return(security: dict, lot: dict, price) -> dict:
+    """One acquisition's return, in percent, or absent with the reason."""
     got = _gain_and_cost(security, lot, price)
-    return None if got is None else round(got[0] / got[1] * 100, 2)
+    if _is_absent(got):
+        return got
+    return _known(round(got[0] / got[1] * 100, 2))
 
 
-def _weighted(security: dict, buys: list[dict], price) -> float | None:
+def _weighted(security: dict, buys: list[dict], price, whole: str) -> dict:
     """Several acquisitions as one figure, weighted by what each cost.
 
     Absent if any of them is, because a subset average presented as the whole
-    is a fabrication.
+    is a fabrication — and the absence names the purchase that could not be
+    scored, because with five buys in a period "this cannot be worked out" on
+    its own leaves nobody knowing which one to look at.
 
     Summed as money and divided once, rather than as each lot's already-rounded
     percentage re-expanded against its cost. The old arrangement made the
@@ -840,18 +912,22 @@ def _weighted(security: dict, buys: list[dict], price) -> float | None:
     total_cost, total_gain = 0.0, 0.0
     for lot in buys:
         got = _gain_and_cost(security, lot, price)
-        if got is None:
-            return None
+        if _is_absent(got):
+            return _absent(
+                f'{whole} cannot be worked out: {got["reason"]}. Averaging '
+                "the purchases that could be scored would present part of it "
+                "as the whole.")
         total_gain += got[0]
         total_cost += got[1]
     if total_cost <= 0:
-        return None
-    return round(total_gain / total_cost * 100, 2)
+        return _absent(f"no purchase of this security is on record, so "
+                       f"{whole} is not a question with an answer yet")
+    return _known(round(total_gain / total_cost * 100, 2))
 
 
-def cycle_return(security: dict, cycle: dict, price) -> float | None:
+def cycle_return(security: dict, cycle: dict, price) -> dict:
     """What one holding period returned, weighted by what each purchase in it
-    cost.
+    cost — or absent, saying which purchase stopped it and why.
 
     This is the figure a round trip is judged by, and it is per period rather
     than per security on purpose: a name bought, closed at a loss and bought
@@ -859,10 +935,11 @@ def cycle_return(security: dict, cycle: dict, price) -> float | None:
     closed period is entirely realised and needs no price; an open one is
     marked at the price passed in, and is absent without one.
     """
-    return _weighted(security, cycle.get("buys") or [], price)
+    return _weighted(security, cycle.get("buys") or [], price,
+                     "what this holding period returned")
 
 
-def position_return(security: dict, price) -> float | None:
+def position_return(security: dict, price) -> dict:
     """The security's return over its whole life — every lot it ever had,
     across every holding period, weighted by what each one cost.
 
@@ -872,10 +949,11 @@ def position_return(security: dict, price) -> float | None:
     would read as the current position's return if it were put in that
     column.
     """
-    return _weighted(security, lots(security, "buy"), price)
+    return _weighted(security, lots(security, "buy"), price,
+                     "what this security has returned over its whole life")
 
 
-def sale_return(security: dict, sale: dict) -> float | None:
+def sale_return(security: dict, sale: dict) -> dict:
     """What the shares in one sale returned while they were held, weighted
     across the lots it drew on."""
     cost, proceeds = 0.0, 0.0
@@ -883,13 +961,95 @@ def sale_return(security: dict, sale: dict) -> float | None:
     for alloc in sale.get("against") or []:
         lot = by_id.get(alloc.get("lot"))
         if lot is None:
-            return None
+            # Not a data gap. The sale points at a purchase that is not in
+            # the record, which is the record contradicting itself, and it
+            # reads differently from a price nobody has fetched.
+            return _absent(f'this sale draws on lot "{alloc.get("lot")}", '
+                           "which is not a purchase this journal holds")
         n = float(alloc.get("shares") or 0)
         cost += n * float(lot["price"])
         proceeds += n * float(sale["price"])
     if cost <= 0:
+        return _absent("the purchases this sale drew on are recorded at "
+                       "nothing, so there is no base to express a return "
+                       "against")
+    return _known(round((proceeds / cost - 1) * 100, 2))
+
+
+def cycle_exit(security: dict, cycle: dict) -> dict | None:
+    """How a holding period ended: what it got out at on average, when
+    nothing was left, and every reason given along the way.
+
+    None for a period still open. An open period may hold trims, and a trim
+    is not an ending — reporting the last trim's price as this holding's exit
+    would put a conclusion on a position still being held.
+
+    **The price is share-weighted across every sale that closed the period.**
+    The last sale's price is one sliver's price: sell ninety at $150 and the
+    final ten at $55 and it reports $55 for a holding that realised $140.50.
+    Worse, it sat on the same strip as a return computed from all the sales,
+    so the card contradicted its own arithmetic and left the reader to work
+    out which half to believe.
+
+    **The date is the last sale's**, because that is the day nothing was
+    held — the one thing the final sliver genuinely does settle.
+
+    **Every reason is kept.** A position trimmed on a risk limit and closed
+    on a broken thesis gave two answers and both are true; picking one loses
+    which shares each was about, and joining them into a sentence loses the
+    weights. Each carries the shares it accounts for, so a reason behind 5%
+    of an exit cannot read like the reason behind all of it.
+
+    Absent, with its reason, wherever the mean cannot be built honestly — a
+    sale recorded at nothing makes the whole mean absent rather than dragging
+    it toward zero. That is the rule `_weighted` obeys one level up, and for
+    the same reason: an average over the sales that happened to have a price
+    is a subset presented as the whole.
+    """
+    if cycle.get("open") or not cycle.get("sells"):
         return None
-    return round((proceeds / cost - 1) * 100, 2)
+    sells = list(cycle["sells"])
+    shares = round(sum(float(s.get("shares") or 0) for s in sells), 8)
+
+    reasons: list[dict] = []
+    for sale in sells:
+        text = sale.get("reason") or "Not stated"
+        hit = next((r for r in reasons if r["reason"] == text), None)
+        if hit is None:
+            reasons.append({"reason": text,
+                            "shares": float(sale.get("shares") or 0)})
+        else:
+            hit["shares"] = round(hit["shares"]
+                                  + float(sale.get("shares") or 0), 8)
+    for r in reasons:
+        r["share"] = round(r["shares"] / shares * 100, 1) if shares else None
+
+    # A sale recorded at nothing is a real entry and goes into the mean at
+    # nothing, which is what the position actually got for those shares. It
+    # is the same distinction the rest of this module already draws: a sale
+    # at nought is a fact `sale_return` reads as −100%, while a sale with no
+    # price at all is a figure nobody recorded. Only the second is an
+    # absence, and only the second could make the mean a fabrication.
+    missing = [s for s in sells if s.get("price") is None]
+    if not shares:
+        exit_price = _absent("the sales that closed this holding are recorded "
+                             "for no shares, so there is nothing to weight a "
+                             "price across")
+    elif missing:
+        exit_price = _absent(
+            f'the sale on {missing[0]["date"]} has no price on the record, '
+            "so what this holding got out at cannot be worked out. Averaging "
+            "the sales that do have one would be part of the exit presented "
+            "as all of it.")
+    else:
+        exit_price = _known(
+            round(sum(float(s["price"]) * float(s.get("shares") or 0)
+                      for s in sells) / shares, 4),
+            [f'{float(s.get("shares") or 0):g} at '
+             f'{float(s["price"]):,.2f} on {s["date"]}' for s in sells])
+
+    return {"date": cycle["closed"], "sales": len(sells), "shares": shares,
+            "price": exit_price, "reasons": reasons}
 
 
 def bought_again_after(security: dict, sale: dict) -> dict | None:
@@ -940,10 +1100,10 @@ def since_sale(security: dict, sale: dict, price) -> dict:
     and only one of them is true.
     """
     back = bought_again_after(security, sale)
+    mark, why = _price_of(price)
     end = {"until": "purchase", "date": back["date"],
            "price": float(back["price"])} if back else \
-        {"until": "today", "date": None,
-         "price": None if price is None else float(price)}
+        {"until": "today", "date": None, "price": mark}
     sold_at = sale.get("price")
     if sold_at is None:
         return {**end, "pct": None,
@@ -953,8 +1113,13 @@ def since_sale(security: dict, sale: dict, price) -> dict:
                 "reason": "the sale is recorded at nothing, so what the price "
                           "did against it cannot be expressed"}
     if end["price"] is None:
+        # The host's own sentence, which names the sibling share classes that
+        # ARE priced or says the figure on record is not a price. "No current
+        # price is known" was true and useless — it could not tell a security
+        # nobody has fetched from one whose price was typed as nought.
         return {**end, "pct": None,
-                "reason": "no current price is known for this security"}
+                "reason": why or "no current price is known for this "
+                                 "security"}
     if end["price"] <= 0:
         # Two different things end a window, and the reason has to say which.
         # Blaming "the purchase on None" when the window runs to today names an
@@ -989,6 +1154,12 @@ def override_scorecard(securities: list[dict], price_of) -> dict:
     would make a data gap look like defiance.
     """
     overrides, compliant = [], []
+    # Per population, not one tally over the journal. The two counts beside
+    # them are per population, so a single shared list states one number and
+    # itemises a different one — and, worse, prints a compliant purchase's
+    # reason under Overrides, which is the panel attributing a decision to
+    # the wrong side of the very line it exists to measure.
+    unscored = {"override": {}, "compliant": {}}
     counted = {"override": 0, "compliant": 0}
     kinds = {"against": 0, "without": 0, "unevaluated": 0}
     reconstructed = 0
@@ -997,7 +1168,11 @@ def override_scorecard(securities: list[dict], price_of) -> dict:
         price = price_of(s)
         for lot in lots(s, "buy"):
             r = lot_return(s, lot, price)
+            scored = None if _is_absent(r) else r["value"]
             ov = lot.get("override")
+            if _is_absent(r):
+                side = unscored["override" if ov else "compliant"]
+                side[r["reason"]] = side.get(r["reason"], 0) + 1
             if ov:
                 kinds[ov.get("kind", "against")] = \
                     kinds.get(ov.get("kind", "against"), 0) + 1
@@ -1005,23 +1180,24 @@ def override_scorecard(securities: list[dict], price_of) -> dict:
                     reconstructed += 1
             counted["override" if ov else "compliant"] += 1
             # Every purchase is counted; only the ones that can be scored are
-            # averaged. A purchase with no price is a real decision that
-            # happened and a return that is not knowable, and the two have to
-            # be reported apart — see the population figures below.
+            # averaged. A purchase that cannot be scored is a real decision
+            # that happened and a return that is not knowable, and the two
+            # have to be reported apart — see the population figures below,
+            # and `unscored`, which says why rather than guessing.
             for cite in (ov or {}).get("failed", []):
                 b = per_rule.setdefault(
                     cite["key"], {"label": cite.get("label") or cite["key"],
                                   "n": 0, "n_scored": 0, "wins": 0,
                                   "avg": None, "returns": []})
                 b["n"] += 1
-                if r is not None:
+                if scored is not None:
                     b["n_scored"] += 1
-                    b["returns"].append(r)
-                    if r > 0:
+                    b["returns"].append(scored)
+                    if scored > 0:
                         b["wins"] += 1
-            if r is None:
+            if scored is None:
                 continue
-            (overrides if ov else compliant).append(r)
+            (overrides if ov else compliant).append(scored)
     for b in per_rule.values():
         b["avg"] = round(sum(b["returns"]) / len(b["returns"]), 1) \
             if b["returns"] else None
@@ -1034,14 +1210,31 @@ def override_scorecard(securities: list[dict], price_of) -> dict:
     # last place a partial population may pass for the whole.
     return {
         "override": {**_summarise(overrides), "n_purchases": counted["override"],
-                     "n_unscored": counted["override"] - len(overrides)},
+                     "n_unscored": counted["override"] - len(overrides),
+                     "unscored": _why_unscored(unscored["override"])},
         "compliant": {**_summarise(compliant),
                       "n_purchases": counted["compliant"],
-                      "n_unscored": counted["compliant"] - len(compliant)},
+                      "n_unscored": counted["compliant"] - len(compliant),
+                      "unscored": _why_unscored(unscored["compliant"])},
         "kinds": kinds,
         "reconstructed_overrides": reconstructed,
         "per_rule": per_rule,
     }
+
+
+def _why_unscored(tally: dict) -> list[dict]:
+    """Why the purchases that could not be scored could not be, and how many
+    of each — commonest first.
+
+    Why, and not just how many. The panel used to say flatly that they "have
+    no price", which the engine agreed with in its own docstring, so neither
+    of them could catch it: a purchase recorded at $0.00 was reported as one
+    with no price, sending the reader to fetch data that would never fix it.
+    In the one panel that is supposed to be able to indict a rule, an
+    invented reason is the last thing that may pass for a finding.
+    """
+    return [{"reason": why, "n": n}
+            for why, n in sorted(tally.items(), key=lambda kv: (-kv[1], kv[0]))]
 
 
 def exit_scorecard(securities: list[dict], price_of) -> dict:
@@ -1065,8 +1258,8 @@ def exit_scorecard(securities: list[dict], price_of) -> dict:
                                 "bought_again": 0, "_held": [], "_after": []})
             b["n"] += 1
             held = sale_return(s, sale)
-            if held is not None:
-                b["_held"].append(held)
+            if not _is_absent(held):
+                b["_held"].append(held["value"])
             after = since_sale(s, sale, price)
             if after["until"] == "purchase":
                 b["bought_again"] += 1

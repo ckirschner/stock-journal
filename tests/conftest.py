@@ -62,15 +62,28 @@ def written_on(monkeypatch):
 
     Leaving the block restores the real clock, so a test can lay down a
     history and then write today's entry the way the app does.
+
+    `at(day)` writes at noon on the machine's own calendar, which is what the
+    real stamp records. It used to be noon UTC, and that is why no test in
+    this suite could see the day-boundary bug: noon UTC lands on the same
+    calendar day from UTC-11 to UTC+11, so the whole suite passed identically
+    at every offset. A fixture that cannot express the failure cannot test
+    for it. `at_local(day, hour)` is for the tests that need the edges.
     """
     import contextlib
+    from datetime import datetime
+
     from engine import dated
     real = dated.stamp
 
+    def local(day, hour=12, minute=0):
+        return (datetime.fromisoformat(f"{day}T00:00:00")
+                .replace(hour=hour, minute=minute)
+                .astimezone().isoformat(timespec="seconds"))
+
     @contextlib.contextmanager
-    def at(day):
-        monkeypatch.setattr(dated, "stamp",
-                            lambda: f"{day}T12:00:00+00:00")
+    def at(day, hour=12, minute=0):
+        monkeypatch.setattr(dated, "stamp", lambda: local(day, hour, minute))
         try:
             yield
         finally:
@@ -86,11 +99,15 @@ def entered(security, day=None, **values):
     *when* it was on record should take the `written_on` fixture instead,
     which is scoped by pytest rather than by a try/finally here.
     """
+    from datetime import datetime
+
     from engine import dated, hand_entered
     real = dated.stamp
     try:
         if day:
-            dated.stamp = lambda: f"{day}T12:00:00+00:00"
+            dated.stamp = lambda: (
+                datetime.fromisoformat(f"{day}T12:00:00")
+                .astimezone().isoformat(timespec="seconds"))
         for eid, v in values.items():
             hand_entered.record(security, eid, v)
     finally:

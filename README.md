@@ -344,6 +344,20 @@ override. **Exits are grouped per sale**, because the reason is given at the
 sale, and a position trimmed on a risk limit and closed on a broken thesis
 gave two different answers.
 
+**A holding closed in stages is described by all of it, not by its last
+sale.** Sell 90 shares at $150 and the final 10 at $55 and the exit price is
+$140.50 — share-weighted across every sale that closed the period — not $55,
+which is what one sliver got. The date is still the last sale's, because that
+is the day nothing was held. Every reason given is shown, each carrying the
+share of the exit it accounts for: two answers were given and both are true,
+and picking one loses which shares each was about.
+
+**A return that cannot be worked out says why.** Every return is a figure or
+an absence with a reason, never a bare dash. "Nobody has fetched a price for
+this" and "the 2 February purchase is recorded at $0.00" are different facts
+with different fixes — one is solved by fetching and the other never will be
+— and the panel that judges your rules used to tell you to fetch for both.
+
 **Return since exit stops when you buy again.** A closed position keeps being
 priced, because watching what happens next is the only way to find out
 whether a sell rule works — but once you own the name again, the move from
@@ -480,6 +494,28 @@ valuation, a typed figure. None of them can be edited, none can be deleted,
 and none can be given a date by the thing writing it: there is no parameter
 to backdate an entry with, which is what makes "what did I know then" a
 question the journal can answer honestly.
+
+**The day an entry was written is your day, not the clock in Greenwich.**
+Every date in the journal is one you typed or read — a purchase date, a sale
+date, the day being reconstructed — so the day an entry was recorded on has
+to be on the same calendar, or the two disagree for part of every day. They
+did: a thesis written at seven in the evening in California was invisible to
+a purchase dated that same evening, and a note written on a Tokyo morning
+rendered as the day before. Records written before this carry the old stamp
+and keep reporting exactly the day they always reported; nothing already
+written is restated.
+
+**A price says which day the market set it.** There is no rule here about
+how old is too old, because that is a strategy's judgement and not the
+program's — a screen built on three-year average earnings barely notices a
+week-old close and a rule about position size notices a month. So the age is
+always stated, on the price and on everything built from it: what the holding
+is worth, its share of the account, the account total. A strategy that cares
+declares its own limit and compares against the count the host reports. And
+where a price series has *ended* — delisted, or the symbol reassigned — that
+is a fact rather than a judgement about age, and it is said wherever the
+price appears. The last close of a dead series is the last price it ever had,
+not what it trades at.
 
 ## Where your data lives
 
@@ -633,10 +669,12 @@ with Windows 10 and 11, so the build stays around 20 MB rather than the
 - **Three of the four strategies.** Graham ships; Buffett, Lynch and Discount
   Closure do not. The rulesets in `dev_reference_docs/legacy-profiles/` are
   the input to writing them.
-- **A risk-free rate.** One strategy test — the earnings yield against what a
-  government bond pays — needs a number that is in no filing and is not price
-  data, and nothing here can be told it. The measure reads absent, which is
-  honest, and the test never passes.
+- **A fetched risk-free rate.** One Graham test compares the earnings yield
+  against what a government bond pays, and nothing here fetches that number —
+  it is in no filing and it is not price data. The rate is a setting on the
+  strategy, shipped at a starting figure, and it is the one value in the
+  program that goes wrong by sitting still. Changing it is recorded on the
+  journal's rule-change record like any other rule change.
 - **Adding to a position, in the interface.** The lot record and the engine
   serve several buys and partial sales against named lots, but the screens
   offer no way to add to a position that is already open — that carries the

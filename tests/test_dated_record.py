@@ -14,11 +14,16 @@ The judgement record has its own file. This one covers the substrate all
 four share and the three that were slots until now.
 """
 
+import contextlib
+import time
+from datetime import date, datetime
+
 import pytest
 from conftest import balance_face, dur, entered, filing, inst
 
 from engine import (dated, expected_value, facts_store, hand_entered,
-                    journals, portfolio, price_store, thesis, valuation)
+                    journals, judgements, portfolio, price_store, thesis,
+                    valuation)
 
 from app import Api
 
@@ -543,3 +548,189 @@ class TestSharedWhereItIsTheSameQuestion:
         assert thesis.standing(s, today=today)["cautions"]
         assert valuation.standing(s, today=today)["cautions"]
         assert hand_entered.reading(s, "fcf_ttm")["cautions"] == []
+
+
+# -- the day the writer was standing on ---------------------------------------
+
+class TestOneCalendarNotTwo:
+    """`recorded` and `as_of` are compared against each other, so they have to
+    be the same calendar.
+
+    Every other date in this program is local: a purchase date, a sale date, a
+    pin, `today`. `recorded` was the only one derived from somewhere else, and
+    for part of every day the two calendars disagree — so an evening's work
+    west of Greenwich was invisible to a purchase dated that same evening, and
+    a morning's work east of it was served to a reconstruction of the day
+    before. Both silently, which is the failure the whole record exists to
+    refuse: hindsight entering a reconstruction in one direction, and a
+    permanent "bought with no thesis" frozen onto a lot in the other.
+
+    These tests force a timezone and a wall-clock instant, because the bug is
+    invisible at noon UTC — which is exactly where every other fixture in this
+    suite writes, and why 808 tests passed against the broken version at every
+    offset from UTC-11 to UTC+14.
+    """
+
+    WEST, EAST = "America/Los_Angeles", "Asia/Tokyo"
+
+    @staticmethod
+    @contextlib.contextmanager
+    def clock(monkeypatch, zone, local_iso):
+        """The machine in `zone`, with the wall clock at `local_iso` local.
+
+        The real `stamp` runs — only the instant and the offset are pinned —
+        so this exercises the production clock rather than a fixture standing
+        in for it. `now(tz)` answers the same instant either way, so the same
+        test drives a UTC stamp and a local one and can tell them apart.
+        """
+        monkeypatch.setenv("TZ", zone)
+        time.tzset()
+        wall = datetime.fromisoformat(local_iso)
+
+        class Clock(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                here = wall.astimezone()
+                return here if tz is None else here.astimezone(tz)
+
+        monkeypatch.setattr(dated, "datetime", Clock)
+        monkeypatch.setattr(portfolio, "datetime", Clock)
+        try:
+            yield
+        finally:
+            time.tzset()
+
+    # Written through each record's own public write, because the guarantee
+    # is about the substrate and all four sit on it.
+    WRITES = {
+        "thesis": lambda s: thesis.amend(s, "A toll road.", "Take rate <2%."),
+        "valuations": lambda s: valuation.claim(s, "reverse_dcf", dict(DCF)),
+        "hand_entered": lambda s: hand_entered.record(s, "fcf_ttm", 149.0),
+        "judgements": lambda s: judgements.assess(
+            s, "moat_durability", "pass", "Regulated crossing."),
+    }
+
+    @pytest.mark.parametrize("key", sorted(WRITES))
+    def test_an_evening_entry_is_in_force_for_that_same_evening(
+            self, monkeypatch, key):
+        """West of Greenwich, 19:30 is already tomorrow in UTC.
+
+        A thesis written on the evening of the fifth, and a purchase dated the
+        fifth, are the same day to the person who did both. Stamped in UTC the
+        entry lands on the sixth and the purchase cannot see it — and what the
+        purchase freezes is append-only, so "bought with no thesis" would be
+        permanent and there is no entry that corrects it.
+        """
+        s = {}
+        with self.clock(monkeypatch, self.WEST, "2026-08-05T19:30:00"):
+            self.WRITES[key](s)
+        entry = s[key][0]
+        assert dated.day_of(entry) == "2026-08-05", entry["recorded"]
+        assert dated.in_force(s, key, as_of="2026-08-05") is not None
+
+    @pytest.mark.parametrize("key", sorted(WRITES))
+    def test_a_morning_entry_is_withheld_from_the_day_before(
+            self, monkeypatch, key):
+        """East of Greenwich, 07:00 is still yesterday in UTC — the worse
+        direction, because it is hindsight presenting itself as something that
+        was on record at the time. The module's own docstring promises exactly
+        this cannot happen."""
+        s = {}
+        with self.clock(monkeypatch, self.EAST, "2026-08-10T07:00:00"):
+            self.WRITES[key](s)
+        entry = s[key][0]
+        assert dated.day_of(entry) == "2026-08-10", entry["recorded"]
+        assert dated.in_force(s, key, as_of="2026-08-09") is None
+
+    def test_a_purchase_that_evening_freezes_that_evening_s_thesis(
+            self, api, monkeypatch):
+        """The consequence that cannot be undone, end to end through the Api.
+
+        A lot's frozen thesis is written once and there is no path that
+        corrects it — `_dated_entry` is deliberately the only way in. A one-day
+        skew therefore writes a permanent falsehood into the record the whole
+        product exists to keep honest, and it also breaks the override
+        arithmetic: a purchase frozen against no thesis cannot be graded
+        against a falsifier that was in fact standing.
+        """
+        idea(api)
+        with self.clock(monkeypatch, self.WEST, "2026-08-05T19:30:00"):
+            assert api.amend_thesis("SYN", "A toll road.", "Take rate <2%.")["ok"]
+            buy(api, when="2026-08-05")
+        frozen = lots_of()[0]["snapshot"]["thesis"]
+        assert frozen is not None, "the evening's thesis was not on record"
+        assert frozen["seq"] == 1
+
+    def test_nothing_is_ever_dated_after_today(self, monkeypatch):
+        """A record that says you wrote something tomorrow is a record the
+        reader stops trusting, and it is what a UTC stamp renders west of
+        Greenwich for the last hours of every day."""
+        s = {}
+        with self.clock(monkeypatch, self.WEST, "2026-08-05T23:59:00"):
+            thesis.amend(s, "A toll road.", "Take rate <2%.")
+            today = date.today().isoformat()
+        assert dated.day_of(s["thesis"][0]) == "2026-08-05"
+        assert dated.day_of(s["thesis"][0]) <= today
+
+    def test_a_thesis_written_the_morning_after_an_exit_is_not_called_stale(
+            self, api, monkeypatch):
+        """The caution that fires when nothing is wrong.
+
+        `last_exit` is a local lot date and the thesis's day was a UTC one, so
+        east of Greenwich a thesis written the morning after an exit was told
+        it "belongs to an earlier holding" — about words the user had written
+        minutes earlier. This one fires on the live path, where `as_of` being
+        None is no protection at all.
+        """
+        idea(api)
+        with self.clock(monkeypatch, self.EAST, "2026-08-04T12:00:00"):
+            assert api.amend_thesis("SYN", "First read.", "Take rate <2%.")["ok"]
+            buy(api, when="2026-08-04")
+        # Sold, then bought back the same day. The re-entry is what makes the
+        # caution reachable at all: `last_exit` answers "when did the holding
+        # BEFORE this one end", so it is None while nothing is held and the
+        # test would pass against any implementation without it.
+        assert api.sell_shares("SYN", "Hit valuation", 30.0, "2026-08-09")["ok"]
+        buy(api, when="2026-08-09")
+        with self.clock(monkeypatch, self.EAST, "2026-08-10T07:00:00"):
+            assert api.amend_thesis("SYN", "Second read.", "Take rate <1%.",
+                                    "Bought it back cheaper.")["ok"]
+        standing = thesis.standing(security(), today="2026-08-10")
+        assert standing["amended"] == "2026-08-10"
+        assert standing["cautions"] == [], standing["cautions"]
+
+    def test_the_order_of_the_record_does_not_depend_on_where_you_read_it(
+            self, monkeypatch):
+        """Principle 3: history is append-only, so its order is a fact about
+        the record and not about the machine reading it.
+
+        Stamps carry an offset now, so the raw text no longer sorts
+        chronologically — "2026-08-09T19:30:00-07:00" is *after*
+        "2026-08-10T02:00:00+00:00" and sorts before it. `history` orders by
+        the parsed instant for that reason, and this goes red against the
+        lexicographic key it replaced.
+
+        What it does NOT catch, said plainly: ordering by the stored day
+        passes this, because a slice of a stamp is as machine-independent as
+        the instant is. The two only disagree where a later entry carries an
+        earlier local day, which cannot happen inside one record — appends
+        happen in real time and `seq` settles them. The instant is still the
+        right key; this test guards the property that matters, not that one.
+        """
+        s = {}
+        for zone, when in ((self.WEST, "2026-08-09T19:30:00"),
+                           (self.EAST, "2026-08-10T12:00:00"),
+                           (self.WEST, "2026-08-10T09:00:00")):
+            with self.clock(monkeypatch, zone, when):
+                hand_entered.record(s, "fcf_ttm", len(s.get("hand_entered", [])))
+
+        def order_under(zone):
+            monkeypatch.setenv("TZ", zone)
+            time.tzset()
+            return [e["seq"] for e in dated.history(s, "hand_entered")]
+
+        try:
+            assert order_under(self.WEST) == [3, 2, 1]
+            assert order_under(self.EAST) == [3, 2, 1]
+        finally:
+            time.tzset()

@@ -59,11 +59,21 @@ from engine import contract
 # ---------------------------------------------------------------------------
 
 # Knockout. One failure kills the buy regardless of everything else.
+#
+# Size is here rather than among the bonus tests, and it is the one place
+# this strategy overrules the arrangement of its source. The report scores
+# it; the argument the report gives for the level is filing quality and the
+# ability to sell when you want to, and neither of those is something a good
+# score elsewhere can compensate for. A scored floor is not a floor. At $40M
+# the buy went through on a company whose shares cannot be sold in the size
+# this strategy would take, with a note underneath saying so — and the whole
+# reason for a discipline agreed while calm is that it is not a note.
 REQUIRED = (
     ("pe_3y_avg_eps", "at_most", "max-pe-3y-avg"),
     ("price_to_book", "at_most", "max-price-to-book"),
     ("graham_combined_multiple", "at_most", "max-combined-multiple"),
     ("current_ratio", "at_least", "min-current-ratio"),
+    ("market_cap", "at_least", "min-market-cap"),
 )
 
 # Most of these must pass; how many is a declared value.
@@ -80,10 +90,7 @@ CORE = (
 
 # Never block. They are reported so the reader can see them and stop there.
 BONUS = (
-    ("market_cap", "at_least", "min-market-cap"),
     ("ncav_to_market_cap", "at_least", "min-ncav-to-market-cap"),
-    ("earnings_yield_to_risk_free_multiple", "at_least",
-     "min-earnings-yield-multiple"),
 )
 
 # The exits, in two families, because they are different news. A balance
@@ -202,7 +209,7 @@ STRATEGY = {
                "what its assets and its typical earnings justify, and sells "
                "when that gap closes, when the balance sheet stops being "
                "safe, or when two years are up — whichever comes first.",
-    "version": 2,
+    "version": 3,
     "contract": 5,
     "changelog": {
         1: "First version. The fifteen entry tests, the four-knockout / "
@@ -220,6 +227,31 @@ STRATEGY = {
            "came from and whose reasoning stands behind it, which six of "
            "them were saying in prose and twenty-two were not saying at "
            "all.",
+        3: "Two changes, and the first one changes what this strategy will "
+           "buy. THE SIZE TEST IS NOW A KNOCKOUT. $300M was a scored test "
+           "before, so a company below it could be bought as long as enough "
+           "else passed — and the argument for the level was never a "
+           "scoring argument. It is filing quality and being able to sell "
+           "when you want to, and neither of those is made up for by a low "
+           "price-to-book. A $40M company could clear every other test here "
+           "and still be a position you cannot get out of. From this "
+           "version a company under the floor is refused outright, and a "
+           "company whose size cannot be worked out returns 'not enough to "
+           "go on' rather than costing nothing. No level moved: $300M is "
+           "the same $300M. The placement is this strategy's own, against "
+           "the expert report, which scores this test — so the setting now "
+           "says the level is the report's and the reasoning is not.\n\n"
+           "SECOND, the earnings-yield test now runs. It compared the "
+           "earnings yield to a risk-free rate through a measure that "
+           "needed the rate handed to it, and nothing could hand one over, "
+           "so from the day it shipped it was permanently unreadable — a "
+           "test in name only. The rate is now a declared value on this "
+           "strategy and the comparison is made here, so the test produces "
+           "a real answer for the first time. It is still a bonus test and "
+           "still blocks nothing, but it will now show passes and failures "
+           "where it used to show nothing at all. The rate ships at a "
+           "starting figure and is the one setting here that has to be "
+           "maintained: nothing fetches it.",
     },
 
     # -----------------------------------------------------------------
@@ -737,7 +769,7 @@ STRATEGY = {
         # -- the three bonus tests -----------------------------------------
         {"id": "min-market-cap", "label": "Smallest company worth buying",
          "type": "number", "unit": "usd", "min": 0,
-         "source": REPORT,
+         "source": REPORT_LEVEL_ONLY,
          "explain": "What the stock market says the whole company's shares "
                     "are worth: every share multiplied by the price of "
                     "one.\n\n"
@@ -749,9 +781,23 @@ STRATEGY = {
                     "opportunity. $300M keeps filing quality and the "
                     "ability to sell when you want to acceptable without "
                     "gutting the list.\n\n"
-                    "It is a bonus test rather than a knockout: failing it "
-                    "never blocks a buy on its own. It is reported so you "
-                    "know what you are stepping into."},
+                    "It is a test this strategy will not bend: below it, no "
+                    "amount of cheapness counts. That placement is this "
+                    "strategy's and not the report's, which scores this "
+                    "test rather than disqualifying on it. The reasoning "
+                    "the report gives for the level is filing quality and "
+                    "being able to sell when you want to, and neither of "
+                    "those is something a good score somewhere else makes "
+                    "up for. A forty-million-dollar company can be cheap on "
+                    "every other line here and still be a position you "
+                    "cannot get out of.\n\n"
+                    "Where it misfires: it is a price times a share count, "
+                    "so it moves with the price. A holding that has halved "
+                    "may now fail a test it passed when you bought — which "
+                    "is why it is an entry test and there is no exit on the "
+                    "other side of it. And a company whose shares are "
+                    "closely held trades far less than its size suggests, "
+                    "which this cannot see."},
 
         {"id": "min-ncav-to-market-cap",
          "label": "Lowest liquid assets against the price",
@@ -791,12 +837,49 @@ STRATEGY = {
                     "rates are doing — a 6.7% earnings yield means "
                     "something very different when cash pays 1% than when "
                     "it pays 5%.\n\n"
-                    "It will read as absent until this program can be told "
-                    "what the risk-free rate is. That figure is not in any "
-                    "filing and it is not price data, so nothing here is "
-                    "entitled to invent one, and an absent reading is the "
-                    "honest answer rather than a passing one. It is a bonus "
-                    "test, so nothing is blocked by that."},
+                    "This and the risk-free rate below are read together, "
+                    "and what they come to is a ceiling on what you may pay "
+                    "for a dollar of typical earnings: at 2.0 against a "
+                    "rate of 4%, an earnings yield of 8% or better, which "
+                    "is 12.5 times earnings or less. That is the figure the "
+                    "test is shown against, because it is the one being "
+                    "compared.\n\n"
+                    "It is a bonus test: failing it never blocks a buy. "
+                    "Expect it to fail often at a high risk-free rate — "
+                    "that is the test working, and it is telling you the "
+                    "same money is being offered a competitive return with "
+                    "none of the risk."},
+
+        {"id": "risk-free-rate", "label": "The risk-free rate",
+         "type": "number", "unit": "percent", "min": 0, "max": 100,
+         "source": {"name": "this strategy's author. The expert report names "
+                            "the comparison but not a rate, because a rate "
+                            "is not the kind of thing a report can fix — it "
+                            "is whatever the government is paying while you "
+                            "are reading this",
+                    "reasoning": True},
+         "explain": "What lending money to the government pays right now: "
+                    "the yield on the ten-year US Treasury note, as an "
+                    "annual percentage. It is the return you can have "
+                    "without taking any business risk at all, so it is what "
+                    "owning a business has to beat before the risk is worth "
+                    "taking.\n\n"
+                    "**This is the one number here you have to maintain, "
+                    "and it is the only one that goes wrong just by sitting "
+                    "still.** Nothing in this program fetches it — it is in "
+                    "no filing and it is not price data — so the figure "
+                    "shipped with the strategy is a starting point and "
+                    "nothing more. Look up the current ten-year Treasury "
+                    "yield and set it here; when rates move, come back. A "
+                    "rate left at 4% while the market pays 6% quietly makes "
+                    "this test easier than you agreed it should be.\n\n"
+                    "It is here as a setting rather than as a question at "
+                    "setup so that changing it is recorded: the day you "
+                    "moved it, what it was, and what it became go on this "
+                    "journal's record of rule changes, next to the reason "
+                    "you give. A number that sets a bar and can be adjusted "
+                    "without trace is the thing this journal exists to "
+                    "prevent."},
 
         # -- the eight exits -----------------------------------------------
         {"id": "exit-pe-3y-avg",
@@ -950,6 +1033,80 @@ def _screen(ctx, rows, group):
     """
     cites = [_cite(m, c, v, group) for m, c, v in rows]
     return cites, [contract.test(ctx, item) for item in cites]
+
+
+# ---------------------------------------------------------------------------
+# the earnings yield against the risk-free rate
+#
+# Graham's Enterprising Investor test, and the one test here this strategy
+# works out for itself instead of naming a measure that already holds the
+# answer.
+#
+# There used to be a bank measure for it and it never ran. It needed a
+# risk-free rate; the rate is in no filing, it is not price data, and nothing
+# in the host could hand one over — so a row that looked like a test was
+# permanently absent, which is the worst state for a test to be in, because
+# it reads as a gap in the data rather than as a question nobody was ever
+# able to ask.
+#
+# It moves here for a better reason than convenience. An earnings yield is a
+# fact. What you compare it against is an opinion, and this strategy is the
+# thing entitled to hold one — so the rate is a declared value like every
+# other limit in this file, retunable, with any change to it landing on the
+# journal's rule-change record with a before and an after.
+#
+# The measure is still cited and never quoted. Working out `1/PE ÷ rate` here
+# and stating the answer would be this strategy restating a figure the host
+# owns, and a restatement can be wrong. So the test is expressed as what it
+# actually constrains: an earnings yield of at least `multiple × rate` per
+# cent is exactly a price of at most `100 ÷ (multiple × rate)` times typical
+# earnings. The strategy owns the question and the limit; the host still owns
+# the figure, its unit, and whether the comparison was met.
+#
+# This is the one limit in this file the strategy states rather than names,
+# and it is the one case the evidence vocabulary cannot express: a row cites
+# ONE setting or states ONE number, and this limit is worked out from two
+# settings. So both are cited beside it as the observations they are. That is
+# the difference between a number a reader can check and a number they have
+# to accept — 12.5 with "twice" and "4%" underneath it is arithmetic anyone
+# can redo, and 12.5 on its own is this file asking to be trusted.
+# ---------------------------------------------------------------------------
+
+_YIELD_SETTINGS = ("min-earnings-yield-multiple", "risk-free-rate")
+
+
+def _earnings_yield_cite(values):
+    """The earnings-yield test as the ceiling on the earnings multiple it
+    amounts to, or None where the two settings do not describe a limit.
+
+    Both are declared values with defaults, so the arithmetic normally cannot
+    fail — but either can be overridden to nought in a journal, and dividing
+    by that would take the whole verdict down over a bonus test that blocks
+    nothing. None means the caller shows the settings and no comparison,
+    which is what a limit nobody could work out honestly looks like.
+    """
+    multiple, rate = (values.get(v) for v in _YIELD_SETTINGS)
+    if not all(isinstance(v, (int, float)) and not isinstance(v, bool)
+               and v > 0 for v in (multiple, rate)):
+        return None
+    return {"measure": "pe_3y_avg_eps", "comparator": "at_most",
+            "threshold": round(100.0 / (multiple * rate), 2),
+            "group": BONUS_GROUP["id"]}
+
+
+def _bonus_cites(ctx, values):
+    """The reported-never-blocking rows, and the two settings behind the one
+    row whose limit this strategy works out for itself.
+
+    The settings are cited whether or not the limit could be built. Where it
+    could, they are how the reader checks it; where it could not, they are
+    the only thing left saying a test exists at all.
+    """
+    cites, _outcomes = _screen(ctx, BONUS, BONUS_GROUP["id"])
+    derived = _earnings_yield_cite(values)
+    return (cites + ([derived] if derived is not None else [])
+            + [{"value": v, "group": BONUS_GROUP["id"]}
+               for v in _YIELD_SETTINGS])
 
 
 # ---------------------------------------------------------------------------
@@ -1121,7 +1278,7 @@ def _on_a_candidate(ctx):
 
     req_cites, req_out = _screen(ctx, REQUIRED, KNOCKOUTS["id"])
     core_cites, core_out = _screen(ctx, CORE, CORE_GROUP["id"])
-    bonus_cites, _bonus_out = _screen(ctx, BONUS, BONUS_GROUP["id"])
+    bonus_cites = _bonus_cites(ctx, values)
 
     req_fail = req_out.count(FAIL)
     req_unknown = req_out.count(UNKNOWN)

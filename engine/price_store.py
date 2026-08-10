@@ -186,11 +186,40 @@ def other_series(doc: dict, ticker: str) -> list[str]:
                   if k not in forms and s and s.get("rows"))
 
 
-def close_on(doc: dict, ticker: str, date: str, max_lookback_days: int = 7):
-    """As-traded close on `date`, or the nearest earlier trading day within
-    the lookback. Returns (date_used, close) or None. Never interpolates,
-    never reaches forward — a price from the future of the asked date would
-    silently describe a different world.
+def terminal_of(doc: dict, ticker: str):
+    """The mark saying this instrument's series has ended, or None.
+
+    A fact, not a judgement about age. "Nothing has traded for a while" and
+    "nothing will trade again" look identical in a row of closes, and only one
+    of them means the last close has stopped being a price. The series still
+    serves that close — data is never hidden — but the mark travels beside it
+    so nothing downstream can render a dead series as a live quote.
+
+    Resolves punctuation the way `series_key` does, so the mark is found under
+    whichever spelling the series was stored as.
+    """
+    series = doc.get("series") or {}
+    for form in symbol_forms(ticker):
+        s = series.get(form)
+        if s and s.get("terminal"):
+            return dict(s["terminal"])
+    return None
+
+
+def close_on(doc: dict, ticker: str, date: str, reach_days: int | None = None):
+    """As-traded close on `date`, or the nearest earlier trading day. Returns
+    (date_used, close, days_before) or None.
+
+    `days_before` is how far back it had to reach, and it is reported rather
+    than judged. There used to be a seven-day bound here, applied by default
+    to every caller that did not think about it, and it was the host holding
+    an opinion: whether a close five days before the day you asked about is
+    good enough to decide on is a question about a strategy, not about a
+    price. Callers that genuinely need a bound pass `reach_days`; nobody in
+    this program does.
+
+    Never interpolates, never reaches forward — a price from the future of
+    the asked date would silently describe a different world.
 
     A zero or null close is a no-trade artifact, not a price; it is stepped
     over, exactly as latest_close steps over it, so a halt on the asked day
@@ -214,10 +243,11 @@ def close_on(doc: dict, ticker: str, date: str, max_lookback_days: int = 7):
     target = D.fromisoformat(date)
     for i in range(lo - 1, -1, -1):
         row = rows[i]
-        if (target - D.fromisoformat(row[0])).days > max_lookback_days:
+        gap = (target - D.fromisoformat(row[0])).days
+        if reach_days is not None and gap > reach_days:
             return None
         if row[1] not in (None, 0):
-            return (row[0], float(row[1]))
+            return (row[0], float(row[1]), gap)
     return None
 
 

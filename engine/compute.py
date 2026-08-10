@@ -37,7 +37,6 @@ from . import concept_map as cm
 from . import price_store
 from .periods import ANNUAL_FORMS, SeriesBuilder, absent, is_absent, label
 
-STALE_PRICE_DAYS = 7
 QUARTERS_FOR_OWN_MEDIAN = 20
 
 
@@ -56,12 +55,11 @@ class Ctx:
     """
 
     def __init__(self, filings: list[dict], prices_doc: dict | None,
-                 tickers: list[str], params: dict | None = None,
+                 tickers: list[str],
                  today: str | None = None, price_cutoff: str | None = None):
         self.sb = SeriesBuilder(filings)
         self.prices = prices_doc or {"series": {}}
         self.tickers = [str(t).upper() for t in tickers if t]
-        self.params = params or {}
         self.today = today or date.today().isoformat()
         self.price_cutoff = str(price_cutoff)[:10] if price_cutoff else None
         self.price_dates_served: set = set()
@@ -75,8 +73,7 @@ class Ctx:
         best = None
         for t in self.tickers:
             if self.price_cutoff:
-                got = price_store.close_on(self.prices, t, self.price_cutoff,
-                                           max_lookback_days=STALE_PRICE_DAYS)
+                got = price_store.close_on(self.prices, t, self.price_cutoff)
             else:
                 got = price_store.latest_close(self.prices, t)
             if got and (best is None or got[0] > best[0]):
@@ -94,8 +91,7 @@ class Ctx:
         return {"date": best[0], "close": best[1], "ticker": best[2]}
 
     def price_on(self, ticker, day):
-        got = price_store.close_on(self.prices, ticker, day,
-                                   max_lookback_days=STALE_PRICE_DAYS)
+        got = price_store.close_on(self.prices, ticker, day)
         if got:
             self.price_dates_served.add(got[0])
         return got
@@ -114,8 +110,7 @@ class Ctx:
         borrowing a sibling's.
         """
         if self.price_cutoff:
-            got = price_store.close_on(self.prices, ticker, self.price_cutoff,
-                                       max_lookback_days=STALE_PRICE_DAYS)
+            got = price_store.close_on(self.prices, ticker, self.price_cutoff)
         else:
             got = price_store.latest_close(self.prices, ticker)
         if got:
@@ -463,11 +458,55 @@ def _market_cap_result(ctx):
                 f"valued here at the {p['ticker']} close")
         pdate = p["date"]
 
-    gap = (date.fromisoformat(ctx.today) - date.fromisoformat(pdate)).days
-    if gap > STALE_PRICE_DAYS:
-        cautions.append(f"the oldest price in this figure is {gap} days old "
-                        f"({pdate}); fetch prices to bring it current")
+    # The price's age, stated always and judged never. This used to be a
+    # caution that appeared only past seven days, which made the fact
+    # conditional on a host opinion: a six-day-old close said nothing about
+    # its age and an eight-day-old one did, so a reader could not tell "this
+    # is current" from "nobody asked". Seven days is a judgement, it differs
+    # between strategies, and it belonged to nobody — the host carries the
+    # date, and what is too old is the strategy's call.
+    cautions.append(_price_age(ctx, pdate))
+    cautions.extend(_ended_series(ctx))
     return computed(total, prov, cautions)
+
+
+def _price_age(ctx, pdate) -> str:
+    """How old the close behind a price-derived figure is, in words.
+
+    Always the OLDEST close where several classes were blended, matching the
+    rule the blend itself uses: staleness measured against the freshest class
+    cannot see a second class whose prices stopped updating months ago, which
+    is precisely the one worth knowing about.
+
+    Counted against the context's own clock, so a reading rebuilt for a past
+    filing reports its age as of THAT day. Against the wall clock it would
+    report an age that is right for today and wrong for the day being
+    reconstructed — a confident number, in a record that keeps it forever.
+    """
+    days = (date.fromisoformat(ctx.today) - date.fromisoformat(pdate)).days
+    if days <= 0:
+        return f"priced at the close of {pdate}, the latest held"
+    return (f"priced at the close of {pdate}, "
+            + ("a day" if days == 1 else f"{days} days")
+            + " before "
+            + ("the day this reading was rebuilt for" if ctx.price_cutoff
+               else "today"))
+
+
+def _ended_series(ctx) -> list[str]:
+    """A word for every one of this company's symbols whose price series has
+    ended. A fact about the instrument, not a judgement about age: a series
+    that stopped last week and one that will never trade again look identical
+    in a list of closes, and only one of them still has a price."""
+    out = []
+    for t in ctx.tickers:
+        mark = price_store.terminal_of(ctx.prices, t)
+        if mark:
+            out.append(f"the {t} price series has ended ("
+                       f"{mark.get('reason') or 'no reason recorded'}), so "
+                       "its last close is the last price it ever had and not "
+                       "what it trades at")
+    return out
 
 
 # --------------------------------------------------------------------------
@@ -1279,29 +1318,6 @@ def net_cash_to_market_cap(ctx):
                     sorted(set(_cautions_of(cash, sti, debt) + mc["cautions"])))
 
 
-def earnings_yield_to_risk_free_multiple(ctx):
-    rate = ctx.params.get("risk_free_rate")
-    try:
-        rate = float(rate)
-    except (TypeError, ValueError):
-        rate = None
-    if rate is None or rate <= 0:
-        return _absent_result(absent(
-            "no risk-free rate has been supplied, and nothing in this host "
-            "is entitled to invent one — it is not a figure in any filing, "
-            "and no strategy can currently hand one in"))
-    pe = ctx.entry("pe_3y_avg_eps")
-    if pe["status"] != "computed":
-        return _absent_result(absent(
-            "P/E on three-year average EPS is not meaningful ("
-            + pe.get("reason", "") + "), and the earnings yield inherits it"))
-    ey = 1.0 / pe["value"] * 100.0
-    return computed(ey / rate,
-                    [f"earnings yield {ey:.2f}% ÷ risk-free rate "
-                     f"{rate:.2f}% (supplied to the computation)"],
-                    pe["cautions"])
-
-
 def _cagr(ctx, input_id, years_span):
     w = _window(ctx, input_id, years_span + 1)
     if is_absent(w):
@@ -1770,7 +1786,7 @@ REGISTRY = {fn.__name__: fn for fn in (
     owner_earnings_yield, ev_to_ebit, ev_ebit_to_own_5y_median,
     pe_to_own_5y_median_pe, peg_trailing, dividend_adjusted_peg,
     dividend_yield, ncav_to_market_cap, net_cash_to_market_cap,
-    earnings_yield_to_risk_free_multiple, revenue_cagr_5y, revenue_cagr_3y,
+    revenue_cagr_5y, revenue_cagr_3y,
     revenue_change_yoy, net_income_cagr_5y, eps_cagr_5y, eps_growth_10y,
     ni_minus_revenue_cagr_spread_5y, eps_minus_revenue_cagr_spread_5y,
     inventory_minus_revenue_growth_yoy, receivables_minus_revenue_growth_yoy,
@@ -1782,23 +1798,8 @@ REGISTRY = {fn.__name__: fn for fn in (
 )}
 
 
-def compute_entry_with_params(ctx: Ctx, entry_id: str, params: dict) -> dict:
-    """One parameterized entry under a specific profile's supplied
-    parameters. Not memoised on the context: the same entry computes to
-    different values under different profiles, by design."""
-    fn = REGISTRY.get(entry_id)
-    if fn is None:
-        return {"status": "absent", "reason": f"{entry_id} has no computation"}
-    old = ctx.params
-    ctx.params = params or {}
-    try:
-        return fn(ctx)
-    finally:
-        ctx.params = old
-
-
 def compute_all(filings: list[dict], prices_doc: dict | None,
-                tickers: list[str], entry_ids=None, params: dict | None = None,
+                tickers: list[str], entry_ids=None,
                 today: str | None = None) -> dict:
     """Every requested bank entry for one company.
 
@@ -1806,7 +1807,7 @@ def compute_all(filings: list[dict], prices_doc: dict | None,
     absent reason rather than taking the others down — a wrong number is
     the enemy, but so is one bad entry hiding fifty good ones.
     """
-    ctx = Ctx(filings, prices_doc, tickers, params=params, today=today)
+    ctx = Ctx(filings, prices_doc, tickers, today=today)
     out = {}
     for entry_id in (entry_ids or REGISTRY.keys()):
         fn = REGISTRY.get(entry_id)
@@ -1843,7 +1844,6 @@ CADENCE = {
     "cash_conversion_median_5y": "annual",
     "effective_tax_rate_median_5y": "annual",
     "payout_to_fcf_median_5y": "annual", "pe_3y_avg_eps": "annual",
-    "earnings_yield_to_risk_free_multiple": "annual",
     "revenue_cagr_5y": "annual", "revenue_cagr_3y": "annual",
     "net_income_cagr_5y": "annual", "eps_cagr_5y": "annual",
     "eps_growth_10y": "annual",
@@ -1920,7 +1920,6 @@ def confirmation_boundaries(filings: list[dict], cadence: str) -> list[dict]:
 
 def confirmation_history(filings: list[dict], prices_doc: dict | None,
                          tickers: list[str], entry_id: str,
-                         params: dict | None = None,
                          max_boundaries: int = CONFIRMATION_BOUNDARY_CAP) -> dict:
     """Per-filing readings of one bank entry, newest first, for
     sell-confirmation.
@@ -1960,7 +1959,7 @@ def confirmation_history(filings: list[dict], prices_doc: dict | None,
                   if str(f.get("filed") or "")[:10] <= b["filed"]]
         priced = None
         try:
-            ctx = Ctx(prefix, prices_doc, tickers, params=params,
+            ctx = Ctx(prefix, prices_doc, tickers,
                       today=b["filed"], price_cutoff=b["filed"])
             r = ctx.entry(entry_id)
             priced = max(ctx.price_dates_served) if ctx.price_dates_served \

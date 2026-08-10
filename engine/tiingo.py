@@ -39,7 +39,20 @@ EARLIEST = "1980-01-01"
 
 class PriceSourceError(Exception):
     """Loud, specific price-fetch failure. Never returns an empty series as
-    if it were data — an empty result writes a permanent-looking gap."""
+    if it were data — an empty result writes a permanent-looking gap.
+
+    `kind` is the machine-readable half, and it exists for exactly one
+    caller: only "the source has never heard of this symbol" is evidence a
+    series has ended, and a rate limit or a rejected key must never be
+    mistaken for it. Marking a live series terminal is worse than never
+    marking one — the price keeps rendering, now labelled as dead, and the
+    mark is written once and cannot be taken back. Branching on the sentence
+    would put that decision one copy-edit away from breaking.
+    """
+
+    def __init__(self, message, kind: str | None = None):
+        super().__init__(message)
+        self.kind = kind
 
 
 def _scrub(text: str, token: str) -> str:
@@ -64,7 +77,7 @@ def _get(url: str, token: str, timeout: int = 60) -> object:
             raise PriceSourceError(
                 "Tiingo does not know this symbol. Delisted or renamed "
                 "tickers drop out of free sources; the series already held "
-                "is kept and marked terminal.") from e
+                "is kept and marked terminal.", kind="unknown-symbol") from e
         if e.code in (401, 403):
             raise PriceSourceError(
                 "Tiingo rejected the API key. Test or replace it on the "

@@ -79,7 +79,12 @@ class writing_on:
     """
 
     def __init__(self, day):
-        self.day = f"{day}T14:00:00+00:00"
+        # Local noon, because that is what the real stamp records: the day
+        # the writer was standing on. A fixed UTC hour lands on the following
+        # calendar day east of about UTC+10, which would build a sample whose
+        # entries are dated a day after the story says they were.
+        self.day = (datetime.fromisoformat(f"{day}T12:00:00")
+                    .astimezone().isoformat(timespec="seconds"))
 
     def __enter__(self):
         self._dated, self._stamp = dated.stamp, portfolio._stamp
@@ -205,9 +210,14 @@ security(
             "plant is worth less than I thought rather than the market being "
             "wrong about it."),
     notes=[("2025-06-12",
-            "Failed the size test — under $300M — and that is a bonus test, "
-            "so it did not block anything. Worth remembering when it is "
-            "hard to sell."),
+            "Bought this under the size floor. $278M against a floor of "
+            "$300M is not far under it, and the strategy still said no — a "
+            "floor that bends for a near miss is not a floor. What I am "
+            "actually taking on is a company small enough that getting out "
+            "of a position this size may not be quick, and that is a "
+            "different risk from the one every other test here measures. "
+            "Written down so that if it turns out to matter, it is on the "
+            "record that I knew."),
            ("2026-08-02",
             "The price has run and both valuation lines are crossed on this "
             "reading. The strategy will not act until a second filing says "
@@ -215,7 +225,13 @@ security(
             "every figure here is typed by hand there are no filings to "
             "confirm it with. That is the honest limit of running this "
             "without a data connection.")])
-buy("CALDR", 260, 12.40, "2025-06-12")
+buy("CALDR", 260, 12.40, "2025-06-12",
+    override_reason="Under the $300M size floor, at $278M. I am taking that "
+                    "on deliberately: the discount is on the plant and the "
+                    "tubes, which do not care what the market capitalisation "
+                    "is, and I am buying a size I could still get out of. If "
+                    "I am wrong it will be because I could not sell it, not "
+                    "because the plant was worth less than I thought.")
 
 
 # -- the balance sheet coming apart -----------------------------------------
@@ -245,7 +261,11 @@ security(
                   altman_z_score=3.1, eps_growth_10y=36.0,
                   consecutive_dividend_years=13, debt_to_equity=0.8,
                   price_to_net_tangible_assets=1.1, accruals_ratio=0.06,
-                  market_cap=238_000_000, ncav_to_market_cap=0.66,
+                  # Comfortably over the size floor when it was bought. This
+                  # security is here to show a balance sheet coming apart,
+                  # and a purchase that also had to override the size test
+                  # would have two stories in it and teach neither.
+                  market_cap=460_000_000, ncav_to_market_cap=0.66,
                   consecutive_annual_loss_years=0), 15.85),
     thesis=("Speciality chemicals at 0.7 times book with thirteen years of "
             "dividends. The plant is worth more than the whole company.",
@@ -373,11 +393,16 @@ security(
          consecutive_annual_loss_years=0),
     on="2026-08-05",
     notes=[("2026-08-05",
-            "Clears everything. The one test showing as unknown is the "
-            "earnings yield against the risk-free rate, which nothing in "
-            "this program can be told yet — it is a bonus test, so it "
-            "blocks nothing, and it reads as unknown rather than as a "
-            "pass.")])
+            "Clears every test that can stop it. The one showing red is the "
+            "earnings yield against the risk-free rate: at 12.8 times "
+            "typical earnings this yields 7.8% a year, and against a "
+            "risk-free rate of 4% the strategy wants twice that — 8%, which "
+            "is 12.5 times earnings or less. It misses by two tenths of a "
+            "percentage point of yield, which is three tenths of a turn on "
+            "the multiple. That test never blocks a buy, and what it is "
+            "telling me is worth reading anyway: the government is paying "
+            "enough that "
+            "this discount is thinner than it looks.")])
 
 
 # -- a candidate the strategy is built to reject -----------------------------

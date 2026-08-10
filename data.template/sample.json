@@ -1,5 +1,5 @@
 {
- "built": "2026-08-10T01:56:35+00:00",
+ "built": "2026-08-10T03:35:39+00:00",
  "as_of": "2026-08-09",
  "free_cash": 62000.0,
  "strategy": "graham",
@@ -15,12 +15,12 @@
      "seq": 1,
      "kind": "buy",
      "date": "2025-11-04",
-     "recorded": "2025-11-04T14:00:00+00:00",
+     "recorded": "2025-11-04T12:00:00-05:00",
      "shares": 180.0,
      "price": 30.85,
      "override": null,
      "snapshot": {
-      "frozen": "2025-11-04T14:00:00+00:00",
+      "frozen": "2025-11-04T12:00:00-05:00",
       "decision": {
        "render": "commit",
        "tier": "position",
@@ -163,6 +163,38 @@
             "id": "min-current-ratio",
             "label": "Lowest current ratio",
             "unit": "ratio"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "market_cap",
+           "label": "Market capitalization",
+           "unit": "usd",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 610000000.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2025-11-01"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 300000000,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-market-cap",
+            "label": "Smallest company worth buying",
+            "unit": "usd"
            },
            "absent": null
           },
@@ -428,38 +460,6 @@
          {
           "subject": {
            "kind": "measure",
-           "id": "market_cap",
-           "label": "Market capitalization",
-           "unit": "usd",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": 610000000.0,
-           "source": "measure",
-           "cautions": [],
-           "provenance": [
-            "entered by hand on 2025-11-01"
-           ]
-          },
-          "test": {
-           "comparator": "at_least",
-           "phrase": "at least",
-           "threshold": 300000000,
-           "threshold_from": {
-            "kind": "value",
-            "id": "min-market-cap",
-            "label": "Smallest company worth buying",
-            "unit": "usd"
-           },
-           "absent": null
-          },
-          "outcome": "pass",
-          "group": "bonus"
-         },
-         {
-          "subject": {
-           "kind": "measure",
            "id": "ncav_to_market_cap",
            "label": "Net current asset value over market capitalization",
            "unit": "ratio",
@@ -492,29 +492,66 @@
          {
           "subject": {
            "kind": "measure",
-           "id": "earnings_yield_to_risk_free_multiple",
-           "label": "Earnings yield as a multiple of the risk-free rate",
+           "id": "pe_3y_avg_eps",
+           "label": "Price to earnings on three-year average EPS",
            "unit": "times",
            "explain": null
           },
           "observed": {
-           "status": "absent",
-           "reason": "no filing data is stored for this security — fetch data first",
-           "source": "measure"
+           "status": "known",
+           "value": 10.4,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2025-11-01"
+           ]
           },
           "test": {
-           "comparator": "at_least",
-           "phrase": "at least",
-           "threshold": 2,
-           "threshold_from": {
-            "kind": "value",
-            "id": "min-earnings-yield-multiple",
-            "label": "Lowest earnings yield against the risk-free rate",
-            "unit": "times"
-           },
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 12.5,
+           "threshold_from": null,
            "absent": null
           },
-          "outcome": "unknown",
+          "outcome": "pass",
+          "group": "bonus"
+         },
+         {
+          "subject": {
+           "kind": "value",
+           "id": "min-earnings-yield-multiple",
+           "label": "Lowest earnings yield against the risk-free rate",
+           "unit": "times",
+           "explain": "How many times more the company's earnings pay you than lending the same money to the government would. At 2.0 the stock's earnings yield is twice the risk-free rate; at 1.0 you are taking every risk of owning a business for a government-bond return.\n\nGraham's Enterprising Investor test, which compared the earnings yield to the corporate bond yield of his day. It is the one test here that makes every other valuation level in the strategy aware of what interest rates are doing — a 6.7% earnings yield means something very different when cash pays 1% than when it pays 5%.\n\nThis and the risk-free rate below are read together, and what they come to is a ceiling on what you may pay for a dollar of typical earnings: at 2.0 against a rate of 4%, an earnings yield of 8% or better, which is 12.5 times earnings or less. That is the figure the test is shown against, because it is the one being compared.\n\nIt is a bonus test: failing it never blocks a buy. Expect it to fail often at a high risk-free rate — that is the test working, and it is telling you the same money is being offered a competitive return with none of the risk."
+          },
+          "observed": {
+           "status": "known",
+           "value": 2,
+           "source": "value",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "bonus"
+         },
+         {
+          "subject": {
+           "kind": "value",
+           "id": "risk-free-rate",
+           "label": "The risk-free rate",
+           "unit": "percent",
+           "explain": "What lending money to the government pays right now: the yield on the ten-year US Treasury note, as an annual percentage. It is the return you can have without taking any business risk at all, so it is what owning a business has to beat before the risk is worth taking.\n\n**This is the one number here you have to maintain, and it is the only one that goes wrong just by sitting still.** Nothing in this program fetches it — it is in no filing and it is not price data — so the figure shipped with the strategy is a starting point and nothing more. Look up the current ten-year Treasury yield and set it here; when rates move, come back. A rate left at 4% while the market pays 6% quietly makes this test easier than you agreed it should be.\n\nIt is here as a setting rather than as a question at setup so that changing it is recorded: the day you moved it, what it was, and what it became go on this journal's record of rule changes, next to the reason you give. A number that sets a bar and can be adjusted without trace is the thing this journal exists to prevent."
+          },
+          "observed": {
+           "status": "known",
+           "value": 4.0,
+           "source": "value",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": null,
+          "outcome": "noted",
           "group": "bonus"
          },
          {
@@ -611,9 +648,9 @@
           "name": "Tests this strategy will not bend",
           "requires": "all",
           "test": null,
-          "members": 4,
-          "tested": 4,
-          "passed": 4,
+          "members": 5,
+          "tested": 5,
+          "passed": 5,
           "failed": 0,
           "unknown": 0,
           "outcome": "pass"
@@ -646,11 +683,11 @@
           "name": "Reported, never blocking",
           "requires": "noted",
           "test": null,
-          "members": 3,
-          "tested": 3,
+          "members": 4,
+          "tested": 2,
           "passed": 2,
           "failed": 0,
-          "unknown": 1,
+          "unknown": 0,
           "outcome": "noted"
          },
          {
@@ -672,16 +709,16 @@
        "strategy": {
         "id": "graham",
         "name": "Graham",
-        "version": 2,
-        "values_version": 1,
+        "version": 3,
+        "values_version": 2,
         "contract": 5
        }
       },
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 2,
-       "values_version": 1,
+       "version": 3,
+       "values_version": 2,
        "contract": 5
       },
       "metrics": {
@@ -841,7 +878,7 @@
        "thesis": "A regional paper mill trading below its own book value with twenty-two straight years of dividends behind it. I am not claiming this is a wonderful business. I am claiming the price is wrong for what the balance sheet holds.",
        "falsifier": "Two consecutive years of losses, or the current ratio falling under 1.2. Either one means the balance sheet has stopped carrying the risk the business cannot.",
        "reason": "",
-       "recorded": "2025-11-01T14:00:00+00:00"
+       "recorded": "2025-11-01T12:00:00-04:00"
       },
       "valuation": null
      }
@@ -853,91 +890,91 @@
      "seq": 1,
      "id": "pe_3y_avg_eps",
      "value": 10.4,
-     "recorded": "2025-11-01T14:00:00+00:00"
+     "recorded": "2025-11-01T12:00:00-04:00"
     },
     {
      "seq": 2,
      "id": "price_to_book",
      "value": 0.96,
-     "recorded": "2025-11-01T14:00:00+00:00"
+     "recorded": "2025-11-01T12:00:00-04:00"
     },
     {
      "seq": 3,
      "id": "graham_combined_multiple",
      "value": 9.98,
-     "recorded": "2025-11-01T14:00:00+00:00"
+     "recorded": "2025-11-01T12:00:00-04:00"
     },
     {
      "seq": 4,
      "id": "current_ratio",
      "value": 2.6,
-     "recorded": "2025-11-01T14:00:00+00:00"
+     "recorded": "2025-11-01T12:00:00-04:00"
     },
     {
      "seq": 5,
      "id": "ltd_to_working_capital",
      "value": 0.35,
-     "recorded": "2025-11-01T14:00:00+00:00"
+     "recorded": "2025-11-01T12:00:00-04:00"
     },
     {
      "seq": 6,
      "id": "profitable_years_10y",
      "value": 10.0,
-     "recorded": "2025-11-01T14:00:00+00:00"
+     "recorded": "2025-11-01T12:00:00-04:00"
     },
     {
      "seq": 7,
      "id": "altman_z_score",
      "value": 3.9,
-     "recorded": "2025-11-01T14:00:00+00:00"
+     "recorded": "2025-11-01T12:00:00-04:00"
     },
     {
      "seq": 8,
      "id": "eps_growth_10y",
      "value": 41.0,
-     "recorded": "2025-11-01T14:00:00+00:00"
+     "recorded": "2025-11-01T12:00:00-04:00"
     },
     {
      "seq": 9,
      "id": "consecutive_dividend_years",
      "value": 22.0,
-     "recorded": "2025-11-01T14:00:00+00:00"
+     "recorded": "2025-11-01T12:00:00-04:00"
     },
     {
      "seq": 10,
      "id": "debt_to_equity",
      "value": 0.48,
-     "recorded": "2025-11-01T14:00:00+00:00"
+     "recorded": "2025-11-01T12:00:00-04:00"
     },
     {
      "seq": 11,
      "id": "price_to_net_tangible_assets",
      "value": 1.15,
-     "recorded": "2025-11-01T14:00:00+00:00"
+     "recorded": "2025-11-01T12:00:00-04:00"
     },
     {
      "seq": 12,
      "id": "accruals_ratio",
      "value": 0.02,
-     "recorded": "2025-11-01T14:00:00+00:00"
+     "recorded": "2025-11-01T12:00:00-04:00"
     },
     {
      "seq": 13,
      "id": "market_cap",
      "value": 610000000.0,
-     "recorded": "2025-11-01T14:00:00+00:00"
+     "recorded": "2025-11-01T12:00:00-04:00"
     },
     {
      "seq": 14,
      "id": "ncav_to_market_cap",
      "value": 0.71,
-     "recorded": "2025-11-01T14:00:00+00:00"
+     "recorded": "2025-11-01T12:00:00-04:00"
     },
     {
      "seq": 15,
      "id": "consecutive_annual_loss_years",
      "value": 0.0,
-     "recorded": "2025-11-01T14:00:00+00:00"
+     "recorded": "2025-11-01T12:00:00-04:00"
     }
    ],
    "thesis": [
@@ -946,13 +983,13 @@
      "thesis": "A regional paper mill trading below its own book value with twenty-two straight years of dividends behind it. I am not claiming this is a wonderful business. I am claiming the price is wrong for what the balance sheet holds.",
      "falsifier": "Two consecutive years of losses, or the current ratio falling under 1.2. Either one means the balance sheet has stopped carrying the risk the business cannot.",
      "reason": "",
-     "recorded": "2025-11-01T14:00:00+00:00"
+     "recorded": "2025-11-01T12:00:00-04:00"
     }
    ],
    "valuations": [],
    "notes": [
     {
-     "date": "2025-11-01T14:00:00+00:00",
+     "date": "2025-11-01T12:00:00-04:00",
      "text": "Bought because it is dull and cheap, which is the whole idea. Nothing about the industry is getting better and nothing needs to."
     }
    ],
@@ -969,31 +1006,48 @@
      "seq": 1,
      "kind": "buy",
      "date": "2025-06-12",
-     "recorded": "2025-06-12T14:00:00+00:00",
+     "recorded": "2025-06-12T12:00:00-04:00",
      "shares": 260.0,
      "price": 12.4,
-     "override": null,
+     "override": {
+      "date": "2025-06-12",
+      "kind": "against",
+      "state": "Not cheap enough",
+      "rule": "knockout-failed",
+      "summary": "1 of the 5 tests this strategy will not bend came back against it, and one is enough.",
+      "basis": "reconstructed",
+      "as_of": "2025-06-12",
+      "strategy": {
+       "id": "graham",
+       "name": "Graham",
+       "version": 3,
+       "values_version": 2,
+       "contract": 5
+      },
+      "failed": [
+       {
+        "key": "value:min-market-cap",
+        "label": "Smallest company worth buying"
+       }
+      ],
+      "missing": [],
+      "reason": "Under the $300M size floor, at $278M. I am taking that on deliberately: the discount is on the plant and the tubes, which do not care what the market capitalisation is, and I am buying a size I could still get out of. If I am wrong it will be because I could not sell it, not because the plant was worth less than I thought."
+     },
      "snapshot": {
-      "frozen": "2025-06-12T14:00:00+00:00",
+      "frozen": "2025-06-12T12:00:00-04:00",
       "decision": {
-       "render": "commit",
+       "render": "hold",
        "tier": "position",
        "state": {
-        "id": "buy",
-        "name": "Cheap enough to buy",
-        "description": "Every test this strategy will not bend has passed, and enough of the rest have. That is not the same as everything passing — some may have failed and are listed below — and it is not a claim that the business is good. It is a claim that the price is low against what the company owns and what it typically earns. The size is worked out from how many names you hold at once and how large any one of them may get.",
+        "id": "not-cheap-enough",
+        "name": "Not cheap enough",
+        "description": "At least one test this strategy cannot bend has failed, or too many of the rest have. Read which ones below: some of these tests are about the price, and some are about whether the company is solid enough that its price is worth arguing about. The two mean quite different things and this state does not distinguish them.",
         "fix": null
        },
-       "payload": {
-        "size": {
-         "unit": "weight",
-         "value": 5.0
-        },
-        "condition": null
-       },
+       "payload": {},
        "reason": {
-        "rule": "qualifies",
-        "summary": "Every knockout test passed and 8 of 8 core tests did, against a bar of 6. The size is 5% of the account, set by an equal share of your places.",
+        "rule": "knockout-failed",
+        "summary": "1 of the 5 tests this strategy will not bend came back against it, and one is enough.",
         "evidence": [
          {
           "subject": {
@@ -1121,6 +1175,38 @@
            "absent": null
           },
           "outcome": "pass",
+          "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "market_cap",
+           "label": "Market capitalization",
+           "unit": "usd",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 278000000.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2025-06-08"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 300000000,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-market-cap",
+            "label": "Smallest company worth buying",
+            "unit": "usd"
+           },
+           "absent": null
+          },
+          "outcome": "fail",
           "group": "knockouts"
          },
          {
@@ -1382,38 +1468,6 @@
          {
           "subject": {
            "kind": "measure",
-           "id": "market_cap",
-           "label": "Market capitalization",
-           "unit": "usd",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": 278000000.0,
-           "source": "measure",
-           "cautions": [],
-           "provenance": [
-            "entered by hand on 2025-06-08"
-           ]
-          },
-          "test": {
-           "comparator": "at_least",
-           "phrase": "at least",
-           "threshold": 300000000,
-           "threshold_from": {
-            "kind": "value",
-            "id": "min-market-cap",
-            "label": "Smallest company worth buying",
-            "unit": "usd"
-           },
-           "absent": null
-          },
-          "outcome": "fail",
-          "group": "bonus"
-         },
-         {
-          "subject": {
-           "kind": "measure",
            "id": "ncav_to_market_cap",
            "label": "Net current asset value over market capitalization",
            "unit": "ratio",
@@ -1446,117 +1500,67 @@
          {
           "subject": {
            "kind": "measure",
-           "id": "earnings_yield_to_risk_free_multiple",
-           "label": "Earnings yield as a multiple of the risk-free rate",
+           "id": "pe_3y_avg_eps",
+           "label": "Price to earnings on three-year average EPS",
            "unit": "times",
            "explain": null
           },
           "observed": {
-           "status": "absent",
-           "reason": "no filing data is stored for this security — fetch data first",
-           "source": "measure"
+           "status": "known",
+           "value": 11.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2025-06-08"
+           ]
           },
           "test": {
-           "comparator": "at_least",
-           "phrase": "at least",
-           "threshold": 2,
-           "threshold_from": {
-            "kind": "value",
-            "id": "min-earnings-yield-multiple",
-            "label": "Lowest earnings yield against the risk-free rate",
-            "unit": "times"
-           },
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 12.5,
+           "threshold_from": null,
            "absent": null
           },
-          "outcome": "unknown",
+          "outcome": "pass",
           "group": "bonus"
          },
          {
           "subject": {
-           "kind": "fact",
-           "id": "portfolio.slots_occupied",
-           "label": "Positions held",
-           "unit": "count",
-           "explain": "How many separate securities this journal currently holds. A strategy that runs a fixed number of positions at once measures against this to know whether there is room for another."
-          },
-          "observed": {
-           "status": "known",
-           "value": 0,
-           "source": "fact",
-           "cautions": [],
-           "provenance": []
-          },
-          "test": {
-           "comparator": "below",
-           "phrase": "below",
-           "threshold": 20,
-           "threshold_from": {
-            "kind": "value",
-            "id": "portfolio-slots",
-            "label": "Names held at once",
-            "unit": "count"
-           },
-           "absent": null
-          },
-          "outcome": "pass",
-          "group": "sizing"
-         },
-         {
-          "subject": {
            "kind": "value",
-           "id": "portfolio-slots",
-           "label": "Names held at once",
-           "unit": "count",
-           "explain": "How many separate companies this strategy holds at one time. Each buy takes an equal share of the account, so twenty names means about five percent each, and once every place is taken a new candidate is told there is no room rather than being talked down.\n\nGraham's own guidance is a list of somewhere between ten and thirty names, and the twenty here sits in the middle of it. Move toward ten and each position gets larger, which means one company being a fraud or a fraud-shaped accident costs you more than the rest of the list can absorb — and this strategy deliberately does not form an opinion about whether a business is good, so it has nothing to offer in defence of a concentrated bet. Move toward thirty and each position gets small enough that the work of following it stops paying for itself. Past thirty you own the market with extra steps.\n\nThis figure and the position cap below are the only two here that do not come from the expert report — it was never asked about sizing. They come from Graham's documented practice instead."
+           "id": "min-earnings-yield-multiple",
+           "label": "Lowest earnings yield against the risk-free rate",
+           "unit": "times",
+           "explain": "How many times more the company's earnings pay you than lending the same money to the government would. At 2.0 the stock's earnings yield is twice the risk-free rate; at 1.0 you are taking every risk of owning a business for a government-bond return.\n\nGraham's Enterprising Investor test, which compared the earnings yield to the corporate bond yield of his day. It is the one test here that makes every other valuation level in the strategy aware of what interest rates are doing — a 6.7% earnings yield means something very different when cash pays 1% than when it pays 5%.\n\nThis and the risk-free rate below are read together, and what they come to is a ceiling on what you may pay for a dollar of typical earnings: at 2.0 against a rate of 4%, an earnings yield of 8% or better, which is 12.5 times earnings or less. That is the figure the test is shown against, because it is the one being compared.\n\nIt is a bonus test: failing it never blocks a buy. Expect it to fail often at a high risk-free rate — that is the test working, and it is telling you the same money is being offered a competitive return with none of the risk."
           },
           "observed": {
            "status": "known",
-           "value": 20,
+           "value": 2,
            "source": "value",
            "cautions": [],
            "provenance": []
           },
           "test": null,
           "outcome": "noted",
-          "group": "sizing"
+          "group": "bonus"
          },
          {
           "subject": {
            "kind": "value",
-           "id": "position-weight-cap",
-           "label": "Largest one name may get",
+           "id": "risk-free-rate",
+           "label": "The risk-free rate",
            "unit": "percent",
-           "explain": "The most of your account any single holding is allowed to be. It almost never binds when you buy — an equal share of twenty names is five percent, well under it — and it exists for what happens afterwards, when one name doubles and doubles again while the rest sit still. At that point the spread you thought you had is gone, and this is what notices.\n\nTen percent is the weight of one name in a list of ten, which is the concentrated end of Graham's own range. A position larger than that is more concentrated than his most concentrated list, on a business he would be the first to say he had no particular faith in.\n\nIt needs your free cash to be answered in settings, because a share of the account cannot be worked out without knowing what the account is. Unanswered, this test reports that it could not be run.\n\nAttributed to Graham's practice, not to the expert report, which does not cover sizing."
+           "explain": "What lending money to the government pays right now: the yield on the ten-year US Treasury note, as an annual percentage. It is the return you can have without taking any business risk at all, so it is what owning a business has to beat before the risk is worth taking.\n\n**This is the one number here you have to maintain, and it is the only one that goes wrong just by sitting still.** Nothing in this program fetches it — it is in no filing and it is not price data — so the figure shipped with the strategy is a starting point and nothing more. Look up the current ten-year Treasury yield and set it here; when rates move, come back. A rate left at 4% while the market pays 6% quietly makes this test easier than you agreed it should be.\n\nIt is here as a setting rather than as a question at setup so that changing it is recorded: the day you moved it, what it was, and what it became go on this journal's record of rule changes, next to the reason you give. A number that sets a bar and can be adjusted without trace is the thing this journal exists to prevent."
           },
           "observed": {
            "status": "known",
-           "value": 10,
+           "value": 4.0,
            "source": "value",
            "cautions": [],
            "provenance": []
           },
           "test": null,
           "outcome": "noted",
-          "group": "sizing"
-         },
-         {
-          "subject": {
-           "kind": "stated",
-           "id": null,
-           "label": "Size this buy",
-           "unit": "percent",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": 5.0,
-           "source": "stated",
-           "cautions": [],
-           "provenance": []
-          },
-          "test": null,
-          "outcome": "noted",
-          "group": "sizing"
+          "group": "bonus"
          }
         ],
         "groups": [
@@ -1565,12 +1569,12 @@
           "name": "Tests this strategy will not bend",
           "requires": "all",
           "test": null,
-          "members": 4,
-          "tested": 4,
+          "members": 5,
+          "tested": 5,
           "passed": 4,
-          "failed": 0,
+          "failed": 1,
           "unknown": 0,
-          "outcome": "pass"
+          "outcome": "fail"
          },
          {
           "id": "core",
@@ -1600,24 +1604,12 @@
           "name": "Reported, never blocking",
           "requires": "noted",
           "test": null,
-          "members": 3,
-          "tested": 3,
-          "passed": 1,
-          "failed": 1,
-          "unknown": 1,
-          "outcome": "noted"
-         },
-         {
-          "id": "sizing",
-          "name": "Room in the list, and how much",
-          "requires": "all",
-          "test": null,
           "members": 4,
-          "tested": 1,
-          "passed": 1,
+          "tested": 2,
+          "passed": 2,
           "failed": 0,
           "unknown": 0,
-          "outcome": "pass"
+          "outcome": "noted"
          }
         ],
         "note": null
@@ -1626,16 +1618,16 @@
        "strategy": {
         "id": "graham",
         "name": "Graham",
-        "version": 2,
-        "values_version": 1,
+        "version": 3,
+        "values_version": 2,
         "contract": 5
        }
       },
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 2,
-       "values_version": 1,
+       "version": 3,
+       "values_version": 2,
        "contract": 5
       },
       "metrics": {
@@ -1801,169 +1793,169 @@
      "seq": 1,
      "id": "pe_3y_avg_eps",
      "value": 11.0,
-     "recorded": "2025-06-08T14:00:00+00:00"
+     "recorded": "2025-06-08T12:00:00-04:00"
     },
     {
      "seq": 2,
      "id": "price_to_book",
      "value": 1.31,
-     "recorded": "2025-06-08T14:00:00+00:00"
+     "recorded": "2025-06-08T12:00:00-04:00"
     },
     {
      "seq": 3,
      "id": "graham_combined_multiple",
      "value": 14.41,
-     "recorded": "2025-06-08T14:00:00+00:00"
+     "recorded": "2025-06-08T12:00:00-04:00"
     },
     {
      "seq": 4,
      "id": "current_ratio",
      "value": 2.3,
-     "recorded": "2025-06-08T14:00:00+00:00"
+     "recorded": "2025-06-08T12:00:00-04:00"
     },
     {
      "seq": 5,
      "id": "ltd_to_working_capital",
      "value": 0.51,
-     "recorded": "2025-06-08T14:00:00+00:00"
+     "recorded": "2025-06-08T12:00:00-04:00"
     },
     {
      "seq": 6,
      "id": "profitable_years_10y",
      "value": 10.0,
-     "recorded": "2025-06-08T14:00:00+00:00"
+     "recorded": "2025-06-08T12:00:00-04:00"
     },
     {
      "seq": 7,
      "id": "altman_z_score",
      "value": 3.6,
-     "recorded": "2025-06-08T14:00:00+00:00"
+     "recorded": "2025-06-08T12:00:00-04:00"
     },
     {
      "seq": 8,
      "id": "eps_growth_10y",
      "value": 58.0,
-     "recorded": "2025-06-08T14:00:00+00:00"
+     "recorded": "2025-06-08T12:00:00-04:00"
     },
     {
      "seq": 9,
      "id": "consecutive_dividend_years",
      "value": 10.0,
-     "recorded": "2025-06-08T14:00:00+00:00"
+     "recorded": "2025-06-08T12:00:00-04:00"
     },
     {
      "seq": 10,
      "id": "debt_to_equity",
      "value": 0.38,
-     "recorded": "2025-06-08T14:00:00+00:00"
+     "recorded": "2025-06-08T12:00:00-04:00"
     },
     {
      "seq": 11,
      "id": "price_to_net_tangible_assets",
      "value": 1.5,
-     "recorded": "2025-06-08T14:00:00+00:00"
+     "recorded": "2025-06-08T12:00:00-04:00"
     },
     {
      "seq": 12,
      "id": "accruals_ratio",
      "value": 0.04,
-     "recorded": "2025-06-08T14:00:00+00:00"
+     "recorded": "2025-06-08T12:00:00-04:00"
     },
     {
      "seq": 13,
      "id": "market_cap",
      "value": 278000000.0,
-     "recorded": "2025-06-08T14:00:00+00:00"
+     "recorded": "2025-06-08T12:00:00-04:00"
     },
     {
      "seq": 14,
      "id": "ncav_to_market_cap",
      "value": 0.61,
-     "recorded": "2025-06-08T14:00:00+00:00"
+     "recorded": "2025-06-08T12:00:00-04:00"
     },
     {
      "seq": 15,
      "id": "consecutive_annual_loss_years",
      "value": 0.0,
-     "recorded": "2025-06-08T14:00:00+00:00"
+     "recorded": "2025-06-08T12:00:00-04:00"
     },
     {
      "seq": 16,
      "id": "pe_3y_avg_eps",
      "value": 19.2,
-     "recorded": "2026-08-02T14:00:00+00:00"
+     "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 17,
      "id": "price_to_book",
      "value": 3.28,
-     "recorded": "2026-08-02T14:00:00+00:00"
+     "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 18,
      "id": "graham_combined_multiple",
      "value": 62.98,
-     "recorded": "2026-08-02T14:00:00+00:00"
+     "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 19,
      "id": "current_ratio",
      "value": 2.1,
-     "recorded": "2026-08-02T14:00:00+00:00"
+     "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 20,
      "id": "ltd_to_working_capital",
      "value": 0.55,
-     "recorded": "2026-08-02T14:00:00+00:00"
+     "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 21,
      "id": "altman_z_score",
      "value": 4.4,
-     "recorded": "2026-08-02T14:00:00+00:00"
+     "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 22,
      "id": "eps_growth_10y",
      "value": 63.0,
-     "recorded": "2026-08-02T14:00:00+00:00"
+     "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 23,
      "id": "consecutive_dividend_years",
      "value": 11.0,
-     "recorded": "2026-08-02T14:00:00+00:00"
+     "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 24,
      "id": "debt_to_equity",
      "value": 0.35,
-     "recorded": "2026-08-02T14:00:00+00:00"
+     "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 25,
      "id": "price_to_net_tangible_assets",
      "value": 2.9,
-     "recorded": "2026-08-02T14:00:00+00:00"
+     "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 26,
      "id": "accruals_ratio",
      "value": 0.05,
-     "recorded": "2026-08-02T14:00:00+00:00"
+     "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 27,
      "id": "market_cap",
      "value": 488000000.0,
-     "recorded": "2026-08-02T14:00:00+00:00"
+     "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 28,
      "id": "ncav_to_market_cap",
      "value": 0.34,
-     "recorded": "2026-08-02T14:00:00+00:00"
+     "recorded": "2026-08-02T12:00:00-04:00"
     }
    ],
    "thesis": [
@@ -1972,18 +1964,22 @@
      "thesis": "Bought at a third of what the tubes and the plant are worth on the books, after a customer cancelled a contract that was 8% of revenue. The cancellation is real and it is not the business.",
      "falsifier": "Book value falling for two straight years, which would mean the plant is worth less than I thought rather than the market being wrong about it.",
      "reason": "",
-     "recorded": "2026-08-02T14:00:00+00:00"
+     "recorded": "2026-08-02T12:00:00-04:00"
     }
    ],
    "valuations": [],
    "notes": [
     {
-     "date": "2025-06-12T14:00:00+00:00",
-     "text": "Failed the size test — under $300M — and that is a bonus test, so it did not block anything. Worth remembering when it is hard to sell."
+     "date": "2025-06-12T12:00:00-04:00",
+     "text": "Bought this under the size floor. $278M against a floor of $300M is not far under it, and the strategy still said no — a floor that bends for a near miss is not a floor. What I am actually taking on is a company small enough that getting out of a position this size may not be quick, and that is a different risk from the one every other test here measures. Written down so that if it turns out to matter, it is on the record that I knew."
     },
     {
-     "date": "2026-08-02T14:00:00+00:00",
+     "date": "2026-08-02T12:00:00-04:00",
      "text": "The price has run and both valuation lines are crossed on this reading. The strategy will not act until a second filing says the same thing, which is the rule doing its job — and because every figure here is typed by hand there are no filings to confirm it with. That is the honest limit of running this without a data connection."
+    },
+    {
+     "date": "2025-06-12T12:00:00-04:00",
+     "text": "Bought against the signal (Not cheap enough under Graham, reconstructed for 2025-06-12 from the data available by then). Stated reason: Under the $300M size floor, at $278M. I am taking that on deliberately: the discount is on the plant and the tubes, which do not care what the market capitalisation is, and I am buying a size I could still get out of. If I am wrong it will be because I could not sell it, not because the plant was worth less than I thought."
     }
    ],
    "lot_seq": 1
@@ -1999,12 +1995,12 @@
      "seq": 1,
      "kind": "buy",
      "date": "2025-02-10",
-     "recorded": "2025-02-10T14:00:00+00:00",
+     "recorded": "2025-02-10T12:00:00-05:00",
      "shares": 520.0,
      "price": 15.85,
      "override": null,
      "snapshot": {
-      "frozen": "2025-02-10T14:00:00+00:00",
+      "frozen": "2025-02-10T12:00:00-05:00",
       "decision": {
        "render": "commit",
        "tier": "position",
@@ -2147,6 +2143,38 @@
             "id": "min-current-ratio",
             "label": "Lowest current ratio",
             "unit": "ratio"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "market_cap",
+           "label": "Market capitalization",
+           "unit": "usd",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 460000000.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2025-02-05"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 300000000,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-market-cap",
+            "label": "Smallest company worth buying",
+            "unit": "usd"
            },
            "absent": null
           },
@@ -2412,38 +2440,6 @@
          {
           "subject": {
            "kind": "measure",
-           "id": "market_cap",
-           "label": "Market capitalization",
-           "unit": "usd",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": 238000000.0,
-           "source": "measure",
-           "cautions": [],
-           "provenance": [
-            "entered by hand on 2025-02-05"
-           ]
-          },
-          "test": {
-           "comparator": "at_least",
-           "phrase": "at least",
-           "threshold": 300000000,
-           "threshold_from": {
-            "kind": "value",
-            "id": "min-market-cap",
-            "label": "Smallest company worth buying",
-            "unit": "usd"
-           },
-           "absent": null
-          },
-          "outcome": "fail",
-          "group": "bonus"
-         },
-         {
-          "subject": {
-           "kind": "measure",
            "id": "ncav_to_market_cap",
            "label": "Net current asset value over market capitalization",
            "unit": "ratio",
@@ -2476,29 +2472,66 @@
          {
           "subject": {
            "kind": "measure",
-           "id": "earnings_yield_to_risk_free_multiple",
-           "label": "Earnings yield as a multiple of the risk-free rate",
+           "id": "pe_3y_avg_eps",
+           "label": "Price to earnings on three-year average EPS",
            "unit": "times",
            "explain": null
           },
           "observed": {
-           "status": "absent",
-           "reason": "no filing data is stored for this security — fetch data first",
-           "source": "measure"
+           "status": "known",
+           "value": 8.9,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2025-02-05"
+           ]
           },
           "test": {
-           "comparator": "at_least",
-           "phrase": "at least",
-           "threshold": 2,
-           "threshold_from": {
-            "kind": "value",
-            "id": "min-earnings-yield-multiple",
-            "label": "Lowest earnings yield against the risk-free rate",
-            "unit": "times"
-           },
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 12.5,
+           "threshold_from": null,
            "absent": null
           },
-          "outcome": "unknown",
+          "outcome": "pass",
+          "group": "bonus"
+         },
+         {
+          "subject": {
+           "kind": "value",
+           "id": "min-earnings-yield-multiple",
+           "label": "Lowest earnings yield against the risk-free rate",
+           "unit": "times",
+           "explain": "How many times more the company's earnings pay you than lending the same money to the government would. At 2.0 the stock's earnings yield is twice the risk-free rate; at 1.0 you are taking every risk of owning a business for a government-bond return.\n\nGraham's Enterprising Investor test, which compared the earnings yield to the corporate bond yield of his day. It is the one test here that makes every other valuation level in the strategy aware of what interest rates are doing — a 6.7% earnings yield means something very different when cash pays 1% than when it pays 5%.\n\nThis and the risk-free rate below are read together, and what they come to is a ceiling on what you may pay for a dollar of typical earnings: at 2.0 against a rate of 4%, an earnings yield of 8% or better, which is 12.5 times earnings or less. That is the figure the test is shown against, because it is the one being compared.\n\nIt is a bonus test: failing it never blocks a buy. Expect it to fail often at a high risk-free rate — that is the test working, and it is telling you the same money is being offered a competitive return with none of the risk."
+          },
+          "observed": {
+           "status": "known",
+           "value": 2,
+           "source": "value",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "bonus"
+         },
+         {
+          "subject": {
+           "kind": "value",
+           "id": "risk-free-rate",
+           "label": "The risk-free rate",
+           "unit": "percent",
+           "explain": "What lending money to the government pays right now: the yield on the ten-year US Treasury note, as an annual percentage. It is the return you can have without taking any business risk at all, so it is what owning a business has to beat before the risk is worth taking.\n\n**This is the one number here you have to maintain, and it is the only one that goes wrong just by sitting still.** Nothing in this program fetches it — it is in no filing and it is not price data — so the figure shipped with the strategy is a starting point and nothing more. Look up the current ten-year Treasury yield and set it here; when rates move, come back. A rate left at 4% while the market pays 6% quietly makes this test easier than you agreed it should be.\n\nIt is here as a setting rather than as a question at setup so that changing it is recorded: the day you moved it, what it was, and what it became go on this journal's record of rule changes, next to the reason you give. A number that sets a bar and can be adjusted without trace is the thing this journal exists to prevent."
+          },
+          "observed": {
+           "status": "known",
+           "value": 4.0,
+           "source": "value",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": null,
+          "outcome": "noted",
           "group": "bonus"
          },
          {
@@ -2595,9 +2628,9 @@
           "name": "Tests this strategy will not bend",
           "requires": "all",
           "test": null,
-          "members": 4,
-          "tested": 4,
-          "passed": 4,
+          "members": 5,
+          "tested": 5,
+          "passed": 5,
           "failed": 0,
           "unknown": 0,
           "outcome": "pass"
@@ -2630,11 +2663,11 @@
           "name": "Reported, never blocking",
           "requires": "noted",
           "test": null,
-          "members": 3,
-          "tested": 3,
-          "passed": 1,
-          "failed": 1,
-          "unknown": 1,
+          "members": 4,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
           "outcome": "noted"
          },
          {
@@ -2656,16 +2689,16 @@
        "strategy": {
         "id": "graham",
         "name": "Graham",
-        "version": 2,
-        "values_version": 1,
+        "version": 3,
+        "values_version": 2,
         "contract": 5
        }
       },
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 2,
-       "values_version": 1,
+       "version": 3,
+       "values_version": 2,
        "contract": 5
       },
       "metrics": {
@@ -2766,7 +2799,7 @@
         ]
        },
        "market_cap": {
-        "value": 238000000.0,
+        "value": 460000000.0,
         "source": "manual",
         "cautions": [],
         "provenance": [
@@ -2831,181 +2864,181 @@
      "seq": 1,
      "id": "pe_3y_avg_eps",
      "value": 8.9,
-     "recorded": "2025-02-05T14:00:00+00:00"
+     "recorded": "2025-02-05T12:00:00-05:00"
     },
     {
      "seq": 2,
      "id": "price_to_book",
      "value": 0.71,
-     "recorded": "2025-02-05T14:00:00+00:00"
+     "recorded": "2025-02-05T12:00:00-05:00"
     },
     {
      "seq": 3,
      "id": "graham_combined_multiple",
      "value": 6.32,
-     "recorded": "2025-02-05T14:00:00+00:00"
+     "recorded": "2025-02-05T12:00:00-05:00"
     },
     {
      "seq": 4,
      "id": "current_ratio",
      "value": 2.4,
-     "recorded": "2025-02-05T14:00:00+00:00"
+     "recorded": "2025-02-05T12:00:00-05:00"
     },
     {
      "seq": 5,
      "id": "ltd_to_working_capital",
      "value": 0.7,
-     "recorded": "2025-02-05T14:00:00+00:00"
+     "recorded": "2025-02-05T12:00:00-05:00"
     },
     {
      "seq": 6,
      "id": "profitable_years_10y",
      "value": 10.0,
-     "recorded": "2025-02-05T14:00:00+00:00"
+     "recorded": "2025-02-05T12:00:00-05:00"
     },
     {
      "seq": 7,
      "id": "altman_z_score",
      "value": 3.1,
-     "recorded": "2025-02-05T14:00:00+00:00"
+     "recorded": "2025-02-05T12:00:00-05:00"
     },
     {
      "seq": 8,
      "id": "eps_growth_10y",
      "value": 36.0,
-     "recorded": "2025-02-05T14:00:00+00:00"
+     "recorded": "2025-02-05T12:00:00-05:00"
     },
     {
      "seq": 9,
      "id": "consecutive_dividend_years",
      "value": 13.0,
-     "recorded": "2025-02-05T14:00:00+00:00"
+     "recorded": "2025-02-05T12:00:00-05:00"
     },
     {
      "seq": 10,
      "id": "debt_to_equity",
      "value": 0.8,
-     "recorded": "2025-02-05T14:00:00+00:00"
+     "recorded": "2025-02-05T12:00:00-05:00"
     },
     {
      "seq": 11,
      "id": "price_to_net_tangible_assets",
      "value": 1.1,
-     "recorded": "2025-02-05T14:00:00+00:00"
+     "recorded": "2025-02-05T12:00:00-05:00"
     },
     {
      "seq": 12,
      "id": "accruals_ratio",
      "value": 0.06,
-     "recorded": "2025-02-05T14:00:00+00:00"
+     "recorded": "2025-02-05T12:00:00-05:00"
     },
     {
      "seq": 13,
      "id": "market_cap",
-     "value": 238000000.0,
-     "recorded": "2025-02-05T14:00:00+00:00"
+     "value": 460000000.0,
+     "recorded": "2025-02-05T12:00:00-05:00"
     },
     {
      "seq": 14,
      "id": "ncav_to_market_cap",
      "value": 0.66,
-     "recorded": "2025-02-05T14:00:00+00:00"
+     "recorded": "2025-02-05T12:00:00-05:00"
     },
     {
      "seq": 15,
      "id": "consecutive_annual_loss_years",
      "value": 0.0,
-     "recorded": "2025-02-05T14:00:00+00:00"
+     "recorded": "2025-02-05T12:00:00-05:00"
     },
     {
      "seq": 16,
      "id": "pe_3y_avg_eps",
      "value": null,
-     "recorded": "2026-07-28T14:00:00+00:00"
+     "recorded": "2026-07-28T12:00:00-04:00"
     },
     {
      "seq": 17,
      "id": "graham_combined_multiple",
      "value": null,
-     "recorded": "2026-07-28T14:00:00+00:00"
+     "recorded": "2026-07-28T12:00:00-04:00"
     },
     {
      "seq": 18,
      "id": "eps_growth_10y",
      "value": null,
-     "recorded": "2026-07-28T14:00:00+00:00"
+     "recorded": "2026-07-28T12:00:00-04:00"
     },
     {
      "seq": 19,
      "id": "price_to_book",
      "value": 0.62,
-     "recorded": "2026-07-28T14:00:00+00:00"
+     "recorded": "2026-07-28T12:00:00-04:00"
     },
     {
      "seq": 20,
      "id": "current_ratio",
      "value": 1.6,
-     "recorded": "2026-07-28T14:00:00+00:00"
+     "recorded": "2026-07-28T12:00:00-04:00"
     },
     {
      "seq": 21,
      "id": "ltd_to_working_capital",
      "value": 1.4,
-     "recorded": "2026-07-28T14:00:00+00:00"
+     "recorded": "2026-07-28T12:00:00-04:00"
     },
     {
      "seq": 22,
      "id": "profitable_years_10y",
      "value": 8.0,
-     "recorded": "2026-07-28T14:00:00+00:00"
+     "recorded": "2026-07-28T12:00:00-04:00"
     },
     {
      "seq": 23,
      "id": "altman_z_score",
      "value": 1.55,
-     "recorded": "2026-07-28T14:00:00+00:00"
+     "recorded": "2026-07-28T12:00:00-04:00"
     },
     {
      "seq": 24,
      "id": "consecutive_dividend_years",
      "value": 0.0,
-     "recorded": "2026-07-28T14:00:00+00:00"
+     "recorded": "2026-07-28T12:00:00-04:00"
     },
     {
      "seq": 25,
      "id": "debt_to_equity",
      "value": 1.7,
-     "recorded": "2026-07-28T14:00:00+00:00"
+     "recorded": "2026-07-28T12:00:00-04:00"
     },
     {
      "seq": 26,
      "id": "price_to_net_tangible_assets",
      "value": 0.9,
-     "recorded": "2026-07-28T14:00:00+00:00"
+     "recorded": "2026-07-28T12:00:00-04:00"
     },
     {
      "seq": 27,
      "id": "accruals_ratio",
      "value": 0.14,
-     "recorded": "2026-07-28T14:00:00+00:00"
+     "recorded": "2026-07-28T12:00:00-04:00"
     },
     {
      "seq": 28,
      "id": "market_cap",
      "value": 141000000.0,
-     "recorded": "2026-07-28T14:00:00+00:00"
+     "recorded": "2026-07-28T12:00:00-04:00"
     },
     {
      "seq": 29,
      "id": "ncav_to_market_cap",
      "value": 0.44,
-     "recorded": "2026-07-28T14:00:00+00:00"
+     "recorded": "2026-07-28T12:00:00-04:00"
     },
     {
      "seq": 30,
      "id": "consecutive_annual_loss_years",
      "value": 2.0,
-     "recorded": "2026-07-28T14:00:00+00:00"
+     "recorded": "2026-07-28T12:00:00-04:00"
     }
    ],
    "thesis": [
@@ -3014,17 +3047,17 @@
      "thesis": "Speciality chemicals at 0.7 times book with thirteen years of dividends. The plant is worth more than the whole company.",
      "falsifier": "A second consecutive annual loss, or the bankruptcy score dropping into the distress zone. Either would mean the plant being worth something is no longer the question.",
      "reason": "",
-     "recorded": "2026-07-28T14:00:00+00:00"
+     "recorded": "2026-07-28T12:00:00-04:00"
     }
    ],
    "valuations": [],
    "notes": [
     {
-     "date": "2025-02-10T14:00:00+00:00",
+     "date": "2025-02-10T12:00:00-05:00",
      "text": "Cheap on assets. Everything else is ordinary."
     },
     {
-     "date": "2026-07-28T14:00:00+00:00",
+     "date": "2026-07-28T12:00:00-04:00",
      "text": "Both halves of my falsifier fired. There is no earnings multiple on the screen because there are no earnings to divide by — the strategy reports that as unknown rather than as a pass, which is the difference between not knowing and being reassured."
     }
    ],
@@ -3041,12 +3074,12 @@
      "seq": 1,
      "kind": "buy",
      "date": "2024-03-08",
-     "recorded": "2024-03-08T14:00:00+00:00",
+     "recorded": "2024-03-08T12:00:00-05:00",
      "shares": 200.0,
      "price": 25.9,
      "override": null,
      "snapshot": {
-      "frozen": "2024-03-08T14:00:00+00:00",
+      "frozen": "2024-03-08T12:00:00-05:00",
       "decision": {
        "render": "commit",
        "tier": "position",
@@ -3189,6 +3222,38 @@
             "id": "min-current-ratio",
             "label": "Lowest current ratio",
             "unit": "ratio"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "market_cap",
+           "label": "Market capitalization",
+           "unit": "usd",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 372000000.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-03-04"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 300000000,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-market-cap",
+            "label": "Smallest company worth buying",
+            "unit": "usd"
            },
            "absent": null
           },
@@ -3454,38 +3519,6 @@
          {
           "subject": {
            "kind": "measure",
-           "id": "market_cap",
-           "label": "Market capitalization",
-           "unit": "usd",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": 372000000.0,
-           "source": "measure",
-           "cautions": [],
-           "provenance": [
-            "entered by hand on 2024-03-04"
-           ]
-          },
-          "test": {
-           "comparator": "at_least",
-           "phrase": "at least",
-           "threshold": 300000000,
-           "threshold_from": {
-            "kind": "value",
-            "id": "min-market-cap",
-            "label": "Smallest company worth buying",
-            "unit": "usd"
-           },
-           "absent": null
-          },
-          "outcome": "pass",
-          "group": "bonus"
-         },
-         {
-          "subject": {
-           "kind": "measure",
            "id": "ncav_to_market_cap",
            "label": "Net current asset value over market capitalization",
            "unit": "ratio",
@@ -3518,29 +3551,66 @@
          {
           "subject": {
            "kind": "measure",
-           "id": "earnings_yield_to_risk_free_multiple",
-           "label": "Earnings yield as a multiple of the risk-free rate",
+           "id": "pe_3y_avg_eps",
+           "label": "Price to earnings on three-year average EPS",
            "unit": "times",
            "explain": null
           },
           "observed": {
-           "status": "absent",
-           "reason": "no filing data is stored for this security — fetch data first",
-           "source": "measure"
+           "status": "known",
+           "value": 13.1,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-03-04"
+           ]
           },
           "test": {
-           "comparator": "at_least",
-           "phrase": "at least",
-           "threshold": 2,
-           "threshold_from": {
-            "kind": "value",
-            "id": "min-earnings-yield-multiple",
-            "label": "Lowest earnings yield against the risk-free rate",
-            "unit": "times"
-           },
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 12.5,
+           "threshold_from": null,
            "absent": null
           },
-          "outcome": "unknown",
+          "outcome": "fail",
+          "group": "bonus"
+         },
+         {
+          "subject": {
+           "kind": "value",
+           "id": "min-earnings-yield-multiple",
+           "label": "Lowest earnings yield against the risk-free rate",
+           "unit": "times",
+           "explain": "How many times more the company's earnings pay you than lending the same money to the government would. At 2.0 the stock's earnings yield is twice the risk-free rate; at 1.0 you are taking every risk of owning a business for a government-bond return.\n\nGraham's Enterprising Investor test, which compared the earnings yield to the corporate bond yield of his day. It is the one test here that makes every other valuation level in the strategy aware of what interest rates are doing — a 6.7% earnings yield means something very different when cash pays 1% than when it pays 5%.\n\nThis and the risk-free rate below are read together, and what they come to is a ceiling on what you may pay for a dollar of typical earnings: at 2.0 against a rate of 4%, an earnings yield of 8% or better, which is 12.5 times earnings or less. That is the figure the test is shown against, because it is the one being compared.\n\nIt is a bonus test: failing it never blocks a buy. Expect it to fail often at a high risk-free rate — that is the test working, and it is telling you the same money is being offered a competitive return with none of the risk."
+          },
+          "observed": {
+           "status": "known",
+           "value": 2,
+           "source": "value",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "bonus"
+         },
+         {
+          "subject": {
+           "kind": "value",
+           "id": "risk-free-rate",
+           "label": "The risk-free rate",
+           "unit": "percent",
+           "explain": "What lending money to the government pays right now: the yield on the ten-year US Treasury note, as an annual percentage. It is the return you can have without taking any business risk at all, so it is what owning a business has to beat before the risk is worth taking.\n\n**This is the one number here you have to maintain, and it is the only one that goes wrong just by sitting still.** Nothing in this program fetches it — it is in no filing and it is not price data — so the figure shipped with the strategy is a starting point and nothing more. Look up the current ten-year Treasury yield and set it here; when rates move, come back. A rate left at 4% while the market pays 6% quietly makes this test easier than you agreed it should be.\n\nIt is here as a setting rather than as a question at setup so that changing it is recorded: the day you moved it, what it was, and what it became go on this journal's record of rule changes, next to the reason you give. A number that sets a bar and can be adjusted without trace is the thing this journal exists to prevent."
+          },
+          "observed": {
+           "status": "known",
+           "value": 4.0,
+           "source": "value",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": null,
+          "outcome": "noted",
           "group": "bonus"
          },
          {
@@ -3637,9 +3707,9 @@
           "name": "Tests this strategy will not bend",
           "requires": "all",
           "test": null,
-          "members": 4,
-          "tested": 4,
-          "passed": 4,
+          "members": 5,
+          "tested": 5,
+          "passed": 5,
           "failed": 0,
           "unknown": 0,
           "outcome": "pass"
@@ -3672,11 +3742,11 @@
           "name": "Reported, never blocking",
           "requires": "noted",
           "test": null,
-          "members": 3,
-          "tested": 3,
-          "passed": 2,
-          "failed": 0,
-          "unknown": 1,
+          "members": 4,
+          "tested": 2,
+          "passed": 1,
+          "failed": 1,
+          "unknown": 0,
           "outcome": "noted"
          },
          {
@@ -3698,16 +3768,16 @@
        "strategy": {
         "id": "graham",
         "name": "Graham",
-        "version": 2,
-        "values_version": 1,
+        "version": 3,
+        "values_version": 2,
         "contract": 5
        }
       },
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 2,
-       "values_version": 1,
+       "version": 3,
+       "values_version": 2,
        "contract": 5
       },
       "metrics": {
@@ -3867,7 +3937,7 @@
        "thesis": "Foundry work for rail and marine, priced at 1.3 times book with seventeen years of dividends. The discount is the reason and the only reason.",
        "falsifier": "The current ratio under 1.2, or two losing years. I have no view on whether this business is good.",
        "reason": "",
-       "recorded": "2024-03-04T14:00:00+00:00"
+       "recorded": "2024-03-04T12:00:00-05:00"
       },
       "valuation": null
      }
@@ -3879,91 +3949,91 @@
      "seq": 1,
      "id": "pe_3y_avg_eps",
      "value": 13.1,
-     "recorded": "2024-03-04T14:00:00+00:00"
+     "recorded": "2024-03-04T12:00:00-05:00"
     },
     {
      "seq": 2,
      "id": "price_to_book",
      "value": 1.28,
-     "recorded": "2024-03-04T14:00:00+00:00"
+     "recorded": "2024-03-04T12:00:00-05:00"
     },
     {
      "seq": 3,
      "id": "graham_combined_multiple",
      "value": 16.77,
-     "recorded": "2024-03-04T14:00:00+00:00"
+     "recorded": "2024-03-04T12:00:00-05:00"
     },
     {
      "seq": 4,
      "id": "current_ratio",
      "value": 2.35,
-     "recorded": "2024-03-04T14:00:00+00:00"
+     "recorded": "2024-03-04T12:00:00-05:00"
     },
     {
      "seq": 5,
      "id": "ltd_to_working_capital",
      "value": 0.6,
-     "recorded": "2024-03-04T14:00:00+00:00"
+     "recorded": "2024-03-04T12:00:00-05:00"
     },
     {
      "seq": 6,
      "id": "profitable_years_10y",
      "value": 10.0,
-     "recorded": "2024-03-04T14:00:00+00:00"
+     "recorded": "2024-03-04T12:00:00-05:00"
     },
     {
      "seq": 7,
      "id": "altman_z_score",
      "value": 3.2,
-     "recorded": "2024-03-04T14:00:00+00:00"
+     "recorded": "2024-03-04T12:00:00-05:00"
     },
     {
      "seq": 8,
      "id": "eps_growth_10y",
      "value": 39.0,
-     "recorded": "2024-03-04T14:00:00+00:00"
+     "recorded": "2024-03-04T12:00:00-05:00"
     },
     {
      "seq": 9,
      "id": "consecutive_dividend_years",
      "value": 17.0,
-     "recorded": "2024-03-04T14:00:00+00:00"
+     "recorded": "2024-03-04T12:00:00-05:00"
     },
     {
      "seq": 10,
      "id": "debt_to_equity",
      "value": 0.7,
-     "recorded": "2024-03-04T14:00:00+00:00"
+     "recorded": "2024-03-04T12:00:00-05:00"
     },
     {
      "seq": 11,
      "id": "price_to_net_tangible_assets",
      "value": 1.6,
-     "recorded": "2024-03-04T14:00:00+00:00"
+     "recorded": "2024-03-04T12:00:00-05:00"
     },
     {
      "seq": 12,
      "id": "accruals_ratio",
      "value": 0.03,
-     "recorded": "2024-03-04T14:00:00+00:00"
+     "recorded": "2024-03-04T12:00:00-05:00"
     },
     {
      "seq": 13,
      "id": "market_cap",
      "value": 372000000.0,
-     "recorded": "2024-03-04T14:00:00+00:00"
+     "recorded": "2024-03-04T12:00:00-05:00"
     },
     {
      "seq": 14,
      "id": "ncav_to_market_cap",
      "value": 0.55,
-     "recorded": "2024-03-04T14:00:00+00:00"
+     "recorded": "2024-03-04T12:00:00-05:00"
     },
     {
      "seq": 15,
      "id": "consecutive_annual_loss_years",
      "value": 0.0,
-     "recorded": "2024-03-04T14:00:00+00:00"
+     "recorded": "2024-03-04T12:00:00-05:00"
     }
    ],
    "thesis": [
@@ -3972,17 +4042,17 @@
      "thesis": "Foundry work for rail and marine, priced at 1.3 times book with seventeen years of dividends. The discount is the reason and the only reason.",
      "falsifier": "The current ratio under 1.2, or two losing years. I have no view on whether this business is good.",
      "reason": "",
-     "recorded": "2024-03-04T14:00:00+00:00"
+     "recorded": "2024-03-04T12:00:00-05:00"
     }
    ],
    "valuations": [],
    "notes": [
     {
-     "date": "2024-03-08T14:00:00+00:00",
+     "date": "2024-03-08T12:00:00-05:00",
      "text": "Bought on the numbers. Nothing else."
     },
     {
-     "date": "2026-08-09T14:00:00+00:00",
+     "date": "2026-08-09T12:00:00-04:00",
      "text": "Twenty-nine months in and up 6%. Nothing has broken and nothing has closed. This is the case the two-year clock exists for: a discount that simply sits there is how this style of investing quietly fails, and no measure can hold 'it has been two years'."
     }
    ],
@@ -3999,7 +4069,7 @@
      "seq": 1,
      "kind": "buy",
      "date": "2024-11-19",
-     "recorded": "2024-11-19T14:00:00+00:00",
+     "recorded": "2024-11-19T12:00:00-05:00",
      "shares": 300.0,
      "price": 20.1,
      "override": {
@@ -4007,14 +4077,14 @@
       "kind": "against",
       "state": "Not cheap enough",
       "rule": "knockout-failed",
-      "summary": "2 of the 4 tests this strategy will not bend came back against it, and one is enough.",
+      "summary": "2 of the 5 tests this strategy will not bend came back against it, and one is enough.",
       "basis": "reconstructed",
       "as_of": "2024-11-19",
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 2,
-       "values_version": 1,
+       "version": 3,
+       "values_version": 2,
        "contract": 5
       },
       "failed": [
@@ -4033,18 +4103,17 @@
        {
         "key": "value:min-ncav-to-market-cap",
         "label": "Lowest liquid assets against the price"
-       }
-      ],
-      "missing": [
+       },
        {
-        "key": "value:min-earnings-yield-multiple",
-        "label": "Lowest earnings yield against the risk-free rate"
+        "key": "measure:pe_3y_avg_eps",
+        "label": "Price to earnings on three-year average EPS"
        }
       ],
+      "missing": [],
       "reason": "The yard is carried at 1974 cost and the book value the test is measuring against is therefore wrong. I accept this is exactly what someone talking themselves into a stock sounds like."
      },
      "snapshot": {
-      "frozen": "2024-11-19T14:00:00+00:00",
+      "frozen": "2024-11-19T12:00:00-05:00",
       "decision": {
        "render": "hold",
        "tier": "position",
@@ -4057,7 +4126,7 @@
        "payload": {},
        "reason": {
         "rule": "knockout-failed",
-        "summary": "2 of the 4 tests this strategy will not bend came back against it, and one is enough.",
+        "summary": "2 of the 5 tests this strategy will not bend came back against it, and one is enough.",
         "evidence": [
          {
           "subject": {
@@ -4181,6 +4250,38 @@
             "id": "min-current-ratio",
             "label": "Lowest current ratio",
             "unit": "ratio"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "market_cap",
+           "label": "Market capitalization",
+           "unit": "usd",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 478000000.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-11-15"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 300000000,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-market-cap",
+            "label": "Smallest company worth buying",
+            "unit": "usd"
            },
            "absent": null
           },
@@ -4446,38 +4547,6 @@
          {
           "subject": {
            "kind": "measure",
-           "id": "market_cap",
-           "label": "Market capitalization",
-           "unit": "usd",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": 478000000.0,
-           "source": "measure",
-           "cautions": [],
-           "provenance": [
-            "entered by hand on 2024-11-15"
-           ]
-          },
-          "test": {
-           "comparator": "at_least",
-           "phrase": "at least",
-           "threshold": 300000000,
-           "threshold_from": {
-            "kind": "value",
-            "id": "min-market-cap",
-            "label": "Smallest company worth buying",
-            "unit": "usd"
-           },
-           "absent": null
-          },
-          "outcome": "pass",
-          "group": "bonus"
-         },
-         {
-          "subject": {
-           "kind": "measure",
            "id": "ncav_to_market_cap",
            "label": "Net current asset value over market capitalization",
            "unit": "ratio",
@@ -4510,29 +4579,66 @@
          {
           "subject": {
            "kind": "measure",
-           "id": "earnings_yield_to_risk_free_multiple",
-           "label": "Earnings yield as a multiple of the risk-free rate",
+           "id": "pe_3y_avg_eps",
+           "label": "Price to earnings on three-year average EPS",
            "unit": "times",
            "explain": null
           },
           "observed": {
-           "status": "absent",
-           "reason": "no filing data is stored for this security — fetch data first",
-           "source": "measure"
+           "status": "known",
+           "value": 14.1,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-11-15"
+           ]
           },
           "test": {
-           "comparator": "at_least",
-           "phrase": "at least",
-           "threshold": 2,
-           "threshold_from": {
-            "kind": "value",
-            "id": "min-earnings-yield-multiple",
-            "label": "Lowest earnings yield against the risk-free rate",
-            "unit": "times"
-           },
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 12.5,
+           "threshold_from": null,
            "absent": null
           },
-          "outcome": "unknown",
+          "outcome": "fail",
+          "group": "bonus"
+         },
+         {
+          "subject": {
+           "kind": "value",
+           "id": "min-earnings-yield-multiple",
+           "label": "Lowest earnings yield against the risk-free rate",
+           "unit": "times",
+           "explain": "How many times more the company's earnings pay you than lending the same money to the government would. At 2.0 the stock's earnings yield is twice the risk-free rate; at 1.0 you are taking every risk of owning a business for a government-bond return.\n\nGraham's Enterprising Investor test, which compared the earnings yield to the corporate bond yield of his day. It is the one test here that makes every other valuation level in the strategy aware of what interest rates are doing — a 6.7% earnings yield means something very different when cash pays 1% than when it pays 5%.\n\nThis and the risk-free rate below are read together, and what they come to is a ceiling on what you may pay for a dollar of typical earnings: at 2.0 against a rate of 4%, an earnings yield of 8% or better, which is 12.5 times earnings or less. That is the figure the test is shown against, because it is the one being compared.\n\nIt is a bonus test: failing it never blocks a buy. Expect it to fail often at a high risk-free rate — that is the test working, and it is telling you the same money is being offered a competitive return with none of the risk."
+          },
+          "observed": {
+           "status": "known",
+           "value": 2,
+           "source": "value",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "bonus"
+         },
+         {
+          "subject": {
+           "kind": "value",
+           "id": "risk-free-rate",
+           "label": "The risk-free rate",
+           "unit": "percent",
+           "explain": "What lending money to the government pays right now: the yield on the ten-year US Treasury note, as an annual percentage. It is the return you can have without taking any business risk at all, so it is what owning a business has to beat before the risk is worth taking.\n\n**This is the one number here you have to maintain, and it is the only one that goes wrong just by sitting still.** Nothing in this program fetches it — it is in no filing and it is not price data — so the figure shipped with the strategy is a starting point and nothing more. Look up the current ten-year Treasury yield and set it here; when rates move, come back. A rate left at 4% while the market pays 6% quietly makes this test easier than you agreed it should be.\n\nIt is here as a setting rather than as a question at setup so that changing it is recorded: the day you moved it, what it was, and what it became go on this journal's record of rule changes, next to the reason you give. A number that sets a bar and can be adjusted without trace is the thing this journal exists to prevent."
+          },
+          "observed": {
+           "status": "known",
+           "value": 4.0,
+           "source": "value",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": null,
+          "outcome": "noted",
           "group": "bonus"
          }
         ],
@@ -4542,9 +4648,9 @@
           "name": "Tests this strategy will not bend",
           "requires": "all",
           "test": null,
-          "members": 4,
-          "tested": 4,
-          "passed": 2,
+          "members": 5,
+          "tested": 5,
+          "passed": 3,
           "failed": 2,
           "unknown": 0,
           "outcome": "fail"
@@ -4577,11 +4683,11 @@
           "name": "Reported, never blocking",
           "requires": "noted",
           "test": null,
-          "members": 3,
-          "tested": 3,
-          "passed": 1,
-          "failed": 1,
-          "unknown": 1,
+          "members": 4,
+          "tested": 2,
+          "passed": 0,
+          "failed": 2,
+          "unknown": 0,
           "outcome": "noted"
          }
         ],
@@ -4591,16 +4697,16 @@
        "strategy": {
         "id": "graham",
         "name": "Graham",
-        "version": 2,
-        "values_version": 1,
+        "version": 3,
+        "values_version": 2,
         "contract": 5
        }
       },
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 2,
-       "values_version": 1,
+       "version": 3,
+       "values_version": 2,
        "contract": 5
       },
       "metrics": {
@@ -4759,169 +4865,169 @@
      "seq": 1,
      "id": "pe_3y_avg_eps",
      "value": 14.1,
-     "recorded": "2024-11-15T14:00:00+00:00"
+     "recorded": "2024-11-15T12:00:00-05:00"
     },
     {
      "seq": 2,
      "id": "price_to_book",
      "value": 1.94,
-     "recorded": "2024-11-15T14:00:00+00:00"
+     "recorded": "2024-11-15T12:00:00-05:00"
     },
     {
      "seq": 3,
      "id": "graham_combined_multiple",
      "value": 27.35,
-     "recorded": "2024-11-15T14:00:00+00:00"
+     "recorded": "2024-11-15T12:00:00-05:00"
     },
     {
      "seq": 4,
      "id": "current_ratio",
      "value": 2.1,
-     "recorded": "2024-11-15T14:00:00+00:00"
+     "recorded": "2024-11-15T12:00:00-05:00"
     },
     {
      "seq": 5,
      "id": "ltd_to_working_capital",
      "value": 0.34,
-     "recorded": "2024-11-15T14:00:00+00:00"
+     "recorded": "2024-11-15T12:00:00-05:00"
     },
     {
      "seq": 6,
      "id": "profitable_years_10y",
      "value": 10.0,
-     "recorded": "2024-11-15T14:00:00+00:00"
+     "recorded": "2024-11-15T12:00:00-05:00"
     },
     {
      "seq": 7,
      "id": "altman_z_score",
      "value": 4.1,
-     "recorded": "2024-11-15T14:00:00+00:00"
+     "recorded": "2024-11-15T12:00:00-05:00"
     },
     {
      "seq": 8,
      "id": "eps_growth_10y",
      "value": 64.0,
-     "recorded": "2024-11-15T14:00:00+00:00"
+     "recorded": "2024-11-15T12:00:00-05:00"
     },
     {
      "seq": 9,
      "id": "consecutive_dividend_years",
      "value": 10.0,
-     "recorded": "2024-11-15T14:00:00+00:00"
+     "recorded": "2024-11-15T12:00:00-05:00"
     },
     {
      "seq": 10,
      "id": "debt_to_equity",
      "value": 0.45,
-     "recorded": "2024-11-15T14:00:00+00:00"
+     "recorded": "2024-11-15T12:00:00-05:00"
     },
     {
      "seq": 11,
      "id": "price_to_net_tangible_assets",
      "value": 2.4,
-     "recorded": "2024-11-15T14:00:00+00:00"
+     "recorded": "2024-11-15T12:00:00-05:00"
     },
     {
      "seq": 12,
      "id": "accruals_ratio",
      "value": 0.03,
-     "recorded": "2024-11-15T14:00:00+00:00"
+     "recorded": "2024-11-15T12:00:00-05:00"
     },
     {
      "seq": 13,
      "id": "market_cap",
      "value": 478000000.0,
-     "recorded": "2024-11-15T14:00:00+00:00"
+     "recorded": "2024-11-15T12:00:00-05:00"
     },
     {
      "seq": 14,
      "id": "ncav_to_market_cap",
      "value": 0.4,
-     "recorded": "2024-11-15T14:00:00+00:00"
+     "recorded": "2024-11-15T12:00:00-05:00"
     },
     {
      "seq": 15,
      "id": "pe_3y_avg_eps",
      "value": 18.2,
-     "recorded": "2026-08-02T14:00:00+00:00"
+     "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 16,
      "id": "price_to_book",
      "value": 2.35,
-     "recorded": "2026-08-02T14:00:00+00:00"
+     "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 17,
      "id": "graham_combined_multiple",
      "value": 42.77,
-     "recorded": "2026-08-02T14:00:00+00:00"
+     "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 18,
      "id": "current_ratio",
      "value": 2.2,
-     "recorded": "2026-08-02T14:00:00+00:00"
+     "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 19,
      "id": "ltd_to_working_capital",
      "value": 0.3,
-     "recorded": "2026-08-02T14:00:00+00:00"
+     "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 20,
      "id": "altman_z_score",
      "value": 4.8,
-     "recorded": "2026-08-02T14:00:00+00:00"
+     "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 21,
      "id": "eps_growth_10y",
      "value": 71.0,
-     "recorded": "2026-08-02T14:00:00+00:00"
+     "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 22,
      "id": "consecutive_dividend_years",
      "value": 12.0,
-     "recorded": "2026-08-02T14:00:00+00:00"
+     "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 23,
      "id": "debt_to_equity",
      "value": 0.4,
-     "recorded": "2026-08-02T14:00:00+00:00"
+     "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 24,
      "id": "price_to_net_tangible_assets",
      "value": 3.1,
-     "recorded": "2026-08-02T14:00:00+00:00"
+     "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 25,
      "id": "accruals_ratio",
      "value": 0.02,
-     "recorded": "2026-08-02T14:00:00+00:00"
+     "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 26,
      "id": "market_cap",
      "value": 980000000.0,
-     "recorded": "2026-08-02T14:00:00+00:00"
+     "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 27,
      "id": "ncav_to_market_cap",
      "value": 0.21,
-     "recorded": "2026-08-02T14:00:00+00:00"
+     "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 28,
      "id": "consecutive_annual_loss_years",
      "value": 0.0,
-     "recorded": "2026-08-02T14:00:00+00:00"
+     "recorded": "2026-08-02T12:00:00-04:00"
     }
    ],
    "thesis": [
@@ -4930,21 +5036,21 @@
      "thesis": "Marine fittings, family controlled, no debt to speak of. Book value is understated because the yard was bought in 1974 and sits at cost.",
      "falsifier": "Debt to equity above 1.0, or the dividend run breaking.",
      "reason": "",
-     "recorded": "2026-08-02T14:00:00+00:00"
+     "recorded": "2026-08-02T12:00:00-04:00"
     }
    ],
    "valuations": [],
    "notes": [
     {
-     "date": "2024-11-19T14:00:00+00:00",
+     "date": "2024-11-19T12:00:00-05:00",
      "text": "The strategy said no: 1.94 times book against a limit of 1.5, and the combined multiple over the line too. I bought it anyway because I think the land is carried at nothing. Writing that down is the point — if I keep being right about this the limit is wrong, and if I keep being wrong I am."
     },
     {
-     "date": "2026-08-02T14:00:00+00:00",
+     "date": "2026-08-02T12:00:00-04:00",
      "text": "Up 105% and now 12% of the account against a cap of 10%. Nothing about the company has changed; the position has just got out of proportion to everything else, which is the risk a basket of twenty is supposed to avoid."
     },
     {
-     "date": "2024-11-19T14:00:00+00:00",
+     "date": "2024-11-19T12:00:00-05:00",
      "text": "Bought against the signal (Not cheap enough under Graham, reconstructed for 2024-11-19 from the data available by then). Stated reason: The yard is carried at 1974 cost and the book value the test is measuring against is therefore wrong. I accept this is exactly what someone talking themselves into a stock sounds like."
     }
    ],
@@ -4961,7 +5067,7 @@
      "seq": 1,
      "kind": "buy",
      "date": "2025-08-20",
-     "recorded": "2025-08-20T14:00:00+00:00",
+     "recorded": "2025-08-20T12:00:00-04:00",
      "shares": 190.0,
      "price": 15.1,
      "override": {
@@ -4969,14 +5075,14 @@
       "kind": "without",
       "state": "Not enough to go on",
       "rule": "screen-incomplete",
-      "summary": "12 of the tests that decide this could not be worked out from the data on record, and the ones that could do not settle it either way.",
+      "summary": "13 of the tests that decide this could not be worked out from the data on record, and the ones that could do not settle it either way.",
       "basis": "reconstructed",
       "as_of": "2025-08-20",
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 2,
-       "values_version": 1,
+       "version": 3,
+       "values_version": 2,
        "contract": 5
       },
       "failed": [],
@@ -4996,6 +5102,10 @@
        {
         "key": "value:min-current-ratio",
         "label": "Lowest current ratio"
+       },
+       {
+        "key": "value:min-market-cap",
+        "label": "Smallest company worth buying"
        },
        {
         "key": "value:max-ltd-to-working-capital",
@@ -5030,22 +5140,18 @@
         "label": "Highest accruals ratio"
        },
        {
-        "key": "value:min-market-cap",
-        "label": "Smallest company worth buying"
-       },
-       {
         "key": "value:min-ncav-to-market-cap",
         "label": "Lowest liquid assets against the price"
        },
        {
-        "key": "value:min-earnings-yield-multiple",
-        "label": "Lowest earnings yield against the risk-free rate"
+        "key": "measure:pe_3y_avg_eps",
+        "label": "Price to earnings on three-year average EPS"
        }
       ],
       "reason": "No figures on record for this company, so there was nothing to check it against. Buying first and filling the numbers in later is how I have always done it, which is what I am trying to stop."
      },
      "snapshot": {
-      "frozen": "2025-08-20T14:00:00+00:00",
+      "frozen": "2025-08-20T12:00:00-04:00",
       "decision": {
        "render": "unknown",
        "tier": "evaluation",
@@ -5058,7 +5164,7 @@
        "payload": {},
        "reason": {
         "rule": "screen-incomplete",
-        "summary": "12 of the tests that decide this could not be worked out from the data on record, and the ones that could do not settle it either way.",
+        "summary": "13 of the tests that decide this could not be worked out from the data on record, and the ones that could do not settle it either way.",
         "evidence": [
          {
           "subject": {
@@ -5166,6 +5272,34 @@
             "id": "min-current-ratio",
             "label": "Lowest current ratio",
             "unit": "ratio"
+           },
+           "absent": null
+          },
+          "outcome": "unknown",
+          "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "market_cap",
+           "label": "Market capitalization",
+           "unit": "usd",
+           "explain": null
+          },
+          "observed": {
+           "status": "absent",
+           "reason": "no filing data is stored for this security — fetch data first",
+           "source": "measure"
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 300000000,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-market-cap",
+            "label": "Smallest company worth buying",
+            "unit": "usd"
            },
            "absent": null
           },
@@ -5399,34 +5533,6 @@
          {
           "subject": {
            "kind": "measure",
-           "id": "market_cap",
-           "label": "Market capitalization",
-           "unit": "usd",
-           "explain": null
-          },
-          "observed": {
-           "status": "absent",
-           "reason": "no filing data is stored for this security — fetch data first",
-           "source": "measure"
-          },
-          "test": {
-           "comparator": "at_least",
-           "phrase": "at least",
-           "threshold": 300000000,
-           "threshold_from": {
-            "kind": "value",
-            "id": "min-market-cap",
-            "label": "Smallest company worth buying",
-            "unit": "usd"
-           },
-           "absent": null
-          },
-          "outcome": "unknown",
-          "group": "bonus"
-         },
-         {
-          "subject": {
-           "kind": "measure",
            "id": "ncav_to_market_cap",
            "label": "Net current asset value over market capitalization",
            "unit": "ratio",
@@ -5455,8 +5561,8 @@
          {
           "subject": {
            "kind": "measure",
-           "id": "earnings_yield_to_risk_free_multiple",
-           "label": "Earnings yield as a multiple of the risk-free rate",
+           "id": "pe_3y_avg_eps",
+           "label": "Price to earnings on three-year average EPS",
            "unit": "times",
            "explain": null
           },
@@ -5466,18 +5572,51 @@
            "source": "measure"
           },
           "test": {
-           "comparator": "at_least",
-           "phrase": "at least",
-           "threshold": 2,
-           "threshold_from": {
-            "kind": "value",
-            "id": "min-earnings-yield-multiple",
-            "label": "Lowest earnings yield against the risk-free rate",
-            "unit": "times"
-           },
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 12.5,
+           "threshold_from": null,
            "absent": null
           },
           "outcome": "unknown",
+          "group": "bonus"
+         },
+         {
+          "subject": {
+           "kind": "value",
+           "id": "min-earnings-yield-multiple",
+           "label": "Lowest earnings yield against the risk-free rate",
+           "unit": "times",
+           "explain": "How many times more the company's earnings pay you than lending the same money to the government would. At 2.0 the stock's earnings yield is twice the risk-free rate; at 1.0 you are taking every risk of owning a business for a government-bond return.\n\nGraham's Enterprising Investor test, which compared the earnings yield to the corporate bond yield of his day. It is the one test here that makes every other valuation level in the strategy aware of what interest rates are doing — a 6.7% earnings yield means something very different when cash pays 1% than when it pays 5%.\n\nThis and the risk-free rate below are read together, and what they come to is a ceiling on what you may pay for a dollar of typical earnings: at 2.0 against a rate of 4%, an earnings yield of 8% or better, which is 12.5 times earnings or less. That is the figure the test is shown against, because it is the one being compared.\n\nIt is a bonus test: failing it never blocks a buy. Expect it to fail often at a high risk-free rate — that is the test working, and it is telling you the same money is being offered a competitive return with none of the risk."
+          },
+          "observed": {
+           "status": "known",
+           "value": 2,
+           "source": "value",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "bonus"
+         },
+         {
+          "subject": {
+           "kind": "value",
+           "id": "risk-free-rate",
+           "label": "The risk-free rate",
+           "unit": "percent",
+           "explain": "What lending money to the government pays right now: the yield on the ten-year US Treasury note, as an annual percentage. It is the return you can have without taking any business risk at all, so it is what owning a business has to beat before the risk is worth taking.\n\n**This is the one number here you have to maintain, and it is the only one that goes wrong just by sitting still.** Nothing in this program fetches it — it is in no filing and it is not price data — so the figure shipped with the strategy is a starting point and nothing more. Look up the current ten-year Treasury yield and set it here; when rates move, come back. A rate left at 4% while the market pays 6% quietly makes this test easier than you agreed it should be.\n\nIt is here as a setting rather than as a question at setup so that changing it is recorded: the day you moved it, what it was, and what it became go on this journal's record of rule changes, next to the reason you give. A number that sets a bar and can be adjusted without trace is the thing this journal exists to prevent."
+          },
+          "observed": {
+           "status": "known",
+           "value": 4.0,
+           "source": "value",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": null,
+          "outcome": "noted",
           "group": "bonus"
          }
         ],
@@ -5487,11 +5626,11 @@
           "name": "Tests this strategy will not bend",
           "requires": "all",
           "test": null,
-          "members": 4,
-          "tested": 4,
+          "members": 5,
+          "tested": 5,
           "passed": 0,
           "failed": 0,
-          "unknown": 4,
+          "unknown": 5,
           "outcome": "unknown"
          },
          {
@@ -5522,11 +5661,11 @@
           "name": "Reported, never blocking",
           "requires": "noted",
           "test": null,
-          "members": 3,
-          "tested": 3,
+          "members": 4,
+          "tested": 2,
           "passed": 0,
           "failed": 0,
-          "unknown": 3,
+          "unknown": 2,
           "outcome": "noted"
          }
         ],
@@ -5536,16 +5675,16 @@
        "strategy": {
         "id": "graham",
         "name": "Graham",
-        "version": 2,
-        "values_version": 1,
+        "version": 3,
+        "values_version": 2,
         "contract": 5
        }
       },
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 2,
-       "values_version": 1,
+       "version": 3,
+       "values_version": 2,
        "contract": 5
       },
       "metrics": {},
@@ -5568,7 +5707,7 @@
        "thesis": "Bought on a conversation, not on numbers. I have not entered a single figure for it.",
        "falsifier": "There is nothing here to falsify yet, which is itself the problem.",
        "reason": "",
-       "recorded": "2025-08-18T14:00:00+00:00"
+       "recorded": "2025-08-18T12:00:00-04:00"
       },
       "valuation": null
      }
@@ -5582,17 +5721,17 @@
      "thesis": "Bought on a conversation, not on numbers. I have not entered a single figure for it.",
      "falsifier": "There is nothing here to falsify yet, which is itself the problem.",
      "reason": "",
-     "recorded": "2025-08-18T14:00:00+00:00"
+     "recorded": "2025-08-18T12:00:00-04:00"
     }
    ],
    "valuations": [],
    "notes": [
     {
-     "date": "2025-08-20T14:00:00+00:00",
+     "date": "2025-08-20T12:00:00-04:00",
      "text": "Recorded with no verdict at all — not a verdict I overrode, a verdict that did not exist. The journal keeps those two apart on purpose, because averaging them would make a gap in the data look like defiance."
     },
     {
-     "date": "2025-08-20T14:00:00+00:00",
+     "date": "2025-08-20T12:00:00-04:00",
      "text": "Bought without a signal (Not enough to go on under Graham, reconstructed for 2025-08-20 from the data available by then). Stated reason: No figures on record for this company, so there was nothing to check it against. Buying first and filling the numbers in later is how I have always done it, which is what I am trying to stop."
     }
    ],
@@ -5610,99 +5749,99 @@
      "seq": 1,
      "id": "pe_3y_avg_eps",
      "value": 12.8,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 2,
      "id": "price_to_book",
      "value": 1.05,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 3,
      "id": "graham_combined_multiple",
      "value": 13.44,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 4,
      "id": "current_ratio",
      "value": 2.7,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 5,
      "id": "ltd_to_working_capital",
      "value": 0.3,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 6,
      "id": "profitable_years_10y",
      "value": 10.0,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 7,
      "id": "altman_z_score",
      "value": 3.8,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 8,
      "id": "eps_growth_10y",
      "value": 52.0,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 9,
      "id": "consecutive_dividend_years",
      "value": 18.0,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 10,
      "id": "debt_to_equity",
      "value": 0.44,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 11,
      "id": "price_to_net_tangible_assets",
      "value": 1.3,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 12,
      "id": "accruals_ratio",
      "value": 0.01,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 13,
      "id": "market_cap",
      "value": 420000000.0,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 14,
      "id": "ncav_to_market_cap",
      "value": 0.58,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 15,
      "id": "consecutive_annual_loss_years",
      "value": 0.0,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     }
    ],
    "thesis": [],
    "valuations": [],
    "notes": [
     {
-     "date": "2026-08-05T14:00:00+00:00",
-     "text": "Clears everything. The one test showing as unknown is the earnings yield against the risk-free rate, which nothing in this program can be told yet — it is a bonus test, so it blocks nothing, and it reads as unknown rather than as a pass."
+     "date": "2026-08-05T12:00:00-04:00",
+     "text": "Clears every test that can stop it. The one showing red is the earnings yield against the risk-free rate: at 12.8 times typical earnings this yields 7.8% a year, and against a risk-free rate of 4% the strategy wants twice that — 8%, which is 12.5 times earnings or less. It misses by two tenths of a percentage point of yield, which is three tenths of a turn on the multiple. That test never blocks a buy, and what it is telling me is worth reading anyway: the government is paying enough that this discount is thinner than it looks."
     }
    ]
   },
@@ -5718,98 +5857,98 @@
      "seq": 1,
      "id": "pe_3y_avg_eps",
      "value": 41.5,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 2,
      "id": "price_to_book",
      "value": 8.1,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 3,
      "id": "graham_combined_multiple",
      "value": 336.15,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 4,
      "id": "current_ratio",
      "value": 3.4,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 5,
      "id": "ltd_to_working_capital",
      "value": 0.0,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 6,
      "id": "profitable_years_10y",
      "value": 7.0,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 7,
      "id": "altman_z_score",
      "value": 5.6,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 8,
      "id": "eps_growth_10y",
      "value": 210.0,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 9,
      "id": "consecutive_dividend_years",
      "value": 0.0,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 10,
      "id": "debt_to_equity",
      "value": 0.1,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 11,
      "id": "price_to_net_tangible_assets",
      "value": 9.4,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 12,
      "id": "accruals_ratio",
      "value": 0.08,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 13,
      "id": "market_cap",
      "value": 2400000000.0,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 14,
      "id": "ncav_to_market_cap",
      "value": 0.09,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 15,
      "id": "consecutive_annual_loss_years",
      "value": 0.0,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     }
    ],
    "thesis": [],
    "valuations": [],
    "notes": [
     {
-     "date": "2026-08-05T14:00:00+00:00",
+     "date": "2026-08-05T12:00:00-04:00",
      "text": "Growing fast, no debt, and rejected on three of the four knockouts. This is the strategy working as designed rather than failing: book value stopped describing companies like this around 1990, and their real assets — the code and the people — are on no balance sheet. A strategy that buys statistical discounts to book has nothing to say about it."
     }
    ]
@@ -5826,74 +5965,74 @@
      "seq": 1,
      "id": "pe_3y_avg_eps",
      "value": 9.2,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 2,
      "id": "price_to_book",
      "value": 0.88,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 3,
      "id": "graham_combined_multiple",
      "value": 8.1,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 4,
      "id": "profitable_years_10y",
      "value": 10.0,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 5,
      "id": "eps_growth_10y",
      "value": 38.0,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 6,
      "id": "consecutive_dividend_years",
      "value": 16.0,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 7,
      "id": "debt_to_equity",
      "value": 1.9,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 8,
      "id": "price_to_net_tangible_assets",
      "value": 0.95,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 9,
      "id": "accruals_ratio",
      "value": 0.04,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 10,
      "id": "market_cap",
      "value": 880000000.0,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 11,
      "id": "consecutive_annual_loss_years",
      "value": 0.0,
-     "recorded": "2026-08-05T14:00:00+00:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     }
    ],
    "thesis": [],
    "valuations": [],
    "notes": [
     {
-     "date": "2026-08-05T14:00:00+00:00",
+     "date": "2026-08-05T12:00:00-04:00",
      "text": "Cheap on every measure that can be read, and it cannot be screened. Banks do not present a current ratio in the way this test means, and the bankruptcy score's author excluded financial companies outright because the ratios do not map. Both come back unknown, and unknown is not a pass. The irony is worth sitting with: price to book is the measure that still works best on banks, and this strategy cannot get far enough to use it."
     }
    ]
@@ -5909,7 +6048,7 @@
      "seq": 1,
      "kind": "buy",
      "date": "2024-06-04",
-     "recorded": "2024-06-04T14:00:00+00:00",
+     "recorded": "2024-06-04T12:00:00-04:00",
      "shares": 400.0,
      "price": 11.2,
      "override": {
@@ -5917,14 +6056,14 @@
       "kind": "against",
       "state": "Not cheap enough",
       "rule": "knockout-failed",
-      "summary": "3 of the 4 tests this strategy will not bend came back against it, and one is enough.",
+      "summary": "3 of the 5 tests this strategy will not bend came back against it, and one is enough.",
       "basis": "reconstructed",
       "as_of": "2024-06-04",
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 2,
-       "values_version": 1,
+       "version": 3,
+       "values_version": 2,
        "contract": 5
       },
       "failed": [
@@ -5947,18 +6086,17 @@
        {
         "key": "value:min-ncav-to-market-cap",
         "label": "Lowest liquid assets against the price"
-       }
-      ],
-      "missing": [
+       },
        {
-        "key": "value:min-earnings-yield-multiple",
-        "label": "Lowest earnings yield against the risk-free rate"
+        "key": "measure:pe_3y_avg_eps",
+        "label": "Price to earnings on three-year average EPS"
        }
       ],
+      "missing": [],
       "reason": "No reason given."
      },
      "snapshot": {
-      "frozen": "2024-06-04T14:00:00+00:00",
+      "frozen": "2024-06-04T12:00:00-04:00",
       "decision": {
        "render": "hold",
        "tier": "position",
@@ -5971,7 +6109,7 @@
        "payload": {},
        "reason": {
         "rule": "knockout-failed",
-        "summary": "3 of the 4 tests this strategy will not bend came back against it, and one is enough.",
+        "summary": "3 of the 5 tests this strategy will not bend came back against it, and one is enough.",
         "evidence": [
          {
           "subject": {
@@ -6095,6 +6233,38 @@
             "id": "min-current-ratio",
             "label": "Lowest current ratio",
             "unit": "ratio"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "market_cap",
+           "label": "Market capitalization",
+           "unit": "usd",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 690000000.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-06-01"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 300000000,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-market-cap",
+            "label": "Smallest company worth buying",
+            "unit": "usd"
            },
            "absent": null
           },
@@ -6360,38 +6530,6 @@
          {
           "subject": {
            "kind": "measure",
-           "id": "market_cap",
-           "label": "Market capitalization",
-           "unit": "usd",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": 690000000.0,
-           "source": "measure",
-           "cautions": [],
-           "provenance": [
-            "entered by hand on 2024-06-01"
-           ]
-          },
-          "test": {
-           "comparator": "at_least",
-           "phrase": "at least",
-           "threshold": 300000000,
-           "threshold_from": {
-            "kind": "value",
-            "id": "min-market-cap",
-            "label": "Smallest company worth buying",
-            "unit": "usd"
-           },
-           "absent": null
-          },
-          "outcome": "pass",
-          "group": "bonus"
-         },
-         {
-          "subject": {
-           "kind": "measure",
            "id": "ncav_to_market_cap",
            "label": "Net current asset value over market capitalization",
            "unit": "ratio",
@@ -6424,29 +6562,66 @@
          {
           "subject": {
            "kind": "measure",
-           "id": "earnings_yield_to_risk_free_multiple",
-           "label": "Earnings yield as a multiple of the risk-free rate",
+           "id": "pe_3y_avg_eps",
+           "label": "Price to earnings on three-year average EPS",
            "unit": "times",
            "explain": null
           },
           "observed": {
-           "status": "absent",
-           "reason": "no filing data is stored for this security — fetch data first",
-           "source": "measure"
+           "status": "known",
+           "value": 26.4,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-06-01"
+           ]
           },
           "test": {
-           "comparator": "at_least",
-           "phrase": "at least",
-           "threshold": 2,
-           "threshold_from": {
-            "kind": "value",
-            "id": "min-earnings-yield-multiple",
-            "label": "Lowest earnings yield against the risk-free rate",
-            "unit": "times"
-           },
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 12.5,
+           "threshold_from": null,
            "absent": null
           },
-          "outcome": "unknown",
+          "outcome": "fail",
+          "group": "bonus"
+         },
+         {
+          "subject": {
+           "kind": "value",
+           "id": "min-earnings-yield-multiple",
+           "label": "Lowest earnings yield against the risk-free rate",
+           "unit": "times",
+           "explain": "How many times more the company's earnings pay you than lending the same money to the government would. At 2.0 the stock's earnings yield is twice the risk-free rate; at 1.0 you are taking every risk of owning a business for a government-bond return.\n\nGraham's Enterprising Investor test, which compared the earnings yield to the corporate bond yield of his day. It is the one test here that makes every other valuation level in the strategy aware of what interest rates are doing — a 6.7% earnings yield means something very different when cash pays 1% than when it pays 5%.\n\nThis and the risk-free rate below are read together, and what they come to is a ceiling on what you may pay for a dollar of typical earnings: at 2.0 against a rate of 4%, an earnings yield of 8% or better, which is 12.5 times earnings or less. That is the figure the test is shown against, because it is the one being compared.\n\nIt is a bonus test: failing it never blocks a buy. Expect it to fail often at a high risk-free rate — that is the test working, and it is telling you the same money is being offered a competitive return with none of the risk."
+          },
+          "observed": {
+           "status": "known",
+           "value": 2,
+           "source": "value",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "bonus"
+         },
+         {
+          "subject": {
+           "kind": "value",
+           "id": "risk-free-rate",
+           "label": "The risk-free rate",
+           "unit": "percent",
+           "explain": "What lending money to the government pays right now: the yield on the ten-year US Treasury note, as an annual percentage. It is the return you can have without taking any business risk at all, so it is what owning a business has to beat before the risk is worth taking.\n\n**This is the one number here you have to maintain, and it is the only one that goes wrong just by sitting still.** Nothing in this program fetches it — it is in no filing and it is not price data — so the figure shipped with the strategy is a starting point and nothing more. Look up the current ten-year Treasury yield and set it here; when rates move, come back. A rate left at 4% while the market pays 6% quietly makes this test easier than you agreed it should be.\n\nIt is here as a setting rather than as a question at setup so that changing it is recorded: the day you moved it, what it was, and what it became go on this journal's record of rule changes, next to the reason you give. A number that sets a bar and can be adjusted without trace is the thing this journal exists to prevent."
+          },
+          "observed": {
+           "status": "known",
+           "value": 4.0,
+           "source": "value",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": null,
+          "outcome": "noted",
           "group": "bonus"
          }
         ],
@@ -6456,9 +6631,9 @@
           "name": "Tests this strategy will not bend",
           "requires": "all",
           "test": null,
-          "members": 4,
-          "tested": 4,
-          "passed": 1,
+          "members": 5,
+          "tested": 5,
+          "passed": 2,
           "failed": 3,
           "unknown": 0,
           "outcome": "fail"
@@ -6491,11 +6666,11 @@
           "name": "Reported, never blocking",
           "requires": "noted",
           "test": null,
-          "members": 3,
-          "tested": 3,
-          "passed": 1,
-          "failed": 1,
-          "unknown": 1,
+          "members": 4,
+          "tested": 2,
+          "passed": 0,
+          "failed": 2,
+          "unknown": 0,
           "outcome": "noted"
          }
         ],
@@ -6505,16 +6680,16 @@
        "strategy": {
         "id": "graham",
         "name": "Graham",
-        "version": 2,
-        "values_version": 1,
+        "version": 3,
+        "values_version": 2,
         "contract": 5
        }
       },
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 2,
-       "values_version": 1,
+       "version": 3,
+       "values_version": 2,
        "contract": 5
       },
       "metrics": {
@@ -6674,7 +6849,7 @@
        "thesis": "Tableware and industrial ceramics at 0.8 times book. The market has priced the whole company at less than the kilns.",
        "falsifier": "Price to book above 3.0, at which point the discount I bought is gone and I am holding it for a reason I never tested.",
        "reason": "",
-       "recorded": "2024-06-01T14:00:00+00:00"
+       "recorded": "2024-06-01T12:00:00-04:00"
       },
       "valuation": null
      }
@@ -6684,7 +6859,7 @@
      "seq": 2,
      "kind": "sell",
      "date": "2025-10-15",
-     "recorded": "2025-10-15T14:00:00+00:00",
+     "recorded": "2025-10-15T12:00:00-04:00",
      "shares": 400.0,
      "price": 19.8,
      "against": [
@@ -6699,12 +6874,12 @@
      "strategy": {
       "id": "graham",
       "name": "Graham",
-      "version": 2,
-      "values_version": 1,
+      "version": 3,
+      "values_version": 2,
       "contract": 5
      },
      "snapshot": {
-      "frozen": "2025-10-15T14:00:00+00:00",
+      "frozen": "2025-10-15T12:00:00-04:00",
       "decision": {
        "render": "close",
        "tier": "position",
@@ -7038,7 +7213,16 @@
            "status": "known",
            "value": 8.987286277948268,
            "source": "fact",
-           "cautions": [],
+           "cautions": [
+            "entered by hand, so it carries no date — this is what you saw the market quote, not something you worked out, and the dated version of it is the price history a fetch keeps. Nothing here can tell how long ago you typed it",
+            "HARW: entered by hand, so it carries no date — this is what you saw the market quote, not something you worked out, and the dated version of it is the price history a fetch keeps. Nothing here can tell how long ago you typed it",
+            "CALDR: entered by hand, so it carries no date — this is what you saw the market quote, not something you worked out, and the dated version of it is the price history a fetch keeps. Nothing here can tell how long ago you typed it",
+            "BRENT: entered by hand, so it carries no date — this is what you saw the market quote, not something you worked out, and the dated version of it is the price history a fetch keeps. Nothing here can tell how long ago you typed it",
+            "MERIDN: entered by hand, so it carries no date — this is what you saw the market quote, not something you worked out, and the dated version of it is the price history a fetch keeps. Nothing here can tell how long ago you typed it",
+            "OKELL: entered by hand, so it carries no date — this is what you saw the market quote, not something you worked out, and the dated version of it is the price history a fetch keeps. Nothing here can tell how long ago you typed it",
+            "THRAP: entered by hand, so it carries no date — this is what you saw the market quote, not something you worked out, and the dated version of it is the price history a fetch keeps. Nothing here can tell how long ago you typed it",
+            "LOWFD: entered by hand, so it carries no date — this is what you saw the market quote, not something you worked out, and the dated version of it is the price history a fetch keeps. Nothing here can tell how long ago you typed it"
+           ],
            "provenance": [
             "$9,840 of an account of $109,488"
            ]
@@ -7115,16 +7299,16 @@
        "strategy": {
         "id": "graham",
         "name": "Graham",
-        "version": 2,
-        "values_version": 1,
+        "version": 3,
+        "values_version": 2,
         "contract": 5
        }
       },
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 2,
-       "values_version": 1,
+       "version": 3,
+       "values_version": 2,
        "contract": 5
       },
       "metrics": {
@@ -7262,7 +7446,7 @@
        "thesis": "Tableware and industrial ceramics at 0.8 times book. The market has priced the whole company at less than the kilns.",
        "falsifier": "Price to book above 3.0, at which point the discount I bought is gone and I am holding it for a reason I never tested.",
        "reason": "",
-       "recorded": "2024-06-01T14:00:00+00:00"
+       "recorded": "2024-06-01T12:00:00-04:00"
       },
       "valuation": null
      }
@@ -7274,91 +7458,91 @@
      "seq": 1,
      "id": "pe_3y_avg_eps",
      "value": 26.4,
-     "recorded": "2024-06-01T14:00:00+00:00"
+     "recorded": "2024-06-01T12:00:00-04:00"
     },
     {
      "seq": 2,
      "id": "price_to_book",
      "value": 3.15,
-     "recorded": "2024-06-01T14:00:00+00:00"
+     "recorded": "2024-06-01T12:00:00-04:00"
     },
     {
      "seq": 3,
      "id": "graham_combined_multiple",
      "value": 83.16,
-     "recorded": "2024-06-01T14:00:00+00:00"
+     "recorded": "2024-06-01T12:00:00-04:00"
     },
     {
      "seq": 4,
      "id": "current_ratio",
      "value": 2.2,
-     "recorded": "2024-06-01T14:00:00+00:00"
+     "recorded": "2024-06-01T12:00:00-04:00"
     },
     {
      "seq": 5,
      "id": "ltd_to_working_capital",
      "value": 0.4,
-     "recorded": "2024-06-01T14:00:00+00:00"
+     "recorded": "2024-06-01T12:00:00-04:00"
     },
     {
      "seq": 6,
      "id": "profitable_years_10y",
      "value": 10.0,
-     "recorded": "2024-06-01T14:00:00+00:00"
+     "recorded": "2024-06-01T12:00:00-04:00"
     },
     {
      "seq": 7,
      "id": "altman_z_score",
      "value": 4.0,
-     "recorded": "2024-06-01T14:00:00+00:00"
+     "recorded": "2024-06-01T12:00:00-04:00"
     },
     {
      "seq": 8,
      "id": "eps_growth_10y",
      "value": 44.0,
-     "recorded": "2024-06-01T14:00:00+00:00"
+     "recorded": "2024-06-01T12:00:00-04:00"
     },
     {
      "seq": 9,
      "id": "consecutive_dividend_years",
      "value": 14.0,
-     "recorded": "2024-06-01T14:00:00+00:00"
+     "recorded": "2024-06-01T12:00:00-04:00"
     },
     {
      "seq": 10,
      "id": "debt_to_equity",
      "value": 0.5,
-     "recorded": "2024-06-01T14:00:00+00:00"
+     "recorded": "2024-06-01T12:00:00-04:00"
     },
     {
      "seq": 11,
      "id": "price_to_net_tangible_assets",
      "value": 3.6,
-     "recorded": "2024-06-01T14:00:00+00:00"
+     "recorded": "2024-06-01T12:00:00-04:00"
     },
     {
      "seq": 12,
      "id": "accruals_ratio",
      "value": 0.03,
-     "recorded": "2024-06-01T14:00:00+00:00"
+     "recorded": "2024-06-01T12:00:00-04:00"
     },
     {
      "seq": 13,
      "id": "market_cap",
      "value": 690000000.0,
-     "recorded": "2024-06-01T14:00:00+00:00"
+     "recorded": "2024-06-01T12:00:00-04:00"
     },
     {
      "seq": 14,
      "id": "ncav_to_market_cap",
      "value": 0.18,
-     "recorded": "2024-06-01T14:00:00+00:00"
+     "recorded": "2024-06-01T12:00:00-04:00"
     },
     {
      "seq": 15,
      "id": "consecutive_annual_loss_years",
      "value": 0.0,
-     "recorded": "2024-06-01T14:00:00+00:00"
+     "recorded": "2024-06-01T12:00:00-04:00"
     }
    ],
    "thesis": [
@@ -7367,25 +7551,25 @@
      "thesis": "Tableware and industrial ceramics at 0.8 times book. The market has priced the whole company at less than the kilns.",
      "falsifier": "Price to book above 3.0, at which point the discount I bought is gone and I am holding it for a reason I never tested.",
      "reason": "",
-     "recorded": "2024-06-01T14:00:00+00:00"
+     "recorded": "2024-06-01T12:00:00-04:00"
     }
    ],
    "valuations": [],
    "notes": [
     {
-     "date": "2024-06-04T14:00:00+00:00",
+     "date": "2024-06-04T12:00:00-04:00",
      "text": "Bought at 0.8 times book."
     },
     {
-     "date": "2025-10-15T14:00:00+00:00",
+     "date": "2025-10-15T12:00:00-04:00",
      "text": "Sold at 1.77 times what I paid. The discount closed, which is the entire exit condition of this strategy."
     },
     {
-     "date": "2026-08-05T14:00:00+00:00",
+     "date": "2026-08-05T12:00:00-04:00",
      "text": "It has gone up another 24% since I sold. That is what the exit scorecard is for: if selling on a closed discount keeps leaving money on the table, the limit is the thing to look at and not my nerve."
     },
     {
-     "date": "2024-06-04T14:00:00+00:00",
+     "date": "2024-06-04T12:00:00-04:00",
      "text": "Bought against the signal (Not cheap enough under Graham, reconstructed for 2024-06-04 from the data available by then). Stated reason: No reason given."
     }
    ],

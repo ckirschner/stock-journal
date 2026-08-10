@@ -68,6 +68,18 @@ def held(ticker="ACME"):
     return portfolio.new_security(ticker, "Acme Widgets")
 
 
+def val(node):
+    """A return's figure, or None where it is absent — with the absence
+    required to say why. Five distinct facts used to come back as one bare
+    None, and a reason nobody wrote is indistinguishable from a failure."""
+    if not isinstance(node, dict):
+        return node
+    if node.get("status") == "absent":
+        assert str(node.get("reason") or "").strip(), "absence with no reason"
+        return None
+    return node.get("value")
+
+
 def bought(ticker="ACME", shares=10, price=40.0, when="2026-01-01",
            render="commit"):
     s = held(ticker)
@@ -464,7 +476,7 @@ class TestExits:
             lot = portfolio.sell_lots(s, decision(render), "Thesis broke", 10,
                                       60.0, "2026-08-08")
             assert lot["rule_triggered"] is True, render
-            assert portfolio.sale_return(s, lot) == 50.0
+            assert val(portfolio.sale_return(s, lot)) == 50.0
 
     def test_an_exit_nobody_called_for_says_so_on_the_record(self):
         s = bought()
@@ -492,8 +504,8 @@ class TestExits:
         s = held()
         portfolio.add_lot(s, decision("commit"), 1, 0.0, "2026-01-01")
         lot = portfolio.sell_lots(s, decision("close"), "Panic", 1, 30.0)
-        assert portfolio.sale_return(s, lot) is None
-        assert portfolio.position_return(s, 30.0) is None
+        assert val(portfolio.sale_return(s, lot)) is None
+        assert val(portfolio.position_return(s, 30.0)) is None
 
     def test_the_exit_decision_is_frozen_too(self):
         s = bought()
@@ -586,24 +598,24 @@ class TestReturns:
         portfolio.sell_lots(s, decision("close"), "Panic", 5, 50.0,
                             "2026-06-01")
         # +50 on five shares and −50 on five is nothing at all
-        assert portfolio.lot_return(s, portfolio.lots(s, "buy")[0], None) == 0.0
+        assert val(portfolio.lot_return(s, portfolio.lots(s, "buy")[0], None)) == 0.0
 
     def test_an_open_lot_with_no_price_has_no_return_never_zero(self):
         s = bought(shares=10, price=100.0)
-        assert portfolio.lot_return(s, s["lots"][0], None) is None
-        assert portfolio.position_return(s, None) is None
-        assert portfolio.position_return(s, 120.0) == 20.0
+        assert val(portfolio.lot_return(s, s["lots"][0], None)) is None
+        assert val(portfolio.position_return(s, None)) is None
+        assert val(portfolio.position_return(s, 120.0)) == 20.0
 
     def test_a_half_sold_lot_marks_the_rest_at_the_price_given(self):
         s = bought(shares=10, price=100.0)
         portfolio.sell_lots(s, decision("reduce"), "Risk limit", 5, 200.0)
         # +100 realised on half, +20 unrealised on the other half
-        assert portfolio.lot_return(s, s["lots"][0], 120.0) == 60.0
+        assert val(portfolio.lot_return(s, s["lots"][0], 120.0)) == 60.0
 
     def test_the_position_return_weights_lots_by_what_they_cost(self):
         s = bought(shares=1, price=100.0, when="2026-01-01")
         portfolio.add_lot(s, decision("commit"), 9, 100.0, "2026-03-01")
-        assert portfolio.position_return(s, 110.0) == 10.0
+        assert val(portfolio.position_return(s, 110.0)) == 10.0
 
 
 def rebought(ticker="ACME"):
@@ -670,29 +682,107 @@ class TestHoldingPeriods:
 
     def test_the_open_period_is_scored_without_the_one_that_closed(self):
         s = rebought()
-        assert portfolio.cycle_return(s, portfolio.open_cycle(s), 44.0) == 10.0
-        assert portfolio.cycle_return(s, portfolio.cycles(s)[0], 44.0) == 100.0
+        assert val(portfolio.cycle_return(s, portfolio.open_cycle(s),
+                                          44.0)) == 10.0
+        assert val(portfolio.cycle_return(s, portfolio.cycles(s)[0],
+                                          44.0)) == 100.0
         # …and the lifetime figure still spans both, for the one place that
         # asks a question about the whole ticker
-        assert portfolio.position_return(s, 44.0) == 28.0
+        assert val(val(portfolio.position_return(s, 44.0))) == 28.0
 
     def test_a_closed_period_needs_no_price_to_be_scored(self):
         s = rebought()
-        assert portfolio.cycle_return(s, portfolio.cycles(s)[0], None) == 100.0
-        assert portfolio.cycle_return(s, portfolio.open_cycle(s), None) is None
+        assert val(portfolio.cycle_return(s, portfolio.cycles(s)[0],
+                                          None)) == 100.0
+        open_period = portfolio.cycle_return(s, portfolio.open_cycle(s), None)
+        assert val(open_period) is None
+        assert "still held" in open_period["reason"]
 
     def test_one_unscoreable_lot_makes_the_whole_period_absent(self):
         """A period averaged over the lots that happened to work is a subset
         presented as the whole — a number that looks like an answer about the
         holding and is an answer about part of it. The lot bought at nothing
-        has no return to give, so the period has none either."""
+        has no return to give, so the period has none either.
+
+        And the period's absence names the purchase that stopped it. With
+        five buys in a period, "this cannot be worked out" on its own leaves
+        the reader no way to know which one to go and look at."""
         s = bought(shares=10, price=10.0, when="2024-01-02")
         portfolio.add_lot(s, decision("commit"), 5, 0.0, "2024-02-02")
         c = portfolio.open_cycle(s)
-        assert portfolio.lot_return(s, c["buys"][0], 20.0) == 100.0
-        assert portfolio.lot_return(s, c["buys"][1], 20.0) is None
-        assert portfolio.cycle_return(s, c, 20.0) is None
-        assert portfolio.position_return(s, 20.0) is None
+        assert val(val(portfolio.lot_return(s, c["buys"][0], 20.0))) == 100.0
+        assert val(val(portfolio.lot_return(s, c["buys"][1], 20.0))) is None
+        period = portfolio.cycle_return(s, c, 20.0)
+        assert val(period) is None
+        assert "2024-02-02" in period["reason"], period["reason"]
+        assert val(val(portfolio.position_return(s, 20.0))) is None
+
+    def test_the_scorecard_says_why_a_purchase_could_not_be_scored(self):
+        """It asserted "no price" for every unscoreable purchase, which the
+        engine's own docstring agreed with — so neither could catch it. A
+        purchase recorded at $0.00 was reported as one with no price, which
+        sends the reader to fetch data that will never fix it, in the panel
+        principle 10 says must be able to indict a rule.
+
+        Per population, too. A shared list would print a compliant
+        purchase's reason under Overrides — the panel attributing a decision
+        to the wrong side of the line it exists to measure.
+        """
+        free = bought(ticker="FREE", shares=10, price=0.0, when="2024-01-02")
+        dark = bought(ticker="DARK", shares=10, price=10.0, when="2024-01-02")
+        dark["lots"][0]["override"] = {"kind": "against", "failed": [],
+                                       "missing": []}
+        card = portfolio.override_scorecard(
+            [free, dark], lambda s: None if s["ticker"] == "DARK"
+            else {"value": None, "reason": "no close is stored for FREE"})
+
+        assert card["compliant"]["n_unscored"] == 1
+        assert card["override"]["n_unscored"] == 1
+        [why_compliant] = card["compliant"]["unscored"]
+        [why_override] = card["override"]["unscored"]
+        assert why_compliant["n"] == why_override["n"] == 1
+        # Each panel's count matches the reasons printed under it…
+        assert sum(u["n"] for u in card["compliant"]["unscored"]) == \
+            card["compliant"]["n_unscored"]
+        assert sum(u["n"] for u in card["override"]["unscored"]) == \
+            card["override"]["n_unscored"]
+        # …and the two reasons are the two real ones, not one asserted twice.
+        assert "recorded at 0" in why_compliant["reason"]
+        assert "no price is on record" in why_override["reason"]
+        assert "no price" not in why_compliant["reason"], \
+            "a purchase recorded at nothing is not a purchase with no price"
+
+    def test_the_five_ways_a_return_goes_absent_read_differently(self):
+        """They used to be one bare None. A reader given the same em-dash for
+        "nobody has fetched a price" and "this purchase is recorded at
+        $0.00" cannot act on either — the first is fixed by fetching and the
+        second never will be, and the panel that judges the rules was telling
+        people to fetch for both."""
+        never = portfolio.new_security("SYN", "Synthetic Co")
+        open_no_price = bought(shares=10, price=10.0, when="2024-01-02")
+        at_nothing = bought(shares=10, price=0.0, when="2024-01-02")
+        broken = bought(shares=10, price=10.0, when="2024-01-02")
+        portfolio.sell_lots(broken, decision("close"), "Panic", 10, 20.0,
+                            "2024-06-03")
+        broken["lots"][-1]["against"] = [{"lot": "l99", "shares": 10}]
+
+        reasons = [
+            portfolio.cycle_return(open_no_price,
+                                   portfolio.open_cycle(open_no_price),
+                                   None)["reason"],
+            portfolio.cycle_return(
+                open_no_price, portfolio.open_cycle(open_no_price),
+                {"value": None,
+                 "reason": "no close is stored for SYN"})["reason"],
+            portfolio.cycle_return(at_nothing,
+                                   portfolio.open_cycle(at_nothing),
+                                   20.0)["reason"],
+            portfolio.position_return(never, 20.0)["reason"],
+            portfolio.sale_return(broken,
+                                  portfolio.lots(broken, "sell")[0])["reason"],
+        ]
+        assert len(set(reasons)) == 5, reasons
+        assert all(r.strip() for r in reasons)
 
     def test_a_purchase_recorded_at_nothing_never_scores_the_window(self):
         """Free shares say nothing about what the market was doing, so they
@@ -717,7 +807,7 @@ class TestHoldingPeriods:
         s = bought(shares=10, price=10.0, when="2024-01-02")
         sale = portfolio.sell_lots(s, decision("close"), "Thesis broke", 10,
                                    0.0, "2024-06-03")
-        assert portfolio.sale_return(s, sale) == -100.0
+        assert val(val(portfolio.sale_return(s, sale))) == -100.0
         x = portfolio.since_sale(s, sale, 44.0)
         assert x["pct"] is None
         assert x["reason"] == ("the sale is recorded at nothing, so what the "

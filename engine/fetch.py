@@ -291,6 +291,29 @@ def _fetch_company(ticker, identity, cik, tmap, resolved_cik,
             except (tiingo.PriceSourceError, ValueError) as e:
                 price_notes.append(f"{sym}: {e}")
                 errors.append(f"prices {sym}: {e}")
+                # The source having never heard of a symbol we already hold
+                # rows for is evidence the series ended, and the error
+                # already told the user it would be marked. It was not, so
+                # the promise was the only thing keeping a delisted series
+                # from rendering as a live quote.
+                #
+                # Only that one kind. A rate limit and a rejected key raise
+                # the same class of error, and marking a live series dead on
+                # a throttle is worse than never marking one: the mark is
+                # written once and nothing takes it back.
+                #
+                # Marked on the document this loop is already holding. A
+                # second copy loaded here would be saved without the rows
+                # merged for the symbols before it, and every one of those
+                # fetches would be silently thrown away — a company with two
+                # listed classes losing the good class's prices because the
+                # dead one 404'd.
+                if getattr(e, "kind", None) == "unknown-symbol":
+                    _mark_prices_terminal(
+                        cik, sym,
+                        "the price source no longer lists this symbol, which "
+                        "is what a delisting or a rename looks like from "
+                        "here", errors, doc=pdoc)
         price_store.save(cik, pdoc)
     else:
         price_notes.append("no symbol currently maps to this CIK; the held "
@@ -324,14 +347,24 @@ def _retry_once(call, pause: float = 5.0):
 
 
 def _mark_prices_terminal(cik: int, ticker: str, reason: str,
-                          errors: list) -> None:
+                          errors: list, doc: dict | None = None) -> None:
     """The terminal mark IS the evidence a series ended; a failure to record
-    it must be visible, not swallowed."""
+    it must be visible, not swallowed.
+
+    `doc` is for the one caller that already holds the price document open:
+    the mark goes onto that document and the caller's own save persists it.
+    Loading a second copy there would write a version of the file that does
+    not have the rows just merged into the first — and the caller would then
+    either save over the mark or reload and lose the rows. One document, one
+    save; the shape refuses the interleaving rather than the caller having to
+    remember it.
+    """
     try:
-        pdoc = price_store.load(cik)
+        pdoc = doc if doc is not None else price_store.load(cik)
         if (pdoc.get("series") or {}).get(str(ticker).upper()):
             price_store.mark_terminal(pdoc, ticker, reason)
-            price_store.save(cik, pdoc)
+            if doc is None:
+                price_store.save(cik, pdoc)
     except Exception as e:                              # noqa: BLE001
         errors.append(f"marking the {ticker} price series terminal failed "
                       f"({type(e).__name__}: {e}); the series still reads as "

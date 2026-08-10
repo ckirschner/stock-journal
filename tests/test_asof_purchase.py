@@ -107,12 +107,26 @@ class TestAsofPrice:
         assert p["date"] == "2025-06-27"
         assert p["source"] == "fetched"
 
-    def test_gap_beyond_the_stale_window_is_absent_with_reason(self):
+    def test_a_distant_close_is_served_saying_how_far_back_it_reached(self):
+        """It used to refuse anything more than seven days before the day
+        asked about, while the live market cap happily served a year-old
+        close with a note beside it — two policies for one number, neither of
+        them the host's to hold. The reach is a fact and it is reported; how
+        far is too far is the reader's call, and on a backdated purchase the
+        distance is frozen into the record beside the price so the answer
+        stays checkable years later."""
         cik = next(_CIK)
         _store_company(cik, [], [["2025-06-27", 10.0, 1000]])
         p = dataview.price_view_asof(cik, "SYN", "2025-07-20")
-        assert p["value"] is None
-        assert "2025-07-20" in p["reason"]
+        assert p["value"] == 10.0
+        assert p["date"] == "2025-06-27"
+        assert p["days_before"] == 23
+
+    def test_a_close_on_the_day_asked_about_reached_no_distance_at_all(self):
+        cik = next(_CIK)
+        _store_company(cik, [], [["2025-06-27", 10.0, 1000]])
+        p = dataview.price_view_asof(cik, "SYN", "2025-06-27")
+        assert (p["value"], p["days_before"]) == (10.0, 0)
 
     def test_never_reaches_forward_to_a_later_close(self):
         cik = next(_CIK)
@@ -210,6 +224,33 @@ class TestApiPurchasePath:
         assert snap["price_date"] == "2025-06-27"
         assert snap["price_source"] == "fetched"
         assert "filed by 2025-06-30" in snap["evaluation"]["note"]
+
+    def test_a_distant_close_freezes_how_far_it_reached_back(self):
+        """Nothing refuses a distant close any more — how old is too old is a
+        judgement, and refusing an eight-day gap outright while the live
+        market cap served a year-old close was the host holding one, twice,
+        differently. So the distance is the fact, and it has to be ON the
+        record: this snapshot is written once and never revisited, and a
+        reader years later asking "what was that priced from" cannot be told
+        anything the note did not say at the time.
+
+        The stored series ends 2025-06-27. A purchase dated 2025-12-01 is
+        157 days after it.
+        """
+        cik = next(_CIK)
+        _store_company(cik, [
+            _fy_filing("A-1", "2025-02-20", "2024-12-31", 200, 100,
+                       cfo=5_000_000, capex=1_000_000)],
+            [["2025-06-27", 10.0, 1000]])
+        api = self._seed(cik)
+        assert api.open_position("SYN", 5, 9.5, "2025-12-01",
+                                 override_reason="backfilled")["ok"]
+        snap = self._snapshot()
+        assert snap["price"] == 10.0
+        assert snap["price_date"] == "2025-06-27"
+        note = snap["evaluation"]["note"]
+        assert "157 days before 2025-12-01" in note, note
+        assert "last one on record" in note, note
 
     def test_the_state_itself_is_the_one_that_day_would_have_produced(self):
         """The decisive case: if the as-of path silently used current data,

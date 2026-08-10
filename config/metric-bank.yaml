@@ -1422,55 +1422,6 @@ entries:
       attribution: |
         Lynch. He liked knowing how much of the price was already money.
 
-  - id: earnings_yield_to_risk_free_multiple
-    kind: computed
-    label: Earnings yield as a multiple of the risk-free rate
-    unit: times
-    format: "0.00x"
-    polarity: higher_is_better
-    derivation:
-      formula: |
-        (1 ÷ P/E on 3-yr average EPS) ÷ risk_free_rate
-      window: current earnings yield against the supplied rate
-    parameters:
-      - id: risk_free_rate
-        label: Risk-free rate
-        unit: percent
-        means: |
-          The rate a risk-free alternative pays right now — the current yield on
-          the 10-year US Treasury note, as an annual percentage. It is the
-          denominator of this measure, not a level to be passed. Neither this
-          figure nor any substitute for it is in SEC EDGAR, and it is not price
-          data; it has to be supplied.
-    inputs:
-      filings:
-        - diluted earnings per share
-      prices:
-        - current price
-      entries:
-        - pe_3y_avg_eps
-    explanation:
-      plain: |
-        How many times more the company's earnings pay you than lending the
-        money to the government would. At 2.0 the stock yields twice the
-        risk-free rate; at 1.0 you are taking equity risk for a government-bond
-        return.
-      misfires: |
-        The supplied rate goes stale. A figure entered once and never updated
-        makes every reading of this measure describe a rate environment that has
-        moved on, and it will do so silently.
-      attribution: |
-        Graham's Enterprising Investor test, which compared earnings yield to
-        the AAA corporate bond yield. Buffett has said for decades that the long
-        bond is the hurdle rate against which everything is measured.
-    not_meaningful_when:
-      - test: no risk-free rate has been supplied
-        because: |
-          The denominator is missing, so there is nothing to compare against.
-      - test: P/E on three-year average EPS is not meaningful
-        because: |
-          The earnings yield inherits it.
-
   # ===========================================================================
   # Growth
   # ===========================================================================

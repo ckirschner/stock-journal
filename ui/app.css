@@ -66,6 +66,11 @@ td.l{text-align:left}
 .tick{font-weight:600;font-size:14px;letter-spacing:.02em}
 .coname{font-family:var(--sans);font-size:12px;color:var(--ink-3);margin-top:2px;white-space:normal}
 .pos{color:var(--pass)} .neg{color:var(--fail)} .dim{color:var(--ink-3)}
+/* A price series that has ended. Not a state a strategy produced and not a
+   verdict — it is a fact about the instrument, so it is marked apart from the
+   verdict colours and always carries the word "ended" beside it. Colour never
+   carries this alone: the reader who cannot see it still reads the word. */
+.ended{color:var(--fail);font-family:var(--mono);font-size:10.5px}
 .empty{padding:52px 24px;text-align:center;color:var(--ink-3)}
 .empty p{margin:0 0 16px;font-size:14px}
 

@@ -397,10 +397,22 @@ class Api:
         once, carrying a frozen decision each, and a second copy is both
         large and a second version of a record that must have exactly one.
         """
-        # The sale that ended it — and only a period that ended has one. An
-        # open period may hold trims, and reporting the last trim's price and
-        # reason as this holding's exit would put an ending on a position
-        # still being held.
+        # How it ended, across every sale that closed it — not the last one
+        # standing for all of them. A period closed in stages had several
+        # sales at several prices for several stated reasons, and reporting
+        # the final sliver as "the exit" describes the smallest part of it:
+        # sell ninety at $150 and the last ten at $55 and the record called
+        # $55 the exit price, beside a return computed from both.
+        #
+        # Only a period that ended has one. An open period may hold trims,
+        # and a trim is not an ending.
+        exit_ = portfolio.cycle_exit(security, cycle)
+        # "Since exit" still runs from the LAST sale, because that is the day
+        # nothing was held — the one thing the final sale does settle. It is
+        # measured from that sale's own price, which is what the shares
+        # actually left at; the weighted figure above is what the holding
+        # got out at across all of them, and the two answer different
+        # questions. Both are labelled so neither can be read as the other.
         closing = cycle["sells"][-1] if cycle["sells"] and not cycle["open"] \
             else None
         return {
@@ -414,8 +426,7 @@ class Api:
             # What the round trip returned: realised once it is closed,
             # marked at the effective price while it is open.
             "return": portfolio.cycle_return(security, cycle, price),
-            "reason": (closing or {}).get("reason"),
-            "exit_price": (closing or {}).get("price"),
+            "exit": exit_,
             # What happened after it ended — to the re-purchase where there
             # was one, and only otherwise to today.
             "since_exit": portfolio.since_sale(security, closing, price)
@@ -521,7 +532,14 @@ class Api:
             # position priced only by a fetch would silently drop out of the
             # analytics that judge the rules, which is the one place a
             # missing number would look like a settled answer.
-            priced.append(price["value"])
+            # The whole price view, not the number out of it. Everything
+            # downstream that cannot produce a figure has to say why, and the
+            # host has already worded each of those precisely — naming the
+            # sibling share classes that ARE priced, or saying the figure on
+            # record is not a price and how to clear it. Handing over the
+            # value alone threw those away and left the browser guessing the
+            # reason, which it got wrong for every case but one.
+            priced.append(price)
             # Holding periods, not one running story. A security bought,
             # closed and bought back is two round trips, and the figures
             # that judge a round trip belong to one of them: which shares,
@@ -529,16 +547,20 @@ class Api:
             # back. Only the lifetime figure spans them, and it is named as
             # such so it can never sit in a column asking about the position
             # in front of you.
-            s["_cycles"] = [self._cycle_view(s, c, price["value"])
+            s["_cycles"] = [self._cycle_view(s, c, price)
                             for c in portfolio.cycles(s)]
             open_cycle = portfolio.open_cycle(s)
-            s["_return"] = portfolio.cycle_return(s, open_cycle,
-                                                  price["value"]) \
-                if open_cycle else None
-            s["_lifetime_return"] = portfolio.position_return(
-                s, price["value"])
+            # "Nothing is held" is a complete answer rather than a missing
+            # one, and it said so by being the same None as five real
+            # absences. Stated, so the payload's own version of the collapse
+            # is not reintroduced at the boundary the view reads.
+            s["_return"] = portfolio.cycle_return(s, open_cycle, price) \
+                if open_cycle else {
+                    "status": "absent",
+                    "reason": "no holding of this security is in progress"}
+            s["_lifetime_return"] = portfolio.position_return(s, price)
             s["_lot_returns"] = {
-                lot["id"]: portfolio.lot_return(s, lot, price["value"])
+                lot["id"]: portfolio.lot_return(s, lot, price)
                 for lot in portfolio.lots(s, "buy")}
 
         by_ticker = dict(zip((s["ticker"] for s in securities), priced))
@@ -916,7 +938,27 @@ class Api:
                     parts.append(f"none of the {avail['filings_held']} stored "
                                  f"filings had been filed by {as_of}")
                 if price.get("value") is not None:
-                    parts.append(f'priced at the {price["date"]} close')
+                    # How far back the close had to be reached for, said
+                    # rather than implied. Nothing refuses a distant one any
+                    # more — how old is too old is a judgement, and it was
+                    # the host's opinion when an eight-day gap was refused
+                    # outright — so the distance is the fact, and this
+                    # sentence is frozen onto the purchase. A record written
+                    # once cannot be asked later what it left out.
+                    gap = price.get("days_before")
+                    parts.append(
+                        f'priced at the {price["date"]} close'
+                        + ("" if not gap else
+                           ", which is the last one on record and "
+                           + ("a day" if gap == 1 else f"{gap} days")
+                           + f" before {as_of}"))
+                    if price.get("terminal"):
+                        parts.append(
+                            "that price series has ended ("
+                            + str(price["terminal"].get("reason")
+                                  or "no reason recorded")
+                            + "), so this is the last price the security ever "
+                              "had rather than its price on the day")
                 else:
                     parts.append(price.get("reason")
                                  or f"no close is stored for {as_of}")

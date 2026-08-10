@@ -125,8 +125,40 @@ def spec_of(history, ticker):
 
 def price_of(sec):
     """The effective price of one security — the same read the screens and the
-    scorecards use."""
-    return dataview.price_view(sec, sec.get("cik"), sec["ticker"])["value"]
+    scorecards use.
+
+    The whole view, not the number out of it. Every return below is worked
+    out from this, and a return that cannot be worked out has to say why —
+    the host's own sentence about the price is the honest reason, and it can
+    only be the reason if the number never travels without it.
+    """
+    return dataview.price_view(sec, sec.get("cik"), sec["ticker"])
+
+
+def figure(node, where=""):
+    """A host figure's value, or None where it is absent — and an absence
+    that says nothing is a failure here rather than a None passed along.
+
+    Five different facts used to come back as one bare None: nobody has
+    fetched a price, the figure on record is not a price, this purchase was
+    recorded at nothing, one purchase of several was, the security was never
+    bought. They have different fixes, so they are different answers.
+    """
+    # The shape itself is the guarantee, so a bare number is a failure here
+    # rather than something to pass along. A return that went back to being
+    # `float | None` would slip through a helper that shrugged and returned
+    # it, and every assertion below would still read as green — which is the
+    # exact way a suite stops proving the thing it was written for.
+    assert isinstance(node, dict) and node.get("status") in ("known",
+                                                             "absent"), \
+        f"{where}: a host figure is {{status, value}} or {{status, reason}}, " \
+        f"not {node!r}"
+    if node["status"] == "absent":
+        assert str(node.get("reason") or "").strip(), \
+            f"{where}: an absence with no reason is indistinguishable from " \
+            "a failure"
+        return None
+    return node.get("value")
 
 
 def expected(node):
@@ -191,7 +223,7 @@ def test_the_holding_periods_and_what_each_returned(loaded):
             assert cycle["closed"] == expect["closed"], f"{at} closed"
             assert cycle["open"] is expect["open"], f"{at} open"
             assert cycle["shares"] == expect["shares"], f"{at} shares"
-            assert portfolio.cycle_return(sec, cycle, price) == \
+            assert figure(portfolio.cycle_return(sec, cycle, price), at) == \
                 expect["return"]["value"], \
                 f'{at} return — {expect["return"]["how"]}'
 
@@ -208,10 +240,11 @@ def test_what_each_purchase_returned_and_what_the_name_returned(loaded):
         price = price_of(sec)
         by_id = {l["id"]: l for l in portfolio.lots(sec, "buy")}
         for lot_id, expect in want["lot_returns"].items():
-            assert portfolio.lot_return(sec, by_id[lot_id], price) == \
-                expect["value"], \
-                f'{where} lot {lot_id} — {expect["how"]}'
-        assert portfolio.position_return(sec, price) == \
+            at = f"{where} lot {lot_id}"
+            assert figure(portfolio.lot_return(sec, by_id[lot_id], price),
+                          at) == expect["value"], \
+                f'{at} — {expect["how"]}'
+        assert figure(portfolio.position_return(sec, price), where) == \
             expected(want["position_return"]), \
             f'{where} lifetime — {want["position_return"]["how"]}'
 
@@ -232,7 +265,7 @@ def test_what_each_sale_returned_and_what_happened_after_it(loaded):
         for sale_id, expect in want["sales"].items():
             at = f"{where} sale {sale_id}"
             sale = sales[sale_id]
-            assert portfolio.sale_return(sec, sale) == \
+            assert figure(portfolio.sale_return(sec, sale), at) == \
                 expect["sale_return"]["value"], \
                 f'{at} return — {expect["sale_return"]["how"]}'
             after, wanted = portfolio.since_sale(sec, sale, price), \
@@ -367,31 +400,32 @@ def test_the_answer_the_defect_gives_is_not_the_answer(loaded):
         held = holdings.get(ticker)
         by_id = {l["id"]: l for l in portfolio.lots(sec, "buy")}
         sales = {l["id"]: l for l in portfolio.lots(sec, "sell")}
-        for figure, bad in wrong.items():
+        for name, bad in wrong.items():
             got, how = None, bad["how"]
-            if figure == "market_value":
+            if name == "market_value":
                 got = (held or {}).get("market_value", {}).get("value")
-            elif figure == "weight":
+            elif name == "weight":
                 got = (held or {}).get("weight", {}).get("value")
-            elif figure == "position_return":
-                got = portfolio.position_return(sec, price)
-            elif figure == "opened_on":
+            elif name == "position_return":
+                got = figure(portfolio.position_return(sec, price))
+            elif name == "opened_on":
                 got = portfolio.opened_on(sec)
-            elif figure == "cycle_count":
+            elif name == "cycle_count":
                 got = len(portfolio.cycles(sec))
-            elif figure == "price_ticker":
+            elif name == "price_ticker":
                 got = dataview.price_view(sec, sec["cik"],
                                           sec["ticker"]).get("ticker")
-            elif figure.startswith("lot_return_"):
-                got = portfolio.lot_return(sec, by_id[figure[11:]], price)
-            elif figure.startswith("sale_return_"):
-                got = portfolio.sale_return(sec, sales[figure[12:]])
-            elif figure.startswith("since_sale_"):
-                got = portfolio.since_sale(sec, sales[figure[11:]],
+            elif name.startswith("lot_return_"):
+                got = figure(portfolio.lot_return(sec, by_id[name[11:]],
+                                                  price))
+            elif name.startswith("sale_return_"):
+                got = figure(portfolio.sale_return(sec, sales[name[12:]]))
+            elif name.startswith("since_sale_"):
+                got = portfolio.since_sale(sec, sales[name[11:]],
                                            price)["pct"]
             else:
-                raise AssertionError(f"{where}: no reader for {figure}")
-            assert got != bad["value"], f"{where} {figure} — {how}"
+                raise AssertionError(f"{where}: no reader for {name}")
+            assert got != bad["value"], f"{where} {name} — {how}"
 
 
 # -- the scorecards ----------------------------------------------------------
@@ -530,9 +564,14 @@ def test_a_price_of_nothing_on_record_is_refused_rather_than_served():
     assert spec["price"]["reason_mentions"] in view["reason"], view["reason"]
 
     lot = portfolio.lots(sec, "buy")[0]
-    got = portfolio.lot_return(sec, lot, view["value"])
-    assert got is None, spec["lot_return"]["how"]
-    assert got != spec["must_not_be"]["lot_return"]["value"]
+    got = portfolio.lot_return(sec, lot, view)
+    assert figure(got) is None, spec["lot_return"]["how"]
+    assert figure(got) != spec["must_not_be"]["lot_return"]["value"]
+    # And the absence carries the host's OWN sentence about the price rather
+    # than a weaker one invented here. That is the whole reason the price
+    # travels as a view: a return that cannot be worked out because of the
+    # price should say exactly what the price screen says.
+    assert view["reason"] in got["reason"], got["reason"]
 
     # And again with the zero handed straight to the arithmetic rather than
     # arriving as an absence. Both layers refuse it: a zero reaching the
@@ -540,10 +579,12 @@ def test_a_price_of_nothing_on_record_is_refused_rather_than_served():
     # report a confident total loss on a position nobody has valued.
     direct = spec["lot_return_asked_at_zero"]
     for reaching in (0.0, -3.0):
-        assert portfolio.lot_return(sec, lot, reaching) is None, direct["how"]
-        assert portfolio.cycle_return(sec, portfolio.cycles(sec)[0],
-                                      reaching) is None, direct["how"]
-        assert portfolio.position_return(sec, reaching) is None, direct["how"]
+        assert figure(portfolio.lot_return(sec, lot, reaching)) is None, \
+            direct["how"]
+        assert figure(portfolio.cycle_return(sec, portfolio.cycles(sec)[0],
+                                             reaching)) is None, direct["how"]
+        assert figure(portfolio.position_return(sec, reaching)) is None, \
+            direct["how"]
 
     ctx = context.build_context(sec, [sec], {}, {"free-cash": 500.0},
                                 record=cash_record())
@@ -613,3 +654,74 @@ def test_the_frozen_record_says_which_instrument_its_price_belonged_to():
     assert snapshot["price_date"] == want["date"]
     wrong = spec_of(history, "NWND.B")["must_not_be"]["price_ticker"]
     assert snapshot["price_ticker"] != wrong["value"], wrong["how"]
+
+
+@pytest.mark.parametrize("loaded", IDS, indirect=True)
+def test_how_a_holding_period_ended_across_every_sale_that_closed_it(loaded):
+    """A period closed in stages ended at more than one price, on more than
+    one day, for more than one stated reason — and it was described by the
+    last sale alone.
+
+    Sell 40 of 100 at $30 on a valuation call and the remaining 60 at $15 on
+    a broken thesis, and the record called $15 the exit price and "Thesis
+    broke" the exit reason. $15 is what one sliver got; the holding got
+    $21.00 a share. Worse, the same strip carried a return computed from
+    both sales, so the card contradicted its own arithmetic and left the
+    reader to work out which half to believe.
+
+    Three separate answers, and they belong to different questions:
+      - the PRICE is share-weighted across every closing sale;
+      - the DATE is the last sale's, because that is when nothing was held;
+      - the REASONS are all of them, each carrying the shares it covers.
+    """
+    history, by_ticker, _ = loaded
+    for spec in history["securities"]:
+        sec = by_ticker[spec["ticker"]]
+        for cycle, expect in zip(portfolio.cycles(sec),
+                                 spec["expect"]["cycles"]):
+            got = portfolio.cycle_exit(sec, cycle)
+            at = f'{history["id"]}/{spec["ticker"]} period {expect["seq"]}'
+            if "exit" not in expect:
+                assert got is None, f"{at}: an open period has no exit"
+                continue
+            want = expect["exit"]
+            assert got["date"] == want["date"] == cycle["closed"], \
+                f'{at} — {want["how"]}'
+            assert got["sales"] == want["sales"], f"{at} sales"
+            assert got["shares"] == want["shares"], f"{at} shares"
+            assert figure(got["price"], at) == want["price"]["value"], \
+                f'{at} exit price — {want["price"]["how"]}'
+            assert got["reasons"] == want["reasons"], \
+                f'{at} every reason given, not one of them'
+
+
+def test_a_staged_exit_is_not_described_by_its_smallest_sale():
+    """The motivating case, at its worst. Ninety shares leave at $150 and
+    the last ten at $55: the holding realised $140.50 a share, and reporting
+    $55 describes a tenth of it as though it were the whole.
+
+    Worked out on paper: 90 x 150.00 = 13,500.00 plus 10 x 55.00 = 550.00 is
+    14,050.00 over 100 shares, so $140.50.
+    """
+    sec = portfolio.new_security("STGD", "Staged Exit Co")
+    decision = {"render": "commit", "tier": "position",
+                "state": {"id": "buy", "name": "Buy"},
+                "reason": {"rule": "r", "summary": "s", "evidence": []}}
+    portfolio.add_lot(sec, decision, 100, 100.0, "2025-01-06")
+    portfolio.sell_lots(sec, None, "Hit valuation", 90, 150.0, "2025-06-10")
+    portfolio.sell_lots(sec, None, "Thesis broke", 10, 55.0, "2025-11-10")
+
+    [period] = portfolio.cycles(sec)
+    got = portfolio.cycle_exit(sec, period)
+    assert got["price"]["value"] == 140.5
+    assert got["price"]["value"] != 55.0, "the last sliver is not the exit"
+    assert got["date"] == "2025-11-10", "when nothing was left"
+    assert [r["reason"] for r in got["reasons"]] == ["Hit valuation",
+                                                     "Thesis broke"]
+    assert [r["share"] for r in got["reasons"]] == [90.0, 10.0]
+    # The per-sale figures the exit scorecard groups by are untouched: it was
+    # already right, and the two panels now agree about the same exit instead
+    # of one of them quietly describing a tenth of it.
+    a, b = portfolio.lots(sec, "sell")
+    assert figure(portfolio.sale_return(sec, a)) == 50.0
+    assert figure(portfolio.sale_return(sec, b)) == -45.0

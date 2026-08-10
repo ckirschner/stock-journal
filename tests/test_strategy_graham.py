@@ -41,7 +41,6 @@ MEASURES = ("pe_3y_avg_eps", "price_to_book", "graham_combined_multiple",
             "altman_z_score", "eps_growth_10y", "consecutive_dividend_years",
             "debt_to_equity", "price_to_net_tangible_assets",
             "accruals_ratio", "market_cap", "ncav_to_market_cap",
-            "earnings_yield_to_risk_free_multiple",
             "consecutive_annual_loss_years")
 
 # A company that clears every entry test. Invented, like everything else
@@ -197,21 +196,40 @@ class TestTheThresholdsAreTheReports:
         for spec in graham["values"]:
             assert len(spec["explain"]) > 120, spec["id"]
 
-    def test_no_test_states_its_own_limit(self, graham):
+    def test_no_test_states_its_own_limit_without_showing_its_working(
+            self, graham):
         """Cite, never quote. A strategy that supplied the number could
         attribute any limit to any setting, and the scorecard that asks
-        whether overriding a rule keeps working groups by exactly that."""
-        seen = 0
+        whether overriding a rule keeps working groups by exactly that.
+
+        One row states its own limit and is allowed to: the earnings-yield
+        test's ceiling is worked out from two settings, and a row cites one
+        setting or states one number — there is no way to name two. The
+        condition on that exemption is that both settings are cited in the
+        same group, so the arithmetic is on the screen and the reader can
+        redo it. A stated limit with nothing behind it would be this
+        strategy asking to be believed.
+        """
+        seen, stated = 0, 0
         for kw in ({"known": CLEARS_ENTRY},
                    {"known": CLEARS_EXITS, "held": True,
                     "opened": "2025-09-01"}):
-            for item in verdict(graham, **kw)["reason"]["evidence"]:
+            evidence = verdict(graham, **kw)["reason"]["evidence"]
+            for item in evidence:
                 test = item["test"]
                 if test is None or item["subject"]["kind"] == "stated":
                     continue
-                assert test["threshold_from"] is not None, item["subject"]
+                if test["threshold_from"] is None:
+                    stated += 1
+                    shown = {e["subject"]["id"] for e in evidence
+                             if e["group"] == item["group"]
+                             and e["subject"]["kind"] == "value"}
+                    assert shown >= {"min-earnings-yield-multiple",
+                                     "risk-free-rate"}, item["subject"]
+                    continue
                 seen += 1
         assert seen >= 20
+        assert stated == 1, "only the derived limit may state itself"
 
 
 # ---------------------------------------------------------------------------
@@ -276,20 +294,76 @@ class TestScreening:
         assert result["reason"]["rule"] == "core-tests-short"
 
     def test_a_failed_bonus_test_never_blocks(self, graham):
-        known = {**CLEARS_ENTRY, "market_cap": 5e6, "ncav_to_market_cap": 0.01}
+        known = {**CLEARS_ENTRY, "ncav_to_market_cap": 0.01}
         result = verdict(graham, known=known)
         assert result["state"]["id"] == "buy"
+        assert outcomes(result)["ncav_to_market_cap"] == "fail"
+
+    def test_a_company_under_the_size_floor_is_refused_outright(self, graham):
+        """The floor is a floor. Size was a scored test until v3, so a
+        company below it could be bought on the strength of everything else
+        — and the argument for the level is filing quality and being able to
+        sell, neither of which a low price-to-book makes up for."""
+        result = verdict(graham, known={**CLEARS_ENTRY, "market_cap": 40e6})
+        assert result["state"]["id"] == "not-cheap-enough"
+        assert result["reason"]["rule"] == "knockout-failed"
         assert outcomes(result)["market_cap"] == "fail"
 
-    def test_the_risk_free_test_is_absent_and_blocks_nothing(self, graham):
-        """Nothing in this host can be told what the risk-free rate is, so
-        the measure that needs it is permanently absent. It is a bonus test
-        precisely so that costs nothing, and it must read as unknown rather
-        than as a pass."""
+    def test_a_size_nobody_could_work_out_is_not_a_pass(self, graham):
+        """The other half of moving it. An absent knockout cannot be shrugged
+        off the way an absent bonus test could — it has to stop the verdict
+        rather than cost nothing, or absence reads as success at the one test
+        that exists to keep an unsellable position out."""
+        known = {k: v for k, v in CLEARS_ENTRY.items() if k != "market_cap"}
+        result = verdict(graham, known=known)
+        assert result["state"]["id"] == "cannot-screen"
+        assert outcomes(result)["market_cap"] == "unknown"
+
+    def test_the_risk_free_test_runs_and_still_blocks_nothing(self, graham):
+        """It used to be permanently absent: the measure needed a risk-free
+        rate and nothing could supply one, so a row that looked like a test
+        never once ran. The rate is a declared value now and the strategy
+        makes the comparison itself, so the test produces a real answer —
+        and it is still a bonus test, so the answer decides nothing.
+
+        CLEARS_ENTRY is at 11 times typical earnings, a 9.1% earnings yield.
+        Against twice a 4% rate — 8% — that passes; at a 6% rate it would
+        not, and the verdict would be the same buy either way.
+        """
         result = verdict(graham, known=CLEARS_ENTRY)
         assert result["state"]["id"] == "buy"
-        assert outcomes(result)["earnings_yield_to_risk_free_multiple"] == \
-            "unknown"
+        bonus = [e for e in result["reason"]["evidence"]
+                 if e["group"] == "bonus" and e["test"]
+                 and e["subject"]["id"] == "pe_3y_avg_eps"]
+        assert len(bonus) == 1
+        assert bonus[0]["outcome"] == "pass"
+        assert bonus[0]["test"]["threshold"] == 12.5
+
+        dear = verdict(graham, known=CLEARS_ENTRY, **{"risk-free-rate": 6.0})
+        assert dear["state"]["id"] == "buy"
+        assert [e for e in dear["reason"]["evidence"]
+                if e["group"] == "bonus" and e["test"]
+                and e["subject"]["id"] == "pe_3y_avg_eps"
+                ][0]["outcome"] == "fail"
+
+    def test_a_rate_of_nought_shows_the_settings_instead_of_a_comparison(
+            self, graham):
+        """The earnings-yield limit is worked out from two settings, and
+        either can be overridden to nought in a journal. Dividing by that
+        would take the whole verdict down over a bonus test that blocks
+        nothing — so no limit is built, and the two settings are shown as the
+        observations they are. A row that simply vanished would leave the
+        reader with no way to see that a test exists at all."""
+        result = verdict(graham, known=CLEARS_ENTRY,
+                         **{"risk-free-rate": 0})
+        assert result["state"]["id"] == "buy"
+        bonus = [e for e in result["reason"]["evidence"]
+                 if e["group"] == "bonus"]
+        assert not [e for e in bonus if e["test"]
+                    and e["subject"]["id"] == "pe_3y_avg_eps"]
+        shown = {e["subject"]["id"] for e in bonus
+                 if e["subject"]["kind"] == "value"}
+        assert shown == {"min-earnings-yield-multiple", "risk-free-rate"}
 
     def test_a_full_journal_says_so_rather_than_saying_no(self, graham):
         """'I would buy this if I had room' is not 'I would not buy this',
@@ -495,7 +569,7 @@ class TestTheRollupIsTheHostsAndNotItsOwn:
             "Reported, never blocking", "Room in the list, and how much"]
         got = rollup(result)
         assert got["knockouts"]["requires"] == "all"
-        assert got["knockouts"]["tested"] == 4
+        assert got["knockouts"]["tested"] == 5
         assert got["core"]["requires"] == "at_least"
         assert got["bonus"]["requires"] == "noted"
 
@@ -520,7 +594,8 @@ class TestTheRollupIsTheHostsAndNotItsOwn:
 
     def test_the_bonus_heading_carries_its_failures_and_blocks_nothing(
             self, graham):
-        result = verdict(graham, known={**CLEARS_ENTRY, "market_cap": 5e6})
+        result = verdict(graham,
+                         known={**CLEARS_ENTRY, "ncav_to_market_cap": 0.01})
         assert result["state"]["id"] == "buy"
         assert rollup(result)["bonus"]["failed"] == 1
         assert rollup(result)["bonus"]["outcome"] == "noted"
@@ -547,8 +622,7 @@ class TestABuyCannotContradictItsOwnEvidence:
         strategy and the host disagreed about what it had just looked at."""
         for kw in ({"known": CLEARS_ENTRY},
                    {"known": CLEARS_ENTRY, "portfolio-slots": 4},
-                   {"known": {**CLEARS_ENTRY, "market_cap": 5e6,
-                              "ncav_to_market_cap": 0.01}},
+                   {"known": {**CLEARS_ENTRY, "ncav_to_market_cap": 0.01}},
                    {"known": {k: v for k, v in CLEARS_ENTRY.items()
                               if k not in ("altman_z_score",
                                            "accruals_ratio")}}):
@@ -600,8 +674,8 @@ class TestEveryValueSaysWhereItCameFrom:
         assert values_for(graham)["portfolio-slots"] == 20
         assert values_for(graham)["position-weight-cap"] == 10
 
-    def test_the_six_with_borrowed_levels_say_whose_reasoning_it_is(self,
-                                                                    graham):
+    def test_those_with_borrowed_levels_say_whose_reasoning_it_is(self,
+                                                                  graham):
         """The report states these levels and gives no reasoning for them.
         The account in `explain` is this strategy's, and that used to be a
         paragraph pasted into six explanations — a claim nothing checked, on
@@ -610,6 +684,7 @@ class TestEveryValueSaysWhereItCameFrom:
         borrowed = {vid for vid, v in declared.items()
                     if not v["source"]["reasoning"]}
         assert borrowed == {"core-tests-required", "max-price-to-tangible",
+                            "min-market-cap",
                             "exit-price-to-book", "exit-current-ratio",
                             "exit-ltd-to-working-capital",
                             "exit-debt-to-equity"}
@@ -718,10 +793,10 @@ class TestWhatTheAuditCaught:
         assert rollup(grey)["knockouts"]["outcome"] == "unknown"
         assert rollup(grey)["knockouts"]["failed"] == 0
         assert rollup(grey)["knockouts"]["unknown"] == 1
-        # Both counted three passes. The count on its own was the thing that
-        # could not tell them apart.
-        assert rollup(red)["knockouts"]["passed"] == 3
-        assert rollup(grey)["knockouts"]["passed"] == 3
+        # Both counted the same passes. The count on its own was the thing
+        # that could not tell them apart.
+        assert rollup(red)["knockouts"]["passed"] == 4
+        assert rollup(grey)["knockouts"]["passed"] == 4
 
     def test_self_confirmation_is_derived_from_the_levels_not_declared(
             self, graham):

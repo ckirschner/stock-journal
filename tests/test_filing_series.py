@@ -159,7 +159,7 @@ class TestHistoryReadings:
                                   ["2025-06-30", 99.0, 0]], [])
         ctx = Ctx([], doc, ["SYN"], price_cutoff="2025-01-05")
         got = ctx.price_for("SYNB")
-        assert got == ("2025-01-02", 10.0)
+        assert got == ("2025-01-02", 10.0, 3)
         assert "2025-01-02" in ctx.price_dates_served
 
     def test_an_unknown_entry_says_so(self):
@@ -185,8 +185,12 @@ class TestPricePinning:
     def test_without_a_cutoff_the_newest_close_serves(self):
         assert Ctx([], self._prices(), ["SYN"]).price_now()["close"] == 20.0
 
-    def test_no_close_near_the_cutoff_is_absent_not_borrowed(self):
-        ctx = Ctx([], self._prices(), ["SYN"], price_cutoff="2025-03-01")
+    def test_a_cutoff_before_the_whole_series_is_absent_not_borrowed(self):
+        """Never reach forward. A close after the day being rebuilt for is a
+        price from a world that day had not seen, and it is the one direction
+        that is always wrong — unlike reaching back, which is how far the
+        answer is, not whether there is one."""
+        ctx = Ctx([], self._prices(), ["SYN"], price_cutoff="2024-01-01")
         assert is_absent(ctx.price_now())
 
 
@@ -264,7 +268,7 @@ class TestCadence:
         fs = _rich_company()
         untested = []
         for eid, fn in sorted(REGISTRY.items()):
-            ctx = Ctx(fs, doc, ["SYN"], params={"risk_free_rate": 4.0})
+            ctx = Ctx(fs, doc, ["SYN"])
             rec = _RecordingSB(ctx.sb)
             ctx.sb = rec
             try:
@@ -289,8 +293,14 @@ class TestCadence:
 # -- the cached provider ----------------------------------------------------
 
 class TestDataviewProvider:
-    def test_histories_are_cached_and_keyed_by_params(self):
-        from engine import dataview, facts_store
+    def test_histories_are_cached_per_entry(self):
+        """One reading of one entry is one answer. There used to be a second
+        cache dimension for a computation's supplied parameters, and nothing
+        supplied any — the one measure that declared a parameter could never
+        receive it, so it never once computed. A measure needing a number
+        nobody can hand over is not a measure; it is a strategy's question,
+        and it went there."""
+        from engine import compute, dataview, facts_store
         cik = 777
         for f in [_quarter("Q1", "2025-05-10", "2025-03-31", 200.0),
                   _quarter("Q2", "2025-08-09", "2025-06-30", 150.0)]:
@@ -300,6 +310,9 @@ class TestDataviewProvider:
         assert [r["value"] for r in h1["readings"]] == [1.5, 2.0]
         assert dataview.confirmation_history(cik, ["SYN"],
                                              "current_ratio") is h1
-        h2 = dataview.confirmation_history(cik, ["SYN"], "current_ratio",
-                                           {"risk_free_rate": 4.0})
-        assert h2 is not h1
+        assert dataview.confirmation_history(
+            cik, ["SYN"], "price_to_book") is not h1
+        # And no computation is waiting on a figure nobody supplies: the
+        # channel is gone, so a new one cannot be quietly added to it.
+        assert not hasattr(compute.Ctx([], None, ["SYN"]), "params")
+        assert not hasattr(compute, "compute_entry_with_params")

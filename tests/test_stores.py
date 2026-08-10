@@ -92,10 +92,40 @@ class TestPriceStore:
                                  [["2024-01-05", 10.0, 100],
                                   ["2024-01-12", 12.0, 100]], [])
         assert price_store.close_on(doc, "SYN", "2024-01-10") == \
-            ("2024-01-05", 10.0)
+            ("2024-01-05", 10.0, 5)
         assert price_store.close_on(doc, "SYN", "2024-01-04") is None
-        # beyond the lookback: absent, not the stale value
-        assert price_store.close_on(doc, "SYN", "2024-02-01") is None
+
+    def test_close_on_reports_how_far_it_reached_and_never_judges_it(self):
+        """The store carries the distance; nothing here decides whether it is
+        too far. There was a seven-day default bound, applied to every caller
+        that did not think about one, and "seven days is too old" is a
+        judgement about a decision rather than a fact about a price — the
+        kind of opinion the host is not entitled to hold. A caller that
+        genuinely needs a bound asks for one."""
+        doc = price_store.load(205)
+        price_store.merge_series(doc, "SYN", "tiingo",
+                                 [["2024-01-05", 10.0, 100]], [])
+        assert price_store.close_on(doc, "SYN", "2024-02-01") == \
+            ("2024-01-05", 10.0, 27)
+        assert price_store.close_on(doc, "SYN", "2024-02-01",
+                                    reach_days=10) is None
+
+    def test_a_terminal_mark_travels_with_the_instrument(self):
+        """Whether a series has ENDED is a fact and the host states it. It is
+        not a judgement about age: a series quiet for a month and one that
+        will never trade again are identical in a list of closes, and only
+        one of them still has a price. The last close is still served —
+        nothing is hidden — and the mark goes with it."""
+        doc = price_store.load(206)
+        price_store.merge_series(doc, "SYN", "tiingo",
+                                 [["2024-01-05", 10.0, 100]], [])
+        assert price_store.terminal_of(doc, "SYN") is None
+        price_store.mark_terminal(doc, "SYN", "delisted")
+        assert price_store.terminal_of(doc, "SYN")["reason"] == "delisted"
+        # found under whichever punctuation the caller spells it with, the
+        # same way the rows themselves are
+        assert price_store.terminal_of(doc, "SYN")["at"]
+        assert price_store.close_on(doc, "SYN", "2024-01-10")[1] == 10.0
 
     def test_zero_closes_are_no_trade_not_a_price(self):
         doc = price_store.load(204)

@@ -375,6 +375,24 @@ HOST_FACTS = MappingProxyType({
         "journal holds — that share class and no other, because two classes "
         "of one company trade at different prices. The day it closed and "
         "the symbol it belongs to travel with it."),
+    "price.days_since_close": _fact(
+        "Days since the price's close", "days",
+        ("price", "age"),
+        "How many days ago the market last set a price for this security. "
+        "Zero means today's close; a large number means the last trade on "
+        "record is old, and every figure built on the price — what the "
+        "holding is worth, what share of the account it is — describes that "
+        "day rather than this one.\n\n"
+        "The host reports the number and holds no view about it. Whether "
+        "four days is fine and forty is not depends entirely on what the "
+        "rule is for: a screen built on three-year average earnings barely "
+        "notices a week-old close, and a rule about position size notices a "
+        "month. A strategy that cares declares its own limit and compares "
+        "against this.\n\n"
+        "Absent for a price you entered by hand, because nothing here knows "
+        "when you typed it. That is not nought days — nought would claim it "
+        "was today's. Absent for a different reason where there is no price "
+        "at all, and the two say which they are."),
 })
 
 
@@ -1683,8 +1701,19 @@ def _fact_observation(ctx, item):
         return _unobserved("the host did not report this figure",
                            "fact"), None
     if node.get("status") == "known":
-        return _observed(node["value"], "fact", node.get("cautions"),
-                         node.get("provenance")), None
+        seen = _observed(node["value"], "fact", node.get("cautions"),
+                         node.get("provenance"))
+        # Anything else the host hung on the node comes across too — the
+        # close's own date and symbol, whether its series has ended. Only
+        # `value`, `cautions` and `provenance` used to survive, so the one
+        # node that carried a structured date lost it here, and both the
+        # evidence row and the snapshot frozen from it were left with a
+        # number and no way to say which day it belonged to. A frozen record
+        # is written once; a fact dropped here can never be recovered.
+        for key, extra in node.items():
+            if key not in seen and key != "status":
+                seen[key] = extra
+        return seen, None
     return _unobserved(node.get("reason")
                        or "the host cannot report this figure", "fact"), None
 

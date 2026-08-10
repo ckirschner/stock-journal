@@ -153,6 +153,17 @@ def _state(strategies, answers=ANSWERS) -> dict:
     assert api.open_position("CLSD", 5, 30.0, "2026-02-02", "a reason")["ok"]
     assert api.sell_shares("CLSD", "Panic", 24.0, "2026-05-02")["ok"]
 
+    # Closed IN STAGES, which is the case the previous screen described by
+    # its last sale alone: 80 of 100 at $45 on a valuation call and the last
+    # 20 at $15 on a broken thesis. The exit is $39.00 a share and two
+    # reasons; the final sliver is neither. Both have to render.
+    assert api.add_security("STGD", "Staged Exit Co")["ok"]
+    assert api.open_position("STGD", 100, 20.0, "2026-01-06", "a reason")["ok"]
+    assert api.sell_shares("STGD", "Hit valuation", 45.0, "2026-04-10",
+                           80)["ok"]
+    assert api.sell_shares("STGD", "Thesis broke", 15.0, "2026-06-10",
+                           20)["ok"]
+
     assert api.record_valuation(
         "ACME", "reverse_dcf",
         {"price": 20, "fcf_ttm": 4, "shares": 10,
@@ -417,15 +428,16 @@ def test_returns_and_scorecards_use_the_fetched_price(strategies):
     s = held[0]
     assert s["price"] is None, "this test needs a fetch-priced position"
     assert s["_price"]["source"] == "fetched"
-    assert s["_return"] is not None, \
-        "a fetch-priced position reported no return"
-    # …and it reaches the analytics, not just the row. Five purchases were
+    assert s["_return"]["status"] == "known", \
+        f'a fetch-priced position reported no return: {s["_return"]}'
+    # …and it reaches the analytics, not just the row. Six purchases were
     # recorded here — two of ACME, two of RVER either side of its exit, one
-    # of CLSD — and every one of them has to be in the count, whichever side
-    # of the override line it fell on. A purchase that drops out because the
-    # price behind its return came from a fetch is evidence lost silently.
+    # of CLSD, one of STGD — and every one of them has to be in the count,
+    # whichever side of the override line it fell on. A purchase that drops
+    # out because the price behind its return came from a fetch is evidence
+    # lost silently.
     card = state["override_scorecard"]
-    assert card["override"]["n"] + card["compliant"]["n"] == 5
+    assert card["override"]["n"] + card["compliant"]["n"] == 6
 
 
 def test_the_screen_and_the_strategy_cannot_disagree_on_when_it_began(
@@ -480,16 +492,17 @@ def test_the_payload_scores_the_holding_you_have_not_the_ticker(strategies):
     state = _state(strategies)
     s = [x for x in state["securities"] if x["ticker"] == "RVER"][0]
     assert s["bucket"] == "holdings"
-    assert s["_return"] == -28.57
-    assert s["_lifetime_return"] == 10.62
+    assert s["_return"] == {"status": "known", "value": -28.57,
+                            "provenance": []}
+    assert s["_lifetime_return"]["value"] == 10.62
 
     first, second = s["_cycles"]
     assert (first["opened"], first["closed"], first["open"]) == \
         ("2026-01-05", "2026-04-05", False)
-    assert first["return"] == 60.0
+    assert first["return"]["value"] == 60.0
     assert (second["opened"], second["closed"], second["open"]) == \
         ("2026-06-01", None, True)
-    assert second["return"] == -28.57
+    assert second["return"]["value"] == -28.57
 
     # …and the window on the closed one stops where the user bought again,
     # at the price they paid, rather than running on to today's 15.00.

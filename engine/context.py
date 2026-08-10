@@ -385,8 +385,90 @@ def _price_basis(view, ticker) -> str:
     """
     if view.get("source") == "manual":
         return "the price entered by hand, which carries no date"
-    return (f'the {view.get("ticker") or ticker} close of {view["date"]}'
-            if view.get("date") else "the recorded close")
+    ended = view.get("terminal")
+    where = (f'the {view.get("ticker") or ticker} close of {view["date"]}'
+             if view.get("date") else "the recorded close")
+    if ended:
+        # A fact, and the one that has to be said loudest. Every other
+        # qualifier here is about how old a price is; this one is about
+        # whether it is still a price at all, and a novice reading a dead
+        # series rendered as a live quote has no way to tell.
+        return (f"{where} — the last this instrument ever traded at, because "
+                f"its price series has ended "
+                f"({ended.get('reason') or 'no reason recorded'})")
+    return where
+
+
+def _days_since(view, today):
+    """Whole days from the close behind a price to the day being asked
+    about, or None where the price carries no date at all.
+
+    Arithmetic over two dates the host already owns, offered for exactly the
+    reason `position.months_held` is: every strategy with a view about how
+    old a price may be would otherwise write it again, and a strategy cannot
+    write it at all — it has a date and no way to subtract one.
+
+    None is the honest answer for a hand-entered price. It is not zero: zero
+    would say the price is today's, and nothing here knows when it was typed.
+    """
+    when = view.get("date")
+    if not when:
+        return None
+    try:
+        return (date.fromisoformat(str(today)[:10])
+                - date.fromisoformat(str(when)[:10])).days
+    except ValueError:
+        return None
+
+
+def _price_age(view, today) -> list[str]:
+    """How old the close behind a price-derived figure is, as a caution — or
+    that it has no date at all.
+
+    Always said, never judged. Whether four days is fine and eleven is not is
+    a strategy's question, and until this the host answered it: a caution
+    appeared past seven days and nothing appeared below it, so silence meant
+    either "current" or "nobody asked" and the reader could not tell which.
+
+    Counted against the clock the figure belongs to, so a reconstruction
+    reports its age as of the day being rebuilt rather than as of today.
+    """
+    out = []
+    ended = view.get("terminal")
+    manual = view.get("source") == "manual"
+    if ended and not manual:
+        # A caution and not only a provenance clause. Provenance says where a
+        # figure came from and stops at the figure it describes; a caution
+        # travels up — market value into the account total, both into weight
+        # — and weight is the number a sizing rule fires on. A dead series
+        # reaching the price and not the weight is the fact arriving
+        # everywhere except where it decides something.
+        #
+        # Not on a hand-entered price. The mark is about the stored series,
+        # and a figure the user typed did not come from it — saying this
+        # figure "rests on the last close the security ever had" would be
+        # the host describing a number it did not produce, and describing it
+        # wrongly. What the ended series means for a price the user supplied
+        # is said on the price itself, where the reader can see both.
+        out.append(
+            "the price series behind this has ended "
+            f"({ended.get('reason') or 'no reason recorded'}), so this rests "
+            "on the last close the security ever had rather than on what it "
+            "trades at")
+    if manual:
+        return out + ([view["undated"]] if view.get("undated") else [])
+    when = view.get("date")
+    if not when:
+        return out
+    try:
+        days = (date.fromisoformat(str(today)[:10])
+                - date.fromisoformat(str(when)[:10])).days
+    except ValueError:
+        return out
+    if days <= 0:
+        return out + [f"priced at the close of {when}, the latest held"]
+    return out + [f"priced at the close of {when}, "
+                  + ("a day" if days == 1 else f"{days} days") + " earlier"]
 
 
 def _price(security, cik, ticker, as_of, today) -> dict:
@@ -427,18 +509,49 @@ def _price(security, cik, ticker, as_of, today) -> dict:
         # which side the value came from. Fetched or hand-entered, never a
         # word invented for this node.
         latest = _known(float(view["value"]), view.get("source") or "price",
+                        cautions=_price_age(view, as_of or today),
                         provenance=[_price_basis(view, ticker)])
         # Kept beside the provenance sentence rather than only inside it: a
-        # rule that wants the close's own date wants a date, not prose.
+        # rule that wants the close's own date wants a date, not prose. The
+        # same goes for a series that has ended and for how old the close is
+        # — a strategy deciding what is too old needs a number to compare,
+        # and a sentence is something it would have to parse.
         latest["date"] = view.get("date")
         latest["ticker"] = view.get("ticker")
+        latest["terminal"] = view.get("terminal")
+        latest["days_since_close"] = _days_since(view, as_of or today)
     closes, events = dataview.price_series(cik, ticker, until=today)
-    return {"latest": latest, "closes": closes, "events": events}
+    return {"latest": latest, "age": _price_age_fact(view, latest, as_of
+                                                     or today),
+            "closes": closes, "events": events}
+
+
+def _price_age_fact(view, latest, today) -> dict:
+    """How many days ago the market last set this price, as a figure a rule
+    can compare — or an absence saying which of the two reasons it is.
+
+    Two, and they are not the same answer. There may be no price at all, in
+    which case the price's own reason is the reason; or there may be a price
+    the user typed, which has no date because nothing here knows when it was
+    typed. A single sentence covering both would tell someone with no price
+    stored that they entered one by hand, and send them looking for a figure
+    they never wrote.
+    """
+    if latest["status"] != "known":
+        return _absent("there is no price on record to date — "
+                       + latest["reason"])
+    days = _days_since(view, today)
+    if days is None:
+        return _absent(view.get("undated")
+                       or "the price on record carries no date")
+    return _known(days, "computed",
+                  provenance=[f'the close of {view["date"]}, against '
+                              f"{today}"])
 
 
 # -- position and portfolio --------------------------------------------------
 
-def _market_value(sec, shares, as_of=None):
+def _market_value(sec, shares, today, as_of=None):
     """Shares times the price of the security actually held.
 
     The price belongs to the clock — the journal's effective price live, the
@@ -467,7 +580,14 @@ def _market_value(sec, shares, as_of=None):
         return _absent(view.get("reason")
                        or "no price is stored for this security, so its "
                           "market value cannot be computed")
+    # The price's age and whether its series has ended travel with the
+    # figure rather than staying in `price_view`. Market value and the weight
+    # built on it are what a sizing rule fires on, and they were the two
+    # numbers with the least said about the price underneath them: a weight
+    # from a two-month-old close and one from this morning's read identically
+    # to a strategy and to the reader.
     return _known(float(view["value"]) * shares, "computed",
+                  cautions=_price_age(view, as_of or today),
                   provenance=[f"{shares:g} shares at "
                               f"{_price_basis(view, ticker)}"])
 
@@ -525,7 +645,18 @@ def _account_value(cash, holdings) -> dict:
             f"({names}), so the account total cannot be reached without "
             "inventing one")
     total = cash["value"] + sum(h["market_value"]["value"] for h in holdings)
-    return _known(total, "computed", cash.get("cautions"),
+    # Every holding's price qualifiers, not only the cash figure's. The
+    # account total is priced from as many closes as there are holdings, and
+    # one series that stopped updating months ago is exactly the one worth
+    # knowing about — the same reason a multi-class market cap reports its
+    # OLDEST close rather than its freshest.
+    cautions = list(cash.get("cautions") or [])
+    for h in holdings:
+        for note in h["market_value"].get("cautions") or []:
+            line = f'{h["ticker"]}: {note}'
+            if line not in cautions:
+                cautions.append(line)
+    return _known(total, "computed", cautions,
                   [f'{_usd(cash["value"])} free cash plus {len(holdings)} '
                    f'holding{"" if len(holdings) == 1 else "s"} at market'])
 
@@ -541,8 +672,16 @@ def _weight(market_value, account_value) -> dict:
         return _absent("the account works out to nothing or less once free "
                        "cash is included, so a share of it cannot be "
                        "expressed")
+    # Both sides. A weight is this holding's price over an account priced
+    # from every other holding's, so a qualifier on either one qualifies it —
+    # and it forwarded only the account's, which is the half that says
+    # nothing about the security in front of you.
+    cautions = list(market_value.get("cautions") or [])
+    for note in account_value.get("cautions") or []:
+        if note not in cautions:
+            cautions.append(note)
     return _known(market_value["value"] / account_value["value"] * 100,
-                  "computed", account_value.get("cautions"),
+                  "computed", cautions,
                   [f'{_usd(market_value["value"])} of an account of '
                    f'{_usd(account_value["value"])}'])
 
@@ -579,7 +718,8 @@ def _position(security, today, as_of, account_value) -> dict:
                       for l in portfolio.lots(security, "sell", today)],
     }
     if held:
-        out["market_value"] = _market_value(security, shares, as_of)
+        out["market_value"] = _market_value(security, shares, today,
+                                            as_of)
         out["weight"] = _weight(out["market_value"], account_value)
     else:
         out["market_value"] = _absent("no position is held")
@@ -611,7 +751,7 @@ def _portfolio(journal_securities, subject, today, as_of, roles) -> dict:
             "ticker": sec.get("ticker"), "name": sec.get("name"),
             "shares": shares,
             "opened": portfolio.opened_on(sec, today),
-            "market_value": _market_value(sec, shares, as_of),
+            "market_value": _market_value(sec, shares, today, as_of),
         })
     cash = _cash(roles, as_of)
     account_value = _account_value(cash, holdings)

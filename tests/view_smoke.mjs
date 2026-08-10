@@ -607,6 +607,65 @@ if (!closed.length) {
     mustNot.push(["previous", bad,
                   `an absent average renders as "${bad}" instead of a dash`]);
   }
+  mustNot.push(["previous", "[object Object]",
+                "a return arrives as {status, value} and must be unpacked, "
+                + "not stringified into the page"]);
+  // A holding closed in stages ended for more than one stated reason, and
+  // the row used to print the last sale's and drop the rest. Every reason
+  // has to be on the row, or the period card and the exit scorecard tell
+  // the reader two different stories about the same exit.
+  //
+  // Checked against the ROW rather than the whole table: "Hit valuation"
+  // appears on some other security's row on every realistic screen, so a
+  // page-wide substring proves nothing about the exit being described here.
+  let staged = 0;
+  for (const s of closed) {
+    for (const c of (s._cycles || []).filter((x) => !x.open && x.exit)) {
+      if (c.exit.sales < 2) continue;
+      staged += 1;
+      const table = String(out.previous ?? "");
+      const row = (table.split(`data-t="${s.ticker}"`)[1] || "").split("</tr>")[0];
+      // The detail page's own header says which holding you are reading and
+      // how it ended, and it read the last sale alone too.
+      const head = (String(out[`detail:${s.ticker}`] ?? "")
+        .split('<div class="meta">')[1] || "").split("</div>")[0];
+      for (const r of c.exit.reasons) {
+        if (!row.includes(r.reason)) {
+          problems.push(`previous: ${s.ticker}'s exit on ${c.closed} gave `
+                        + `"${r.reason}" for ${r.share}% of it and the row `
+                        + `does not say so — "${row.slice(0, 200)}"`);
+        }
+        if (!head.includes(r.reason)) {
+          problems.push(`detail:${s.ticker}: the header names how the holding `
+                        + `ended and leaves out "${r.reason}" — "${head}"`);
+        }
+      }
+      // The exit price on the detail strip is the share-weighted figure.
+      // The last sale's price is what it used to be, and it must not be
+      // what renders — so both halves are asserted, or a page that happens
+      // to contain the right digits elsewhere would pass.
+      if (c.exit.price.status === "known") {
+        const last = c.sells[c.sells.length - 1];
+        must.push([`detail:${s.ticker}`,
+                   `<i>Exit price</i><b>$${c.exit.price.value}`,
+                   `${s.ticker} exited across ${c.exit.sales} sales, so its `
+                   + "exit price is the share-weighted figure"]);
+        mustNot.push([`detail:${s.ticker}`,
+                      `<i>Exit price</i><b>$${lotPrice(s, last)}`,
+                      `${s.ticker}'s exit price is not its last sale's`]);
+      }
+    }
+  }
+  if (!staged) {
+    gap("the harness built no holding closed in stages — the weighted exit "
+        + "price and the multi-reason row are unexercised");
+  }
+}
+
+/* One sale lot's price, by id, off the payload the page renders from. */
+function lotPrice(s, lotId) {
+  const lot = (s._sales || []).find((l) => l.id === lotId);
+  return lot ? lot.price : null;
 }
 // A name held more than once: every period is its own row, the detail page
 // groups the entries by holding, and no figure spanning them is unlabelled.
