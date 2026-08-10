@@ -613,9 +613,6 @@ def _market_value(sec, shares, today, as_of=None):
 _NO_CASH_ROLE = ("no strategy in this journal asks for your free cash, so "
                  "the journal does not record it and the account it would "
                  "be measured against cannot be reached")
-_UNDATED_INPUT = ("what you told this journal carries no date, so this is "
-                  "the answer on record now, not one known to be true on "
-                  "{day}")
 
 
 def _usd(n) -> str:
@@ -625,21 +622,42 @@ def _usd(n) -> str:
 def _cash(roles, as_of) -> dict:
     """Free cash, from whichever declared input claims the `cash` role.
 
-    Under a pin it is served with the same caution a hand-entered measure
-    carries: an answer with no date participates, because the journal has no
-    other to offer, but it is never presented as a figure known to have been
-    true on a past day.
+    The answers reaching here are already the ones that were on record on
+    the day being evaluated — they are resolved against the journal's dated
+    change record before the context is built, in journals.answers_on. So
+    there is no caution to attach and no carrying-forward to admit to: the
+    figure either was the answer on that day or there is no answer, and the
+    second case arrives here as an absence like any other.
+
+    That is a change from serving today's balance with a warning beside it.
+    A qualified wrong number still decides — the account total is built from
+    this, every weight is measured against the account, and strategies bind
+    on weight — so the number is the thing that had to move, not the
+    sentence.
     """
     entry = (roles or {}).get("cash")
     if entry is None:
         return _absent(_NO_CASH_ROLE)
     if "value" not in entry:
+        if as_of:
+            # A different absence from "answer it in settings". Two ways to
+            # get here — the journal had not been told yet, or it did not
+            # exist on that day — and this node cannot tell them apart, so it
+            # says both rather than guessing. Which it was is on the record:
+            # the reconstruction's own note names the day the journal was
+            # created when that is the reason.
+            return _absent(
+                f'this journal holds no answer for what "{entry["label"]}" '
+                f"was on {as_of} — it had not been told, or it did not yet "
+                "exist. What you have told it since is an answer about the "
+                "days it was told, and carrying that back would size a "
+                "decision made then against an account measured now")
         return _absent(entry.get("reason")
                        or "this journal has no answer for it yet")
-    cautions = [_UNDATED_INPUT.format(day=as_of)] if as_of else None
-    return _known(float(entry["value"]), "input", cautions,
+    when = f", as it stood on {as_of}" if as_of else ""
+    return _known(float(entry["value"]), "input", None,
                   [f'"{entry["label"]}", answered in this journal\'s '
-                   "settings"])
+                   f"settings{when}"])
 
 
 def _account_value(cash, holdings) -> dict:

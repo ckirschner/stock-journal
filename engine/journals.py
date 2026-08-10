@@ -69,10 +69,9 @@ from __future__ import annotations
 
 import re
 import shutil
-from datetime import datetime, timezone
 from pathlib import Path
 
-from . import portfolio, secrets, store, strategy_values
+from . import dated, portfolio, secrets, store, strategy_values
 
 # 2: a security's position became append-only lot history and every stored
 #    bucket, running total and single entry snapshot went with it. There is
@@ -85,7 +84,19 @@ _OPEN_KEY = "open_journal"      # machine-local: which journal is open here
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    """When something was observed, on the calendar the user was standing on.
+
+    The same stamp, and the same reasoning, as `dated.stamp` — this record is
+    read against days a person typed, so it has to be on the same calendar as
+    those days. `answers_on` compares a change's day against a purchase date,
+    and a UTC stamp would put an evening's change on tomorrow west of
+    Greenwich, so a purchase backdated to that evening would be reconstructed
+    against an answer the user had already replaced.
+
+    Entries written before this are UTC and stay UTC. Nothing already on
+    record is restated.
+    """
+    return dated.stamp()
 
 
 # -- paths and discovery -----------------------------------------------------
@@ -517,6 +528,60 @@ def set_inputs(journal: dict, record: dict, inputs: dict) -> dict | None:
              "seen": _now(), "moved": moved}
     journal.setdefault("input_changes", []).append(entry)
     return entry
+
+
+def answers_on(journal: dict, as_of: str | None = None) -> dict | None:
+    """What this journal's answers were on a given day, or None where it has
+    no answer for that day at all.
+
+    `as_of` of None means now — what the journal holds, with no ceiling.
+
+    The change record already carried everything needed for this and nothing
+    read it. A reconstruction served the answer standing *now*, qualified
+    with a caution saying it carried no date — which stopped being true the
+    day these changes started being recorded, and was never the whole
+    problem anyway. Free cash is what the account total is built from, the
+    account is what every weight is measured against, and a strategy binds
+    on weight: a purchase backdated two years was being sized against
+    today's balance, with a sentence beside it rather than a different
+    number.
+
+    **None where the day predates the journal**, which is every backfill of
+    a position bought before this program was opened. The journal has no
+    answer for that day — not a stale one, none — and carrying the earliest
+    one it ever held backwards is exactly the carrying-forward principle 4
+    refuses. What follows from that is deliberate: free cash is absent, so
+    the account total is absent, so a weight is absent, so a rule that binds
+    on one says it cannot be worked out and names why. That is a
+    reconstruction admitting what it does not know, and it is the whole
+    reason the entry it produces is recorded as unreconstructed rather than
+    as an override.
+
+    Walked newest-first and undone rather than replayed forward, because the
+    record stores where each answer came *from*: the first answer a journal
+    was created with is not a change and is not in the list, so replaying
+    from empty would lose it.
+    """
+    if as_of is None:
+        return dict(journal.get("inputs") or {})
+    day = str(as_of)[:10]
+    born = str(journal.get("created") or "")[:10]
+    if born and day < born:
+        return None
+    answers = dict(journal.get("inputs") or {})
+    for change in reversed(journal.get("input_changes") or []):
+        # A change made on the day being asked about counts as in force,
+        # which is the rule every dated record in this program obeys — see
+        # dated.in_force. Only what came strictly afterwards is undone.
+        if str(change.get("seen") or "")[:10] <= day:
+            break
+        for moved in change.get("moved") or []:
+            was = moved.get("from")
+            if was is None:
+                answers.pop(moved.get("id"), None)
+            else:
+                answers[moved["id"]] = was
+    return answers
 
 
 def pending(journal: dict) -> list[dict]:

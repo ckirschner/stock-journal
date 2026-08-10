@@ -16,6 +16,7 @@ every screen comes from one call to engine.contract.evaluate.
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import shutil
 import sys
@@ -308,7 +309,14 @@ class Api:
         # them the host may report as a figure, is the declaration's
         # business and is settled inside build_context.
         declared = {f["id"] for f in (record.get("inputs") or [])}
-        supplied = {k: v for k, v in (journal.get("inputs") or {}).items()
+        # The answers that were on record on the day being evaluated, not the
+        # ones on record now. They are dated — every change to one is on the
+        # journal's own append-only record — and a reconstruction that served
+        # today's would size a purchase made two years ago against today's
+        # account. A day before this journal existed has no answers at all,
+        # and that absence is served as itself: see journals.answers_on.
+        answered = journals.answers_on(journal, as_of)
+        supplied = {k: v for k, v in (answered or {}).items()
                     if k in declared}
         try:
             ctx = context.build_context(security, securities,
@@ -530,6 +538,13 @@ class Api:
             # read, never stored: a stored bucket or running total is a
             # second opinion about a fact the lots already settle.
             s["bucket"] = portfolio.bucket_of(s)
+            # Whether any entry in this name was reconstructed rather than
+            # captured at the time. Derived from the lots, like the bucket,
+            # and stated here so the list and the detail page read one
+            # answer — a screen working it out for itself is a second copy
+            # of the rule, and the two disagree the first time an entry is
+            # added without one.
+            s["_backfilled"] = portfolio.backfilled(s)
             s["_lots"] = portfolio.open_lots(s)
             s["_sales"] = portfolio.lots(s, "sell")
             s["_shares"] = portfolio.shares_held(s)
@@ -977,19 +992,23 @@ class Api:
         return ok()
 
     # -- purchases and exits ----------------------------------------------
-    def _purchase_date(self, opened):
+    def _entry_date(self, when, what):
         """(iso date or None, is_past), on the one date rule every dated
         entry obeys — a real date, and one that has happened.
 
-        The refusal itself lives in engine/portfolio, at the write, so a
-        purchase cannot be dated ahead by any route. Checked again here
-        because the preview evaluates before anything is written, and
-        reconstructing a day that has not happened is not a thing the data
-        can honestly answer.
+        The refusal itself lives in engine/portfolio, at the write, so an
+        entry cannot be dated ahead by any route. Checked again here because
+        the preview evaluates before anything is written, and reconstructing
+        a day that has not happened is not a thing the data can honestly
+        answer.
+
+        One function for a purchase and a sale, taking the word for the
+        message. There were two of these and only one of them knew about the
+        past at all — see `_evaluated_for`.
         """
-        if not opened:
+        if not when:
             return None, False
-        iso = portfolio.recorded_date(opened, "purchase")
+        iso = portfolio.recorded_date(when, what)
         return iso, iso < date.today().isoformat()
 
     def _values_live(self, s):
@@ -1130,32 +1149,97 @@ class Api:
         }
         return values, price, evaluation
 
-    def _at_purchase(self, journal, record, chain, s, opened_iso, is_past):
-        """(decision, values, price, evaluation, thesis, valuation) for the
-        day being recorded. Today evaluates live; a past date is
-        reconstructed from the data available by then, and says so
-        everywhere.
+    @staticmethod
+    def _note_what_cannot_be_rebuilt(journal, record, when_iso, evaluation):
+        """Add to a reconstruction's own account of itself the two things it
+        rebuilt nothing for.
 
-        The thesis and the valuation obey the same clock as the filings. A
-        purchase backdated to before either was written freezes nothing for
-        it, which is the honest record of a buy made without one — never the
-        version written afterwards, which would let a thesis composed with
-        hindsight be presented as the case that was made at the time.
+        The filings and the close reach back; these two do not, and a record
+        written once can never be asked afterwards what it was working from.
+
+        **The rules are today's.** A verdict rebuilt for 2019 is that day's
+        data run through the strategy as it stands now — its logic and its
+        thresholds — because the version in force in 2019 is not on this
+        machine and, for a purchase predating the journal, never was. That is
+        not a fault to fix; it is the only reconstruction there is. It is
+        also the one part of a reconstruction that genuinely judges the past
+        with the present, so the record says it in as many words rather than
+        leaving it to be inferred from a version number.
+
+        **The journal may not have existed.** Everything the user told it —
+        free cash, and anything else a strategy asks for — begins on the day
+        it was created. Before that the journal holds no answers, and the
+        figures built on them are absent rather than borrowed from now.
+        """
+        parts = [evaluation.get("note")] if evaluation.get("note") else []
+        if record is not None:
+            parts.append(
+                f'judged by {record["name"]} v{record["version"]} as it '
+                f'stands today (values v{record.get("values_version")}) — '
+                "the version in force then is not recoverable, so the rules "
+                "are the present ones and only the data is of the day")
+        born = str(journal.get("created") or "")[:10]
+        if born and when_iso < born:
+            parts.append(
+                f"this journal was created on {born}, so it held no answers "
+                f"on {when_iso} — free cash, and every figure measured "
+                "against the account, are absent rather than taken from what "
+                "you have told it since")
+        evaluation["note"] = "; ".join(p for p in parts if p)
+        return evaluation
+
+    def _evaluated_for(self, journal, record, chain, s, when_iso, is_past,
+                       *, ask=True):
+        """Everything an entry dated `when_iso` freezes: the verdict, the
+        values behind it, the price seen, the record of how it was reached,
+        and the versions of what the user had written by then.
+
+        Today evaluates live; a past date is reconstructed from the data
+        available by then, and says so everywhere.
+
+        **One function for a purchase and a sale, and that is the point.**
+        There were two paths here. The purchase path reconstructed; the sale
+        path did not, so an exit backdated to 2019 was judged with today's
+        filings and today's close, and the journal recorded a verdict it
+        never computed — into `rule_triggered` and `signal_at_exit`, which
+        are exactly what the panic-sell learning loop reads. Two paths is how
+        that happened and one path is the fix: there is now nowhere to record
+        a dated entry from that does not know about the clock, so the next
+        kind of entry cannot reintroduce it by omission.
+
+        The thesis and the valuation obey the same clock as the filings. An
+        entry backdated to before either was written freezes nothing for it,
+        which is the honest record of a decision made without one — never the
+        version written afterwards, which would let a case composed with
+        hindsight be presented as the one that was made at the time.
+
+        `ask` False is the one caller that has no strategy to ask — the sale
+        path when the bundle is not installed. It still reconstructs the
+        values, because what was observable on the day does not depend on
+        whether the strategy is on this machine, and the record then says the
+        strategy could not be asked rather than showing a verdict that read
+        clear.
         """
         securities = journal.get("securities", [])
+        pin = when_iso if is_past else None
         if is_past:
-            values, price, evaluation = self._values_asof(s, opened_iso)
-            decision = self._decide(s, securities, journal, record, chain,
-                                    as_of=opened_iso)
-            pin = opened_iso
+            values, price, evaluation = self._values_asof(s, when_iso)
+            self._note_what_cannot_be_rebuilt(journal, record, when_iso,
+                                              evaluation)
         else:
             values, price = self._values_live(s)
             evaluation = {"basis": "live", "as_of": date.today().isoformat()}
-            decision = self._decide(s, securities, journal, record, chain)
-            pin = None
-        return (decision, values, price, evaluation,
-                thesis_mod.in_force(s, pin),
-                valuation.frozen(valuation.in_force(s, pin)))
+        decision = self._decide(s, securities, journal, record, chain,
+                                as_of=pin) if ask else None
+        return {
+            "decision": decision,
+            "values": values,
+            "price": price,
+            "evaluation": evaluation,
+            "pin": pin,
+            "thesis": thesis_mod.in_force(s, pin),
+            "valuation": valuation.frozen(valuation.in_force(s, pin)),
+        }
 
     @guarded
     @locked
@@ -1175,42 +1259,91 @@ class Api:
         if journal is None:
             return err("No journal is open.")
         s = self._find(journal, ticker)
-        opened_iso, is_past = self._purchase_date(opened)
-        decision, _values, _price, evaluation, *_ = \
-            self._at_purchase(journal, record, chain, s, opened_iso, is_past)
+        opened_iso, is_past = self._entry_date(opened, "purchase")
+        at = self._evaluated_for(journal, record, chain, s, opened_iso,
+                                 is_past)
         # What this purchase is about to freeze, in front of the person
         # about to make it. A buy recorded against no thesis at all is
         # allowed and always will be — but it should be a thing you notice
         # you are doing, not a thing you find out about months later.
-        pin = opened_iso if is_past else None
+        pin, evaluation = at["pin"], at["evaluation"]
         clock = str(pin or date.today().isoformat())[:10]
-        return ok(decision=decision, basis=evaluation["basis"],
+        return ok(decision=at["decision"], basis=evaluation["basis"],
                   as_of=evaluation["as_of"], note=evaluation.get("note"),
+                  # Which of the four ways this entry would go on the record,
+                  # from the engine rather than worked out again in the
+                  # browser. The dialog asks for a reason on an override and
+                  # must not ask for one where there was no signal to
+                  # override — and a second copy of that judgement in the
+                  # view is how the two came to disagree about the same
+                  # purchase.
+                  recorded_as=portfolio.recorded_as(at["decision"],
+                                                    evaluation["basis"]),
                   thesis=thesis_mod.standing(s, as_of=pin, today=clock),
                   valuation=valuation.standing(s, as_of=pin, today=clock))
 
     @guarded
     @locked
     def open_position(self, ticker, shares, cost, opened,
-                      override_reason="", previewed_state=None):
+                      override_reason="", previewed_state=None,
+                      recollection=""):
         journal, record, chain, _ = self._open()
         if journal is None:
             return err("No journal is open.")
         s = self._find(journal, ticker)
-        opened_iso, is_past = self._purchase_date(opened)
-        decision, values, price, evaluation, standing, claim = \
-            self._at_purchase(journal, record, chain, s, opened_iso, is_past)
+        opened_iso, is_past = self._entry_date(opened, "purchase")
+        at = self._evaluated_for(journal, record, chain, s, opened_iso,
+                                 is_past)
+        decision = at["decision"]
         lot = portfolio.add_lot(s, decision, float(shares), float(cost),
-                                opened_iso, override_reason, values=values,
-                                price_seen=price, evaluation=evaluation,
-                                thesis=standing, valuation=claim)
+                                opened_iso, override_reason,
+                                values=at["values"], price_seen=at["price"],
+                                evaluation=at["evaluation"],
+                                thesis=at["thesis"],
+                                valuation=at["valuation"],
+                                recollection=recollection)
+        portfolio.note_recording(s, [lot])
         self._write(journal)
         state = (decision.get("state") or {}).get("id")
         return ok(override=bool(lot.get("override")),
+                  unreconstructed=bool(lot.get("unreconstructed")),
+                  basis=at["evaluation"]["basis"],
                   state=(decision.get("state") or {}).get("name"),
                   commit=portfolio.is_commit(decision),
                   state_changed=bool(previewed_state and state
                                      and previewed_state != state))
+
+    @guarded
+    @locked
+    def preview_sale(self, ticker, exited=None):
+        """What the journal's strategy says for the day a sale is dated,
+        before anything is committed.
+
+        The same shape the purchase preview returns, from the same
+        evaluation, because they are the same question asked about different
+        days. It exists for the backdated case: a sale entered out of a
+        brokerage statement freezes a verdict, and the person entering it
+        should see which one — and see it named as a reconstruction — rather
+        than find out from a toast afterwards.
+        """
+        journal, record, chain, _ = self._open()
+        if journal is None:
+            return err("No journal is open.")
+        s = self._find(journal, ticker)
+        exited_iso, is_past = self._entry_date(exited, "sale")
+        at = self._evaluated_for(journal, record, chain, s, exited_iso,
+                                 is_past, ask=record is not None)
+        pin, evaluation = at["pin"], at["evaluation"]
+        clock = str(pin or date.today().isoformat())[:10]
+        return ok(decision=at["decision"], basis=evaluation["basis"],
+                  as_of=evaluation["as_of"], note=evaluation.get("note"),
+                  # Whether the strategy answered at all. A sale recorded
+                  # where nothing could be rebuilt says so and records no
+                  # signal — never "no rule triggered this exit", which
+                  # claims a signal was read and came back clear.
+                  verdict=portfolio.is_verdict(at["decision"]),
+                  held=portfolio.shares_held(s, exited_iso),
+                  thesis=thesis_mod.standing(s, as_of=pin, today=clock))
 
     @guarded
     @locked
@@ -1221,6 +1354,12 @@ class Api:
         a position means. A partial sale leaves the remaining lots exactly
         as they are — nothing is rewritten, a sale is one more appended
         entry naming what it drew on.
+
+        A sale dated in the past is judged with the data of that day, exactly
+        as a purchase is — see `_evaluated_for`. It used to be judged with
+        today's, which put a verdict the strategy was never asked for into
+        `signal_at_exit` and `rule_triggered`, and those are what the exit
+        analytics teach from.
         """
         journal, record, chain, _ = self._open()
         if journal is None:
@@ -1236,27 +1375,217 @@ class Api:
         # actually lives — this is only so the message names the date rather
         # than arriving after a strategy has been asked about a day that has
         # not happened.
-        exited = portfolio.recorded_date(exited, "sale")
+        exited_iso, is_past = self._entry_date(exited, "sale")
         # A strategy that is not installed is not a signal that read clear:
-        # the sale records that it could not be asked at all.
-        decision, values, seen = None, None, None
-        if record is not None:
-            decision = self._decide(s, journal.get("securities", []), journal,
-                                    record, chain)
-            values, seen = self._values_live(s)
+        # the sale records that it could not be asked at all. The values are
+        # still reconstructed for the day, because what was observable then
+        # does not depend on what is on this machine now.
+        at = self._evaluated_for(journal, record, chain, s, exited_iso,
+                                 is_past, ask=record is not None)
         # The thesis standing at the sale, frozen with it. This is where it
         # gets graded — "did the falsifier fire, or did I talk myself out of
-        # it" is a question about the version that was on record when the
-        # sell button was pressed, and that version is amendable right up
-        # until it.
-        lot = portfolio.sell_lots(s, decision, reason, n, float(price),
-                                  exited, values=values, price_seen=seen,
-                                  thesis=thesis_mod.in_force(s))
+        # it" is a question about the version that was on record on the day
+        # of the sale, which under a reconstruction is not the version
+        # standing now.
+        lot = portfolio.sell_lots(s, at["decision"], reason, n, float(price),
+                                  exited_iso, values=at["values"],
+                                  price_seen=at["price"],
+                                  evaluation=at["evaluation"],
+                                  thesis=at["thesis"])
+        portfolio.note_recording(s, [lot])
         self._write(journal)
         return ok(rule_triggered=lot["rule_triggered"],
                   signal=lot["signal_at_exit"],
+                  basis=at["evaluation"]["basis"],
+                  as_of=at["evaluation"]["as_of"],
                   remaining=portfolio.shares_held(s),
                   strategy_name=(lot["strategy"] or {}).get("name"))
+
+    # -- backfill ----------------------------------------------------------
+    # Entering a position you already own, out of your own history.
+    #
+    # The journal is only usable forward from the day it was started, and
+    # every analytic in it — the override scorecard, the exit reasons, what
+    # happened after you sold — has nothing to work against until enough
+    # decisions accumulate. Backfill is what gives them something. It is also
+    # the fastest way to poison them, which is why the two corrections above
+    # had to land first: a batch of old purchases against a strategy nothing
+    # could reconstruct used to manufacture a pile of "bought against signal"
+    # records describing data coverage rather than discipline.
+    #
+    # Nothing here is a new evaluation path. Each entry goes through exactly
+    # the write the single-entry dialogs use, evaluated by exactly the
+    # function they evaluate through, against the data of its own day. What
+    # this adds is a sequence: several dated entries applied in order, each
+    # one seeing the journal as the ones before it left it, so a sale in 2016
+    # is checked against the shares that were held in 2016.
+
+    _BACKFILL_KINDS = ("buy", "sell")
+
+    def _backfill_event(self, raw, index):
+        """One requested entry, in the types the record needs, or a refusal
+        naming the row.
+
+        Checked here, before any of them are applied, only for the things
+        that are about the *request* — a kind nobody can record, a date that
+        is not a date, a count that is not a number. Everything about whether
+        the entry is possible against the position — selling shares that were
+        never bought, a sale dated before the purchase it draws on — is left
+        to engine/portfolio, which is where those rules live and where they
+        are enforced for every other caller.
+        """
+        where = f"Entry {index + 1}"
+        kind = str((raw or {}).get("kind") or "").strip()
+        if kind not in self._BACKFILL_KINDS:
+            raise ValueError(
+                f'{where} is a "{kind or "blank"}", and a position is built '
+                "out of purchases and sales. Choose one.")
+        what = "purchase" if kind == "buy" else "sale"
+        when = str(raw.get("date") or "").strip()
+        if not when:
+            raise ValueError(
+                f"{where} has no date. Every entry is judged against the "
+                "data of its own day, so the day is the one thing it cannot "
+                "be recorded without.")
+        try:
+            iso = portfolio.recorded_date(when, what)
+        except ValueError as e:
+            raise ValueError(f"{where}: {e}")
+        try:
+            shares = float(str(raw.get("shares") or "").strip())
+            price = float(str(raw.get("price") or "").strip())
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"{where} needs a share count and a price per share, both as "
+                "numbers. Nothing is filled in for you — a price this "
+                "program guessed would go into an append-only record as "
+                "though you had read it off a statement.")
+        return {"index": index, "kind": kind, "what": what, "date": iso,
+                "is_past": iso < date.today().isoformat(),
+                "shares": shares, "price": price,
+                # A sale entered from history may honestly have no reason on
+                # it. Forcing a choice from the list would manufacture the
+                # one fact the exit analytics exist to read, and "I do not
+                # remember why I sold in 2014" is itself worth counting.
+                "reason": (str(raw.get("reason") or "").strip()
+                           or portfolio.UNSTATED_REASON) if kind == "sell"
+                else None}
+
+    def _run_backfill(self, ticker, events, recollection, commit):
+        """Apply a run of dated entries to one security, oldest first.
+
+        The preview and the recording are this one function, run against a
+        copy of the journal or against the real one. That is deliberate and
+        it is the only honest arrangement: a preview built from a second
+        implementation can promise a verdict the write does not produce, and
+        the thing being previewed here is what is about to enter a record
+        that can never be corrected.
+
+        Stops at the first entry that cannot be recorded, and writes nothing
+        unless every one of them can. Continuing past a failure would
+        evaluate the entries after it against a position missing a purchase,
+        so every row below the broken one would be wrong in a way that looks
+        like an answer. Nothing is written on the way to the failure either —
+        a journal is loaded fresh on every call and only saved at the end, so
+        a run that stops halfway leaves the file exactly as it was.
+        """
+        journal, record, chain, _ = self._open()
+        if journal is None:
+            return err("No journal is open.")
+        if not commit:
+            # The preview mutates a security as it goes — that is how entry
+            # four is evaluated against the position entries one to three
+            # left behind — so it works on a copy and the real journal is
+            # never touched by a screen that has not been confirmed.
+            journal = copy.deepcopy(journal)
+        s = self._find(journal, ticker)
+
+        ordered = sorted((self._backfill_event(e, i)
+                          for i, e in enumerate(events or [])),
+                         key=lambda e: (e["date"], e["index"]))
+        if not ordered:
+            return err("Add at least one purchase. A position starts with "
+                       "one, and everything else is recorded against it.")
+        if ordered[0]["kind"] != "buy" and not portfolio.is_held(
+                s, ordered[0]["date"]):
+            return err(
+                f'The earliest entry is a sale dated {ordered[0]["date"]}, '
+                f"and no {s['ticker']} was held then. A position is built "
+                "from the purchase up — record what you bought first.")
+
+        results, made, problem = [], [], None
+        remembered = str(recollection or "").strip()
+        for ev in ordered:
+            at = self._evaluated_for(journal, record, chain, s, ev["date"],
+                                     ev["is_past"], ask=record is not None)
+            decision, evaluation = at["decision"], at["evaluation"]
+            row = {
+                "index": ev["index"], "kind": ev["kind"], "date": ev["date"],
+                "shares": ev["shares"], "price": ev["price"],
+                "reason": ev["reason"],
+                "basis": evaluation["basis"], "as_of": evaluation["as_of"],
+                "note": evaluation.get("note"),
+                "state": ((decision or {}).get("state") or {}).get("name"),
+                "summary": ((decision or {}).get("reason") or {}).get(
+                    "summary"),
+                "problem": None,
+            }
+            try:
+                if ev["kind"] == "buy":
+                    # The recollection goes on the purchase that opens the
+                    # run and on no other. It is what somebody can honestly
+                    # answer — "what was I thinking when I bought this" — and
+                    # asking it again of every add five years later is asking
+                    # for something invented.
+                    lot = portfolio.add_lot(
+                        s, decision, ev["shares"], ev["price"], ev["date"],
+                        values=at["values"], price_seen=at["price"],
+                        evaluation=evaluation, thesis=at["thesis"],
+                        valuation=at["valuation"],
+                        recollection=remembered if not made else "")
+                    row["recorded_as"] = portfolio.recorded_as(
+                        decision, evaluation["basis"])
+                else:
+                    lot = portfolio.sell_lots(
+                        s, decision, ev["reason"], ev["shares"], ev["price"],
+                        ev["date"], values=at["values"],
+                        price_seen=at["price"], evaluation=evaluation,
+                        thesis=at["thesis"])
+                    row["rule_triggered"] = lot["rule_triggered"]
+                    row["signal"] = lot["signal_at_exit"]
+                made.append(lot)
+            except (ValueError, store.StoreError) as e:
+                row["problem"] = str(e)
+                problem = str(e)
+                results.append(row)
+                break
+            results.append(row)
+
+        pending = [e["index"] for e in ordered
+                   if e["index"] not in {r["index"] for r in results}]
+        if problem is None and commit:
+            portfolio.note_recording(s, made)
+            self._write(journal)
+        return ok(events=results, problem=problem, unchecked=pending,
+                  recorded=bool(problem is None and commit),
+                  # What the run would leave behind, so the dialog can say
+                  # "this ends with 40 shares held" rather than leaving the
+                  # reader to add up their own rows.
+                  shares_after=portfolio.shares_held(s),
+                  held_after=portfolio.is_held(s))
+
+    @guarded
+    @locked
+    def preview_backfill(self, ticker, events=None, recollection=""):
+        """What a run of historical entries would record, before any of it
+        is permanent. Nothing is written."""
+        return self._run_backfill(ticker, events, recollection, commit=False)
+
+    @guarded
+    @locked
+    def record_backfill(self, ticker, events=None, recollection=""):
+        """Record a run of historical entries. All of them or none."""
+        return self._run_backfill(ticker, events, recollection, commit=True)
 
     # -- data acquisition ------------------------------------------------
     def _tie_cik(self, journal_id, ticker, cik):

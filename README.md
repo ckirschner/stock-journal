@@ -189,6 +189,16 @@ inflate every weight measured against it.
 The host reports the figure and stops there. Whether a weight is too high is
 a strategy's opinion, and appears nowhere in the host.
 
+**Your answers are dated too.** Every change to one is on the journal's own
+append-only record, so an entry judged for a past day reads the answer that
+was standing then. Before the journal existed there is no answer, and the
+absence is served as itself: free cash absent, so the account absent, so
+every weight absent, so a rule that binds on one says it cannot be worked
+out and names why. This used to serve today's balance with a caution beside
+it, which is the same failure one step removed — a qualified wrong number
+still decides, and a purchase made two years ago was being sized against
+today's account.
+
 ### A share class is a security; the company is not
 
 Two classes of one company are two instruments at two prices, and the tool
@@ -497,6 +507,25 @@ going ahead **against** a verdict, and going ahead **without** one where the
 strategy could not reach a verdict at all. Averaging them would make a gap in
 the data look like defiance.
 
+**A third thing is not an override at all.** Enter a purchase you made in
+2019 and the verdict is rebuilt for that day — but sometimes there is nothing
+to rebuild it from: no filings had been filed, or the journal did not exist
+yet and holds no answer for what your account was worth. That is not a signal
+you went past. Nobody was standing in front of a screen, and the grey box is
+a fact about how far back this program can see rather than about your
+discipline. It is recorded as exactly that, counted in its own population,
+and kept out of both comparisons — because the moment history can be entered,
+counting those as overrides would fill the one figure that measures your
+judgement with decisions nobody made, and the scorecard would report that
+overriding works fine.
+
+**And the comparison is reported twice.** Once for decisions you saw at the
+time, once for decisions rebuilt afterwards, never added together. They are
+not evidence about the same thing: the first is your judgement under a
+verdict you were looking at, the second is this program's best attempt at a
+day nobody lived through. Both are shown, at equal weight — dropping the
+second would hide real evidence about the rules.
+
 The per-rule breakdown is the part that earns its keep. If overriding one
 particular limit keeps working out, that limit is miscalibrated, not you.
 
@@ -571,11 +600,59 @@ is cross-checked against the company's own reported public float, which
 catches adjusted-price, split-basis, currency and share-class errors in one
 comparison.
 
-### A purchase is judged by the data of its date
+### An entry is judged by the data of its date
 
-Record a purchase with a past date and the verdict is rebuilt from what was
-observable then — filings filed by that day, that day's close — and is
-labelled a reconstruction everywhere it appears.
+Record a purchase **or a sale** with a past date and the verdict is rebuilt
+from what was observable then — filings filed by that day, that day's close —
+and is labelled a reconstruction everywhere it appears.
+
+The sale used to be judged with today's data, which put a verdict the
+strategy was never asked for into the two facts the exit analytics teach
+from: what the signal read at the exit, and whether a rule called for it. An
+exit dated 2019 now reads the world of 2019 or says it could not, and the
+thesis frozen beside it is the version that was standing that day rather than
+one amended since.
+
+### Entering a position you already own
+
+**Enter history** on a security's page takes a run of dated entries —
+purchases, adds, trims, an exit, a re-entry — and applies them oldest first,
+each judged against the data of its own day and each checked against the
+position the ones before it leave behind. Nothing is filled in for you: the
+day, the shares and the price are the three facts only you have, and a number
+this program guessed would enter a record that can never be corrected.
+
+It checks before it records, and shows you what every row would produce —
+including the rows nothing can be rebuilt for. If any row cannot be recorded,
+none of them is: an append-only record has no way to take an entry back, so
+"three landed and the fourth was refused" has to be a state that cannot be
+reached rather than one to recover from.
+
+A backfilled entry is marked wherever it appears — the list, the detail page,
+the lot history, both scorecards — for as long as it exists. Reconstruction
+is imperfect and that is acceptable; presenting one as a record made at the
+time is not.
+
+**A sale entered from history may honestly have no reason on it.** You were
+not there, and forcing a pick from the list would manufacture the one fact
+the exit analytics exist to read. "I do not remember" is an answer, and
+counting how many of your old exits are unexplained is itself the finding.
+
+### What you remember, marked as a memory
+
+A purchase backdated to 2019 freezes no thesis, because you had not written
+one — and it never gets the one you write today, which would be a case
+composed with hindsight presented as the case that was made at the time.
+
+So there is one hindsight surface and it is not the thesis. On a purchase
+entered from history you can write down **what you remember thinking**. It is
+kept under its own name, carrying the day it was actually written, and it is
+rendered as what it is: written after the outcome was known, and gradeable
+against nothing. It is refused outright on a purchase made today, where the
+honest answer is to write a thesis on the record that keeps every version and
+asks why each one changed. Nothing about it reaches a strategy, and no
+judgement or valuation has an equivalent — a remembered assessment would be a
+measurement invented backwards, and a strategy binds on those.
 
 Hand-entered values obey the same clock. Each one is dated when you enter it,
 so a purchase backdated to 2024 reads the figure that was on record in 2024,
@@ -783,6 +860,17 @@ with Windows 10 and 11, so the build stays around 20 MB rather than the
   shipped content.
 - **Choosing which lots a sale draws on.** The record holds whichever
   allocation it is given; the screens always propose oldest-first.
+- **Telling a journal what your account looked like in the past.** Answers —
+  free cash above all — begin the day the journal is created, so an entry
+  dated before that has no account to be sized against and any rule about
+  position size reports that it cannot be worked out. That is the honest
+  answer and it is why most backfilled purchases record no verdict. Fixing it
+  means a dated answer record you can enter history into as well, which is
+  its own piece of work rather than a corner of this one.
+- **The strategy of the day.** A reconstruction runs *that day's data*
+  through *today's* strategy, because the version in force in 2019 is not on
+  the machine and, for a purchase predating the journal, never was. The
+  record says so in as many words; nothing can make it otherwise.
 - **History charts.** Per-filing history exists, so there is something to
   chart.
 - **The screening funnel.** Deliberately later. This is the journal first.

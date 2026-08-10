@@ -57,6 +57,10 @@ run("S = __state;");
 run(`window.pywebview = { api: {
   preview_purchase: async (t) => (__state.__previews || {})[t]
     || { ok: false, error: "no preview captured for " + t },
+  preview_sale: async (t) => (__state.__sale_previews || {})[t]
+    || { ok: false, error: "no sale preview captured for " + t },
+  preview_backfill: async () => __state.__backfill
+    || { ok: false, error: "no backfill preview captured" },
   get_coverage: async (t) => (__state.__coverage || {})[t]
     || { ok: false, error: "no coverage captured for " + t },
 } };`);
@@ -156,7 +160,35 @@ dlg("dlg:renamejournal", "dlgRenameJournal()");
 // is a confirmation nobody read.
 dlg("dlg:deletejournal", "dlgDeleteJournal()");
 const holding = state.securities.find((s) => s.bucket === "holdings");
-if (holding) dlg("dlg:sell", `dlgSell(find(${JSON.stringify(holding.ticker)}))`);
+if (holding) {
+  // dlgSell is async and takes a date. Today's is the ordinary screen; a past
+  // one fetches a preview and renders the reconstruction notice, which is the
+  // branch that freezes a verdict for a day nobody was standing in.
+  await run(`dlgSell(find(${JSON.stringify(holding.ticker)}))`);
+  check("dlg:sell", `document.getElementById("dlgbody").innerHTML`);
+  await run(`dlgSell(find(${JSON.stringify(holding.ticker)}), "2026-03-02")`);
+  check("dlg:sell-from-history",
+        `document.getElementById("dlgbody").innerHTML`);
+}
+
+// Entering a position out of your own records: the empty form, and the form
+// after a check has come back with a verdict per row — including a row
+// nothing could be rebuilt for, which is the whole reason this exists.
+// The footer matters here and nowhere else: the promise this dialog makes is
+// that nothing is written until it has been checked, and the only place that
+// promise is visible is the button's own label changing from one to the
+// other. A body-only capture would let both presses read "Record".
+await run(`dlgBackfill(find(${JSON.stringify(state.securities[0].ticker)}))`);
+check("dlg:backfill", `[document.getElementById("dlgbody").innerHTML,
+                       document.getElementById("dlgfoot").innerHTML].join("")`);
+if (state.__backfill) {
+  await run(`dlgBackfill(find(${JSON.stringify(state.securities[0].ticker)}),`
+    + ` {rows: __state.__backfill_rows, recollection: "",`
+    + `  preview: __state.__backfill})`);
+  check("dlg:backfill-checked",
+        `[document.getElementById("dlgbody").innerHTML,
+          document.getElementById("dlgfoot").innerHTML].join("")`);
+}
 
 // The three dialogs that write to a dated record. Each renders one branch
 // when the record is empty and a different one when it is not — the second
@@ -340,6 +372,79 @@ const must = [
   ["evidence:change", "change since you first bought",
    "the row says which purchase it measures from"],
 ];
+/* An entry typed in out of somebody's records must be visibly distinct from
+   one captured at the time, everywhere it appears — and a screen that renders
+   it as an ordinary record is the one failure this whole change exists to
+   prevent. Pushed conditionally, like every other payload-dependent
+   assertion here: a journal with nothing entered from history has nothing to
+   mark, and demanding the mark of it would be testing the fixture. */
+const lotsOf = (s) => (s._lots || []).concat(s._sales || []);
+const fromHistory = state.securities.find((s) => s._backfilled);
+if (fromHistory) {
+  must.push(
+    ["holdings", "from history",
+     "the list marks a position part of which was entered afterwards"],
+    [`detail:${fromHistory.ticker}`, "entered from history",
+     "the detail page says so before a single figure is read"],
+    );
+}
+// The two scorecard shapes, each gated on the journal actually having that
+// population. A panel demanded of a journal with nothing in it would be
+// testing the fixture rather than the screen.
+const card = state.override_scorecard || {};
+if ((card.unreconstructed || {}).n_purchases) {
+  must.push(["previous", "Could not be reconstructed",
+             "the scorecards report the third population rather than folding "
+             + "it into the override comparison"]);
+}
+if ((card.live || {}).n_purchases && (card.reconstructed || {}).n_purchases) {
+  must.push(["previous", "seen at the time",
+             "the two cohorts are labelled where they are stacked"]);
+}
+// The security holding an entry nothing could be rebuilt for, and the one
+// holding a memory. Two different securities in general, and each assertion
+// asks its own — a page with a reconstruction on it need not have either.
+const noVerdict = state.securities.find(
+  (s) => lotsOf(s).some((l) => l.unreconstructed));
+if (noVerdict) {
+  const page = `detail:${noVerdict.ticker}`;
+  must.push(
+    [page, "No verdict could be reconstructed",
+     "an entry nothing could be rebuilt for says that, not that it was an "
+     + "override"],
+    [page, "not</strong> counted as buying against a signal",
+     "and says explicitly that it is not counted as one"]);
+  mustNot.push(
+    // The sentence this whole change exists to stop. An entry nobody could
+    // rebuild a verdict for is not a decision taken without one — there was
+    // no screen, and no grey box anybody read and went past.
+    [page, "Bought without a signal",
+     "a gap in what can be reconstructed is not a decision"]);
+}
+const remembered = state.securities.find(
+  (s) => lotsOf(s).some((l) => ((l.snapshot || {}).recollection)));
+if (remembered) {
+  must.push([`detail:${remembered.ticker}`, "Written in hindsight",
+             "a recollection is never presented as the case made at the "
+             + "time"]);
+}
+if (state.__sale_previews) {
+  must.push(["dlg:sell-from-history", "not seen at the time",
+             "a backdated sale says what it is about to freeze was rebuilt"]);
+}
+if (state.__backfill) {
+  must.push(
+    ["dlg:backfill", "Add a purchase",
+     "the history form can be grown a row at a time"],
+    ["dlg:backfill", "Check these entries",
+     "nothing is recorded before it has been checked"],
+    ["dlg:backfill-checked", "nothing recorded yet",
+     "the checked form still says the record is untouched"],
+    ["dlg:backfill-checked", "no verdict to rebuild — not an override",
+     "the check names the rows that would record a gap rather than a "
+     + "decision"]);
+}
+
 if (stamped) {
   // The whole point of carrying a caution: it is on screen beside the number
   // it qualifies. The values dialog never rendered one at all.

@@ -390,6 +390,45 @@ class TestLotsAreTheposition:
         s = bought()
         lot = portfolio.sell_lots(s, decision("close"), "Panic", 10, 60.0)
         assert lot["snapshot"]["evaluation"]["basis"] == "live"
+        assert portfolio.basis_of(lot) == "live"
+
+    def test_a_sale_entered_from_history_records_which_day_it_was_judged_on(
+            self):
+        """The other half of the as-of machinery. An exit backdated to 2019
+        was judged with today's filings and today's close, and the verdict
+        the strategy was never asked for went into `signal_at_exit` and
+        `rule_triggered` — the two facts the panic-sell loop teaches from."""
+        s = bought()
+        lot = portfolio.sell_lots(
+            s, decision("close"), "Panic", 10, 60.0, "2026-03-01",
+            evaluation={"basis": "reconstructed", "as_of": "2026-03-01"})
+        assert portfolio.basis_of(lot) == "reconstructed"
+        assert lot["snapshot"]["evaluation"]["as_of"] == "2026-03-01"
+
+    def test_a_sale_whose_verdict_could_not_be_rebuilt_claims_none(self):
+        """"No rule triggered this exit" says a signal was read and came back
+        clear. Where nothing could be rebuilt, nothing was read, and the
+        record says so rather than reporting an absence as a clear signal."""
+        s = bought()
+        lot = portfolio.sell_lots(
+            s, decision("unknown"), "Panic", 10, 60.0, "2026-03-01",
+            evaluation={"basis": "reconstructed", "as_of": "2026-03-01"})
+        assert lot["rule_triggered"] is None
+
+    def test_an_entry_from_history_is_narrated_once_not_once_each(self):
+        """Six near-identical notes stamped today, above every note the user
+        actually wrote, is how the Journal panel stops being read. Everything
+        specific to an entry is on the entry, beside the day it is about."""
+        s = bought()
+        made = [portfolio.add_lot(
+            s, decision("commit"), 5, 10.0, day,
+            evaluation={"basis": "reconstructed", "as_of": day})
+            for day in ("2026-02-01", "2026-03-01", "2026-04-01")]
+        assert s["notes"] == []
+        portfolio.note_recording(s, made)
+        assert len(s["notes"]) == 1
+        assert "2026-02-01 to 2026-04-01" in s["notes"][0]["text"]
+        assert portfolio.note_recording(s, [bought()["lots"][0]]) is None
 
 
 class TestOverrides:
@@ -397,7 +436,37 @@ class TestOverrides:
         s = held()
         lot = portfolio.add_lot(s, decision("commit"), 10, 40.0, "2026-08-01")
         assert lot["override"] is None
-        assert portfolio.override_kind(decision("commit")) is None
+        assert lot["unreconstructed"] is None
+        assert portfolio.recorded_as(decision("commit"), "live") == "commit"
+
+    def test_a_recollection_is_refused_on_a_purchase_made_today(self):
+        """The one place hindsight is allowed in, and it is a raise rather
+        than a convention. A prose field that could reach a live purchase
+        would be a second, undated, unamendable thesis sitting where the
+        first one belongs — and the thesis record is what every override,
+        every exit and every falsifier is graded against."""
+        s = held()
+        with pytest.raises(ValueError, match="not a thesis|recollection|"
+                                             "remember"):
+            portfolio.add_lot(s, decision("commit"), 1, 10.0, "2026-08-01",
+                              recollection="I liked the look of it.")
+        assert s["lots"] == []
+
+    def test_a_recollection_is_never_the_thesis_and_says_when_it_was_written(
+            self):
+        s = held()
+        lot = portfolio.add_lot(
+            s, decision("commit"), 1, 10.0, "2019-08-01",
+            recollection="I remember thinking the buyback was the point.",
+            evaluation={"basis": "reconstructed", "as_of": "2019-08-01"})
+        snap = lot["snapshot"]
+        assert snap["thesis"] is None, \
+            "a memory must never occupy the slot the case-made-at-the-time " \
+            "is read from"
+        assert snap["recollection"]["text"].startswith("I remember")
+        # Written now, about then. The day it was written is the day it was
+        # written, and nothing anywhere can set it to the day it is about.
+        assert snap["recollection"]["written"][:4] >= "2026"
 
     def test_going_ahead_against_a_verdict_is_recorded_as_against(self):
         s = held()
@@ -734,7 +803,8 @@ class TestHoldingPeriods:
                                        "missing": []}
         card = portfolio.override_scorecard(
             [free, dark], lambda s: None if s["ticker"] == "DARK"
-            else {"value": None, "reason": "no close is stored for FREE"})
+            else {"value": None, "reason": "no close is stored for FREE"})[
+                "live"]
 
         assert card["compliant"]["n_unscored"] == 1
         assert card["override"]["n_unscored"] == 1
@@ -908,7 +978,7 @@ class TestScorecards:
         b = held("B")
         portfolio.add_lot(b, decision("unknown"), 1, 100.0, "2026-01-01",
                           override_reason="without")
-        card = portfolio.override_scorecard([a, b], lambda s: 110.0)
+        card = portfolio.override_scorecard([a, b], lambda s: 110.0)["live"]
         assert card["override"]["n"] == 2
         assert card["kinds"]["against"] == 1
         assert card["kinds"]["without"] == 1
@@ -926,12 +996,17 @@ class TestScorecards:
             portfolio.add_lot(s, decision("hold", evidence=[rule]), 1, 100.0,
                               "2026-01-01", override_reason="anyway")
             wins.append(s)
-        card = portfolio.override_scorecard(wins, lambda s: 120.0)
+        card = portfolio.override_scorecard(wins, lambda s: 120.0)["live"]
         b = card["per_rule"]["value:max-pe"]
         assert b["label"] == "Maximum P/E"
         assert (b["n"], b["wins"], b["avg"]) == (3, 3, 20.0)
 
-    def test_reconstructed_backfills_are_counted_but_named(self):
+    def test_the_two_cohorts_are_reported_apart_and_never_added_up(self):
+        """A verdict somebody was looking at and a verdict rebuilt for a day
+        nobody was standing in are not evidence about the same question. A
+        journal with a decade of history typed into it would answer "did
+        overriding help" almost entirely with the second, under the first's
+        heading."""
         live, rec = held("L"), held("R")
         portfolio.add_lot(live, decision("hold"), 1, 100.0, "2026-01-01",
                           override_reason="x")
@@ -940,15 +1015,72 @@ class TestScorecards:
                           evaluation={"basis": "reconstructed",
                                       "as_of": "2026-01-01"})
         card = portfolio.override_scorecard([live, rec], lambda s: 110.0)
-        assert card["override"]["n"] == 2
-        assert card["reconstructed_overrides"] == 1
+        assert card["live"]["override"]["n"] == 1
+        assert card["reconstructed"]["override"]["n"] == 1
+        # Each cohort says which it is, in words the panel prints — the two
+        # rows are meaningless stacked on each other unlabelled.
+        assert card["live"]["label"] and card["reconstructed"]["label"]
+        assert card["live"]["label"] != card["reconstructed"]["label"]
+
+    def test_a_reconstruction_that_reached_nothing_is_in_neither_comparison(
+            self):
+        """The whole reason backfill can exist. A purchase whose verdict
+        could not be rebuilt is not a decision taken against a signal and not
+        one taken with it — there was no signal. Counted as either, a batch
+        of old purchases manufactures a pile of records describing data
+        coverage rather than discipline, in the one figure that is supposed
+        to measure the user's judgement."""
+        s = held("OLD")
+        lot = portfolio.add_lot(
+            s, decision("unknown"), 1, 100.0, "2019-01-02",
+            evaluation={"basis": "reconstructed", "as_of": "2019-01-02"})
+        assert lot["override"] is None
+        assert lot["unreconstructed"]["as_of"] == "2019-01-02"
+        card = portfolio.override_scorecard([s], lambda x: 110.0)
+        assert card["live"]["override"]["n_purchases"] == 0
+        assert card["live"]["compliant"]["n_purchases"] == 0
+        assert card["reconstructed"]["override"]["n_purchases"] == 0
+        assert card["reconstructed"]["compliant"]["n_purchases"] == 0
+        # Counted, and its return reported — it happened, and what it did is
+        # knowable. It is the attribution that is refused, not the fact.
+        assert card["unreconstructed"]["n_purchases"] == 1
+        assert card["unreconstructed"]["avg"] == 10.0
+        assert card["unreconstructed"]["reasons"], \
+            "an unrebuilt evaluation says why, or the panel cannot be acted on"
+
+    def test_a_strategy_declared_block_is_a_verdict_even_reconstructed(self):
+        """"Read this again before adding" is an answer, and going ahead is
+        going against it. The host's own blocked states are the opposite —
+        setup missing, strategy absent — and nobody went against those."""
+        s = held("BLOCK")
+        strategy_said = {**decision("blocked"), "produced_by": "strategy"}
+        host_said = {**decision("blocked"), "produced_by": "host"}
+        assert portfolio.recorded_as(strategy_said, "reconstructed") \
+            == "against"
+        assert portfolio.recorded_as(host_said, "reconstructed") \
+            == "unreconstructed"
+        assert portfolio.recorded_as(host_said, "live") == "without"
+        lot = portfolio.add_lot(
+            s, strategy_said, 1, 100.0, "2019-01-02", override_reason="anyway",
+            evaluation={"basis": "reconstructed", "as_of": "2019-01-02"})
+        assert lot["override"]["kind"] == "against"
+
+    def test_a_basis_is_required_before_an_entry_can_be_classified(self):
+        """Two paths asking this question is how the sale path came to skip
+        the clock entirely. A caller that cannot say which moment it is
+        recording gets no answer at all, so the "without a signal" branch is
+        unreachable from a reconstruction by construction."""
+        with pytest.raises(ValueError, match="not a basis"):
+            portfolio.recorded_as(decision("unknown"), "")
+        with pytest.raises(ValueError, match="not a basis"):
+            portfolio.recorded_as(decision("unknown"), "rebuilt")
 
     def test_overrides_are_counted_per_lot_not_per_security(self):
         s = held("MIXED")
         portfolio.add_lot(s, decision("commit"), 1, 100.0, "2026-01-01")
         portfolio.add_lot(s, decision("hold"), 1, 100.0, "2026-03-01",
                           override_reason="adding anyway")
-        card = portfolio.override_scorecard([s], lambda x: 110.0)
+        card = portfolio.override_scorecard([s], lambda x: 110.0)["live"]
         assert card["override"]["n"] == 1
         assert card["compliant"]["n"] == 1
 
@@ -971,7 +1103,7 @@ class TestScorecards:
         s = held("NOPRICE")
         portfolio.add_lot(s, decision("hold"), 1, 100.0, "2026-01-01",
                           override_reason="x")
-        card = portfolio.override_scorecard([s], lambda x: None)
+        card = portfolio.override_scorecard([s], lambda x: None)["live"]
         assert card["override"]["n"] == 0
         assert card["override"]["avg"] is None
         # the override itself is still counted — only the return is absent

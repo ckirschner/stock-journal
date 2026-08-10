@@ -119,10 +119,18 @@ def security(ticker, name, price, values, on, thesis=None, notes=(),
             call(api.add_note, ticker, text)
 
 
-def buy(ticker, shares, cost, opened, override_reason=""):
+def buy(ticker, shares, cost, opened, override_reason="", recollection=""):
+    """One purchase, dated.
+
+    `recollection` is what the buyer remembers thinking, on a purchase entered
+    out of their own records rather than captured at the time. It is never a
+    thesis and never counted as one — see engine/portfolio._recollection — and
+    it is the only thing here that may be offered where an override reason
+    cannot be, because there was no verdict to go against.
+    """
     with writing_on(opened):
         return call(api.open_position, ticker, shares, cost, opened,
-                    override_reason)
+                    override_reason, None, recollection)
 
 
 def sell(ticker, reason, price, exited, shares=None):
@@ -148,8 +156,15 @@ def expect(ticker, want):
 # The journal
 # ===========================================================================
 
-call(api.create_journal, "Sample — Graham", "graham",
-     {"free-cash": FREE_CASH})
+# Created before the earliest entry in it. What a journal has been told
+# begins on the day it was created — free cash, and every figure measured
+# against the account — so a journal stamped today could not size a purchase
+# it is being told about from 2024, and every frozen verdict below would read
+# "waiting on setup" instead of the state its own note describes. The sample
+# is a journal that has been kept for a while, and it is built as one.
+with writing_on("2024-01-02"):
+    call(api.create_journal, "Sample — Graham", "graham",
+         {"free-cash": FREE_CASH})
 
 
 # -- a holding with nothing happening ---------------------------------------
@@ -370,13 +385,14 @@ security(
     notes=[("2025-08-20",
             "Recorded with no verdict at all — not a verdict I overrode, a "
             "verdict that did not exist. The journal keeps those two apart "
-            "on purpose, because averaging them would make a gap in the "
-            "data look like defiance.")])
+            "on purpose, because counting a gap in the data as defiance "
+            "would put a decision I never made into the one figure that is "
+            "supposed to measure my judgement.")])
 buy("THRAP", 190, 15.10, "2025-08-20",
-    override_reason="No figures on record for this company, so there was "
-                    "nothing to check it against. Buying first and filling "
-                    "the numbers in later is how I have always done it, "
-                    "which is what I am trying to stop.")
+    recollection="No figures on record for this company, so there was "
+                 "nothing to check it against. Buying first and filling the "
+                 "numbers in later is how I have always done it, which is "
+                 "what I am trying to stop.")
 
 
 # -- a candidate that qualifies ---------------------------------------------
@@ -503,11 +519,17 @@ journal, *_ = api._open()
 securities = journal["securities"]
 by_ticker = {s["ticker"]: s for s in securities}
 
-# The two overrides are different kinds and stay different kinds.
+# A verdict gone against, and an evaluation that could not be rebuilt at all.
+# They are different records, not two flavours of one, and the whole learning
+# loop depends on their staying apart: an override is a decision somebody took
+# in the face of a signal, and a purchase nothing could be reconstructed for is
+# not a decision about anything — there was no signal to obey or defy.
 okell = portfolio.lots(by_ticker["OKELL"], "buy")[0]
 assert okell["override"]["kind"] == "against", okell["override"]
+assert okell["unreconstructed"] is None, okell["unreconstructed"]
 thrap = portfolio.lots(by_ticker["THRAP"], "buy")[0]
-assert thrap["override"]["kind"] == "without", thrap["override"]
+assert thrap["override"] is None, thrap["override"]
+assert thrap["unreconstructed"], thrap
 
 # The buy that was against a verdict was against a real one, frozen as it
 # stood on the day — not the verdict today, and not nothing.
@@ -516,6 +538,25 @@ assert okell["snapshot"]["decision"]["state"]["id"] == "not-cheap-enough"
 # A closed holding period, still being priced.
 cycles = portfolio.cycles(by_ticker["LOWFD"])
 assert len(cycles) == 1 and not cycles[0]["open"], cycles
+
+# The exit is judged against the data of the day it is dated, not against
+# today's. It was judged against today's, which froze a verdict the strategy
+# was never asked for into `signal_at_exit` and `rule_triggered` — the two
+# facts the panic-sell scorecard teaches from. A sample shipping that would be
+# demonstrating the defect.
+exit_lot = portfolio.lots(by_ticker["LOWFD"], "sell")[0]
+assert portfolio.basis_of(exit_lot) == "reconstructed", exit_lot["snapshot"]
+assert exit_lot["snapshot"]["evaluation"]["as_of"] == "2025-10-15"
+assert exit_lot["snapshot"]["decision"]["state"]["id"] != \
+    state_of("LOWFD")[0], \
+    "the frozen exit verdict is today's, which means the sale was not " \
+    "rebuilt for its own day"
+
+# Every entry in this sample is dated before the day it was written, so every
+# one of them is a reconstruction and every one of them says so. That is the
+# honest reading of a demonstration journal built out of an invented history,
+# and it is what the screens have to mark.
+assert portfolio.backfilled(by_ticker["LOWFD"])
 
 # The weight rule needs an account, and the account needs the free cash the
 # strategy asked for. If this stops being true the sizing states go quiet.

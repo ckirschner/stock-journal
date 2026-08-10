@@ -8,6 +8,8 @@ also be a complete refusal: a half-delete that reported failure would be the
 worst of both.
 """
 
+from datetime import date
+
 import pytest
 from conftest import journal_for
 
@@ -81,13 +83,30 @@ class TestRemoveSecurity:
 
     def test_a_lot_recorded_as_an_override_is_refused(self, api):
         """An override is the record principle 10 depends on most. Losing one
-        would quietly delete the evidence that a rule is miscalibrated."""
+        would quietly delete the evidence that a rule is miscalibrated.
+
+        Recorded today, so it is an override at all: a purchase dated 2024
+        with nothing to reconstruct from records the gap rather than a
+        decision, and deleting a gap loses nothing worth keeping. Both are
+        history, and both are refused — which is the thing being checked.
+        """
         api.add_security("OVR", "Overridden Idea")
-        assert api.open_position("OVR", 1, 5.0, "2024-01-02",
+        assert api.open_position("OVR", 1, 5.0, date.today().isoformat(),
                                  "went ahead anyway")["ok"]
         assert api.remove_security("OVR")["ok"] is False
         assert _find("OVR")["lots"][0]["override"]["reason"] == \
             "went ahead anyway"
+
+    def test_an_entry_entered_from_history_is_refused_too(self, api):
+        """It carries no override, because there was no signal to go against
+        — and it is still recorded history, which this journal never
+        deletes."""
+        api.add_security("OLD", "Long-Held Co")
+        assert api.open_position("OLD", 1, 5.0, "2019-01-02")["ok"]
+        lot = _find("OLD")["lots"][0]
+        assert lot["override"] is None
+        assert lot["unreconstructed"]["as_of"] == "2019-01-02"
+        assert api.remove_security("OLD")["ok"] is False
 
     def test_removing_from_one_journal_leaves_another_alone(self, api,
                                                             strategies):
