@@ -76,7 +76,13 @@ function check(label, code) {
       // A number that reached the screen as NaN, an object stringified into
       // the markup, or an undefined interpolation are all the same defect:
       // the view read a key the backend does not send.
-      const m = html.match(/.{0,80}(undefined|\[object Object\]|\bNaN\b).{0,80}/);
+      //
+      // `/*` is a fourth of the same kind. Every screen here is built from
+      // template literals, and a comment written one line too far inside one
+      // stops being a comment and becomes body text — silently, because it
+      // is still valid JavaScript and still renders.
+      const m = html.match(
+        /.{0,80}(undefined|\[object Object\]|\bNaN\b|\/\*).{0,80}/);
       if (m) problems.push(`${label}: rendered "${m[0].replace(/\s+/g, " ")}"`);
     }
     out[label] = html;
@@ -301,6 +307,45 @@ for (const s of state.securities) {
 if (spoke && !attributed) {
   gap("no verdict in the harness cites a limit by the setting it "
       + "came from — the attribution renders against nothing");
+}
+
+// The heading a group renders as, and the rollup the host counted under it.
+// A group is not decoration: it is what tells a reader which rows were
+// disqualifying, and it is what the host refuses a contradicted buy on. If
+// it never draws, the reader is back to a flat list of fifteen.
+let headed = 0;
+for (const s of state.securities) {
+  for (const g of ((s._decision || {}).reason || {}).groups || []) {
+    headed += 1;
+    must.push([`detail:${s.ticker}`, g.name,
+               `${s.ticker}: the "${g.name}" heading reaches the screen`]);
+    if (g.tested) {
+      must.push([`detail:${s.ticker}`, `${g.passed} of ${g.tested} passed`,
+                 `${s.ticker}: the rollup under "${g.name}" is on screen`]);
+    }
+  }
+}
+if (spoke && !headed) {
+  gap("no verdict in the harness gathers its evidence under a heading — "
+      + "the group rendering is unexercised");
+}
+
+// Where a threshold came from, on the screen where someone is about to
+// change it. The claim used to live inside the explanation, which meant it
+// could be made once for a file and quietly fail to cover a value added
+// afterwards; rendered from the declaration, it cannot go missing.
+let attributedValues = 0;
+for (const v of (state.strategy || {}).values || []) {
+  if (!v.source || !v.source.name) continue;
+  attributedValues += 1;
+  must.push(["dlg:settings", v.source.name,
+             `the setting "${v.id}" says where its number came from`]);
+  must.push(["strategy", v.source.name,
+             `the strategy page says where "${v.id}" came from`]);
+}
+if ((state.strategy || {}).values && !attributedValues) {
+  gap("no declared value in the harness says where its number came from — "
+      + "the attribution renders against nothing");
 }
 
 // The questions no filing answers. Three renderings have to work: an
@@ -562,6 +607,65 @@ if (!closed.length) {
     mustNot.push(["previous", bad,
                   `an absent average renders as "${bad}" instead of a dash`]);
   }
+  mustNot.push(["previous", "[object Object]",
+                "a return arrives as {status, value} and must be unpacked, "
+                + "not stringified into the page"]);
+  // A holding closed in stages ended for more than one stated reason, and
+  // the row used to print the last sale's and drop the rest. Every reason
+  // has to be on the row, or the period card and the exit scorecard tell
+  // the reader two different stories about the same exit.
+  //
+  // Checked against the ROW rather than the whole table: "Hit valuation"
+  // appears on some other security's row on every realistic screen, so a
+  // page-wide substring proves nothing about the exit being described here.
+  let staged = 0;
+  for (const s of closed) {
+    for (const c of (s._cycles || []).filter((x) => !x.open && x.exit)) {
+      if (c.exit.sales < 2) continue;
+      staged += 1;
+      const table = String(out.previous ?? "");
+      const row = (table.split(`data-t="${s.ticker}"`)[1] || "").split("</tr>")[0];
+      // The detail page's own header says which holding you are reading and
+      // how it ended, and it read the last sale alone too.
+      const head = (String(out[`detail:${s.ticker}`] ?? "")
+        .split('<div class="meta">')[1] || "").split("</div>")[0];
+      for (const r of c.exit.reasons) {
+        if (!row.includes(r.reason)) {
+          problems.push(`previous: ${s.ticker}'s exit on ${c.closed} gave `
+                        + `"${r.reason}" for ${r.share}% of it and the row `
+                        + `does not say so — "${row.slice(0, 200)}"`);
+        }
+        if (!head.includes(r.reason)) {
+          problems.push(`detail:${s.ticker}: the header names how the holding `
+                        + `ended and leaves out "${r.reason}" — "${head}"`);
+        }
+      }
+      // The exit price on the detail strip is the share-weighted figure.
+      // The last sale's price is what it used to be, and it must not be
+      // what renders — so both halves are asserted, or a page that happens
+      // to contain the right digits elsewhere would pass.
+      if (c.exit.price.status === "known") {
+        const last = c.sells[c.sells.length - 1];
+        must.push([`detail:${s.ticker}`,
+                   `<i>Exit price</i><b>$${c.exit.price.value}`,
+                   `${s.ticker} exited across ${c.exit.sales} sales, so its `
+                   + "exit price is the share-weighted figure"]);
+        mustNot.push([`detail:${s.ticker}`,
+                      `<i>Exit price</i><b>$${lotPrice(s, last)}`,
+                      `${s.ticker}'s exit price is not its last sale's`]);
+      }
+    }
+  }
+  if (!staged) {
+    gap("the harness built no holding closed in stages — the weighted exit "
+        + "price and the multi-reason row are unexercised");
+  }
+}
+
+/* One sale lot's price, by id, off the payload the page renders from. */
+function lotPrice(s, lotId) {
+  const lot = (s._sales || []).find((l) => l.id === lotId);
+  return lot ? lot.price : null;
 }
 // A name held more than once: every period is its own row, the detail page
 // groups the entries by holding, and no figure spanning them is unlabelled.
@@ -622,8 +726,15 @@ for (const s of twice) {
     }
   });
 }
+/* Text that reaches the page through `esc` arrives HTML-escaped, so an
+   apostrophe in a source's name is `&#39;` in the markup. Both readings
+   count: the expectation is that the words are on screen, not which entity
+   the escaper chose. */
+const asMarkup = (v) => String(v).replace(/[&<>"']/g, (c) => ({
+  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 for (const [screen, text, why] of must) {
-  if (!String(out[screen] ?? "").includes(text)) {
+  const html = String(out[screen] ?? "");
+  if (!html.includes(text) && !html.includes(asMarkup(text))) {
     problems.push(`${screen}: ${why} — expected "${text}"`);
   }
 }

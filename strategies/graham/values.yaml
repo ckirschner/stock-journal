@@ -14,7 +14,7 @@
 # Bump `version` whenever any number here moves. That is what makes the
 # change appear on the rule-change record of every journal running this
 # strategy, with a before and an after.
-version: 1
+version: 2
 
 values:
 
@@ -29,11 +29,12 @@ values:
   holding-period-months: 24
   sell-confirmation-filings: 2
 
-  # The four knockouts
+  # The five knockouts
   max-pe-3y-avg: 15
   max-price-to-book: 1.5
   max-combined-multiple: 22.5
   min-current-ratio: 2.0
+  min-market-cap: 300000000
 
   # The eight core tests
   max-ltd-to-working-capital: 1.0
@@ -45,10 +46,12 @@ values:
   max-price-to-tangible: 2.0
   max-accruals-ratio: 0.10
 
-  # The three bonus tests
-  min-market-cap: 300000000
+  # The two bonus tests. The rate is the one number in this file that
+  # nothing fetches and that goes wrong by sitting still — set it to the
+  # current ten-year Treasury yield and revisit it when rates move.
   min-ncav-to-market-cap: 0.50
   min-earnings-yield-multiple: 2
+  risk-free-rate: 4.0
 
   # The eight exits
   exit-pe-3y-avg: 25

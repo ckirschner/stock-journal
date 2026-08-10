@@ -120,6 +120,16 @@ def run(filings: list[dict], prices_doc: dict, tickers: list[str]) -> dict:
     return {"checks": checks, "summary": summary}
 
 
+# The one place a reach bound survives, and it is not a staleness rule. This
+# check reconciles a figure the filing states on its cover AGAINST the price
+# on that cover date, so a close from a month either side is not a stale
+# answer to the question — it is an answer to a different one, and the check
+# would report a mismatch that is really a calendar gap. Ten days covers a
+# holiday week plus a weekend, which is the longest a cover date can be from
+# the nearest trading day. Nothing decided by a strategy comes through here.
+_REACH = 10
+
+
 def _market_cap_at(prices_doc, tickers, shares, when):
     """Market cap near a date from as-traded closes; per class where classes
     exist. Returns (mcap|None, [price descriptions], [tickers missing])."""
@@ -130,14 +140,14 @@ def _market_cap_at(prices_doc, tickers, shares, when):
         for cl in shares["classes"]:
             sym = cl.get("symbol")
             got = price_store.close_on(prices_doc, sym, when,
-                                       max_lookback_days=10) if sym else None
+                                       reach_days=_REACH) if sym else None
             if got is None:
                 if fallback is None:
                     for c2 in shares["classes"]:
                         if c2.get("symbol"):
                             fallback = price_store.close_on(
                                 prices_doc, c2["symbol"], when,
-                                max_lookback_days=10)
+                                reach_days=_REACH)
                             if fallback:
                                 break
                 if fallback is None:
@@ -151,7 +161,7 @@ def _market_cap_at(prices_doc, tickers, shares, when):
             total += cl["value"] * got[1]
         return total, used, missing
     for t in tickers:
-        got = price_store.close_on(prices_doc, t, when, max_lookback_days=10)
+        got = price_store.close_on(prices_doc, t, when, reach_days=_REACH)
         if got is not None:
             used.append(f"{t}: close {got[1]:,.2f} on {got[0]}")
             return shares["total"] * got[1], used, missing

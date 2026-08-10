@@ -80,6 +80,47 @@ exactly that attribution.
 A limit can be missing too. An answer you have not given sets no limit, and a
 test with no limit reads as *not run* — never as passed.
 
+### The figures are gathered under headings, and a heading has a rule
+
+Fifteen rows of evidence are fifteen rows. What a reader needs to know is
+which of them were disqualifying, and a flat list cannot say that. So a
+strategy gathers its citations under headings, and each heading says what it
+demands of the rows beneath it: **all** of them, **at least** so many of
+them, or nothing at all.
+
+The count under a heading is the host's, taken from the same rows you are
+looking at. A strategy cannot tally "six of eight core tests passed"
+separately from the eight rows underneath and have the two disagree, because
+it does not tally it at all. Where a heading demands a number, that number is
+read out of one of the strategy's own settings the way every other limit is.
+
+A row nobody could read counts as neither a pass nor a failure there, exactly
+as it does on its own. Five passed, one failed and two unreadable against a
+bar of six is not a failure — it could still get there — so the heading reads
+as undecided and says how many are missing.
+
+### A verdict cannot contradict its own evidence
+
+A strategy has to choose a state before any of its evidence is resolved,
+which used to mean every strategy compared the figures twice: once privately
+to decide, and once through the host to display. Nothing checked that the two
+agreed, and when they did not, a verdict to buy rendered beside a row saying
+the test had failed, with nothing on screen saying which was wrong.
+
+Both halves of that are closed. A strategy now asks the host how a comparison
+came out and cites the same question it asked, so there is one answer rather
+than two. And where a strategy puts capital in anyway — beside a row the host
+resolved as failed, or against a heading whose requirement was not met — the
+verdict is **refused**, and the reason says which heading and by how much.
+
+Refused, not shown with a warning. A screen carrying a buy and a red row
+leaves you to arbitrate, which is the judgement call this tool exists to have
+already made.
+
+The check is narrow on purpose. A hold may cite failures — that is often why
+it is a hold — and an exit rests on them by definition. It is `commit` alone
+that says capital may go in.
+
 ## What a journal tells its strategy
 
 Two kinds of thing, and the difference is where the default comes from.
@@ -194,6 +235,19 @@ a render type or an input role of its own devising is an error in place.
 Anything it needs that the host does not offer is a request against the
 host, not something to work around.
 
+What it receives is **frozen**. Reads work exactly as they do on a plain
+dict; writes cannot happen at all. That is what makes "the host owns the
+answer" true rather than merely intended — a figure a strategy could edit is
+a figure it could quote back differently from the one on the screen.
+
+Every setting a strategy ships says **where its number came from** and
+whether the explanation beside it is that source's reasoning or the author's
+own. Nothing can verify that a level really is a particular book's; what this
+refuses is the three ways the claim goes wrong on its own — being absent,
+being made once for a whole file, and being silent about how far it reaches.
+A level with borrowed authority and homemade reasoning is the case worth
+being able to tell apart, and prose loses it first.
+
 `engine/contract.py` is the full specification and is written to be read.
 
 **`strategies/graham/` is the first real one.** It buys a statistical
@@ -289,6 +343,20 @@ purchase**, because one buy in a name can be compliant and the next an
 override. **Exits are grouped per sale**, because the reason is given at the
 sale, and a position trimmed on a risk limit and closed on a broken thesis
 gave two different answers.
+
+**A holding closed in stages is described by all of it, not by its last
+sale.** Sell 90 shares at $150 and the final 10 at $55 and the exit price is
+$140.50 — share-weighted across every sale that closed the period — not $55,
+which is what one sliver got. The date is still the last sale's, because that
+is the day nothing was held. Every reason given is shown, each carrying the
+share of the exit it accounts for: two answers were given and both are true,
+and picking one loses which shares each was about.
+
+**A return that cannot be worked out says why.** Every return is a figure or
+an absence with a reason, never a bare dash. "Nobody has fetched a price for
+this" and "the 2 February purchase is recorded at $0.00" are different facts
+with different fixes — one is solved by fetching and the other never will be
+— and the panel that judges your rules used to tell you to fetch for both.
 
 **Return since exit stops when you buy again.** A closed position keeps being
 priced, because watching what happens next is the only way to find out
@@ -426,6 +494,28 @@ valuation, a typed figure. None of them can be edited, none can be deleted,
 and none can be given a date by the thing writing it: there is no parameter
 to backdate an entry with, which is what makes "what did I know then" a
 question the journal can answer honestly.
+
+**The day an entry was written is your day, not the clock in Greenwich.**
+Every date in the journal is one you typed or read — a purchase date, a sale
+date, the day being reconstructed — so the day an entry was recorded on has
+to be on the same calendar, or the two disagree for part of every day. They
+did: a thesis written at seven in the evening in California was invisible to
+a purchase dated that same evening, and a note written on a Tokyo morning
+rendered as the day before. Records written before this carry the old stamp
+and keep reporting exactly the day they always reported; nothing already
+written is restated.
+
+**A price says which day the market set it.** There is no rule here about
+how old is too old, because that is a strategy's judgement and not the
+program's — a screen built on three-year average earnings barely notices a
+week-old close and a rule about position size notices a month. So the age is
+always stated, on the price and on everything built from it: what the holding
+is worth, its share of the account, the account total. A strategy that cares
+declares its own limit and compares against the count the host reports. And
+where a price series has *ended* — delisted, or the symbol reassigned — that
+is a fact rather than a judgement about age, and it is said wherever the
+price appears. The last close of a dead series is the last price it ever had,
+not what it trades at.
 
 ## Where your data lives
 
@@ -579,10 +669,12 @@ with Windows 10 and 11, so the build stays around 20 MB rather than the
 - **Three of the four strategies.** Graham ships; Buffett, Lynch and Discount
   Closure do not. The rulesets in `dev_reference_docs/legacy-profiles/` are
   the input to writing them.
-- **A risk-free rate.** One strategy test — the earnings yield against what a
-  government bond pays — needs a number that is in no filing and is not price
-  data, and nothing here can be told it. The measure reads absent, which is
-  honest, and the test never passes.
+- **A fetched risk-free rate.** One Graham test compares the earnings yield
+  against what a government bond pays, and nothing here fetches that number —
+  it is in no filing and it is not price data. The rate is a setting on the
+  strategy, shipped at a starting figure, and it is the one value in the
+  program that goes wrong by sitting still. Changing it is recorded on the
+  journal's rule-change record like any other rule change.
 - **Adding to a position, in the interface.** The lot record and the engine
   serve several buys and partial sales against named lots, but the screens
   offer no way to add to a position that is already open — that carries the

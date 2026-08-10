@@ -68,8 +68,12 @@ class TestTheMarketCapChain:
         assert "10.0% of the share count" in blend      # how much of it
         assert "SYN close of 2024-01-02" in blend       # valued at whose
         assert "assumption" in blend and "not a measurement" in blend
-        stale = next(c for c in cautions if "days old" in c)
-        assert "2024-01-02" in stale and "fetch prices" in stale
+        # The price's age, stated always rather than only past some line the
+        # host had picked. A six-day-old close used to say nothing about its
+        # age and an eight-day-old one did, so "no age mentioned" meant
+        # either current or nobody asked, and the reader could not tell.
+        age = next(c for c in cautions if "priced at the close of" in c)
+        assert "2024-01-02" in age and "days before today" in age
 
     def test_it_reaches_the_screen_with_the_value(self):
         api = self._seed()
@@ -149,3 +153,172 @@ class TestASnapshotRefusesABareNumber:
             portfolio.add_lot(s, None, 1, 10.0, "2025-01-02",
                               values={"market_cap": 1000.0})
         assert "bare float" in str(e.value)
+
+
+class TestThePriceSaysWhenItWasAPrice:
+    """The host carries a price's date and never judges it.
+
+    There were four rules for one question and no policy. Market cap
+    mentioned a price's age only past seven days; the as-of path refused a
+    close eight days out; live market value and weight said nothing at all;
+    and a delisted series served its last close unmarked. Seven days is a
+    judgement — it differs between a screen built on three-year average
+    earnings and a rule about position size — and it belonged to nobody.
+
+    What the host owes is the fact: which day the market last set this price,
+    how long ago that was, and whether the series has ended. What is too old
+    is the strategy's call, and `price.days_since_close` is what lets it make
+    one.
+    """
+
+    # A strategy that asks for free cash, because weight and the account
+    # total are the two figures this class is about and neither exists
+    # without it.
+    ANSWERS = {"free-cash": 40000.0, "stance": "building",
+               "keeps-reserve": False, "first-buy": 4}
+
+    @pytest.fixture(autouse=True)
+    def _journal(self, strategies):
+        strategies("awkward")
+        journal_for("awkward", "Prices", inputs=dict(self.ANSWERS))
+
+    def _held(self, closes, price=None):
+        """One holding, priced from `closes`, with the position figures a
+        sizing rule fires on."""
+        from engine import facts_store, price_store
+        cik = next(_CIK)
+        multiclass_company(cik, closes)
+        api = Api()
+        assert api.add_security("SYN", "Synthetic Co")["ok"]
+        journal = journals.load(journals.resolve_open())
+        journal["securities"][0]["cik"] = cik
+        journals.save(journal)
+        assert api.open_position("SYN", 10, 5.0, None, "recording")["ok"]
+        if price is not None:
+            assert api.save_metrics("SYN", {}, price)["ok"]
+        return api, cik, facts_store, price_store
+
+    def test_the_age_is_stated_however_young_the_price_is(self):
+        """Conditional was the worst of the three designs. A six-day-old
+        close said nothing about its age and an eight-day-old one did, so
+        "no age mentioned" meant either "this is current" or "nobody asked",
+        and there is no way to tell those apart from a silence."""
+        from datetime import date, timedelta
+        fresh = (date.today() - timedelta(days=2)).isoformat()
+        api, cik, *_ = self._held([(fresh, 20.0)])
+        mcap = dataview.computed_results(cik, ["SYN"],
+                                         ["market_cap"])["market_cap"]
+        age = [c for c in mcap["cautions"] if "priced at the close of" in c]
+        assert age and fresh in age[0], mcap
+        # And the same on the position side, which is the other half of the
+        # policy: two days is as much a fact about a weight as two months.
+        ctx = _context_for(api, "SYN")
+        for path in (("position", "market_value"), ("position", "weight")):
+            node = ctx
+            for step in path:
+                node = node[step]
+            assert any(fresh in c for c in node["cautions"]), path
+
+    def test_weight_and_the_account_total_say_which_day_they_are_from(self):
+        """The two figures a sizing rule actually binds on, and the two that
+        said least about the price underneath them. A weight worked out from
+        a two-month-old close and one from this morning's read identically —
+        to the reader and to a strategy citing `position.weight`."""
+        api, *_ = self._held([("2024-01-02", 20.0)])
+        ctx = _context_for(api, "SYN")
+        for path in (("position", "weight"),
+                     ("position", "market_value"),
+                     ("portfolio", "account_value")):
+            node = ctx
+            for step in path:
+                node = node[step]
+            assert node["status"] == "known", path
+            assert any("2024-01-02" in c for c in node["cautions"]), path
+
+    def test_a_strategy_can_count_the_days_and_the_host_will_not(self):
+        """The load-bearing half. A date on its own does not let a strategy
+        decide anything — it has a date and no way to subtract one — so the
+        host offers the arithmetic it already owns, on the same footing as
+        `position.months_held`, and holds no view about the answer."""
+        from datetime import date, timedelta
+        from engine import contract
+        old = (date.today() - timedelta(days=40)).isoformat()
+        api, *_ = self._held([(old, 20.0)])
+        ctx = _context_for(api, "SYN")
+        assert ctx["price"]["latest"]["days_since_close"] == 40
+        assert contract.test(ctx, {"fact": "price.days_since_close",
+                                   "comparator": "at_most",
+                                   "threshold": 30}) == "fail"
+        assert contract.test(ctx, {"fact": "price.days_since_close",
+                                   "comparator": "at_most",
+                                   "threshold": 60}) == "pass"
+        # And nothing in the host has an opinion of its own about 40 days.
+        from engine import compute
+        assert not hasattr(compute, "STALE_PRICE_DAYS")
+
+    def test_a_hand_entered_price_counts_no_days_rather_than_nought(self):
+        """Nought would be a claim that the price is today's. Nothing here
+        knows when it was typed, so the count is absent and says why — and
+        the screen says it too, rather than leaving a reader to notice a
+        blank where every other record shows a day."""
+        api, *_ = self._held([("2024-01-02", 20.0)], price=31.5)
+        ctx = _context_for(api, "SYN")
+        assert ctx["price"]["latest"]["value"] == 31.5
+        assert ctx["price"]["latest"]["days_since_close"] is None
+        s = api.get_state()["securities"][0]
+        assert "carries no date" in (s["_price"]["undated"] or "")
+
+    def test_a_series_that_has_ended_says_so_wherever_its_price_appears(self):
+        """A fact, not a judgement about age. A series quiet for a month and
+        one that will never trade again are identical in a list of closes,
+        and only one of them still has a price. It was stated on a tab a
+        novice has no reason to open, and nowhere else — not on the price,
+        not on what the holding is worth, not on its share of the account.
+        """
+        api, cik, _fs, ps = self._held([("2024-01-02", 20.0)])
+        doc = ps.load(cik)
+        ps.mark_terminal(doc, "SYN", "delisted")
+        ps.save(cik, doc)
+        dataview.invalidate(cik)
+
+        s = api.get_state()["securities"][0]
+        assert s["_price"]["value"] == 20.0, "the last close is still served"
+        assert s["_price"]["terminal"]["reason"] == "delisted"
+
+        ctx = _context_for(api, "SYN")
+        assert ctx["price"]["latest"]["terminal"]["reason"] == "delisted"
+        for path in (("position", "market_value"), ("position", "weight")):
+            node = ctx
+            for step in path:
+                node = node[step]
+            said = " ".join(node["provenance"] + node["cautions"])
+            assert "has ended" in said and "delisted" in said, (path, said)
+
+    def test_the_date_survives_the_crossing_into_a_strategys_evidence(self):
+        """It did not. `_fact_observation` forwarded the value, the cautions
+        and the provenance and dropped everything else, so the one node that
+        carried a structured date lost it at the boundary — and a purchase
+        snapshot is written once, so a fact dropped there is gone."""
+        from engine import contract
+        api, *_ = self._held([("2024-01-02", 20.0)])
+        ctx = _context_for(api, "SYN")
+        rendered, errors = contract.resolve_evidence(
+            {"values": [], "inputs": []}, ctx, [{"fact": "price.latest"}])
+        assert errors == []
+        assert rendered[0]["observed"]["date"] == "2024-01-02"
+        assert rendered[0]["observed"]["ticker"]
+
+
+def _context_for(api, ticker):
+    """The context a strategy is handed for one security, built the way the
+    evaluator builds it — not assembled by hand, so what these tests assert
+    is what a strategy actually receives."""
+    from engine import context
+    journal, record, chain, _ = api._open()
+    security = next(s for s in journal["securities"]
+                    if s["ticker"] == ticker)
+    declared = {f["id"] for f in (record.get("inputs") or [])}
+    supplied = {k: v for k, v in (journal.get("inputs") or {}).items()
+                if k in declared}
+    return context.build_context(security, journal["securities"],
+                                 chain["values"], supplied, record=record)

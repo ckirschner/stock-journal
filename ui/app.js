@@ -86,6 +86,7 @@ const EV_UNIT = {
   usd: (n) => (n < 0 ? "−$" : "$") + num(Math.abs(n), 0),
   shares: (n) => num(n, 0) + " shares",
   years: (n) => num(n, 1) + " yrs",
+  months: (n) => num(n, 0) + (Number(n) === 1 ? " month" : " months"),
   days: (n) => num(n, 0) + " days",
   count: (n) => num(n, 0),
   yes_no: (v) => (v ? "Yes" : "No"),
@@ -127,8 +128,10 @@ const localToday = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 /* Whole days between two YYYY-MM-DD strings (a minus b). Snapshot "frozen"
-   stamps are UTC while purchase dates are local, so a one-day skew proves
-   nothing; claims about backdating require a gap of at least two days. */
+   stamps now carry the writer's own day, the same calendar a purchase date is
+   on, so a gap here is a real gap. The two-day margin below stays because
+   records written before that was true carry UTC stamps and can still read a
+   day out — a claim about backdating has to hold for those too. */
 const dayGap = (a, b) => Math.round((Date.parse(a) - Date.parse(b)) / 86400000);
 /* Effective price: hand-entered wins; otherwise the newest fetched close.
    The source and date travel with it so a stale quote is visibly stale. */
@@ -148,9 +151,20 @@ function priceCell(s) {
     return (p && p.reason)
       ? `<span class="dim" title="${esc(p.reason)}">—</span>` : money(null);
   }
+  /* A series that has ENDED is not a stale price, it is not a price. The
+     word says so — never colour alone, and never a bare number that a
+     novice reads as what the security trades at today. */
+  if (p.terminal)
+    return `${money(p.value)} <span class="ended" title="${esc(
+      "This price series has ended (" + (p.terminal.reason || "no reason recorded")
+      + "). This is the last close it ever had, not what it trades at.")}">· ended</span>`;
   if (p.source === "fetched")
     return `${money(p.value)} <span class="dim" title="Fetched close, as of ${esc(p.date)}">·${esc(fmtCloseDate(p.date))}</span>`;
-  return money(p.value);
+  /* Hand-entered, and the one value in the journal with no date on it. The
+     host says why; the column says that it is undated at all, because a bare
+     number beside dated ones reads as the freshest of them. */
+  return `${money(p.value)} <span class="dim" title="${esc(
+    p.undated || "Entered by hand; it carries no date.")}">·typed</span>`;
 }
 function dataFact(s) {
   if (s._fetch && s._fetch.running) return "fetching…";
@@ -164,8 +178,28 @@ function dataFact(s) {
   const when = d.last_fetch ? String(d.last_fetch.at).slice(0, 10) : "never";
   return `${d.filings_held} filings · fetched ${when}`;
 }
-function pctCell(v) {
-  if (v === null || v === undefined) return '<span class="dim">—</span>';
+/* A return, or a dash carrying the host's own reason for there not being one.
+   Returns arrive as {status, value} or {status, reason} like every other host
+   figure — they used to be a bare number-or-null, and five different facts
+   came back as the same null: nobody has fetched a price, the figure on
+   record is not a price, this purchase was recorded at $0.00, one purchase of
+   several was, the security was never bought. Those have different fixes, so
+   a single silent em-dash was the wrong answer to all of them. */
+function pctVal(r) {
+  if (r === null || r === undefined) return null;
+  if (typeof r === "object") return r.status === "known" ? r.value : null;
+  return r;
+}
+function pctWhy(r) {
+  return (r && typeof r === "object" && r.status === "absent") ? r.reason : "";
+}
+function pctCell(r) {
+  const v = pctVal(r);
+  if (v === null || v === undefined) {
+    const why = pctWhy(r);
+    return why ? `<span class="dim" title="${esc("Not known: " + why)}">—</span>`
+      : '<span class="dim">—</span>';
+  }
   return `<span class="${v >= 0 ? "pos" : "neg"}">${v >= 0 ? "+" : ""}${Number(v).toFixed(1)}%</span>`;
 }
 
@@ -363,6 +397,18 @@ function stateStamp(d, big) {
 /* What happened after a sale, with the window it rests on named. "Up 40%
    since you sold" and "up 40% between selling and buying again" are different
    claims, and only one of them is true once the user went back in. */
+/* Every reason given across the sales that closed a period, each carrying
+   the share of the exit it accounts for. A position trimmed on a risk limit
+   and closed on a broken thesis gave two answers and both are true; the card
+   used to print the last one and drop the rest. */
+function exitReasonChips(x) {
+  const rs = (x && x.reasons) || [];
+  if (!rs.length) return '<span class="dim">—</span>';
+  return rs.map((r) => `<span class="chip s-none"${rs.length > 1
+    ? ` title="${esc(`${r.reason} — ${r.shares} of ${x.shares} shares, ${r.share}% of the exit`)}"` : ""
+    }>${esc(r.reason)}${rs.length > 1 ? ` <span class="dim">${r.share}%</span>` : ""}</span>`).join(" ");
+}
+
 function sinceExitCell(x) {
   if (!x) return '<span class="dim">—</span>';
   if (x.pct === null || x.pct === undefined)
@@ -418,7 +464,7 @@ function listView() {
         <div class="coname">${esc(s.name)}</div>
         <div class="dim">${periods(s).length > 1 ? esc(periodName(s, c)) + " · " : ""}${esc(c.opened)} → ${esc(c.closed)}</div></td>
         <td>${pctCell(c.return)}</td><td>${sinceExitCell(c.since_exit)}</td>
-        <td class="hide-sm"><span class="chip s-none">${esc(c.reason || "")}</span></td>
+        <td class="hide-sm">${exitReasonChips(c.exit)}</td>
         <td>${stateStamp(decisionOf(s))}</td></tr>`).join("");
   } else {
     const sorted = rows.slice().sort((a, b) => order(a) - order(b));
@@ -448,15 +494,25 @@ function scorecards() {
      the one panel that is supposed to be able to indict a rule. */
   const pct = (v) => v === null || v === undefined
     ? "—" : (v >= 0 ? "+" : "") + v + "%";
-  const unscored = (n) => n
-    ? `<div class="hint" style="margin:4px 0 0">${n} more ${n === 1 ? "has" : "have"} no price, so ${n === 1 ? "it is" : "they are"} counted but not averaged.</div>`
+  /* Why they could not be scored, from the engine, rather than a reason
+     asserted here. The panel used to say flatly that they "have no price" —
+     for every unscoreable purchase, including one recorded at $0.00, which
+     sent the reader off to fetch data that would never fix it. In the one
+     panel principle 10 says must be able to indict a rule, an invented
+     reason is the last thing that may pass for a finding. */
+  /* Each panel's own reasons, never the journal's. A shared list would let
+     the Overrides panel itemise a compliant purchase — the panel attributing
+     a decision to the wrong side of the line it exists to measure. */
+  const unscored = (n, why) => n
+    ? `<div class="hint" style="margin:4px 0 0">${n} more ${n === 1 ? "was" : "were"} counted but not averaged.${
+        (why || []).map((u) => ` ${u.n}: ${esc(u.reason)}.`).join("")}</div>`
     : "";
   const summ = (d) => d.n_purchases
     ? line("Purchases", d.n_purchases)
       + line("Scored", d.n + " of " + d.n_purchases)
       + line("Win rate", d.win_rate === null ? "—" : d.win_rate + "%")
       + line("Average return", pct(d.avg))
-      + unscored(d.n_unscored)
+      + unscored(d.n_unscored, d.unscored)
     : '<p class="hint">Nothing to compare yet.</p>';
 
   const keys = Object.keys(o.per_rule || {});
@@ -644,6 +700,56 @@ function evidenceRow(item, i) {
     <div class="sstate"><span class="chip ${cls}">${esc(word)}</span></div></div>`;
 }
 
+/* The headings the rows are gathered under, and what each one demanded.
+   Rendered from the reason, never from a list in this file: a strategy that
+   groups its evidence differently arrives here with no view code changed.
+
+   The counts are the host's own, taken from the rows below the heading, so
+   a rollup and its rows cannot say different things. Where a group demanded
+   nothing, only the count shows — inventing "never blocks" for it would be
+   this file claiming to know why the strategy is not testing them, and an
+   exit awaiting a second filing is not the same as a bonus test. */
+function groupHead(g) {
+  const [word, cls] = OUTCOME[g.outcome] || [g.outcome, "s-none"];
+  const need = g.requires === "all"
+    ? (g.tested > 1 ? `all ${g.tested} must pass`
+      : g.tested === 1 ? "it must pass" : "")
+    : g.requires === "at_least"
+      ? ((g.test && g.test.absent)
+        ? "no bar is set — " + esc(g.test.absent)
+        : `at least ${esc(String((g.test || {}).threshold))} must pass`
+          + ((g.test || {}).threshold_from
+            ? ` — your ${esc(g.test.threshold_from.label)}` : ""))
+      : "";
+  const counted = g.tested
+    ? `${g.passed} of ${g.tested} passed`
+      + (g.unknown ? ` · ${g.unknown} could not be worked out` : "")
+    : "";
+  return `<div class="srow ghrow"><div class="sname"><b>${esc(g.name)}</b></div>
+    <div class="scond"><span class="dim">${counted}${counted && need ? " · " : ""}${need}</span></div>
+    <div class="sstate">${g.requires === "noted" ? ""
+      : `<span class="chip ${cls}">${esc(word)}</span>`}</div></div>`;
+}
+
+/* One list of rows, with a heading wherever a group starts. The order is the
+   strategy's — the contract refuses a group whose rows are not together, so
+   a heading is opened once and never reopened. */
+function evidenceList(decision, key) {
+  const reason = decision.reason || {};
+  const ev = reason.evidence || [];
+  const by = {};
+  (reason.groups || []).forEach((g) => { by[g.id] = g; });
+  let open = null;
+  return ev.map((item, i) => {
+    let head = "";
+    if (item.group !== open) {
+      open = item.group;
+      if (open && by[open]) head = groupHead(by[open]);
+    }
+    return head + evidenceRow(item, key + ":" + i);
+  }).join("");
+}
+
 /* A blocked verdict with nothing to click is a dead end, and the state that
    says "the strategy needs an answer you have not given" is exactly the one
    a user must be able to escape. The host names the screen that resolves
@@ -676,7 +782,7 @@ function decisionSection(d, title) {
       ${r.note ? `<div class="pe-why">${prose(r.note)}</div>` : ""}
       ${fixButton(d)}
     </div>
-    ${ev.length ? `<div class="slist" style="margin-top:14px">${ev.map(evidenceRow).join("")}</div>`
+    ${ev.length ? `<div class="slist" style="margin-top:14px">${evidenceList(d, "ev")}</div>`
       : '<p class="hint" style="margin-top:12px">No figures were cited — nothing about the security was read.</p>'}
   </section>`;
 }
@@ -803,7 +909,8 @@ function detailView(s) {
     : isPrev
     ? (many ? `${esc(periodName(s, last))} of ${closed.length} · closed `
         : "Closed ") + esc(last.closed)
-      + " · " + esc(last.reason || "no reason recorded")
+      + " · " + esc(((last.exit || {}).reasons || [])
+          .map((r) => r.reason).join(", ") || "no reason recorded")
     : "Added " + esc(s.added);
   h += `<div class="dhead"><div class="dtitle"><h1>${esc(s.ticker)}</h1><p>${esc(s.name)}</p>
     <div class="meta">${meta} · judged by ${esc((S.journal.strategy || {}).name || "no strategy")}</div></div>
@@ -827,7 +934,9 @@ function detailView(s) {
   }
 
   /* facts */
-  const priceLabel = (s._price && s._price.source === "fetched")
+  const priceLabel = (s._price && s._price.terminal)
+    ? "Price · series ended"
+    : (s._price && s._price.source === "fetched")
     ? `Price · close ${String(s._price.date).slice(0, 10)}` : "Price";
   /* Why there is no price, not just a dash. The host's reason names the
      instrument and lists the sibling share classes that DO have stored
@@ -836,10 +945,33 @@ function detailView(s) {
      bare dash makes the second look like the first. */
   const priceWhy = (s._price && s._price.value == null && s._price.reason)
     ? "Not known: " + s._price.reason + "."
+    : (s._price && s._price.terminal)
+    ? "This price series has ended (" + s._price.terminal.reason
+      + "). What you see is the last close this security ever had, not what "
+      + "it trades at — and what it is worth, and its share of the account, "
+      + "are worked out from that."
     : (s._price && s._price.source === "manual")
-    ? "The price you entered by hand. It wins over any fetched close, and carries no date."
+    ? (s._price.undated
+       ? "The price you entered by hand. It wins over any fetched close. It "
+         + "is the one thing you record here that carries no date: it is what "
+         + "you saw the market quote rather than something you worked out, "
+         + "and the dated version of it is the price history a fetch keeps. "
+         + "What it is worth and its share of the account come from it, so if "
+         + "it is old, so are they."
+       : "The price you entered by hand. It wins over any fetched close.")
     : "";
-  const pctText = (v) => v === null || v === undefined ? "—" : (v >= 0 ? "+" : "") + v + "%";
+  const pctText = (r) => {
+    const v = pctVal(r);
+    return v === null || v === undefined ? "—" : (v >= 0 ? "+" : "") + v + "%";
+  };
+  /* The reason travels with the figure now, so the strip stops guessing at
+     it. It used to test a separate field and splice in the price's reason,
+     which was right for an unpriced security and wrong for every other way a
+     return can be absent — including the one that reads identically. */
+  const pctWhyOr = (r, fallback) => {
+    const why = pctWhy(r);
+    return why ? `Not known: ${why}` : fallback;
+  };
   /* Every fact on this strip describes one holding — the one open, or the one
      that ended. The lifetime figure is the single exception and appears only
      when there is more than one holding to span, named so it can never be
@@ -869,18 +1001,29 @@ function detailView(s) {
   if (isHold) {
     facts = [[priceLabel, money(px(s)), priceWhy], ["Average cost", money(s._cost_basis)],
       ["Shares", s._shares],
-      ["Since buy", pctText(s._return),
-        (s._return === null || s._return === undefined) && unpriced && s._price.reason
-          ? `Not known: an open holding is marked at what it is worth now, and ${s._price.reason}.`
-          : sinceBuyWhy],
+      ["Since buy", pctText(s._return), pctWhyOr(s._return, sinceBuyWhy)],
       ["Value", px(s) ? "$" + (px(s) * s._shares).toLocaleString(undefined, { maximumFractionDigits: 0 }) : "—",
         unpriced && s._price.reason ? `Not known: ${s._price.reason}.` : ""]];
   } else if (isPrev) {
-    facts = [["Exit price", money(last.exit_price)],
+    const ex = last.exit || {};
+    const exPrice = ex.price || {};
+    facts = [["Exit price",
+      exPrice.status === "known" ? money(exPrice.value) : "—",
+      exPrice.status === "absent" ? `Not known: ${exPrice.reason}`
+        : ex.sales > 1
+        ? `Share-weighted across the ${ex.sales} sales that closed this holding — ${
+            (exPrice.provenance || []).join("; ")}. Not the last sale's price, which is one sliver of it.`
+        : "What you sold at."],
       ["Return held", pctText(last.return),
-        `What this holding returned over its life: bought ${last.opened}, closed ${last.closed}.`],
+        pctWhyOr(last.return,
+          `What this holding returned over its life: bought ${last.opened}, closed ${last.closed}.`)],
       ["Since exit", sinceExitText(last.since_exit), sinceExitWhy(last.since_exit)],
-      ["Reason", last.reason || "not stated"]];
+      ["Reason", (ex.reasons || []).map((r) => r.reason).join(", ") || "not stated",
+        (ex.reasons || []).length > 1
+          ? "Every reason given, in the order the sales happened: "
+            + ex.reasons.map((r) => `${r.reason} for ${r.shares} shares (${r.share}%)`).join("; ")
+            + ". A holding closed in stages gave more than one answer and all of them are true."
+          : ""]];
   } else {
     facts = [[priceLabel, money(px(s)), priceWhy], ["Added", s.added],
       ["Values read", (s._cited || []).length + " cited by the strategy"]];
@@ -1043,11 +1186,13 @@ function overrideNotice(s, lot) {
   const why = ov.kind === "without"
     ? "There was no verdict to go against — the strategy could not reach one."
     : "The strategy did not say to commit capital.";
-  const r = (s._lot_returns || {})[lot.id];
+  const r = pctVal((s._lot_returns || {})[lot.id]);
+  const rWhy = pctWhy((s._lot_returns || {})[lot.id]);
   return `<div class="notice"><h4>${head}${ov.basis === "reconstructed" ? " · reconstructed" : ""}</h4>
     <p>${lead} ${esc(why)}
     ${failed ? " " + esc(failed) + " missed its threshold." : ""}${missing ? " " + esc(missing) + " could not be read." : ""}
-    The purchase was recorded anyway.${r === null || r === undefined ? ""
+    The purchase was recorded anyway.${r === null || r === undefined
+      ? (rWhy ? ` What these shares have done since is not known: ${esc(rWhy)}.` : "")
       : lot.open ? ` These shares are ${r >= 0 ? "up" : "down"} ${Math.abs(r).toFixed(1)}% since.`
       : ` These shares ${r >= 0 ? "returned" : "lost"} ${Math.abs(r).toFixed(1)}% before they were sold.`}</p>
     ${ov.rule ? `<p class="hint">Rule at the time: <code>${esc(ov.rule)}</code> — ${esc(ov.summary || "")}</p>` : ""}
@@ -1073,7 +1218,8 @@ function lotHistory(s) {
     const st = snap.strategy || {};
     const ev = snap.evaluation || {};
     const frozenD = String(snap.frozen || "").slice(0, 10);
-    const r = buy ? (s._lot_returns || {})[lot.id] : null;
+    const lotReturn = buy ? (s._lot_returns || {})[lot.id] : null;
+    const r = pctVal(lotReturn);
 
     let how = "";
     if (ev.basis === "reconstructed") {
@@ -1096,13 +1242,23 @@ function lotHistory(s) {
       ? `<p class="hint">Recorded under v${esc(st.version)}; the strategy is at v${esc((S.journal.strategy || {}).version)} now.
          Every change between them is on the Strategy tab.</p>` : "";
 
+    /* Keyed on the lot's own id, not its position in the list: grouped by
+       holding, two entries would otherwise share an index and one "what is
+       this?" would open two boxes on different periods.
+
+       A decision frozen before groups existed simply has none, and its rows
+       render in a flat list exactly as they were written. Nothing about an
+       old record is recomputed to acquire headings it never had. */
+    const frozenEvidence = evidenceList(d || {}, "lot" + lot.id);
+
     return `<div class="lot">
       <div class="lothead">
         <b>${buy ? "Bought" : "Sold"} ${esc(lot.shares)} at ${money(lot.price)}</b>
         <time>${esc(String(lot.date).slice(0, 10))}</time>
         ${buy ? "" : `<span class="chip s-none">${esc(lot.reason || "no reason recorded")}</span>`}
         ${r !== null && r !== undefined ? `<span class="chip ${r >= 0 ? "s-pass" : "s-fail"}"
-          title="What these shares have returned: the price each sale got on the ones that are gone, today's price on the ones still held, against what this lot cost.">${r >= 0 ? "+" : ""}${r}%</span>` : ""}
+          title="What these shares have returned: the price each sale got on the ones that are gone, today's price on the ones still held, against what this lot cost.">${r >= 0 ? "+" : ""}${r}%</span>`
+          : pctWhy(lotReturn) ? `<span class="chip blank" title="${esc("Not known: " + pctWhy(lotReturn))}">not known</span>` : ""}
       </div>
       <div class="pe-sub">${left}${how}${st.name ? ` · under ${esc(st.name)} v${esc(st.version)}` : ""}</div>
       ${moved}${diff}
@@ -1110,11 +1266,7 @@ function lotHistory(s) {
           <div class="pe-head"><b>${esc((d.reason || {}).summary || "")}</b>
             <span class="chip s-none">${esc((d.state || {}).name || "")}</span></div>
           <div class="pe-sub" style="margin-top:6px">Rule <code>${esc((d.reason || {}).rule || "")}</code></div></div>
-        <div class="slist" style="margin-top:12px">${((d.reason || {}).evidence || []).map(
-          /* Keyed on the lot's own id, not its position in the list: grouped
-             by holding, two entries would otherwise share an index and one
-             "what is this?" would open two boxes on different periods. */
-          (item, j) => evidenceRow(item, "lot" + lot.id + ":" + j)).join("")}</div>`
+        <div class="slist" style="margin-top:12px">${frozenEvidence}</div>`
         : `<p class="hint">No verdict was recorded with this entry.</p>`}
     </div>`;
   };
@@ -1134,11 +1286,17 @@ function lotHistory(s) {
        which period, and this is the whole of that answer. */
     body = all.slice().reverse().map((c) => {
       const rows = periodLots(s, c).map(row).join("");
-      const ret = c.return === null || c.return === undefined ? ""
-        : `<span class="chip ${c.return >= 0 ? "s-pass" : "s-fail"}">${c.return >= 0 ? "+" : ""}${c.return}%</span>`;
+      const cv = pctVal(c.return);
+      const ret = cv === null || cv === undefined
+        ? (pctWhy(c.return)
+           ? `<span class="chip blank" title="${esc("Not known: " + pctWhy(c.return))}">not known</span>`
+           : "")
+        : `<span class="chip ${cv >= 0 ? "s-pass" : "s-fail"}">${cv >= 0 ? "+" : ""}${cv}%</span>`;
       const span = c.open
         ? `bought ${esc(c.opened)} · ${c.shares} shares still held`
-        : `${esc(c.opened)} → ${esc(c.closed)} · closed: ${esc(c.reason || "no reason recorded")}`;
+        : `${esc(c.opened)} → ${esc(c.closed)} · closed: ${esc(
+            ((c.exit || {}).reasons || []).map((r) => r.reason).join(", ")
+            || "no reason recorded")}`;
       return `<div class="cyc"><div class="cychead">
           <b>${esc(periodName(s, c))}</b><span class="dim">${span}</span>${ret}</div>
         <div class="lots">${rows}</div></div>`;
@@ -1379,9 +1537,10 @@ function strategyView() {
         <div class="pe-head"><b>${esc(v.label)}</b><code>${esc(v.id)}</code>
           <span class="req">${esc(v.unit || v.type)}</span></div>
         <div class="pe-desc">${prose(v.explain)}</div>
+        ${valueSource(v)}
         <div class="pe-param"><b>${esc(fmtUnit(v.value, v.unit || (v.type === "boolean" ? "yes_no" : "none")))}</b>
-          <span class="dim">${v.source === "shipped default" ? "shipped default"
-            : `set by ${esc(v.source)} — shipped default ${esc(String(v.shipped))}`}</span></div>
+          <span class="dim">${v.set_by === "shipped default" ? "shipped default"
+            : `set by ${esc(v.set_by)} — shipped default ${esc(String(v.shipped))}`}</span></div>
       </div>`).join("")}</div>
       <div class="toolbar" style="justify-content:flex-start;margin-top:12px">
         <button class="btn" data-act="settings">Change these settings</button></div></section>`;
@@ -1396,6 +1555,19 @@ function strategyView() {
         ${(r.errors || []).map((e) => `<div class="greynote">${esc(e)}</div>`).join("")}</li>`).join("")}</ul></div>`;
   }
   return h;
+}
+
+/* Where a threshold came from, and whose reasoning the explanation above is.
+   Rendered from the declaration, never written by hand into the explanation:
+   the version that lived in prose could be stated once for a whole file and
+   silently fail to cover the value added afterwards, and a reader auditing a
+   number had no way to tell which kind of claim they were reading. */
+function valueSource(v) {
+  const s = v.source;
+  if (!s || !s.name) return "";
+  return `<div class="greynote">Level from ${esc(s.name)}. ${s.reasoning
+    ? "The explanation above is theirs too."
+    : "The explanation above is this strategy's own account of it, not theirs."}</div>`;
 }
 
 /* One declared field's answer, as words. A choice reads as its label, never
@@ -1805,9 +1977,16 @@ function dlgSettings() {
   const inputs = (st.inputs || []).map((f) =>
     declaredField(f, f.value, "in_",
       f.role ? `This journal reports it back to you as a figure: ${esc(((st.roles || {})[f.role] || {}).means || "")}.` : "")).join("");
+  /* The attribution belongs here above all: this is the screen where someone
+     is about to overwrite a number, and whose number it is — and whether the
+     reasoning they just read is that source's or the strategy author's — is
+     the thing that should give them pause. */
   const values = (st.values || []).map((v) =>
     declaredField({ ...v, required: false }, cfg[v.id], "cfg_",
-      `${esc(st.name)} ships <b>${esc(declaredText(v, v.shipped))}</b>. Leave blank to use it.`)).join("");
+      `${esc(st.name)} ships <b>${esc(declaredText(v, v.shipped))}</b>. Leave blank to use it.`
+      + (v.source && v.source.name
+        ? ` The level is ${esc(v.source.name)}'s${v.source.reasoning ? ""
+          : ", and the reasoning above is this strategy's own"}.` : ""))).join("");
   dialog({
     title: "Journal settings",
     blurb: `${st.name} · everything ${S.journal.name} tells it.`,
@@ -2193,18 +2372,22 @@ async function dlgBuy(s, dateChosen, keep, fallbackDate) {
    still one field away. */
 function dlgSell(s) {
   const opts = S.exit_reasons.map((r) => `<option value="${esc(r)}">${esc(r)}</option>`).join("");
-  /* The exit price enters an append-only record. A stale fetched close must
-     never slide in as a silent default. */
+  /* The exit price enters an append-only record, so nothing is prefilled
+     here at all. What the tape says is not what you got: you sold at a time
+     of day, possibly across a spread, and the close is a different number
+     that happens to be nearby. It also used to be prefilled only when the
+     close was under seven days old — a rule the browser applied itself, in a
+     second copy of a judgement the engine was making too, and neither of
+     them was the host's to make. The honest field is an empty one with the
+     close shown beside it as a reference. */
   const p = s._price || {};
-  const fetchedAge = p.source === "fetched" && p.date
-    ? Math.round((Date.now() - new Date(p.date).getTime()) / 86400000) : null;
-  const stale = fetchedAge !== null && fetchedAge > 7;
-  const prefill = p.source === "fetched" ? (stale ? "" : p.value) : (px(s) ?? "");
-  const priceHelp = p.source === "fetched"
-    ? (stale
-      ? `Left blank on purpose: the newest fetched close is ${fetchedAge} days old (${p.date}). Enter the price you actually sold at.`
-      : `Prefilled from the fetched close of ${p.date} — replace it with the price you actually sold at.`)
-    : "The price you actually sold at.";
+  const closeNote = p.source === "fetched" && p.date
+    ? ` For reference, the last fetched close was ${money(p.value)} on ${p.date}${
+        p.terminal ? " — the last this security ever traded at" : ""}.`
+    : "";
+  const priceHelp = "The price you actually sold at, per share. Nothing is "
+    + "filled in for you: this goes on the record permanently, and a number "
+    + "off the tape is not the number you got." + closeNote;
   const lots = buyLots(s).filter((l) => l.open);
   const lotHelp = lots.length > 1
     ? `Oldest shares go first, across ${lots.length} open lots (${lots.map((l) => `${l.remaining} from ${l.date}`).join(", ")}).`
@@ -2216,7 +2399,7 @@ function dlgSell(s) {
         <select id="f_reason" name="reason">${opts}</select>
         <div class="help">Answer honestly. The Previous holdings tab groups outcomes by this, and it is the only way to find out whether your sell rules work.</div></div>`
       + field("shares", "Shares sold", s._shares, `You hold ${s._shares}. Sell fewer to trim; the rest stays open, priced from what it actually cost. ${lotHelp}`, "number")
-      + field("price", "Sale price per share", prefill, priceHelp, "number")
+      + field("price", "Sale price per share", "", priceHelp, "number")
       /* Same bound as the purchase date, and for the same reason. A sale
          dated ahead has not happened: it reports the position closed to
          every screen that asks while the strategy is still holding it, and

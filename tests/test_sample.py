@@ -113,7 +113,8 @@ class TestTheSample:
                      if s["ticker"] == "LOWFD")
         [cycle] = portfolio.cycles(lowfd)
         assert not cycle["open"]
-        assert portfolio.cycle_return(lowfd, cycle, lowfd["price"]) \
+        assert portfolio.cycle_return(lowfd, cycle,
+                                      lowfd["price"])["value"] \
             == pytest.approx(76.8, abs=0.1)     # 11.20 -> 19.80
         [sale] = portfolio.lots(lowfd, "sell")
         since = portfolio.since_sale(lowfd, sale, lowfd["price"])

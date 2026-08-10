@@ -9,9 +9,12 @@ lands.
 
 What it deliberately touches, so the wiring is exercised and not just
 asserted: one measure's current value and dated series, the clock, the one
-declared value, the declared inputs, and the figures the host can only
-report once a journal says what the account is.
+declared value, the declared inputs, the figures the host can only report
+once a journal says what the account is, the host's answer to a comparison,
+and one heading over the lot.
 """
+
+from engine import contract
 
 STRATEGY = {
     "id": "contract-proof",
@@ -19,8 +22,8 @@ STRATEGY = {
     "summary": "A scaffold that proves the host/strategy boundary carries "
                "data both ways. It reads one measure and always holds; it "
                "is not investment logic and never will be.",
-    "version": 3,
-    "contract": 4,
+    "version": 4,
+    "contract": 5,
     "changelog": {
         1: "First version: reads free cash flow and the clock, and holds.",
         2: "Asks for free cash so the account figures can be proved end to "
@@ -29,6 +32,10 @@ STRATEGY = {
         3: "Cites the latest price, so the boundary is proved to carry a "
            "figure's day and its symbol and not just its number. Still "
            "holds, always.",
+        4: "Speaks contract 5: asks the host how its one comparison came "
+           "out rather than working it out itself, gathers its citations "
+           "under a heading, cites the months-held figure, and says where "
+           "its one declared value came from. Still holds, always.",
     },
     "states": [
         {"id": "scaffold-hold", "name": "Nothing to do", "render": "hold",
@@ -63,12 +70,29 @@ STRATEGY = {
     "values": [
         {"id": "patience", "label": "Readings considered", "type": "integer",
          "unit": "count", "min": 1, "max": 40,
+         # There is no outside source for a number a scaffold made up, and
+         # saying so is the honest answer rather than an omission. A value
+         # with nothing behind it is exactly the case the field exists to
+         # make visible.
+         "source": {"name": "the scaffold itself — it is not investment "
+                            "logic and this number decides nothing",
+                    "reasoning": True},
          "explain": "How many of the newest dated readings the scaffold "
                     "counts before holding. It changes nothing but the "
                     "sentence in the reason — it exists to prove a shipped "
                     "default can be overridden and seen."},
     ],
 }
+
+# One heading, so the boundary is proved to carry a rollup as well as rows.
+# `noted`, because the scaffold demands nothing of anything: it holds either
+# way, and a group claiming a requirement it does not have would be the
+# scaffold pretending to be a strategy.
+READINGS = {"id": "readings", "name": "What the scaffold read",
+            "requires": "noted"}
+
+POSITIVE = {"measure": "fcf_ttm", "comparator": "above", "threshold": 0,
+            "group": READINGS["id"]}
 
 
 def decide(ctx):
@@ -91,35 +115,47 @@ def decide(ctx):
 
     patience = int(ctx["values"]["patience"])
     considered = measure["series"]["points"][-patience:]
+    # Asked of the host, not worked out here — the scaffold does nothing
+    # with the answer except prove the boundary carries it, which is the
+    # point of a scaffold.
+    positive = contract.test(ctx, POSITIVE)
     evidence = [
-        {"measure": "fcf_ttm", "comparator": "above", "threshold": 0},
-        {"value": "patience"},
+        POSITIVE,
+        {"value": "patience", "group": READINGS["id"]},
         {"label": "Dated readings considered", "unit": "count",
-         "actual": len(considered)},
+         "actual": len(considered), "group": READINGS["id"]},
         # Cited, never restated. Where the journal cannot say what the
         # account is, the host's own reason is what the screen reads — the
         # scaffold has no sentence of its own to offer about it.
-        {"fact": "portfolio.cash"},
-        {"fact": "portfolio.account_value"},
+        {"fact": "portfolio.cash", "group": READINGS["id"]},
+        {"fact": "portfolio.account_value", "group": READINGS["id"]},
         # A price is a figure about one instrument on one day, and citing it
         # has to carry both — a company's share classes trade at different
         # prices, so a number with no symbol behind it cannot be checked.
-        {"fact": "price.latest"},
+        {"fact": "price.latest", "group": READINGS["id"]},
     ]
     if ctx["position"]["held"]:
-        evidence.append({"fact": "position.weight"})
-        evidence.append({"fact": "position.opened"})
+        evidence.append({"fact": "position.weight",
+                         "group": READINGS["id"]})
+        evidence.append({"fact": "position.opened",
+                         "group": READINGS["id"]})
+        evidence.append({"fact": "position.months_held",
+                         "group": READINGS["id"]})
     if considered:
         evidence.append({"measure": "fcf_ttm",
-                         "at": considered[0]["period_end"]})
+                         "at": considered[0]["period_end"],
+                         "group": READINGS["id"]})
     return {
         "state": "scaffold-hold",
         "payload": {},
         "reason": {
             "rule": "always-hold",
             "summary": "The scaffold read the data and holds, which is the "
-                       "only thing it does.",
+                       f"only thing it does. Free cash flow came out "
+                       f"{positive} against zero, and nothing follows from "
+                       "that here.",
             "evidence": evidence,
+            "groups": [READINGS],
             "note": ctx["inputs"].get("journal-note") or None,
         },
     }

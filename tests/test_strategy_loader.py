@@ -92,6 +92,7 @@ class TestRefusals:
             " 'states': [{'id': 's', 'name': 'n', 'render': 'hold',"
             " 'description': 'd'}],"
             " 'values': [{'id': 'v', 'label': 'V', 'type': 'number',"
+            " 'source': {'name': 'a fixture', 'reasoning': True},"
             " 'explain': 'e'}]}\ndef decide(ctx): pass\n")
         (bundle / "values.yaml").write_text("# nothing but a comment\n")
         _, reports = strategy_loader.discover([tmp_path])

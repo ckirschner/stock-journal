@@ -17,12 +17,13 @@ filings are a few dozen JSON files — so results are cached in memory against a
 fingerprint of the stores (file count + newest mtime + concept-map mtime).
 A fetch changes the fingerprint and the cache falls away by itself.
 
-Entries whose bank definition declares parameters (the risk-free rate) have
-no computed value at all here, and no caller supplies one. Those entries
-resolve to absent with their own reason, which is honest: nothing in this
-host is entitled to invent a rate. Giving a strategy a way to supply one is a
-change to the contract and a request against the host, not something to route
-around here.
+No bank entry needs a number from outside the filings and the price
+history. There used to be one — an earnings yield divided by a risk-free rate
+— and it was permanently absent, because the rate is not in any filing and
+nothing here could supply it. A measure needing a figure nobody can hand over
+is not a measure; comparing earnings yield against a risk-free rate is a
+judgement, so it belongs to a strategy, which declares the rate as one of its
+own values and does the division itself.
 """
 
 from __future__ import annotations
@@ -192,7 +193,12 @@ def _no_close(prices: dict, ticker: str, when: str | None = None) -> str:
     instrument it is about and what else is stored. It is a sentence about
     identity — it can explain the gap, and it cannot fill it.
     """
-    where = f" on or shortly before {when}" if when else ""
+    where = f" on or before {when}" if when else ""
+    ended = price_store.terminal_of(prices, ticker)
+    if ended:
+        return (f"the {ticker} price series has ended "
+                f"({ended.get('reason') or 'no reason recorded'}) and holds "
+                f"no close{where}")
     others = price_store.other_series(prices, ticker)
     if others:
         return (f"no close is stored for {ticker}{where}. Prices are held for "
@@ -203,8 +209,17 @@ def _no_close(prices: dict, ticker: str, when: str | None = None) -> str:
 
 def price_view_asof(cik: int, ticker: str, as_of: str) -> dict:
     """The close that belongs to `as_of` for ONE security: that day or the
-    nearest earlier trading day within the stale window, labelled with the
-    date actually used.
+    nearest earlier trading day, labelled with the date actually used and how
+    far back it had to reach.
+
+    It reaches back as far as the series goes, and reports the distance rather
+    than refusing past it. There was a seven-day cut-off here, and it was the
+    host deciding: an eight-day gap was refused outright while the live market
+    cap served a year-old close with a note. Two policies for one number,
+    neither of them derivable from anything the host is entitled to know.
+    `days_before` is the fact; whether it is too far is the reader's call and
+    the strategy's, and on a backdated purchase it is frozen into the record
+    beside the price so the answer stays checkable.
 
     A hand-entered price never appears here — it is a statement about now, and
     reaching it into the past would invent a value. Neither does a sibling
@@ -214,12 +229,15 @@ def price_view_asof(cik: int, ticker: str, as_of: str) -> dict:
     """
     _one_symbol(ticker, "price_view_asof")
     prices = _prices(cik)
-    got = price_store.close_on(prices, ticker, as_of,
-                               max_lookback_days=compute.STALE_PRICE_DAYS)
+    got = price_store.close_on(prices, ticker, as_of)
     if got:
         return {"value": got[1], "source": "fetched", "date": got[0],
-                "ticker": price_store.series_key(prices, ticker)}
-    return {"value": None, "source": None, "date": None, "ticker": None,
+                "days_before": got[2],
+                "ticker": price_store.series_key(prices, ticker),
+                "terminal": price_store.terminal_of(prices, ticker)}
+    return {"value": None, "source": None, "date": None, "days_before": None,
+            "ticker": None, "terminal": price_store.terminal_of(prices,
+                                                                ticker),
             "reason": _no_close(prices, ticker, as_of)}
 
 
@@ -243,27 +261,26 @@ def computed_results(cik: int, tickers: list[str], entry_ids) -> dict:
     return out
 
 
-def confirmation_history(cik: int, tickers: list[str], entry_id: str,
-                         params: dict | None = None) -> dict:
+def confirmation_history(cik: int, tickers: list[str],
+                         entry_id: str) -> dict:
     """Per-filing readings for one sell-watched entry, cached with the same
     per-CIK bundle as the computed values — the fingerprint invalidates on
     new filings or prices. The history itself is derived, never stored:
     engine/compute.confirmation_history recomputes it from the filing files
     every time the cache turns over, so it cannot drift from the data."""
     b = _bundle(cik, tickers)
-    key = (entry_id, tuple(sorted((params or {}).items())))
     cache = b.setdefault("confirmations", {})
-    if key not in cache:
+    if entry_id not in cache:
         try:
-            cache[key] = compute.confirmation_history(
-                b["filings"], b["prices"], list(b["tickers"]), entry_id,
-                params or None)
+            cache[entry_id] = compute.confirmation_history(
+                b["filings"], b["prices"], list(b["tickers"]), entry_id)
         except Exception as e:                          # noqa: BLE001
-            cache[key] = {"entry": entry_id, "cadence": None, "readings": [],
-                          "boundaries_held": 0, "truncated": False,
-                          "note": f"the filing history could not be read: "
-                                  f"{type(e).__name__}: {e}"}
-    return cache[key]
+            cache[entry_id] = {"entry": entry_id, "cadence": None,
+                               "readings": [], "boundaries_held": 0,
+                               "truncated": False,
+                               "note": f"the filing history could not be "
+                                       f"read: {type(e).__name__}: {e}"}
+    return cache[entry_id]
 
 
 def qualified(value, source, cautions=None, provenance=None) -> dict:
@@ -330,6 +347,17 @@ def merged_values(security: dict, computed: dict,
     return values
 
 
+# Said in one place, because it is said in several: on the price itself, and
+# on every figure built from it. A price is the one thing the user types that
+# is not dated, and the reason it is not is worth stating rather than leaving
+# the reader to spot a blank where every other record shows a day.
+_MANUAL_IS_UNDATED = (
+    "entered by hand, so it carries no date — this is what you saw the "
+    "market quote, not something you worked out, and the dated version of it "
+    "is the price history a fetch keeps. Nothing here can tell how long ago "
+    "you typed it")
+
+
 def price_view(security: dict, cik: int | None, ticker: str) -> dict:
     """The price the journal should show for ONE security: hand-entered wins,
     else that security's own newest stored close, labelled with its date so
@@ -354,10 +382,20 @@ def price_view(security: dict, cik: int | None, ticker: str) -> dict:
     # refused it must not still read as a fact.
     manual = security.get("price")
     refused = None
+    ended = price_store.terminal_of(_prices(cik), ticker) if cik else None
     if manual not in (None, ""):
         if float(manual) > 0:
+            # `date` is None and stays None, and the screen says why rather
+            # than leaving the reader to notice. A hand-entered price is not
+            # a claim about the business that could be dated and revised —
+            # it is what the market said, and the dated form of that is the
+            # price history the fetcher keeps. What it is NOT is a figure
+            # anyone can tell the age of, and it feeds market value, weight
+            # and the account total, so the absence is stated where those
+            # are shown instead of being inferred from a blank.
             return {"value": float(manual), "source": "manual", "date": None,
-                    "ticker": ticker}
+                    "undated": _MANUAL_IS_UNDATED, "ticker": ticker,
+                    "terminal": ended}
         refused = (f"the price on record for {ticker} is {float(manual):g}, "
                    "which is not a price — clear it, or enter what the "
                    "security actually trades at")
@@ -366,10 +404,13 @@ def price_view(security: dict, cik: int | None, ticker: str) -> dict:
         got = price_store.latest_close(prices, ticker)
         if got:
             return {"value": got[1], "source": "fetched", "date": got[0],
-                    "ticker": price_store.series_key(prices, ticker)}
+                    "ticker": price_store.series_key(prices, ticker),
+                    "terminal": ended}
         return {"value": None, "source": None, "date": None, "ticker": None,
+                "terminal": ended,
                 "reason": refused or _no_close(prices, ticker)}
     return {"value": None, "source": None, "date": None, "ticker": None,
+            "terminal": None,
             "reason": refused or
             (f"{ticker} is not matched to a company at the SEC, so no price "
              "history has been fetched for it — enter a price by hand, or "

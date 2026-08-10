@@ -133,10 +133,20 @@ between the repo and the user data directory is the next task's problem.
 
 ## Entries needing data outside SEC XBRL filings and daily prices
 
-1. **`earnings_yield_to_risk_free_multiple`** — declares the parameter
-   `risk_free_rate`. Not in EDGAR, not price data. Left `null` in
-   `graham.yaml`, so the entry resolves grey. Used by Graham BONUS 15. The
-   report's proposed fix is a single hand-entered field updated quarterly.
+1. ~~**`earnings_yield_to_risk_free_multiple`**~~ — **removed from the bank.**
+   It declared a `risk_free_rate` parameter, and the bank is the wrong place
+   for it: the rate is in no filing and is not price data, `context` never
+   supplied one, and the measure was therefore permanently absent from the day
+   it shipped — a test that could never once run. An earnings yield is a fact;
+   what you compare it against is a judgement, so the comparison belongs to a
+   strategy. Graham declares the rate as one of its own values and does the
+   division itself. The parameter channel it was the only user of
+   (`Ctx.params`, `compute_entry_with_params`) went with it, so a new entry
+   cannot quietly be added to a supply route that has no supplier.
+
+   **The rule this leaves behind:** a bank entry may need filings and prices
+   and nothing else. An entry that would need a number handed to it from
+   outside is a strategy's question, not a measure.
 
 2. **`insider_net_buying_6m`** — Form 4 ownership XML, a separate ingestion path
    from XBRL company facts. Used by Lynch BONUS 14 and Discount Closure BONUS
