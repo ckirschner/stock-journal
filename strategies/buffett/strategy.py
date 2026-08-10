@@ -270,9 +270,16 @@ STRATEGY = {
                "and only at a price that leaves something on the table. "
                "Sells when the business breaks — never when the price gets "
                "high, and never because time has passed.",
-    "version": 1,
+    "version": 2,
     "contract": 5,
     "changelog": {
+        2: "No threshold and no rule changed, and no verdict moves. The one "
+           "state that stops and waits for you — the three questions — now "
+           "says where it is answered, so the host puts a button on the "
+           "verdict rather than the state's description having to tell you "
+           "to scroll. It was the strategy's own prose holding that up "
+           "before, which meant it held only as long as somebody remembered "
+           "to write it.",
         1: "First version. The fifteen entry tests, the three-knockout / "
            "seven-of-nine rollup, and the five exits with two-filing "
            "confirmation — four quarters for free cash flow — all as stated "
@@ -309,6 +316,11 @@ STRATEGY = {
                         "strategy runs at once."},
 
         {"id": "judgement-owed", "render": "blocked",
+         # The one state here that stops rather than answers, so it is the
+         # one that has to say where it is un-stopped. The host reads this
+         # and puts the button on the verdict; the description below says the
+         # same thing in words for a reader who is not clicking anything.
+         "fix": "judgement",
          "name": "Three questions only you can answer",
          "description": "The numbers pass. What decides this now is not in "
                         "any filing — whether the moat holds, whether "

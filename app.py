@@ -657,6 +657,14 @@ class Api:
             # exist; it is told, every render.
             render_types={k: dict(v) for k, v in
                           contract.RENDER_TYPES.items()},
+            # And the ways out of a state that stopped, so the button on a
+            # blocked verdict is drawn from the host's own table rather than
+            # from a list of labels kept in the view. The view held one, and
+            # it knew about exactly one fix — which meant a state naming any
+            # other rendered no button at all, silently, which is the dead
+            # end the fix exists to close.
+            state_fixes={k: dict(v) for k, v in
+                         contract.STATE_FIXES.items()},
             ev_methods=EV_METHODS,
             exit_reasons=EXIT_REASONS,
             override_scorecard=portfolio.override_scorecard(

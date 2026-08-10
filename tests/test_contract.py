@@ -459,10 +459,110 @@ class TestDecisionValidation:
 
     def test_a_blocked_state_says_what_is_owed(self):
         states = [{"id": "ask", "name": "Ask", "render": "blocked",
-                   "description": "d"}]
+                   "fix": "settings", "description": "d"}]
         errors = self.check(states, {"state": "ask", "payload": {"needs": []},
                                      "reason": {"rule": "r", "summary": "s"}})
         assert any("owed" in e for e in errors)
+
+
+class TestABlockedVerdictCannotBecomeADeadEnd:
+    """The one state that stops the program has to say how it is started
+    again, and the saying has to be something the host can render.
+
+    Two halves, refused in two places, and the split is the point. A state
+    that names no way out at all is wrong the moment it is written, so it is
+    refused at load, before a journal is ever stamped with it. A state whose
+    way out is built from the decision's own citations can only be wrong for
+    one particular decision, so it is refused where the decision is — and
+    both refusals land on the author rather than on the reader.
+    """
+
+    def blocked(self, **over):
+        s = {"id": "ask", "name": "Ask", "render": "blocked",
+             "fix": "judgement", "description": "d"}
+        s.update(over)
+        return s
+
+    # -- at load ---------------------------------------------------------
+    def test_a_blocked_state_that_names_no_way_out_is_refused_at_load(self):
+        s = self.blocked()
+        s.pop("fix")
+        errors = contract.validate_declaration(decl(states=[s]))
+        assert any("nothing to click" in e for e in errors), errors
+
+    def test_a_way_out_the_host_does_not_have_is_refused(self):
+        errors = contract.validate_declaration(
+            decl(states=[self.blocked(fix="ring-the-author")]))
+        assert any("ring-the-author" not in e and "must set `fix`" in e
+                   for e in errors), errors
+
+    def test_a_state_that_does_not_stop_cannot_carry_a_way_out(self):
+        """A key that silently does nothing is worse than one that refuses,
+        and a hold has nothing for a button to resolve."""
+        errors = contract.validate_declaration(decl(states=[
+            {"id": "sit", "name": "Sit", "render": "hold",
+             "fix": "settings", "description": "d"}]))
+        assert any("only a `blocked` state" in e for e in errors), errors
+
+    def test_every_way_out_the_host_names_itself_is_on_the_list(self):
+        """The host's own states pick from the same table a strategy does,
+        so the view can draw either without knowing whose state it has."""
+        for sid, state in contract.HOST_STATES.items():
+            fix = state["fix"]
+            assert fix is None or fix in contract.STATE_FIXES, sid
+
+    def test_the_list_is_closed_by_construction(self):
+        with pytest.raises(TypeError):
+            contract.STATE_FIXES["email-support"] = {}
+        with pytest.raises(TypeError):
+            contract.STATE_FIXES["judgement"]["cites"] = None
+
+    # -- at evaluation ---------------------------------------------------
+    def evaluated(self, evidence, ctx=None, fix="judgement"):
+        rec = record(
+            states=[self.blocked(fix=fix)],
+            decide=lambda c: {
+                "state": "ask",
+                "payload": {"needs": ["Answer the moat question."]},
+                "reason": {"rule": "owed", "summary": "Something is owed.",
+                           "evidence": evidence}})
+        return contract.evaluate(rec, ctx or {
+            "contract": contract.CONTRACT_VERSION, "today": "2026-08-08",
+            "inputs": {}, "values": {},
+            "measures": {"moat_durability": {
+                "current": {"status": "absent",
+                            "reason": "nothing is recorded yet"},
+                "series": {"cadence": None, "points": []}}}})
+
+    def test_a_block_that_cites_its_question_stands(self):
+        result = self.evaluated([{"measure": "moat_durability"}])
+        assert result["render"] == "blocked"
+        assert result["produced_by"] == "strategy"
+        assert result["state"]["fix"] == "judgement"
+
+    def test_a_block_that_names_its_question_only_in_prose_is_refused(self):
+        """The exact failure this exists to close: the verdict says three
+        questions are owed, the section that asks them is built from
+        citations, and the strategy cited none — so the reader is told
+        something is needed and offered nowhere to give it."""
+        result = self.evaluated([])
+        assert result["state"]["id"] == "host:invalid-decision"
+        assert "without citing anything" in result["reason"]["summary"]
+
+    def test_citing_a_figure_is_not_citing_a_question(self):
+        """A judgement is a judgement because the bank says so, never
+        because the strategy called it one — so a block cannot satisfy this
+        by citing the numbers it happened to read."""
+        result = self.evaluated([{"label": "Tests passed", "unit": "count",
+                                  "actual": 7}])
+        assert result["state"]["id"] == "host:invalid-decision"
+
+    def test_a_fixed_screen_owes_no_citation(self):
+        """Only a destination built out of citations can be emptied by the
+        absence of one. The settings screen is there whatever was cited."""
+        result = self.evaluated([], fix="settings")
+        assert result["render"] == "blocked"
+        assert result["state"]["fix"] == "settings"
 
 
 class TestEvaluate:

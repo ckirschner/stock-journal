@@ -38,7 +38,11 @@ STRATEGY = {
         {"id": "sit", "name": "Sized right", "render": "hold",
          "description": "The position is where the cap wants it, so there "
                         "is nothing to do."},
+        # Blocked, so it has to say where it is un-blocked. What paused this
+        # is an answer in this journal's settings, so that is where the host
+        # sends anyone who wants it unpaused.
         {"id": "paused", "name": "You paused this journal", "render": "blocked",
+         "fix": "settings",
          "description": "You said you are not opening positions right now, "
                         "so the fixture will not propose one."},
         {"id": "no-account", "name": "Nothing to measure against",
