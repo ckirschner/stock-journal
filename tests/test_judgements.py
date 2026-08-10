@@ -13,7 +13,7 @@ several of these were only ever visible from one end.
 """
 
 import pytest
-from conftest import balance_face, dur, filing, inst
+from conftest import balance_face, dur, filing, inst, open_since
 
 from engine import contract, dataview, facts_store, journals, judgements
 from engine import price_store
@@ -323,6 +323,7 @@ class TestTheClockGovernsIt:
         """The hole that hand-entered values still have and this does not: an
         assessment carries the day it was written, so a reconstruction can
         refuse it rather than quietly using today's answer for 2024."""
+        open_since("2024-01-01")
         hold(api, when="2024-01-10")
         assert api.record_judgement("SYN", MOAT, "pass", "It holds.")
 
@@ -336,6 +337,7 @@ class TestTheClockGovernsIt:
 
     def test_the_assessment_that_stood_on_the_day_is_the_one_served(self,
                                                                     api):
+        open_since("2024-01-01")
         hold(api, when="2024-01-10")
         assert api.record_judgement("SYN", MOAT, "fail", "It broke.")
         assert api.record_judgement("SYN", MOAT, "pass", "Rebuilt since.")

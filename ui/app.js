@@ -269,6 +269,20 @@ const buyLots = (s) => s._lots || [];
 const sales = (s) => s._sales || [];
 const overrideLots = (s) => buyLots(s).filter((l) => l.override);
 
+/* Whether an entry's verdict was seen on the day it is dated or rebuilt for
+   that day afterwards. One reader, here, because the answer is written in one
+   place on the record and a screen working it out for itself is a second copy
+   of the rule — and this is the rule that decides whether a reconstruction
+   can be shown as a contemporaneous record. Whether the SECURITY has any such
+   entry is the engine's answer, on `_backfilled`; this is the per-entry one. */
+const reconstructed = (lot) =>
+  (((lot || {}).snapshot || {}).evaluation || {}).basis === "reconstructed";
+/* The label, once. Every place a backfilled entry appears says the same word
+   in the same shape, so a reader learns it once. Never colour alone. */
+const RECON_CHIP = '<span class="chip s-recon" title="Entered from history. '
+  + 'The verdict was rebuilt from the data available on the day this entry is '
+  + 'dated, not seen at the time.">from history</span>';
+
 /* A security is not held once. It is bought, closed, and — when the strategy
    says so again — bought back, and each of those is its own round trip with
    its own answer to "how did that go". The backend derives the periods from
@@ -550,6 +564,7 @@ function listView() {
     head = '<th class="l">Position</th><th>Price</th><th>Avg cost</th><th>Since buy</th><th>State</th>';
     body = sorted.map((s) => `<tr data-t="${s.ticker}"><td class="l"><span class="tick">${esc(s.ticker)}</span>
       ${(openPeriod(s) ? periodLots(s, openPeriod(s)) : []).some((l) => l.override) ? '<span class="flagdot" title="This position holds shares bought against or without the signal"></span>' : ""}
+      ${s._backfilled ? RECON_CHIP : ""}
       <div class="coname">${esc(s.name)}${lotCount(s)}</div></td>
       <td>${priceCell(s)}</td><td class="dim">${money(s._cost_basis)}</td>
       <td title="What the position you hold now has returned. An earlier holding of the same name is its own row under Previous holdings.">${pctCell(s._return)}</td>
@@ -560,6 +575,7 @@ function listView() {
     head = '<th class="l">Holding</th><th>Return held</th><th>Since exit</th><th class="hide-sm">Exit reason</th><th>Today</th>';
     body = rows.map(({ s, c }) => `<tr data-t="${s.ticker}"><td class="l"><span class="tick">${esc(s.ticker)}</span>
         ${openPeriod(s) ? '<span class="chip s-none" title="This name is held again — the open position is under Current holdings.">held again</span>' : ""}
+        ${periodLots(s, c).some(reconstructed) ? RECON_CHIP : ""}
         <div class="coname">${esc(s.name)}</div>
         <div class="dim">${periods(s).length > 1 ? esc(periodName(s, c)) + " · " : ""}${esc(c.opened)} → ${esc(c.closed)}</div></td>
         <td>${pctCell(c.return)}</td><td>${sinceExitCell(c.since_exit)}</td>
@@ -568,6 +584,8 @@ function listView() {
   } else {
     const sorted = rows.slice().sort((a, b) => order(a) - order(b));
     head = '<th class="l">Candidate</th><th>Price</th><th class="hide-sm">Added</th><th>State</th>';
+    /* No history mark here: a candidate is a security with no lots at all,
+       so there is nothing on it that could have been entered afterwards. */
     body = sorted.map((s) => `<tr data-t="${s.ticker}"><td class="l"><span class="tick">${esc(s.ticker)}</span>
       <div class="coname">${esc(s.name)}</div></td>
       <td>${priceCell(s)}</td><td class="dim hide-sm">${esc(s.added)}</td>
@@ -612,25 +630,84 @@ function scorecards() {
       + line("Win rate", d.win_rate === null ? "—" : d.win_rate + "%")
       + line("Average return", pct(d.avg))
       + unscored(d.n_unscored, d.unscored)
-    : '<p class="hint">Nothing to compare yet.</p>';
+    : "";
 
-  const keys = Object.keys(o.per_rule || {});
-  const perRule = keys.map((id) => {
-    const b = o.per_rule[id];
-    /* wins are counted over what could be scored, so the denominator has to
-       be that same population — "1/3" over three purchases of which two had
-       no price says a rule lost twice when nothing is known about them. */
-    return line(b.label, `${b.wins}/${b.n_scored} · ${pct(b.avg)}`
-      + (b.n_scored < b.n
-        ? ` <span class="dim">of ${b.n} overrides</span>` : ""));
+  /* Two cohorts, never added up. A decision seen on the screen and a decision
+     rebuilt for a day in the past are not the same evidence about the same
+     question: the first is somebody's judgement under a verdict they were
+     looking at, the second is this program's best attempt at a day nobody was
+     standing in. A journal backfilled with ten years of history would answer
+     "did overriding help" almost entirely with the second and report it as
+     the first.
+
+     Each cohort renders only if it has purchases in it, so a journal with no
+     history entered looks exactly as it did, and a wholly backfilled one is
+     not two empty panels above a footnote. */
+  const COHORTS = ["live", "reconstructed"];
+  /* Per side, not per journal. A journal can have overrides in one cohort
+     only and compliant purchases in both, and a heading printed over a
+     single row is a distinction charged for nothing — while the same
+     heading missing from two stacked rows is two win rates reading as one. */
+  const shown = (which) => COHORTS.filter((c) => (o[c] || {})[which]
+    && o[c][which].n_purchases);
+  const side = (which) => {
+    const cohorts = shown(which);
+    return cohorts.map((c) => (cohorts.length > 1
+      ? `<div class="cohort" title="${esc(o[c].means)}">${esc(o[c].label)}</div>`
+      : "") + summ(o[c][which])).join("")
+      || '<p class="hint">Nothing to compare yet.</p>';
+  };
+
+  /* The purchases nobody could rebuild a verdict for. In neither comparison,
+     because there was no verdict to obey or defy — putting them in either
+     would invent a decision that was never made. Reported anyway: they
+     happened, what they returned is knowable, and how many of them there are
+     is the honest measure of how far back this journal can see. */
+  const u = o.unreconstructed || {};
+  const dark = u.n_purchases
+    ? `<div class="panel"><h3>Could not be reconstructed</h3>
+       <div class="sub">Entered from history, with no verdict to rebuild</div>
+       ${summ(u)}
+       <p class="hint">These are in neither comparison. There was no signal to
+       go against, so calling them overrides would put decisions nobody made
+       into the one figure that is supposed to measure your judgement.
+       ${(u.reasons || []).map((r) => `${r.n}: ${esc(r.reason)}`).join(" ")}</p></div>`
+    : "";
+
+  /* Per rule, per cohort, and labelled — the panel that is supposed to be able
+     to indict a rule is the last place two populations may pass for one. */
+  const perRule = COHORTS.map((c) => {
+    const rules = (o[c] || {}).per_rule || {};
+    const rows = Object.keys(rules).map((id) => {
+      const b = rules[id];
+      /* wins are counted over what could be scored, so the denominator has to
+         be that same population — "1/3" over three purchases of which two had
+         no price says a rule lost twice when nothing is known about them. */
+      return line(b.label, `${b.wins}/${b.n_scored} · ${pct(b.avg)}`
+        + (b.n_scored < b.n
+          ? ` <span class="dim">of ${b.n} overrides</span>` : ""));
+    }).join("");
+    if (!rows) return "";
+    return (COHORTS.filter((x) => Object.keys((o[x] || {}).per_rule || {}).length)
+      .length > 1
+      ? `<div class="cohort" title="${esc(o[c].means)}">${esc(o[c].label)}</div>`
+      : "") + rows;
   }).join("");
 
   const exRows = Object.keys(x).map((reason) => {
     const b = x[reason];
     const over = (n) => n < b.n ? ` <span class="dim">(${n} of ${b.n})</span>` : "";
+    /* How many of this group's sales were entered from history. The returns
+       either side of a sale are recorded prices and do not change according to
+       when the row was typed — but the signal the sale was recorded against
+       was rebuilt, and "Panic, three times, and it rose after each" reads
+       differently when none of the three was a moment anybody lived through. */
     return line(reason + ` (${b.n})`,
       `held ${pct(b.avg_held)}${over(b.n_held)}`
-      + ` · after ${pct(b.avg_after)}${over(b.n_after)}`);
+      + ` · after ${pct(b.avg_after)}${over(b.n_after)}`
+      + (b.n_reconstructed
+        ? ` <span class="dim" title="Entered from history: the verdict beside these sales was rebuilt, not seen at the time.">· ${b.n_reconstructed} from history</span>`
+        : ""));
   }).join("") || '<p class="hint">No sales recorded yet.</p>';
   /* "After" measures to today, except where the name was bought again — there
      it stops at that purchase. Saying so matters: an average that silently
@@ -647,16 +724,23 @@ function scorecards() {
   /* Two kinds of override, counted apart on purpose. Going ahead in the face
      of a verdict and going ahead where there was no verdict to face are not
      the same decision, and averaging them makes a data gap look like
-     defiance. */
-  const k = o.kinds || {};
+     defiance. Counted within the live cohort only, because that is the only
+     one that can hold the second kind: a reconstruction that reached no
+     verdict is not a decision taken without one — see recorded_as. */
+  const k = (o.live || {}).kinds || {};
   const kindNote = (k.against || k.without)
-    ? `<p class="hint">${k.against || 0} against a verdict · ${k.without || 0} where there was no verdict to go against.</p>` : "";
-  const reconNote = o.reconstructed_overrides
-    ? `<p class="hint">${o.reconstructed_overrides} of these ${o.reconstructed_overrides === 1 ? "is a" : "are"} reconstructed
-       backfill${o.reconstructed_overrides === 1 ? "" : "s"} — the verdict was rebuilt for the purchase date, not seen at the time.</p>` : "";
+    ? `<p class="hint">Seen at the time: ${k.against || 0} against a verdict · ${k.without || 0} where there was no verdict to go against.</p>` : "";
+  /* Said once, under whichever panel is actually showing two rows. A panel
+     with one row has nothing to explain, and the sentence printed under
+     "nothing to compare yet" is noise where a reader is looking for a
+     figure. */
+  const reconNote = (which) => shown(which).length > 1
+    ? `<p class="hint">The two rows are not added up. ${esc(o.reconstructed.label)} means
+       ${esc(o.reconstructed.means)} — the same question asked of a moment nobody was standing in.</p>` : "";
   return `<div class="cards">
-    <div class="panel"><h3>Overrides</h3><div class="sub">Bought against or without the signal</div>${summ(o.override)}${kindNote}${reconNote}</div>
-    <div class="panel"><h3>Compliant</h3><div class="sub">Bought when the strategy said so</div>${summ(o.compliant)}</div>
+    <div class="panel"><h3>Overrides</h3><div class="sub">Bought against or without the signal</div>${side("override")}${kindNote}${reconNote("override")}</div>
+    <div class="panel"><h3>Compliant</h3><div class="sub">Bought when the strategy said so</div>${side("compliant")}${reconNote("compliant")}</div>
+    ${dark}
     <div class="panel"><h3>By exit reason</h3><div class="sub">Return while held · return since</div>${exRows}
       <p class="hint">If one reason keeps showing a strong return <em>after</em> you sold, that is the rule to look at.</p>${backNote}</div>
     ${perRule ? `<div class="panel"><h3>Rules you overrode</h3><div class="sub">Wins / times · average</div>${perRule}
@@ -1037,9 +1121,24 @@ function detailView(s) {
           .map((r) => r.reason).join(", ") || "no reason recorded")
     : "Added " + esc(s.added);
   h += `<div class="dhead"><div class="dtitle"><h1>${esc(s.ticker)}</h1><p>${esc(s.name)}</p>
-    <div class="meta">${meta} · judged by ${esc((S.journal.strategy || {}).name || "no strategy")}</div></div>
+    <div class="meta">${meta} · judged by ${esc((S.journal.strategy || {}).name || "no strategy")}${
+      s._backfilled ? " · " + RECON_CHIP : ""}</div></div>
     <div style="text-align:right">${stateStamp(d, true)}
     <div class="stamp-note">${esc((d && (d.reason || {}).summary) || "")}</div></div></div>`;
+  /* Said once, at the top, on any position holding an entry that was typed in
+     rather than captured. Everything below repeats it per entry — the point
+     of this line is that somebody arriving at the page knows before they read
+     a single figure that part of this record is a reconstruction. */
+  if (s._backfilled) {
+    const n = buyLots(s).concat(sales(s)).filter(reconstructed).length;
+    h += `<div class="notice quiet"><h4>Part of this record was entered from history</h4>
+      <p>${n} ${n === 1 ? "entry is" : "entries are"} dated earlier than the day
+      ${n === 1 ? "it was" : "they were"} entered, so what is frozen beside
+      ${n === 1 ? "it" : "them"} was rebuilt rather than seen. Each was judged
+      against the filings and the close available on its own day — never against
+      today's — and each says so where it appears. What could not be rebuilt
+      says that instead of guessing.</p></div>`;
+  }
 
   const fetching = s._fetch && s._fetch.running;
   h += `<div class="toolbar" style="margin-top:16px;justify-content:flex-end;align-items:center"><div>
@@ -1048,6 +1147,7 @@ function detailView(s) {
     <button class="btn" data-act="ev">Expected value</button>
     <button class="btn" data-act="thesis">Thesis</button>
     <button class="btn" data-act="note">Add note</button>
+    <button class="btn" data-act="backfill">Enter history</button>
     ${!isHold ? `<button class="btn primary" data-act="buy">${isPrev ? "Record a purchase — buying it back" : "Record a purchase"}</button>` : ""}
     ${!isHold && !isPrev ? '<button class="btn danger" data-act="remove">Remove</button>' : ""}
     ${isHold ? '<button class="btn danger" data-act="sell">Record a sale</button>' : ""}
@@ -1183,6 +1283,14 @@ function detailView(s) {
      rather than shouted at the top of a page about a different one. */
   (open ? periodLots(s, open) : []).filter((l) => l.kind === "buy" && l.override)
     .forEach((l) => { h += overrideNotice(s, l); });
+  /* An entry whose verdict could not be rebuilt is not an override and is
+     never told as one — there was no signal on any screen to go against. It
+     still belongs at the top of a position that is holding shares bought this
+     way, because "I do not know what my rules would have said about this"
+     is the single most important thing to know about a holding. */
+  (open ? periodLots(s, open) : [])
+    .filter((l) => l.kind === "buy" && l.unreconstructed)
+    .forEach((l) => { h += unreconstructedNotice(s, l); });
 
   /* An exit nobody's rule called for is the panic-sell learning loop, and it
      belongs to the holding it ended — every closed one, not just the last,
@@ -1293,6 +1401,49 @@ function detailView(s) {
   return h;
 }
 
+/* What the user remembers thinking, on an entry they typed in out of their
+   own history. Rendered wherever the thesis would be, and never as one: it
+   carries the day it was actually written, and the sentence beside it says
+   the outcome was already known when it was written. That is the whole
+   difference between a record and a story, and the reader has to be able to
+   see which they are holding. */
+function recollectionBox(lot, where) {
+  const r = ((lot || {}).snapshot || {}).recollection;
+  if (!r) return "";
+  return `<details class="whybox"${where === "open" ? " open" : ""}>
+    <summary>Written in hindsight, on ${esc(String(r.written).slice(0, 10))}</summary>
+    ${prose(r.text)}
+    <p class="hint">Not a thesis. This was written after the outcome was known,
+    about a purchase dated ${esc(String(lot.date).slice(0, 10))} — nothing here
+    can be graded against what happened, because whoever wrote it already knew.
+    A thesis is what you commit to before, and it lives on its own record.</p></details>`;
+}
+
+/* An entry this program could not rebuild a verdict for. Deliberately not the
+   override notice with different words: an override is a decision somebody
+   took in the face of a signal, and there was no signal here — the purchase
+   predates what can be reconstructed, and saying otherwise would put a
+   decision nobody made on the record. */
+function unreconstructedNotice(s, lot) {
+  const u = lot.unreconstructed;
+  const own = periods(s).find((c) => c.buys.includes(lot.id));
+  const many = (own && own.buys.length > 1) ? ` of ${lot.shares} shares` : "";
+  const who = (u.strategy || {}).name || "the strategy";
+  const r = pctVal((s._lot_returns || {})[lot.id]);
+  const rWhy = pctWhy((s._lot_returns || {})[lot.id]);
+  return `<div class="notice quiet"><h4>No verdict could be reconstructed · from history</h4>
+    <p>This purchase${many} is dated ${esc(u.date)} and was entered from your own
+    records. ${esc(who)} could not be rebuilt for that day — ${esc(u.why)}
+    So nothing is recorded about what your rules would have said, and this is
+    <strong>not</strong> counted as buying against a signal: there was none.${
+      r === null || r === undefined
+        ? (rWhy ? ` What these shares have done since is not known: ${esc(rWhy)}.` : "")
+        : lot.open ? ` These shares are ${r >= 0 ? "up" : "down"} ${Math.abs(r).toFixed(1)}% since.`
+        : ` These shares ${r >= 0 ? "returned" : "lost"} ${Math.abs(r).toFixed(1)}% before they were sold.`}</p>
+    ${u.note ? `<p class="hint">What the reconstruction could consult: ${esc(u.note)}.</p>` : ""}
+    ${recollectionBox(lot, "open")}</div>`;
+}
+
 function overrideNotice(s, lot) {
   const ov = lot.override;
   const failed = (ov.failed || []).map((c) => c.label).join(", ");
@@ -1335,7 +1486,7 @@ function overrideNotice(s, lot) {
       : ` These shares ${r >= 0 ? "returned" : "lost"} ${Math.abs(r).toFixed(1)}% before they were sold.`}</p>
     ${ov.rule ? `<p class="hint">Rule at the time: <code>${esc(ov.rule)}</code> — ${esc(ov.summary || "")}</p>` : ""}
     ${basisNote}
-    <q>${esc(ov.reason)}</q></div>`;
+    <q>${esc(ov.reason)}</q>${recollectionBox(lot)}</div>`;
 }
 
 /* Lot history. Every purchase and every sale, in order, each with the
@@ -1360,8 +1511,8 @@ function lotHistory(s) {
     const r = pctVal(lotReturn);
 
     let how = "";
-    if (ev.basis === "reconstructed") {
-      how = ` · <b>reconstructed</b> for ${esc(ev.as_of)} from the data available by that day`;
+    if (reconstructed(lot)) {
+      how = ` · <b>from history</b> — rebuilt for ${esc(ev.as_of)} from the data available by that day, not seen at the time`;
     } else if (!ev.basis && frozenD && dayGap(frozenD, String(lot.date).slice(0, 10)) >= 2) {
       how = ` · evaluated when it was recorded, around ${esc(frozenD)}, not on the day itself`;
     } else if (frozenD) {
@@ -1393,6 +1544,7 @@ function lotHistory(s) {
       <div class="lothead">
         <b>${buy ? "Bought" : "Sold"} ${esc(lot.shares)} at ${money(lot.price)}</b>
         <time>${esc(String(lot.date).slice(0, 10))}</time>
+        ${reconstructed(lot) ? RECON_CHIP : ""}
         ${buy ? "" : `<span class="chip s-none">${esc(lot.reason || "no reason recorded")}</span>`}
         ${r !== null && r !== undefined ? `<span class="chip ${r >= 0 ? "s-pass" : "s-fail"}"
           title="What these shares have returned: the price each sale got on the ones that are gone, today's price on the ones still held, against what this lot cost.">${r >= 0 ? "+" : ""}${r}%</span>`
@@ -1400,6 +1552,10 @@ function lotHistory(s) {
       </div>
       <div class="pe-sub">${left}${how}${st.name ? ` · under ${esc(st.name)} v${esc(st.version)}` : ""}</div>
       ${moved}${diff}
+      ${recollectionBox(lot)}
+      ${lot.unreconstructed ? `<p class="hint">No verdict could be rebuilt for
+        ${esc(lot.unreconstructed.as_of)}: ${esc(lot.unreconstructed.why)}
+        This is not recorded as buying against a signal, because there was none.</p>` : ""}
       ${d ? `<div class="rollup" style="margin-top:10px">
           <div class="pe-head"><b>${esc((d.reason || {}).summary || "")}</b>
             <span class="chip s-none">${esc((d.state || {}).name || "")}</span></div>
@@ -2560,18 +2716,35 @@ async function dlgBuy(s, dateChosen, keep, fallbackDate) {
   }
   const d = p.decision;
   const commit = d.render === "commit";
-  const noVerdict = d.tier === "evaluation";
-  const bad = !commit;
+  /* Which of the four ways this would go on the record, from the engine.
+     "Bought without a signal" is a real decision — you read the grey box and
+     went ahead — and a reconstruction that reaches no verdict is not that
+     decision at all: nobody was standing in front of anything. The engine
+     draws that line, and the dialog reads its answer rather than working it
+     out again from the render tier, which is how the two came to disagree. */
+  const asRecorded = p.recorded_as;
+  const noVerdict = asRecorded === "without";
+  const cannotRebuild = asRecorded === "unreconstructed";
+  /* A reason is owed where there was something to go against. Asking for one
+     where nothing could be rebuilt would be asking somebody to justify a
+     purchase against a signal that never existed. */
+  const bad = !commit && !cannotRebuild;
   const cited = ((d.reason || {}).evidence || []);
   const failed = cited.filter((e) => e.outcome === "fail").map((e) => e.subject.label);
   const unknown = cited.filter((e) => e.outcome === "unknown").map((e) => e.subject.label);
   const who = (d.strategy || {}).name || "The strategy";
   const recon = p.basis === "reconstructed";
   const reconBox = recon
-    ? `<div class="notice quiet" style="margin:0 0 12px"><h4>Reconstructed — not seen live</h4>
+    ? `<div class="notice quiet" style="margin:0 0 12px"><h4>From history — not seen at the time</h4>
        <p>${esc(when)} is in the past, so the state below is rebuilt from what was observable then:
        ${esc(p.note || "")}. It is recorded as a reconstruction, distinct everywhere from a state
        you saw at the time.</p></div>` : "";
+  const darkBox = cannotRebuild
+    ? `<div class="notice quiet" style="margin:0 0 12px"><h4>No verdict could be rebuilt for ${esc(when)}</h4>
+       <p>${esc(who)} reads <strong>${esc(d.state.name)}</strong> — ${esc((d.reason || {}).summary || "")}
+       Nothing is recorded about what your rules would have said, and this purchase is
+       <strong>not</strong> counted as buying against a signal, because there was none to go against.
+       That distinction is the whole reason the override scorecard means anything.</p></div>` : "";
   const warn = bad
     ? `<div class="dlg-err"><strong>${esc(who)}</strong> ${recon ? `reads <strong>${esc(d.state.name)}</strong> for ${esc(p.as_of)}, reconstructed from the data available by then`
         : `says <strong>${esc(d.state.name)}</strong>`}. ${esc((d.reason || {}).summary || "")}
@@ -2618,23 +2791,40 @@ async function dlgBuy(s, dateChosen, keep, fallbackDate) {
       ? `You held ${s.ticker} before and closed it. This starts a new holding, judged from scratch by ${who}`
       : `Judged by ${who}`)
       + ", the strategy this journal is stamped with. This records what you already did; the tool cannot place trades.",
-    body: reconBox + warn + thesisBox + `<div class="grid2">${field("shares", "Shares", (keep && keep.shares) || "", "", "number")}${field("cost", "Cost per share", (keep && keep.cost) || "", "", "number")}</div>`
+    body: reconBox + darkBox + warn + thesisBox + `<div class="grid2">${field("shares", "Shares", (keep && keep.shares) || "", "", "number")}${field("cost", "Cost per share", (keep && keep.cost) || "", "", "number")}</div>`
       + `<div class="field"><label for="f_opened">Date</label>
          <input id="f_opened" name="opened" type="date" value="${esc(when)}" max="${esc(today)}">
          ${recon ? "" : '<div class="help">A past date is evaluated with the data of that day, and the preview updates when you change this. The future is not offered — its data does not exist yet.</div>'}</div>`
       + (bad ? area("override_reason", noVerdict ? "Why are you buying without a signal?" : "Why are you buying anyway?", (keep && keep.override_reason) || "",
-        "Required. One sentence. You will read this again later.") : ""),
+        "Required. One sentence. You will read this again later.") : "")
+      /* Offered where there is something to remember and nothing on record:
+         a purchase in the past that froze no thesis. Never on a purchase made
+         today, where the honest answer is to write a thesis — the engine
+         refuses it there outright, so this is the form agreeing with a rule
+         rather than enforcing one. */
+      + (recon && th.status !== "known"
+        ? area("recollection", "What do you remember thinking? (optional)", (keep && keep.recollection) || "",
+          "Written now, about then — and recorded as exactly that, with today's date on it. It is not a "
+          + "thesis and is never counted as one: you already know how this turned out, so nothing here can "
+          + "be graded against what happened.")
+        : ""),
     confirm: bad ? "Record anyway" : "Record purchase", danger: bad,
     onConfirm: async (dd) => {
       if (!dd.shares || !dd.cost) return "Shares and cost per share are required.";
       if (bad && !(dd.override_reason || "").trim()) return "A reason is required when the strategy doesn't say to commit.";
-      const r = await api("open_position", s.ticker, dd.shares, dd.cost, dd.opened, dd.override_reason || "", d.state.id);
+      const r = await api("open_position", s.ticker, dd.shares, dd.cost, dd.opened,
+        dd.override_reason || "", d.state.id, dd.recollection || "");
       if (!r) return " ";
       /* The state is re-evaluated at commit; if it moved while the dialog
          was open (a fetch completed, the strategy changed), the record
          differs from what the user was shown — say so, loudly. */
       if (r.state_changed) {
         toast(`The state changed to ${r.state} between preview and commit (data or the strategy moved). The purchase is recorded under the new state${r.override ? " as an override — add a note with your reasoning" : ""}.`, !r.commit);
+      }
+      if (r.unreconstructed) {
+        toast(`Recorded from history, dated ${dd.opened}. No verdict could be rebuilt for that day, so none is recorded — and this is not counted as buying against a signal.`);
+      } else if (r.basis === "reconstructed") {
+        toast(`Recorded from history, dated ${dd.opened}. The verdict beside it was rebuilt from that day's data, and says so wherever it appears.`);
       }
       /* Stay where the purchase was started from. Someone allocating a sum
          across a list has more of the list to get through, and throwing them
@@ -2648,7 +2838,8 @@ async function dlgBuy(s, dateChosen, keep, fallbackDate) {
   if (dateEl) dateEl.onchange = () => {
     if ((dateEl.value || today) === when) return;
     const keepNow = { shares: $("f_shares").value, cost: $("f_cost").value,
-      override_reason: ($("f_override_reason") || {}).value || "" };
+      override_reason: ($("f_override_reason") || {}).value || "",
+      recollection: ($("f_recollection") || {}).value || "" };
     $("dlg").close();
     dlgBuy(s, dateEl.value, keepNow, when);
   };
@@ -2659,8 +2850,46 @@ async function dlgBuy(s, dateChosen, keep, fallbackDate) {
    a trim recordable at all, and what a `reduce` verdict has been asking for
    with nowhere to go. Shares default to everything held, so closing out is
    still one field away. */
-function dlgSell(s) {
-  const opts = S.exit_reasons.map((r) => `<option value="${esc(r)}">${esc(r)}</option>`).join("");
+async function dlgSell(s, dateChosen, keep, fallbackDate) {
+  const today = localToday();
+  const when = dateChosen || today;
+  /* A sale dated in the past is judged with the data of that day, exactly as
+     a purchase is. It used to be judged with today's, which froze a verdict
+     the strategy was never asked for into `signal_at_exit` and
+     `rule_triggered` — the two facts the panic-sell learning loop reads. The
+     preview exists so the person entering it sees which verdict is about to
+     go on the record, and sees it named as a reconstruction.
+
+     Only fetched when the date is in the past. A sale being recorded as it
+     happens is the ordinary case and the screen stays exactly as it was: a
+     verdict box on it would be the tool asking you to reconsider a trade you
+     have already made, which is a gate wearing a preview's clothes. */
+  const past = when < today;
+  const p = past ? await api("preview_sale", s.ticker, when) : null;
+  if (past && !p) {
+    if (fallbackDate) dlgSell(s, fallbackDate, keep);
+    return;
+  }
+  const reconBox = p
+    ? `<div class="notice quiet" style="margin:0 0 12px"><h4>From history — not seen at the time</h4>
+       <p>${esc(when)} is in the past, so what gets frozen beside this sale is rebuilt from what was
+       observable then: ${esc(p.note || "")}.
+       ${p.verdict
+         ? `${esc(((p.decision || {}).state || {}).name || "")} — ${esc(((p.decision || {}).reason || {}).summary || "")}`
+         : "No verdict could be rebuilt for that day, so none is recorded against this sale. It will not read as "
+           + "an exit your rules called for, and it will not read as one they stayed silent on either."}</p>
+       ${(p.thesis || {}).status === "known"
+         ? `<p class="hint">Graded against the thesis standing on ${esc(p.thesis.amended)} — the version on record then,
+            not the one on record now.</p>`
+         : `<p class="hint">No thesis is frozen with this sale: ${esc((p.thesis || {}).reason || "none was on record then")}.</p>`}</div>`
+    : "";
+  const opts = [...S.exit_reasons.map((r) => `<option value="${esc(r)}">${esc(r)}</option>`),
+    /* Offered only on a sale entered out of history, and never on one being
+       recorded as it happens: you were there, and the reason is the one fact
+       the exit analytics cannot work without. Years later it may honestly be
+       gone, and forcing a pick from the list would manufacture exactly the
+       figure this record exists to measure. */
+    past ? '<option value="">I do not remember</option>' : ""].join("");
   /* The exit price enters an append-only record, so nothing is prefilled
      here at all. What the tape says is not what you got: you sold at a time
      of day, possibly across a spread, and the close is a different number
@@ -2669,10 +2898,10 @@ function dlgSell(s) {
      second copy of a judgement the engine was making too, and neither of
      them was the host's to make. The honest field is an empty one with the
      close shown beside it as a reference. */
-  const p = s._price || {};
-  const closeNote = p.source === "fetched" && p.date
-    ? ` For reference, the last fetched close was ${money(p.value)} on ${p.date}${
-        p.terminal ? " — the last this security ever traded at" : ""}.`
+  const quote = s._price || {};
+  const closeNote = quote.source === "fetched" && quote.date
+    ? ` For reference, the last fetched close was ${money(quote.value)} on ${quote.date}${
+        quote.terminal ? " — the last this security ever traded at" : ""}.`
     : "";
   const priceHelp = "The price you actually sold at, per share. Nothing is "
     + "filled in for you: this goes on the record permanently, and a number "
@@ -2684,19 +2913,21 @@ function dlgSell(s) {
   dialog({
     title: `Record a sale · ${s.ticker}`,
     blurb: "It stays in the journal and keeps being priced, so you can see what happened after you sold.",
-    body: `<div class="field"><label for="f_reason">Why are you selling?</label>
+    body: reconBox + `<div class="field"><label for="f_reason">Why are you selling?</label>
         <select id="f_reason" name="reason">${opts}</select>
         <div class="help">Answer honestly. The Previous holdings tab groups outcomes by this, and it is the only way to find out whether your sell rules work.</div></div>`
-      + field("shares", "Shares sold", s._shares, `You hold ${s._shares}. Sell fewer to trim; the rest stays open, priced from what it actually cost. ${lotHelp}`, "number")
-      + field("price", "Sale price per share", "", priceHelp, "number")
+      + field("shares", "Shares sold", (keep && keep.shares) || s._shares,
+        `You hold ${s._shares}. Sell fewer to trim; the rest stays open, priced from what it actually cost. ${lotHelp}`, "number")
+      + field("price", "Sale price per share", (keep && keep.price) || "", priceHelp, "number")
       /* Same bound as the purchase date, and for the same reason. A sale
          dated ahead has not happened: it reports the position closed to
          every screen that asks while the strategy is still holding it, and
          takes the whole holding out of the account. The backend refuses it
          regardless; this is so the picker never offers it. */
-      + field("exited", "Date", localToday(),
-        "The day you actually sold. A date that has not happened yet is refused.",
-        "date", `max="${localToday()}"`),
+      + `<div class="field"><label for="f_exited">Date</label>
+         <input id="f_exited" name="exited" type="date" value="${esc(when)}" max="${esc(today)}">
+         <div class="help">The day you actually sold. A past date is judged with the data of that day,
+         and this dialog updates when you change it. A date that has not happened yet is refused.</div></div>`,
     confirm: "Record the sale", danger: true,
     onConfirm: async (d) => {
       if (!d.price) return "A sale price is required.";
@@ -2706,11 +2937,179 @@ function dlgSell(s) {
       tab = r.remaining > 0 ? "holdings" : "previous";
       if (r.remaining > 0)
         toast(`Recorded. ${r.remaining} shares still held; the lots they came from are unchanged.`);
-      if (r.rule_triggered === false)
+      if (r.basis === "reconstructed")
+        toast(`Recorded from history, dated ${r.as_of}. What is frozen beside it was rebuilt from that day's data, and says so wherever it appears.`);
+      else if (r.rule_triggered === false)
         toast(`Recorded. ${r.signal} under ${r.strategy_name} — no rule triggered this sale. That is now on the record.`);
-      if (r.rule_triggered === null)
-        toast("Recorded. The strategy was not installed, so no signal could be evaluated — which is itself on the record.");
+      else if (r.rule_triggered === null)
+        toast("Recorded. No verdict could be evaluated, and that absence is on the record rather than papered over.");
     },
+  });
+  const dateEl = $("f_exited");
+  if (dateEl) dateEl.onchange = () => {
+    if ((dateEl.value || today) === when) return;
+    const keepNow = { shares: $("f_shares").value, price: $("f_price").value };
+    $("dlg").close();
+    dlgSell(s, dateEl.value, keepNow, when);
+  };
+}
+
+/* ------------------------------------------------------------- backfill --- */
+/* Entering a position you already own, out of your own records.
+
+   A journal is otherwise only usable forward from the day it was started, and
+   every analytic in it has nothing to work against until enough decisions
+   accumulate. This is what gives them something — and the thing it must never
+   do is let a reconstruction pass for a record made at the time, which is why
+   every entry it writes is marked, everywhere, for as long as it exists.
+
+   Nothing is guessed. Each row asks for the three facts only the person who
+   made the trade has — the day, the shares, the price — and for a sale, why.
+   A form that filled any of those in from the tape would put a number nobody
+   read off a statement into a record that can never be corrected. What the
+   form does instead is show, before anything is permanent, exactly what each
+   row would record: the verdict rebuilt for its own day, or the fact that
+   none could be. */
+const BF_BLANK = { kind: "buy", date: "", shares: "", price: "", reason: "" };
+
+function bfRow(r, i, previewed) {
+  const p = previewed || null;
+  const sell = r.kind === "sell";
+  const outcome = !p ? "" : p.problem
+    ? `<div class="bf-out bad">${esc(p.problem)}</div>`
+    : `<div class="bf-out"><b>${esc(p.state || "No verdict")}</b>
+       ${p.basis === "reconstructed" ? RECON_CHIP : '<span class="chip s-none">seen live</span>'}
+       ${p.recorded_as === "unreconstructed"
+         ? '<span class="chip s-none">no verdict to rebuild — not an override</span>'
+         : p.recorded_as === "against" ? '<span class="chip s-fail">against the signal</span>'
+         : p.recorded_as === "commit" ? '<span class="chip s-pass">with the signal</span>' : ""}
+       <div class="dim">${esc(p.summary || p.note || "")}</div></div>`;
+  return `<div class="bfrow" data-i="${i}">
+    <select data-k="kind">
+      <option value="buy" ${sell ? "" : "selected"}>Bought</option>
+      <option value="sell" ${sell ? "selected" : ""}>Sold</option></select>
+    <input data-k="date" type="date" value="${esc(r.date)}" max="${esc(localToday())}">
+    <input data-k="shares" type="number" step="any" placeholder="Shares" value="${esc(r.shares)}">
+    <input data-k="price" type="number" step="any" placeholder="Price each" value="${esc(r.price)}">
+    ${sell ? `<select data-k="reason">
+        ${S.exit_reasons.map((x) => `<option value="${esc(x)}" ${x === r.reason ? "selected" : ""}>${esc(x)}</option>`).join("")}
+        <option value="" ${r.reason ? "" : "selected"}>I do not remember</option></select>`
+      : '<span class="dim">—</span>'}
+    <button class="btn" type="button" data-drop="${i}">Remove</button>
+    ${outcome}</div>`;
+}
+
+async function dlgBackfill(s, state) {
+  const st = state || { rows: [{ ...BF_BLANK }], recollection: "", preview: null };
+  const pv = st.preview;
+  const byIndex = {};
+  ((pv || {}).events || []).forEach((e) => { byIndex[e.index] = e; });
+
+  /* Offered only where it can be answered honestly: on a run that opens with
+     a purchase in the past. It is not a thesis and can never become one — the
+     record keeps it under its own name with the day it was actually written,
+     and the engine refuses it outright on an entry dated today, where the
+     answer is to write a thesis instead. */
+  const first = st.rows[0] || BF_BLANK;
+  const canRemember = first.kind === "buy" && first.date
+    && first.date < localToday();
+
+  const summary = !pv ? "" : pv.problem
+    ? `<div class="dlg-err">Nothing has been recorded. ${esc(pv.problem)}
+       ${(pv.unchecked || []).length ? ` The ${pv.unchecked.length} entries after it were not checked — each one is judged against the position the ones before it leave behind, so there is nothing honest to say about them until this is fixed.` : ""}</div>`
+    : `<div class="notice quiet"><h4>Checked — nothing recorded yet</h4>
+       <p>${pv.events.length} ${pv.events.length === 1 ? "entry" : "entries"}, each judged against the
+       data of its own day. This run ends with ${pv.shares_after} ${s.ticker} held.
+       ${pv.events.filter((e) => e.recorded_as === "unreconstructed").length
+         ? `${pv.events.filter((e) => e.recorded_as === "unreconstructed").length} could not have a verdict rebuilt — those record the gap and produce no override.`
+         : ""}</p></div>`;
+
+  dialog({
+    title: `Enter history · ${s.ticker}`,
+    blurb: "Purchases, adds, trims, exits and re-entries you made before you started recording them here. "
+      + "Each is judged against the filings and the close of its own day, and is marked as a reconstruction for good.",
+    body: summary
+      + `<div class="bfhead"><span>What</span><span>Date</span><span>Shares</span><span>Price each</span><span>Why sold</span><span></span></div>
+         <div id="bf_rows">${st.rows.map((r, i) => bfRow(r, i, byIndex[i])).join("")}</div>
+         <div class="toolbar" style="margin:8px 0">
+           <button class="btn" type="button" id="bf_add_buy">Add a purchase</button>
+           <button class="btn" type="button" id="bf_add_sell">Add a sale</button></div>`
+      + (canRemember
+        ? area("recollection", "What do you remember thinking? (optional)", st.recollection,
+          "Written now, about then — and recorded as exactly that, with today's date on it. "
+          + "It is not a thesis and is never counted as one: you already know how this turned out, "
+          + "so nothing here can be graded against what happened. It attaches to the first purchase above.")
+        : ""),
+    confirm: pv && !pv.problem ? `Record ${pv.events.length} ${pv.events.length === 1 ? "entry" : "entries"}` : "Check these entries",
+    danger: !!(pv && !pv.problem),
+    onConfirm: async () => {
+      const rows = bfRead();
+      const remembered = ($("f_recollection") || {}).value || "";
+      if (!rows.length) return "Add at least one entry.";
+      /* Check first, record second, and never both on one press. What is
+         about to be written cannot be corrected afterwards, so the person
+         writing it sees the verdict each row produces — including the rows
+         that produce none — before any of it is permanent. */
+      const fresh = await api(pv && !pv.problem ? "record_backfill" : "preview_backfill",
+        s.ticker, rows, remembered);
+      if (!fresh) return " ";
+      if (fresh.recorded) {
+        tab = fresh.held_after ? "holdings" : "previous";
+        toast(`Recorded ${fresh.events.length} ${fresh.events.length === 1 ? "entry" : "entries"} from history. Every one of them is marked as a reconstruction wherever it appears.`);
+        return;
+      }
+      $("dlg").close();
+      dlgBackfill(s, { rows, recollection: remembered, preview: fresh });
+      return true;
+    },
+  });
+
+  const add = (kind) => {
+    const rows = bfRead();
+    rows.push({ ...BF_BLANK, kind });
+    const remembered = ($("f_recollection") || {}).value || "";
+    $("dlg").close();
+    dlgBackfill(s, { rows, recollection: remembered, preview: null });
+  };
+  if ($("bf_add_buy")) $("bf_add_buy").onclick = () => add("buy");
+  if ($("bf_add_sell")) $("bf_add_sell").onclick = () => add("sell");
+  const holder = $("bf_rows");
+  if (holder && holder.querySelectorAll) {
+    holder.querySelectorAll("[data-drop]").forEach((b) => {
+      b.onclick = () => {
+        const rows = bfRead();
+        rows.splice(Number(b.dataset.drop), 1);
+        const remembered = ($("f_recollection") || {}).value || "";
+        $("dlg").close();
+        dlgBackfill(s, { rows: rows.length ? rows : [{ ...BF_BLANK }],
+          recollection: remembered, preview: null });
+      };
+    });
+    /* Changing what an entry IS changes which questions it owes — a sale owes
+       a reason and a purchase does not — so the form is redrawn rather than
+       leaving a column that means nothing. */
+    holder.querySelectorAll('[data-k="kind"]').forEach((el) => {
+      el.onchange = () => {
+        const remembered = ($("f_recollection") || {}).value || "";
+        $("dlg").close();
+        dlgBackfill(s, { rows: bfRead(), recollection: remembered, preview: null });
+      };
+    });
+  }
+}
+
+/* What the rows currently say, read off the form rather than tracked in a
+   second copy beside it. One source for what is about to be recorded. */
+function bfRead() {
+  const holder = $("bf_rows");
+  if (!holder || !holder.querySelectorAll) return [];
+  return Array.from(holder.querySelectorAll(".bfrow")).map((el) => {
+    const get = (k) => {
+      const f = el.querySelector(`[data-k="${k}"]`);
+      return f ? f.value : "";
+    };
+    return { kind: get("kind") || "buy", date: get("date"),
+      shares: get("shares"), price: get("price"), reason: get("reason") };
   });
 }
 
@@ -2986,6 +3385,7 @@ document.addEventListener("click", async (ev) => {
     case "note": return dlgNote(s);
     case "buy": return dlgBuy(s);
     case "sell": return dlgSell(s);
+    case "backfill": return dlgBackfill(s);
     case "ev": return dlgEV(s);
     case "settings": return dlgSettings();
     case "explain": return dlgExplain(act.dataset.seq);

@@ -73,19 +73,43 @@ class TestTheSample:
             assert evidence, ticker
             assert decision["reason"]["rule"], ticker
 
-    def test_the_two_kinds_of_override_stay_apart(self, loaded):
-        """Going ahead against a verdict and going ahead where there was no
-        verdict are different decisions, and averaging them would make a gap
-        in the data look like defiance."""
+    def test_a_verdict_gone_against_and_a_verdict_that_never_existed(
+            self, loaded):
+        """Two different records, not two flavours of one. OKELL was bought
+        in the face of a real verdict — a decision, and one the override
+        scorecard is entitled to judge. THRAP had no figures on record at
+        all, so nothing could be reconstructed for the day it is dated, and
+        there was no signal to obey or defy. Counted as an override it would
+        put a decision nobody made into the one figure that measures the
+        user's judgement.
+        """
         api, _ = loaded
         journal, *_ = api._open()
         by_ticker = {s["ticker"]: s for s in journal["securities"]}
-        kinds = {t: [l["override"]["kind"] for l in by_ticker[t]["lots"]
-                     if l.get("override")]
-                 for t in ("OKELL", "THRAP", "HARW")}
-        assert kinds["OKELL"] == ["against"]
-        assert kinds["THRAP"] == ["without"]
-        assert kinds["HARW"] == []
+        buys = {t: [l for l in by_ticker[t]["lots"] if l["kind"] == "buy"]
+                for t in ("OKELL", "THRAP", "HARW")}
+        assert [l["override"]["kind"] for l in buys["OKELL"]] == ["against"]
+        assert [l["unreconstructed"] for l in buys["OKELL"]] == [None]
+        assert [l["override"] for l in buys["THRAP"]] == [None]
+        assert all(l["unreconstructed"]["why"] for l in buys["THRAP"])
+        assert [l["override"] for l in buys["HARW"]] == [None]
+        assert [l["unreconstructed"] for l in buys["HARW"]] == [None]
+
+    def test_a_memory_is_marked_as_one_and_is_never_the_thesis(self, loaded):
+        """THRAP carries what its buyer remembers thinking. It is written
+        after the outcome is known, so it can be graded against nothing, and
+        the record keeps it under its own name with the day it was actually
+        written on it."""
+        api, _ = loaded
+        journal, *_ = api._open()
+        thrap = next(s for s in journal["securities"]
+                     if s["ticker"] == "THRAP")
+        [lot] = [l for l in thrap["lots"] if l["kind"] == "buy"]
+        snap = lot["snapshot"]
+        assert snap["recollection"]["text"].startswith("No figures on record")
+        assert snap["recollection"]["written"]
+        assert snap["thesis"] is None or \
+            snap["thesis"]["thesis"] != snap["recollection"]["text"]
 
     def test_the_frozen_snapshot_is_the_verdict_of_its_own_day(self, loaded):
         """OKELL was bought against a real verdict and has since more than

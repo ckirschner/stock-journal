@@ -91,6 +91,34 @@ def install(history) -> list[dict]:
     return out
 
 
+def lot_of(spec) -> dict:
+    """One lot as add_lot and sell_lots write it.
+
+    The snapshot is stripped to the one thing the figures below read off it:
+    whether this entry's verdict was seen on the day it is dated or rebuilt
+    for that day afterwards. That is not decoration on a lot — it decides
+    which cohort a purchase is counted in, whether an exit's reason reads as
+    one somebody gave at the time, and whether going ahead was an override at
+    all. A fixture that could not state it could not cover any of that.
+
+    `basis` defaults to live, exactly as the write does, so every history
+    written before backfill existed keeps meaning what it meant.
+    """
+    lot = dict(spec, snapshot={"evaluation": {
+        "basis": spec.get("basis", "live"),
+        "as_of": spec.get("as_of", spec["date"])}})
+    lot.pop("basis", None)
+    lot.pop("as_of", None)
+    if spec["kind"] == "buy":
+        # An override is part of the lot as add_lot writes it: which kind it
+        # was, and which cited figures came out against. Beside it, and never
+        # merged with it, an entry whose verdict could not be rebuilt at all.
+        # The scorecards read nothing else about either.
+        lot["override"] = spec.get("override")
+        lot["unreconstructed"] = spec.get("unreconstructed")
+    return lot
+
+
 def security_of(spec, cik=None) -> dict:
     """One security as the journal stores it. `manual_price` is the price a
     user typed — the only price for a security the SEC does not match, and the
@@ -100,13 +128,7 @@ def security_of(spec, cik=None) -> dict:
         "cik": spec.get("cik", cik),
         "price": spec.get("manual_price"), "notes": [],
         "lot_seq": len(spec["lots"]),
-        # An override is part of the lot as add_lot writes it: which kind it
-        # was, and which cited figures came out against. The scorecards read
-        # nothing else about it.
-        "lots": [dict(l, snapshot=None,
-                      **({"override": l.get("override")}
-                         if l["kind"] == "buy" else {}))
-                 for l in spec["lots"]],
+        "lots": [lot_of(l) for l in spec["lots"]],
     }
 
 
@@ -444,7 +466,7 @@ def test_the_exit_scorecard_groups_sales_by_reason(loaded):
     for reason, expect in want.items():
         at = f'{history["id"]} exit "{reason}"'
         for figure in ("n", "n_held", "n_after", "avg_held", "avg_after",
-                       "bought_again"):
+                       "bought_again", "n_reconstructed"):
             assert got[reason][figure] == expect[figure], \
                 f'{at} {figure} — {expect.get("how", "")}'
 
@@ -453,38 +475,59 @@ def test_the_exit_scorecard_groups_sales_by_reason(loaded):
 def test_the_override_scorecard_counts_purchases(loaded):
     """Counted per lot, not per security: with several buys in one name, one
     can be a compliant entry and the next an override, and collapsing them
-    loses exactly the comparison the scorecard exists to make."""
+    loses exactly the comparison the scorecard exists to make.
+
+    Counted per cohort as well. A decision seen on the screen and a decision
+    rebuilt for a day in the past are not evidence about the same thing, and a
+    journal with a decade of history typed into it would answer "did
+    overriding help" almost entirely with the second while labelling it the
+    first.
+    """
     history, _, secs = loaded
     got = portfolio.override_scorecard(secs, price_of)
-    for group, expect in history["override_scorecard"].items():
-        at = f'{history["id"]} {group}'
+    for cohort, groups in history["override_scorecard"].items():
+        for group, expect in groups.items():
+            at = f'{history["id"]} {cohort}/{group}'
+            for figure in ("n", "n_purchases", "n_unscored", "win_rate",
+                           "avg"):
+                assert got[cohort][group][figure] == expect[figure], \
+                    f'{at} {figure} — {expect.get("how", "")}'
+            # The two populations must never be reported as one: a win rate
+            # over the purchases that could be priced, beside a count of every
+            # purchase, is a data gap reading as a settled result — in the
+            # panel whose whole job is to be able to indict a rule rather than
+            # the person.
+            assert got[cohort][group]["n"] + got[cohort][group]["n_unscored"] \
+                == got[cohort][group]["n_purchases"], at
+
+    # Purchases nobody could rebuild a verdict for are in neither comparison.
+    # Stated as its own figure rather than inferred from the two above, because
+    # "it is not in either" is exactly the claim that would break silently.
+    dark = history.get("unreconstructed")
+    if dark:
         for figure in ("n", "n_purchases", "n_unscored", "win_rate", "avg"):
-            assert got[group][figure] == expect[figure], \
-                f'{at} {figure} — {expect.get("how", "")}'
-        # The two populations must never be reported as one: a win rate over
-        # the purchases that could be priced, beside a count of every purchase,
-        # is a data gap reading as a settled result — in the panel whose whole
-        # job is to be able to indict a rule rather than the person.
-        assert got[group]["n"] + got[group]["n_unscored"] == \
-            got[group]["n_purchases"], at
-
+            assert got["unreconstructed"][figure] == dark[figure], \
+                f'{history["id"]} unreconstructed {figure} — {dark["how"]}'
     if "kinds" in history:
-        for kind, n in history["kinds"].items():
-            if kind != "how":
-                assert got["kinds"][kind] == n, \
-                    f'{history["id"]} {kind} — {history["kinds"]["how"]}'
+        for cohort, kinds in history["kinds"].items():
+            for kind, n in kinds.items():
+                if kind != "how":
+                    assert got[cohort]["kinds"][kind] == n, \
+                        f'{history["id"]} {cohort} {kind} — ' \
+                        f'{kinds.get("how", "")}'
 
-    for key, expect in (history.get("per_rule") or {}).items():
-        bucket = got["per_rule"].get(key)
-        assert bucket is not None, \
-            f'{history["id"]} the rule {key} is missing from the panel'
-        for figure in ("label", "n", "n_scored", "wins", "avg"):
-            assert bucket[figure] == expect[figure], \
-                f'{history["id"]} {key} {figure} — {expect["how"]}'
-        wrong = (history.get("must_not_be") or {}).get("per_rule_n")
-        if wrong:
-            assert bucket["n"] != wrong["value"], \
-                f'{history["id"]} {key} — {wrong["how"]}'
+    for cohort, rules in (history.get("per_rule") or {}).items():
+        for key, expect in rules.items():
+            bucket = got[cohort]["per_rule"].get(key)
+            assert bucket is not None, \
+                f'{history["id"]} the rule {key} is missing from {cohort}'
+            for figure in ("label", "n", "n_scored", "wins", "avg"):
+                assert bucket[figure] == expect[figure], \
+                    f'{history["id"]} {key} {figure} — {expect["how"]}'
+            wrong = (history.get("must_not_be") or {}).get("per_rule_n")
+            if wrong:
+                assert bucket["n"] != wrong["value"], \
+                    f'{history["id"]} {key} — {wrong["how"]}'
 
 
 # -- the account boundary ----------------------------------------------------

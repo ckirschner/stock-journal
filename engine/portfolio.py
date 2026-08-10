@@ -38,12 +38,20 @@ the journal's stamped strategy, and this module records it. Reading a state's
 an opinion about investing — the render types are the host's own vocabulary
 and `commit` means "capital may go in" by definition. Which securities
 deserve capital is the strategy's business, and this module never asks.
+
+An entry also records **when its verdict was worked out**, and the two
+answers are not interchangeable. A decision seen on the day it is dated was
+seen; a decision rebuilt afterwards for a day in the past was not, however
+faithfully it was rebuilt. Every figure derived from the record splits on
+that line — see `recorded_as` for the case that made it load-bearing, and
+`override_scorecard` for what happens to a comparison that ignores it.
 """
 
 from __future__ import annotations
 
 import copy
 from datetime import date, datetime
+from types import MappingProxyType
 
 EXIT_REASONS = [
     "Thesis broke",
@@ -52,6 +60,20 @@ EXIT_REASONS = [
     "Risk limit",
     "Panic",
 ]
+
+# What a sale with no reason on it is called, everywhere it is counted.
+#
+# Not one of the reasons above, and deliberately not offered when a sale is
+# recorded as it happens: you were there, and the answer is the one thing the
+# exit analytics cannot work without. It exists for a sale entered out of
+# history, where "I do not remember why I sold in 2014" is the truth and any
+# of the five above would be a guess dressed as a fact — in the record that
+# exists to tell you whether your sell rules work.
+#
+# Named here rather than written out at each of its three call sites, because
+# a reason that is spelled differently in two places is two groups in the
+# scorecard for one thing that happened.
+UNSTATED_REASON = "Not stated"
 
 BUCKETS = ("holdings", "previous", "ideas")
 
@@ -346,10 +368,11 @@ def has_history(security: dict) -> bool:
 
 
 # -- reading a decision ------------------------------------------------------
-# Three host-owned facts, and nothing more: whether the strategy said capital
-# may go in, which of the figures it cited came out against, and which it
-# could not settle at all. All three are read off the contract's own
-# vocabulary, so this module needs no view about any measure or level.
+# Four host-owned facts, and nothing more: whether the strategy said capital
+# may go in, whether it answered at all, which of the figures it cited came
+# out against, and which it could not settle. All four are read off the
+# contract's own vocabulary, so this module needs no view about any measure
+# or level.
 
 def _cite(item: dict) -> dict:
     """How one cited figure is named in the record. A threshold that came
@@ -384,35 +407,115 @@ def is_commit(decision: dict | None) -> bool:
     return bool(decision) and decision.get("render") == "commit"
 
 
-def override_kind(decision: dict | None) -> str | None:
-    """None when the strategy said commit. Otherwise which of the two kinds
-    of override this is — the distinction the learning loop depends on.
+def is_verdict(decision: dict | None) -> bool:
+    """Whether the strategy actually answered, as opposed to the evaluation
+    failing to produce an answer.
 
-    "Against" means the strategy reached a verdict and you went the other
-    way; "without" means there was no verdict to go against. The render
-    tier settles most of it — a `hold`, a `reduce` and a `close` are all
-    about the security, and `unknown` is about the evaluation.
+    The render tier settles most of it — a `hold`, a `reduce`, a `close` and
+    a `commit` are all about the security, and `unknown` is about the
+    evaluation.
 
     `blocked` is the one that needs asking who produced it, and getting that
     wrong matters because it feeds the scorecard that is supposed to be able
     to indict the rules. The host's own blocked states mean "we could not
-    ask" — setup missing, values unresolved — and buying past one is buying
-    without a signal. A blocked state a *strategy* declared is the opposite:
-    it is a verdict, and a pointed one. "Read this again before adding" is
-    an answer, and going ahead anyway is going against it. Recorded as
-    "without a signal" it would sit in the scorecard beside purchases nobody
-    could evaluate, and the one rule most worth measuring — a bar on adding —
-    would be invisible in the count of times the user was right to overrule
-    it.
+    ask" — setup missing, values unresolved, the strategy not on this
+    machine — and there is no verdict behind any of them. A blocked state a
+    *strategy* declared is the opposite: it is a verdict, and a pointed one.
+    "Read this again before adding" is an answer, and going ahead anyway is
+    going against it. Counted as an absence it would sit beside purchases
+    nobody could evaluate, and the one rule most worth measuring — a bar on
+    adding — would be invisible in the count of times the user was right to
+    overrule it.
     """
     if decision is None:
-        return "unevaluated"
-    if is_commit(decision):
-        return None
+        return False
     if decision.get("tier") == "position":
+        return True
+    return (decision.get("render") == "blocked"
+            and decision.get("produced_by") == "strategy")
+
+
+# How a purchase goes on the record. Exactly one of these, always — the same
+# rule principle 7 makes about a position's state, one level down: parallel
+# answers to "was this an override" are how a purchase came to be counted in
+# two populations at once.
+#
+#   commit           the strategy said capital may go in, and it went in.
+#   against          a verdict was reached and the user went the other way.
+#   without          no verdict could be reached, and the user — looking at
+#                    that on the screen — went ahead anyway.
+#   unreconstructed  no verdict could be REBUILT for a day in the past. There
+#                    was nothing on any screen, because nobody was standing
+#                    in front of one.
+RECORDED_AS = ("commit", "against", "without", "unreconstructed")
+
+
+def recorded_as(decision: dict | None, basis: str) -> str:
+    """Which of the four this purchase is, given what the strategy said and
+    whether that answer was seen or rebuilt.
+
+    The basis is the whole reason this takes two arguments. "Without a
+    signal" is a real decision: the screen said it could not say, the user
+    read that and bought anyway, and counting it apart from a defied verdict
+    is what stops a data gap reading as defiance. A *reconstruction* that
+    reaches no verdict is not that decision and never was. Nobody saw
+    anything — the purchase predates the journal, and the grey box is a fact
+    about what this program can rebuild in 2011, not about what its owner
+    ignored. Filed as an override it would put fictional entries into the
+    one metric the learning loop depends on, and the moment backfill exists
+    it would put a pile of them there at once: the scorecard would report
+    that overriding works fine, because most of those were never decisions.
+
+    Two arguments rather than one, and `basis` required rather than
+    defaulted, because that is principle 14 here. A caller that does not say
+    which moment it is recording cannot get an answer at all, so the
+    "without" branch is unreachable from a reconstruction by construction
+    and not by anyone remembering.
+    """
+    if basis not in ("live", "reconstructed"):
+        raise ValueError(
+            f'"{basis}" is not a basis. A decision was either seen live or '
+            "reconstructed for a past day, and which one it was decides "
+            "whether going ahead was an override or simply a gap in what "
+            "could be rebuilt.")
+    if is_commit(decision):
+        return "commit"
+    if is_verdict(decision):
         return "against"
-    return ("against" if decision.get("render") == "blocked"
-            and decision.get("produced_by") == "strategy" else "without")
+    return "without" if basis == "live" else "unreconstructed"
+
+
+def basis_of(lot: dict | None) -> str:
+    """Whether this entry's verdict was seen on the day it is dated, or
+    rebuilt for that day afterwards.
+
+    Read off the entry's own frozen evaluation, which is the only place it
+    is written. Anything that is not the word "reconstructed" is live: a
+    reconstruction is stamped as one at the write and always has been, so
+    the absence of a stamp can only mean an entry recorded against the data
+    in front of the user. That direction is the safe one — the failure this
+    guards is a reconstruction passing for a contemporaneous record, and it
+    cannot happen by omission.
+    """
+    evaluation = ((lot or {}).get("snapshot") or {}).get("evaluation") or {}
+    return "reconstructed" if evaluation.get("basis") == "reconstructed" \
+        else "live"
+
+
+def is_reconstructed(lot: dict | None) -> bool:
+    return basis_of(lot) == "reconstructed"
+
+
+def backfilled(security: dict) -> bool:
+    """Whether any entry in this security's record was reconstructed rather
+    than captured at the time.
+
+    Derived from the lots on read, exactly like the bucket and the holding
+    periods, and for the same reason: a stored flag is a second opinion
+    about a fact the entries already settle, and the two fall out of step
+    the first time one entry is added without it.
+    """
+    return any(is_reconstructed(l) for l in (security.get("lots") or []))
 
 
 # -- writing a lot -----------------------------------------------------------
@@ -478,8 +581,42 @@ def _dated_entry(entry, what: str):
     return copy.deepcopy(entry)
 
 
+_RECOLLECTION_IS_NOT_A_THESIS = (
+    "A recollection is what you remember thinking, written now about a day "
+    "that has passed. There is nothing to remember about a decision being "
+    "made today — write a thesis, on the record that keeps every version of "
+    "it and demands a reason for every change. Offering this here would be "
+    "a way round that record, and a thesis you can write after the fact is "
+    "a thesis nothing can be graded against.")
+
+
+def _recollection(text, basis: str) -> dict | None:
+    """What the user remembers thinking, or a refusal.
+
+    Only on a reconstruction, and refused outright anywhere else. This is
+    the one place hindsight is allowed into the record, so the boundary is
+    a raise rather than a convention: the thesis record is what an override,
+    an exit and a falsifier are all graded against, and a prose field that
+    could reach a live purchase would be a second, undated, unamendable
+    version of it sitting where the first one belongs.
+
+    It is never the thesis and is never stored as one. The lot keeps it
+    under its own name, carrying the day it was actually written, so no
+    reader looking for the case that was made at the time can find this
+    instead. Backdating the writing is not possible anywhere in this
+    program, and nothing here is an exception to that — only the subject is
+    in the past.
+    """
+    text = str(text or "").strip()
+    if not text:
+        return None
+    if basis != "reconstructed":
+        raise ValueError(_RECOLLECTION_IS_NOT_A_THESIS)
+    return {"text": text, "written": _stamp()}
+
+
 def _snapshot(decision, values, price_seen, evaluation,
-              thesis=None, valuation=None) -> dict:
+              thesis=None, valuation=None, recollection=None) -> dict:
     return {
         "frozen": _stamp(),
         # The decision, entire. Everything the screen showed — state, payload
@@ -522,6 +659,13 @@ def _snapshot(decision, values, price_seen, evaluation,
         # two years ago.
         "thesis": _dated_entry(thesis, "thesis"),
         "valuation": _dated_entry(valuation, "valuation"),
+        # What the user remembers thinking, on a purchase they are entering
+        # from their own history. Deliberately not merged into `thesis`
+        # above, and deliberately carrying its own writing date: the two
+        # answer the same question from opposite sides of the outcome, and
+        # a record that could not tell them apart would let a case composed
+        # with hindsight be read as the case that was made at the time.
+        "recollection": copy.deepcopy(recollection),
     }
 
 
@@ -531,14 +675,21 @@ def add_lot(security: dict, decision: dict, shares: float, price: float,
             price_seen: dict | None = None,
             evaluation: dict | None = None,
             thesis: dict | None = None,
-            valuation: dict | None = None) -> dict:
+            valuation: dict | None = None,
+            recollection: str = "") -> dict:
     """Record a purchase as its own lot, and freeze the decision that was on
-    screen for it.
+    screen for it — or the one that could not be rebuilt for it.
 
-    A decision that does not say commit does not block anything. It gets
-    recorded alongside the purchase with the user's stated reason for going
-    ahead — including going ahead on a state nobody could evaluate, which is
-    its own kind of override and is kept apart from the other.
+    A decision that does not say commit does not block anything. Where the
+    user saw it and went ahead, it is recorded as an override with their
+    stated reason — including going ahead on a state nobody could evaluate,
+    which is its own kind of override and is kept apart from the other.
+
+    Where the decision was *reconstructed* and produced no verdict, there was
+    no override, because there was nothing on any screen to override. The lot
+    records that the evaluation could not be rebuilt, and says why. See
+    `recorded_as`: this is the distinction the whole learning loop rests on,
+    and backfill is what would otherwise flood it.
 
     `values` are the merged values behind the decision — hand-entered over
     computed — each one qualified: what it was, which side it came from, how
@@ -555,6 +706,10 @@ def add_lot(security: dict, decision: dict, shares: float, price: float,
     the position and carries on to the next purchase; the valuation belongs
     to *this* purchase and to no other, which is why it is frozen here and
     never averaged into a figure about the holding.
+
+    `recollection` is what the user remembers thinking, on a purchase they
+    are entering out of their own history. It is refused on a live purchase
+    outright — see `_recollection` — and it is never the thesis.
     """
     shares, price = float(shares), float(price)
     if shares <= 0:
@@ -562,6 +717,7 @@ def add_lot(security: dict, decision: dict, shares: float, price: float,
     when = recorded_date(opened, "purchase")
     evaluation = copy.deepcopy(evaluation) if evaluation \
         else {"basis": "live", "as_of": _today()}
+    remembered = _recollection(recollection, evaluation["basis"])
 
     lot_id, seq = _next_id(security)
     lot = {
@@ -572,20 +728,33 @@ def add_lot(security: dict, decision: dict, shares: float, price: float,
         "recorded": _stamp(),
         "shares": shares,
         "price": price,
+        # Two fields rather than one with a kind on it, because they are two
+        # populations rather than two flavours of one. An override belongs
+        # in the comparison that asks whether going against the tool paid;
+        # an entry whose evaluation could not be rebuilt has no counterpart
+        # to compare against and belongs nowhere near it. A single field
+        # would put them in the same list and leave every reader to
+        # remember to split it.
         "override": None,
+        "unreconstructed": None,
         "snapshot": _snapshot(decision, values, price_seen, evaluation,
-                              thesis, valuation),
+                              thesis, valuation, remembered),
     }
 
-    kind = override_kind(decision)
-    if kind is not None:
-        state = (decision or {}).get("state") or {}
+    how = recorded_as(decision, evaluation["basis"])
+    state = (decision or {}).get("state") or {}
+    named = state.get("name") or state.get("id") or "no verdict"
+    who = (((decision or {}).get("strategy") or {}).get("name")
+           or "the strategy")
+    reason = (decision or {}).get("reason") or {}
+
+    if how in ("against", "without"):
         lot["override"] = {
             "date": lot["date"],
-            "kind": kind,
-            "state": state.get("name") or state.get("id") or "no verdict",
-            "rule": ((decision or {}).get("reason") or {}).get("rule"),
-            "summary": ((decision or {}).get("reason") or {}).get("summary"),
+            "kind": how,
+            "state": named,
+            "rule": reason.get("rule"),
+            "summary": reason.get("summary"),
             "basis": evaluation["basis"],
             "as_of": evaluation["as_of"],
             "strategy": copy.deepcopy((decision or {}).get("strategy")),
@@ -593,15 +762,36 @@ def add_lot(security: dict, decision: dict, shares: float, price: float,
             "missing": _by_outcome(decision, "unknown"),
             "reason": (override_reason or "").strip() or "No reason given.",
         }
+    elif how == "unreconstructed":
+        lot["unreconstructed"] = {
+            "date": lot["date"],
+            "as_of": evaluation["as_of"],
+            "state": named,
+            # The strategy's own sentence about why it could not answer, or
+            # the host's. Kept verbatim: "no filings had been filed by then"
+            # and "the strategy is not installed on this machine" send the
+            # reader to different places, and a summary written here would
+            # have to guess which.
+            "why": reason.get("summary") or "No reason was given.",
+            "strategy": copy.deepcopy((decision or {}).get("strategy")),
+            "missing": _by_outcome(decision, "unknown"),
+            # What the reconstruction could and could not consult, frozen
+            # beside the failure it explains. The record is written once and
+            # can never be asked again what it was working from.
+            "note": evaluation.get("note"),
+        }
 
     security.setdefault("lots", []).append(lot)
 
-    if kind is None:
+    if how == "commit":
         # The state can move between the preview and the commit — a fetch
         # lands, the strategy is upgraded — and the user may already have
         # written why they were going ahead against the old one. That
         # sentence is theirs and is kept, rather than dropped because the
-        # answer improved while they were typing.
+        # answer improved while they were typing. Kept on a reconstruction
+        # too, and checked before the early return below: the sentence
+        # belongs to the person who wrote it whichever clock the verdict was
+        # worked out on.
         if (override_reason or "").strip():
             add_note(security,
                      "Recorded with the signal. The reason written while the "
@@ -609,15 +799,62 @@ def add_lot(security: dict, decision: dict, shares: float, price: float,
                      + override_reason.strip())
         return lot
 
-    what = "against the signal" if kind == "against" else "without a signal"
-    how = (f", reconstructed for {evaluation['as_of']} from the data "
-           "available by then"
-           if evaluation["basis"] == "reconstructed" else "")
-    who = ((decision or {}).get("strategy") or {}).get("name") or "the strategy"
+    if evaluation["basis"] == "reconstructed":
+        # No note. See `note_recording`: an entry made out of history is
+        # narrated once for the whole act of recording, not once per entry.
+        # A ten-event backfill writing ten near-identical notes stamped
+        # today would bury every note the user actually wrote under a wall
+        # of machinery, and each of those sentences already sits on its own
+        # entry, beside the purchase it is about — including the stated
+        # reason for an override, which the notice renders in place.
+        return lot
+
+    what = "against the signal" if how == "against" else "without a signal"
     add_note(security,
-             f'Bought {what} ({lot["override"]["state"]} under '
-             f"{who}{how}). Stated reason: {lot['override']['reason']}")
+             f"Bought {what} ({named} under {who}). Stated reason: "
+             f"{lot['override']['reason']}")
     return lot
+
+
+def note_recording(security: dict, entries: list[dict]) -> dict | None:
+    """One note for one act of recording, however many entries it wrote.
+
+    Only for entries made out of history. An entry captured as it happens
+    narrates itself where it is written, because it is one line about one
+    thing that just happened. A backfill is one thing that just happened too
+    — somebody sat down and typed in six years of a position — and writing a
+    line per entry would put six near-identical sentences, all stamped
+    today, above every note the user has ever actually written. The Journal
+    panel is the human narrative, and burying it under machinery is how it
+    stops being read.
+
+    Everything specific to an entry stays on the entry, where a reader
+    looking at a 2014 purchase will be standing. This is only the sentence
+    that says the typing happened, and when.
+
+    Returns None where there was nothing to narrate, so a live recording can
+    call it without a condition.
+    """
+    made = [l for l in (entries or []) if is_reconstructed(l)]
+    if not made:
+        return None
+    days = sorted(str(l.get("date") or "")[:10] for l in made)
+    span = days[0] if days[0] == days[-1] else f"{days[0]} to {days[-1]}"
+    buys = sum(1 for l in made if l.get("kind") == "buy")
+    sells = len(made) - buys
+    what = ", ".join(
+        f"{n} {word if n == 1 else word + 's'}"
+        for n, word in ((buys, "purchase"), (sells, "sale")) if n)
+    dark = sum(1 for l in made if l.get("unreconstructed"))
+    could_not = (
+        f" {dark} of {'them' if len(made) > 1 else 'these'} could not have a "
+        "verdict reconstructed, so none is recorded against "
+        f"{'them' if dark > 1 else 'it'}." if dark else "")
+    add_note(security,
+             f"Recorded from history: {what}, dated {span}. Each was judged "
+             "against the data available on its own day, not against "
+             "today's." + could_not)
+    return security["notes"][-1]
 
 
 # -- exits -------------------------------------------------------------------
@@ -697,18 +934,32 @@ def sell_lots(security: dict, decision: dict | None, reason: str,
     makes it a previous holding and what a re-entry later reads against.
 
     The decision frozen here is the one the journal's own strategy produced
-    at the moment of the sale — there is only ever one, because a journal has
-    one strategy and it does not change. Where the strategy could not be
+    for the day the sale is dated — there is only ever one, because a journal
+    has one strategy and it does not change. Where the strategy could not be
     asked at all (it is not installed on this machine), that absence is
     recorded as itself rather than as a signal that read clear.
+
+    **A backdated sale is judged with the data of its own day**, exactly as a
+    backdated purchase is. `evaluation` says which: basis "live" for a sale
+    recorded as it happens, "reconstructed" for one entered afterwards, with
+    `as_of` naming the day. That is not a nicety — `rule_triggered` and
+    `signal_at_exit` are what the panic-sell loop reads, and an exit dated
+    2019 carrying today's verdict states that the strategy said something on
+    a day it was never asked about.
+
+    Where the reconstruction reaches no verdict, `rule_triggered` is None and
+    stays None. "No rule triggered this exit" would claim a signal was read
+    and came back clear; the honest record is that nothing could be rebuilt,
+    and the note says which of the two it was.
 
     The thesis standing at the sale is frozen with it, because this is where
     it gets graded: "did the falsifier fire, or did I talk myself out of it"
     is a question about the version that was on record when the sell button
-    was pressed, and that version is amendable right up until it. No
-    valuation is frozen here — a claim is the case for a purchase, and
-    attaching one to an exit would invent a number the sale was never
-    justified by.
+    was pressed. Under a reconstruction that is the version on record on the
+    sale's own date — never one amended since, which would grade a prediction
+    against a revision made after the answer was known. No valuation is
+    frozen here — a claim is the case for a purchase, and attaching one to an
+    exit would invent a number the sale was never justified by.
     """
     shares, exit_price = float(shares), float(exit_price)
     if shares <= 0:
@@ -769,18 +1020,28 @@ def sell_lots(security: dict, decision: dict | None, reason: str,
                 f'{bought["date"]}. A sale cannot take shares that had not '
                 "been bought yet.")
 
+    evaluation = copy.deepcopy(evaluation) if evaluation \
+        else {"basis": "live", "as_of": _today()}
+    rebuilt = evaluation.get("basis") == "reconstructed"
+
     if decision is None:
         signal, rule_triggered, strategy = "Strategy not installed", None, None
     else:
         state = decision.get("state") or {}
         signal = state.get("name") or state.get("id") or "no verdict"
         strategy = copy.deepcopy(decision.get("strategy"))
-        if decision.get("tier") != "position":
+        if not is_verdict(decision):
             # No verdict was reached at all — the strategy could not be
-            # asked, or could not answer. That is an absence, and it is
-            # recorded as one. Calling it "no rule triggered this exit"
-            # would claim a signal was read and came back clear, which is
-            # the difference between a fact and a fabrication.
+            # asked, could not answer, or could not be rebuilt for the day
+            # this sale is dated. That is an absence, and it is recorded as
+            # one. Calling it "no rule triggered this exit" would claim a
+            # signal was read and came back clear, which is the difference
+            # between a fact and a fabrication.
+            #
+            # Read through `is_verdict` rather than off the tier, so a
+            # strategy's own blocked state — "read this again before you
+            # act" — counts as the answer it is, on the sale exactly as on
+            # the purchase.
             rule_triggered = None
         else:
             # An exit the strategy called for: it said to leave, in whole or
@@ -802,14 +1063,8 @@ def sell_lots(security: dict, decision: dict | None, reason: str,
         "signal_at_exit": signal,
         "rule_triggered": rule_triggered,
         "strategy": strategy,
-        # A sale is always judged against the data on screen at the moment
-        # it is recorded — there is no as-of sell path — so the basis is
-        # stated rather than left out and read as unknown later.
-        "snapshot": _snapshot(
-            decision, values, price_seen,
-            copy.deepcopy(evaluation) if evaluation
-            else {"basis": "live", "as_of": _today()},
-            thesis=thesis),
+        "snapshot": _snapshot(decision, values, price_seen, evaluation,
+                              thesis=thesis),
     }
     security.setdefault("lots", []).append(lot)
 
@@ -819,16 +1074,21 @@ def sell_lots(security: dict, decision: dict | None, reason: str,
     # bought back — putting a sentence in the append-only record that says
     # the position stayed open when it did not.
     partial = shares_held(security, when) > 0
+    did = "Trimmed" if partial else "Closed"
+    if rebuilt:
+        # No note. See `note_recording`: an entry made out of history is
+        # narrated once for the whole act of recording, not once per entry,
+        # and everything specific to this sale is on the sale.
+        return lot
     if rule_triggered is False:
         who = (strategy or {}).get("name") or "the strategy"
-        add_note(security, f"{'Trimmed' if partial else 'Closed'} with no "
-                           f"rule triggering it. {who} read {signal} at the "
-                           "time.")
+        add_note(security, f"{did} with no rule triggering it. {who} read "
+                           f"{signal} at the time.")
     elif rule_triggered is None:
-        add_note(security, f"{'Trimmed' if partial else 'Closed'} with no "
-                           f"verdict to go on — {signal}. No signal could be "
-                           "evaluated at the time, and that absence is on "
-                           "the record rather than papered over.")
+        add_note(security, f"{did} with no verdict to go on — {signal}. No "
+                           "signal could be evaluated at the time, and that "
+                           "absence is on the record rather than papered "
+                           "over.")
     return lot
 
 
@@ -1045,6 +1305,14 @@ def cycle_exit(security: dict, cycle: dict) -> dict | None:
     weights. Each carries the shares it accounts for, so a reason behind 5%
     of an exit cannot read like the reason behind all of it.
 
+    **Every reason says which of its sales were reconstructed.** A holding
+    closed in stages can have been closed partly at the time and partly from
+    memory afterwards, and the two are different evidence about the same
+    exit. Carried per reason rather than once for the whole exit, because the
+    reason is what the panic-sell loop groups on: "Panic, 40% of the exit"
+    means one thing when it was typed while the screen said hold and another
+    when it was entered years later out of a brokerage statement.
+
     Absent, with its reason, wherever the mean cannot be built honestly — a
     sale recorded at nothing makes the whole mean absent rather than dragging
     it toward zero. That is the rule `_weighted` obeys one level up, and for
@@ -1058,14 +1326,17 @@ def cycle_exit(security: dict, cycle: dict) -> dict | None:
 
     reasons: list[dict] = []
     for sale in sells:
-        text = sale.get("reason") or "Not stated"
+        text = sale.get("reason") or UNSTATED_REASON
+        n = float(sale.get("shares") or 0)
+        rebuilt = 1 if is_reconstructed(sale) else 0
         hit = next((r for r in reasons if r["reason"] == text), None)
         if hit is None:
-            reasons.append({"reason": text,
-                            "shares": float(sale.get("shares") or 0)})
+            reasons.append({"reason": text, "shares": n, "sales": 1,
+                            "reconstructed": rebuilt})
         else:
-            hit["shares"] = round(hit["shares"]
-                                  + float(sale.get("shares") or 0), 8)
+            hit["shares"] = round(hit["shares"] + n, 8)
+            hit["sales"] += 1
+            hit["reconstructed"] += rebuilt
     for r in reasons:
         r["share"] = round(r["shares"] / shares * 100, 1) if shares else None
 
@@ -1090,11 +1361,23 @@ def cycle_exit(security: dict, cycle: dict) -> dict | None:
         exit_price = _known(
             round(sum(float(s["price"]) * float(s.get("shares") or 0)
                       for s in sells) / shares, 4),
+            # Each sliver names its day, its price and — where it applies —
+            # that its verdict was rebuilt rather than seen. The price itself
+            # is a recorded fact either way: what the user got is what the
+            # user got, and nothing here reconstructs it. What was rebuilt is
+            # the signal the sale was recorded against, and the provenance
+            # line is the one place a reader can see which sales carried one.
             [f'{float(s.get("shares") or 0):g} at '
-             f'{float(s["price"]):,.2f} on {s["date"]}' for s in sells])
+             f'{float(s["price"]):,.2f} on {s["date"]}'
+             + (" (reconstructed)" if is_reconstructed(s) else "")
+             for s in sells])
 
     return {"date": cycle["closed"], "sales": len(sells), "shares": shares,
-            "price": exit_price, "reasons": reasons}
+            "price": exit_price, "reasons": reasons,
+            # How much of this exit was entered from history rather than
+            # captured as it happened. Counted in sales rather than shares
+            # because that is the unit a reason is given in.
+            "reconstructed": sum(1 for s in sells if is_reconstructed(s))}
 
 
 def bought_again_after(security: dict, sale: dict) -> dict | None:
@@ -1181,6 +1464,50 @@ def since_sale(security: dict, sale: dict, price) -> dict:
 
 
 # ------------------------------------------------------------------ analytics
+
+# The two cohorts every purchase figure is reported in, never blended.
+#
+# A decision seen on screen and a decision rebuilt for a day in the past are
+# not the same evidence about the same question. "Did overriding the tool
+# help" is a question about a person's judgement under a verdict they were
+# looking at; a reconstruction had no such moment, and the rebuild is
+# imperfect in ways nobody can quantify — filings get restated, coverage
+# thins the further back you go. Averaged together, a journal backfilled with
+# ten years of history would answer the question almost entirely with entries
+# where nobody was standing in front of a screen, and the panel would report
+# a finding about the user that is really a finding about EDGAR.
+#
+# Both are reported, at equal weight, side by side. Excluding the
+# reconstructed cohort would be the other failure: it is real evidence about
+# the rules, and principle 10 says the panel has to be able to indict them.
+COHORTS = MappingProxyType({
+    "live": MappingProxyType({
+        "label": "seen at the time",
+        "means": "the verdict was on the screen when the entry was recorded",
+    }),
+    "reconstructed": MappingProxyType({
+        "label": "reconstructed",
+        "means": "the entry is dated in the past and its verdict was rebuilt "
+                 "from the data available by that day, not seen at the time",
+    }),
+})
+
+
+def _empty_cohort() -> dict:
+    return {"override": [], "compliant": [],
+            "unscored": {"override": {}, "compliant": {}},
+            "counted": {"override": 0, "compliant": 0},
+            "kinds": {"against": 0, "without": 0},
+            "per_rule": {}}
+
+
+def _rule_bucket(per_rule: dict, cite: dict) -> dict:
+    return per_rule.setdefault(
+        cite["key"], {"label": cite.get("label") or cite["key"],
+                      "n": 0, "n_scored": 0, "wins": 0, "avg": None,
+                      "returns": []})
+
+
 def override_scorecard(securities: list[dict], price_of) -> dict:
     """Did overriding the tool help or hurt? And is any rule miscalibrated?
 
@@ -1193,90 +1520,127 @@ def override_scorecard(securities: list[dict], price_of) -> dict:
     here at equal weight: if overriding one particular limit keeps working
     out, that limit is wrong, not the person.
 
-    The two kinds of override are counted apart. "Bought against the signal"
-    is a decision taken in the face of a verdict; "bought without a signal"
-    is a decision taken where there was no verdict to face. Averaging them
-    would make a data gap look like defiance.
+    Three splits, and none of them may be collapsed.
+
+    **By cohort.** Every figure is reported once for decisions seen at the
+    time and once for decisions reconstructed afterwards, and the two are
+    never added up — see COHORTS.
+
+    **By kind, within the live cohort.** "Bought against the signal" is a
+    decision taken in the face of a verdict; "bought without a signal" is a
+    decision taken where there was no verdict to face. Averaging them would
+    make a data gap look like defiance. The reconstructed cohort has only the
+    first kind, by construction: see `recorded_as`.
+
+    **Purchases whose evaluation could not be rebuilt at all** are their own
+    population, in neither the override count nor the compliant one. They are
+    not a decision that went either way — there was no verdict to obey or
+    defy — so putting them in either group would be inventing a decision
+    nobody made. They are still counted and their returns still reported,
+    because the purchases happened and what they did is worth knowing.
     """
-    overrides, compliant = [], []
-    # Per population, not one tally over the journal. The two counts beside
-    # them are per population, so a single shared list states one number and
-    # itemises a different one — and, worse, prints a compliant purchase's
-    # reason under Overrides, which is the panel attributing a decision to
-    # the wrong side of the very line it exists to measure.
-    unscored = {"override": {}, "compliant": {}}
-    counted = {"override": 0, "compliant": 0}
-    kinds = {"against": 0, "without": 0, "unevaluated": 0}
-    reconstructed = 0
-    per_rule: dict[str, dict] = {}
+    cohorts = {name: _empty_cohort() for name in COHORTS}
+    # In neither cohort's comparison, and reported on its own. A returns
+    # figure is still built for it: "the twelve entries this program could
+    # not rebuild a verdict for returned 8% on average" is a fact, and a fact
+    # that says nothing about anyone's discipline, which is the point.
+    unrebuilt = {"returns": [], "counted": 0, "unscored": {}, "reasons": {}}
     for s in securities:
         price = price_of(s)
         for lot in lots(s, "buy"):
             r = lot_return(s, lot, price)
             scored = None if _is_absent(r) else r["value"]
             ov = lot.get("override")
+            gap = lot.get("unreconstructed")
+            if gap:
+                unrebuilt["counted"] += 1
+                why = gap.get("why") or "No reason was given."
+                unrebuilt["reasons"][why] = \
+                    unrebuilt["reasons"].get(why, 0) + 1
+                if _is_absent(r):
+                    unrebuilt["unscored"][r["reason"]] = \
+                        unrebuilt["unscored"].get(r["reason"], 0) + 1
+                else:
+                    unrebuilt["returns"].append(scored)
+                continue
+            c = cohorts[basis_of(lot)]
+            side = "override" if ov else "compliant"
+            c["counted"][side] += 1
             if _is_absent(r):
-                side = unscored["override" if ov else "compliant"]
-                side[r["reason"]] = side.get(r["reason"], 0) + 1
+                tally = c["unscored"][side]
+                tally[r["reason"]] = tally.get(r["reason"], 0) + 1
             if ov:
-                kinds[ov.get("kind", "against")] = \
-                    kinds.get(ov.get("kind", "against"), 0) + 1
-                if ov.get("basis") == "reconstructed":
-                    reconstructed += 1
-            counted["override" if ov else "compliant"] += 1
+                kind = ov.get("kind", "against")
+                c["kinds"][kind] = c["kinds"].get(kind, 0) + 1
             # Every purchase is counted; only the ones that can be scored are
             # averaged. A purchase that cannot be scored is a real decision
             # that happened and a return that is not knowable, and the two
             # have to be reported apart — see the population figures below,
             # and `unscored`, which says why rather than guessing.
             for cite in (ov or {}).get("failed", []):
-                b = per_rule.setdefault(
-                    cite["key"], {"label": cite.get("label") or cite["key"],
-                                  "n": 0, "n_scored": 0, "wins": 0,
-                                  "avg": None, "returns": []})
+                b = _rule_bucket(c["per_rule"], cite)
                 b["n"] += 1
                 if scored is not None:
                     b["n_scored"] += 1
                     b["returns"].append(scored)
                     if scored > 0:
                         b["wins"] += 1
-            if scored is None:
-                continue
-            (overrides if ov else compliant).append(scored)
-    for b in per_rule.values():
-        b["avg"] = round(sum(b["returns"]) / len(b["returns"]), 1) \
-            if b["returns"] else None
-        b.pop("returns")
+            if scored is not None:
+                c[side].append(scored)
 
-    # Each group says how many purchases it covers AND how many of them could
-    # be scored. Reporting a win rate over the priced subset beside a count of
-    # every override would let a data gap read as a settled result — and this
-    # is the panel that is supposed to be able to indict a rule, so it is the
-    # last place a partial population may pass for the whole.
-    return {
-        "override": {**_summarise(overrides), "n_purchases": counted["override"],
-                     "n_unscored": counted["override"] - len(overrides),
-                     "unscored": _why_unscored(unscored["override"])},
-        "compliant": {**_summarise(compliant),
-                      "n_purchases": counted["compliant"],
-                      "n_unscored": counted["compliant"] - len(compliant),
-                      "unscored": _why_unscored(unscored["compliant"])},
-        "kinds": kinds,
-        "reconstructed_overrides": reconstructed,
-        "per_rule": per_rule,
+    out = {}
+    for name, c in cohorts.items():
+        for b in c["per_rule"].values():
+            b["avg"] = round(sum(b["returns"]) / len(b["returns"]), 1) \
+                if b["returns"] else None
+            b.pop("returns")
+        # Each group says how many purchases it covers AND how many of them
+        # could be scored. Reporting a win rate over the priced subset beside
+        # a count of every override would let a data gap read as a settled
+        # result — and this is the panel that is supposed to be able to
+        # indict a rule, so it is the last place a partial population may
+        # pass for the whole.
+        out[name] = {
+            **COHORTS[name],
+            "override": {**_summarise(c["override"]),
+                         "n_purchases": c["counted"]["override"],
+                         "n_unscored": (c["counted"]["override"]
+                                        - len(c["override"])),
+                         "unscored": _why_unscored(c["unscored"]["override"])},
+            "compliant": {**_summarise(c["compliant"]),
+                          "n_purchases": c["counted"]["compliant"],
+                          "n_unscored": (c["counted"]["compliant"]
+                                         - len(c["compliant"])),
+                          "unscored": _why_unscored(
+                              c["unscored"]["compliant"])},
+            "kinds": c["kinds"],
+            "per_rule": c["per_rule"],
+            "n_purchases": (c["counted"]["override"]
+                            + c["counted"]["compliant"]),
+        }
+    out["unreconstructed"] = {
+        **_summarise(unrebuilt["returns"]),
+        "n_purchases": unrebuilt["counted"],
+        "n_unscored": unrebuilt["counted"] - len(unrebuilt["returns"]),
+        "unscored": _why_unscored(unrebuilt["unscored"]),
+        "reasons": _why_unscored(unrebuilt["reasons"]),
     }
+    return out
 
 
 def _why_unscored(tally: dict) -> list[dict]:
-    """Why the purchases that could not be scored could not be, and how many
-    of each — commonest first.
+    """A tally of reasons as the panel reads it: each sentence with how many
+    entries gave it, commonest first.
 
-    Why, and not just how many. The panel used to say flatly that they "have
-    no price", which the engine agreed with in its own docstring, so neither
-    of them could catch it: a purchase recorded at $0.00 was reported as one
-    with no price, sending the reader to fetch data that would never fix it.
-    In the one panel that is supposed to be able to indict a rule, an
-    invented reason is the last thing that may pass for a finding.
+    Why, and not just how many. The panel used to say flatly that unscored
+    purchases "have no price", which the engine agreed with in its own
+    docstring, so neither of them could catch it: a purchase recorded at
+    $0.00 was reported as one with no price, sending the reader to fetch data
+    that would never fix it. In the one panel that is supposed to be able to
+    indict a rule, an invented reason is the last thing that may pass for a
+    finding. The same shape now carries why a reconstruction could not be
+    made, for the same reason — "no filings had been filed by then" and "the
+    strategy is not installed" send the reader to different places.
     """
     return [{"reason": why, "n": n}
             for why, n in sorted(tally.items(), key=lambda kv: (-kv[1], kv[0]))]
@@ -1293,15 +1657,27 @@ def exit_scorecard(securities: list[dict], price_of) -> dict:
     pick between. What happened after is windowed per sale for the same
     reason — each one is asked about its own aftermath, and a sale the user
     later bought against is asked only about the stretch before that.
+
+    The returns here are not split by cohort, and that is deliberate rather
+    than an oversight. What a sale got and what the price did afterwards are
+    recorded prices and market history — facts that do not change according
+    to when the entry was typed. What *was* reconstructed is the signal the
+    sale was recorded against, so `n_reconstructed` says how many sales in
+    each group carried a rebuilt verdict rather than one seen at the time.
+    That is the figure a reader needs before treating "Panic, three times,
+    and the price rose 20% after each" as evidence about their own nerve.
     """
     out: dict[str, dict] = {}
     for s in securities:
         price = price_of(s)
         for sale in lots(s, "sell"):
-            b = out.setdefault(sale.get("reason") or "Not stated",
-                               {"n": 0, "avg_held": 0.0, "avg_after": 0.0,
+            b = out.setdefault(sale.get("reason") or UNSTATED_REASON,
+                               {"n": 0, "n_reconstructed": 0,
+                                "avg_held": 0.0, "avg_after": 0.0,
                                 "bought_again": 0, "_held": [], "_after": []})
             b["n"] += 1
+            if is_reconstructed(sale):
+                b["n_reconstructed"] += 1
             held = sale_return(s, sale)
             if not _is_absent(held):
                 b["_held"].append(held["value"])

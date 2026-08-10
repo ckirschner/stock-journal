@@ -28,7 +28,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from conftest import balance_face, dur, filing, inst
+from conftest import balance_face, dur, filing, inst, open_since
 
 from engine import facts_store, journals, price_store, strategy_loader
 
@@ -82,6 +82,14 @@ def _state(strategies, answers=ANSWERS) -> dict:
     api = app_mod.Api()
     created = api.create_journal("Long-term ideas", "awkward", dict(answers))
     assert created["ok"], created
+    # The journal has to predate the entries below or none of them can be
+    # sized: what the user told a journal begins on the day it was created,
+    # and before that there is no free cash, no account total and no weight.
+    # That is correct — see journals.answers_on — and it is what a backfill
+    # of a position bought before this program existed genuinely meets. The
+    # screens that render weight need a journal that was there, and the ones
+    # that render a gap get HIST below, which was deliberately not.
+    open_since("2025-12-01")
 
     cik = 611
     _company(cik)
@@ -164,6 +172,32 @@ def _state(strategies, answers=ANSWERS) -> dict:
     assert api.sell_shares("STGD", "Thesis broke", 15.0, "2026-06-10",
                            20)["ok"]
 
+    # A position typed in out of somebody's own records, years before this
+    # journal existed. Every screen has to be able to say so — the row, the
+    # detail page, both scorecards — and nothing about it may read as a
+    # record made at the time. The 2019 purchase reconstructs to nothing at
+    # all, which is the population that must sit outside the override
+    # comparison rather than inside it.
+    assert api.add_security("HIST", "Halloway Tin")["ok"]
+    assert api.save_metrics("HIST", {}, 31.0)["ok"]
+    backfill = [
+        {"kind": "buy", "date": "2019-03-12", "shares": 100, "price": 10.0},
+        {"kind": "buy", "date": "2022-05-04", "shares": 50, "price": 16.0},
+        {"kind": "sell", "date": "2024-09-10", "shares": 50, "price": 24.0,
+         # A reason no other fixture entry gives, so this security cannot
+         # quietly move an average another test is pinning.
+         "reason": "Better opportunity"},
+    ]
+    checked = api.preview_backfill("HIST", backfill,
+                                   "I remember buying it for the buyback and "
+                                   "then forgetting about it for five years.")
+    assert checked["ok"] and not checked["problem"], checked
+    assert not checked["recorded"], "a preview must write nothing"
+    assert api.record_backfill(
+        "HIST", backfill,
+        "I remember buying it for the buyback and then forgetting about it "
+        "for five years.")["ok"]
+
     assert api.record_valuation(
         "ACME", "reverse_dcf",
         {"price": 20, "fcf_ttm": 4, "shares": 10,
@@ -190,6 +224,24 @@ def _state(strategies, answers=ANSWERS) -> dict:
         for s in state["securities"]}
     for ticker, preview in state["__previews"].items():
         assert preview["ok"], (ticker, preview)
+    # The sale dialog renders from a backend reply too, once its date is in
+    # the past — which is exactly when what it freezes stops being what is on
+    # the screen today. Captured for the same reason as the purchase preview.
+    state["__sale_previews"] = {
+        s["ticker"]: api.preview_sale(s["ticker"], "2026-03-02")
+        for s in state["securities"]}
+    for ticker, preview in state["__sale_previews"].items():
+        assert preview["ok"], (ticker, preview)
+    # And the backfill form after a check has come back: rows carrying a
+    # verdict each, including one nothing could be rebuilt for.
+    state["__backfill_rows"] = [
+        {"kind": "buy", "date": "2019-03-12", "shares": "100", "price": "10",
+         "reason": ""},
+        {"kind": "sell", "date": "2024-09-10", "shares": "40", "price": "24",
+         "reason": "Hit valuation"}]
+    state["__backfill"] = api.preview_backfill("HIST",
+                                               state["__backfill_rows"], "")
+    assert state["__backfill"]["ok"], state["__backfill"]
     # The coverage panel loads the same way. Captured for the same reason,
     # and because without it every detail page in the harness rendered
     # "could not reach the app backend" where the panel should be.
@@ -410,10 +462,14 @@ def test_weight_reaches_the_screen_once_the_account_is_known(strategies):
     weight = cited["position.weight"]["observed"]
     assert weight["status"] == "known", weight
     # ACME: 16 shares at the 20.00 close is 320. RVER: 12 shares at the 15.00
-    # hand-entered price is 180. CLSD is closed and holds nothing. Against
-    # 40,000 of free cash that is an account of 40,500.
-    assert cited["portfolio.account_value"]["observed"]["value"] == 40500.0
-    assert round(weight["value"], 4) == round(320 / 40500 * 100, 4)
+    # hand-entered price is 180. HIST: 100 shares left of the 150 typed in
+    # from history, at the 31.00 hand-entered price, is 3,100 — a position
+    # entered afterwards is still a position, and leaving it out of the
+    # account would understate every weight measured against it. CLSD is
+    # closed and holds nothing. Against 40,000 of free cash that is an
+    # account of 43,600.
+    assert cited["portfolio.account_value"]["observed"]["value"] == 43600.0
+    assert round(weight["value"], 4) == round(320 / 43600 * 100, 4)
 
 
 def test_returns_and_scorecards_use_the_fetched_price(strategies):
@@ -430,14 +486,22 @@ def test_returns_and_scorecards_use_the_fetched_price(strategies):
     assert s["_price"]["source"] == "fetched"
     assert s["_return"]["status"] == "known", \
         f'a fetch-priced position reported no return: {s["_return"]}'
-    # …and it reaches the analytics, not just the row. Six purchases were
+    # …and it reaches the analytics, not just the row. Eight purchases were
     # recorded here — two of ACME, two of RVER either side of its exit, one
-    # of CLSD, one of STGD — and every one of them has to be in the count,
-    # whichever side of the override line it fell on. A purchase that drops
+    # of CLSD, one of STGD and two of HIST typed in from history — and every
+    # one of them has to be in the count, whichever side of the override line
+    # it fell on and whichever cohort it belongs to. A purchase that drops
     # out because the price behind its return came from a fetch is evidence
     # lost silently.
     card = state["override_scorecard"]
-    assert card["override"]["n"] + card["compliant"]["n"] == 6
+    counted = sum(card[c][g]["n_purchases"]
+                  for c in ("live", "reconstructed")
+                  for g in ("override", "compliant"))
+    assert counted + card["unreconstructed"]["n_purchases"] == 8
+    # And HIST's 2019 purchase is in the third population, not in either
+    # comparison: nothing could be rebuilt for a day with no filings behind
+    # it, so there was no signal to obey or defy.
+    assert card["unreconstructed"]["n_purchases"] >= 1
 
 
 def test_the_screen_and_the_strategy_cannot_disagree_on_when_it_began(

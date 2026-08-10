@@ -567,19 +567,40 @@ class TestTheAccountAndWeight:
         assert ctx["portfolio"]["account_value"]["value"] == 1000.0
         assert ctx["position"]["weight"]["value"] == 20.0
 
-    def test_under_a_pin_cash_participates_but_says_it_is_undated(self):
-        """The same rule a hand-entered measure obeys: an answer with no date
-        is the value on record now, never one known to be true then."""
+    def test_under_a_pin_cash_is_the_answer_of_that_day_or_none_at_all(self):
+        """Free cash used to be served from today's answer under any pin,
+        with a caution saying it carried no date. It does carry a date — every
+        change to it is on the journal's own append-only record — and the
+        caution was the wrong fix anyway: a qualified wrong number still
+        decides. The account total is built from this, every weight is
+        measured against the account, and strategies bind on weight, so a
+        purchase backdated two years was being sized against today's balance
+        with a sentence beside it.
+
+        The answers that reach the context are now already the ones that were
+        on record on the day being evaluated — resolved in journals.answers_on
+        before the context is built — so a pin serves a figure or nothing.
+        Nothing is where every real backfill lands, because the journal held
+        no answers before it existed.
+        """
         sec = self._held(926)
         ctx = build(sec, record=cash_strategy(), inputs={"free-cash": 800.0},
                     as_of="2025-03-05")
-        for node in (ctx["portfolio"]["cash"],
-                     ctx["portfolio"]["account_value"],
-                     ctx["position"]["weight"]):
-            assert any("carries no date" in c for c in node["cautions"]), node
-        assert not build(sec, record=cash_strategy(),
-                         inputs={"free-cash": 800.0}
-                         )["portfolio"]["cash"]["cautions"]
+        # Given an answer for that day, it is served as one — dated, not
+        # apologised for.
+        assert ctx["portfolio"]["cash"]["value"] == 800.0
+        assert not ctx["portfolio"]["cash"]["cautions"]
+        assert "2025-03-05" in \
+            " ".join(ctx["portfolio"]["cash"]["provenance"])
+
+        # Given none, the absence cascades all the way to weight rather than
+        # a present-day balance standing in for a past one.
+        dark = build(sec, record=cash_strategy(), inputs={},
+                     as_of="2025-03-05")
+        assert dark["portfolio"]["cash"]["status"] == "absent"
+        assert "2025-03-05" in dark["portfolio"]["cash"]["reason"]
+        assert dark["portfolio"]["account_value"]["status"] == "absent"
+        assert dark["position"]["weight"]["status"] == "absent"
 
     def test_an_answer_to_a_question_that_does_not_apply_is_not_served(self):
         """A stale answer to a gated-off question is worse than no answer:

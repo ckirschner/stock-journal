@@ -282,13 +282,30 @@ class TestTheThesisIsAmendedNeverRewritten:
         idea(api)
         assert api.amend_thesis("SYN", "Toll road.", "Take rate below 2%.")
         buy(api, when="2026-01-05")
-        assert api.sell_shares("SYN", "Thesis broke", 9.0, "2026-04-05")["ok"]
+        assert api.sell_shares("SYN", "Thesis broke", 9.0,
+                               date.today().isoformat())["ok"]
         sale = portfolio.lots(security(), "sell")[0]
         assert sale["snapshot"]["thesis"]["falsifier"] == "Take rate below 2%."
         # And no valuation: a claim is the case for a purchase, and
         # attaching one to an exit would invent a number the sale was never
         # justified by.
         assert sale["snapshot"]["valuation"] is None
+
+    def test_a_backdated_sale_freezes_the_thesis_of_its_own_day(self, api):
+        """The clock governs the exit exactly as it governs the purchase. A
+        sale entered from history grades against what was on record then, and
+        a thesis written since is not the version anybody sold against —
+        however much better it reads now."""
+        idea(api)
+        buy(api, when="2026-01-05")
+        # Written today, about a name sold in March. It cannot be the case
+        # the sale was judged against, because it did not exist in March.
+        assert api.amend_thesis("SYN", "Toll road.", "Take rate below 2%.")
+        assert api.sell_shares("SYN", "Thesis broke", 9.0, "2026-03-05")["ok"]
+        sale = portfolio.lots(security(), "sell")[0]
+        assert sale["snapshot"]["thesis"] is None
+        assert sale["snapshot"]["evaluation"]["basis"] == "reconstructed"
+        assert sale["snapshot"]["evaluation"]["as_of"] == "2026-03-05"
 
 
 # -- the valuation claim ------------------------------------------------------

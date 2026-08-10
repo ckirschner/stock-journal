@@ -115,6 +115,26 @@ def entered(security, day=None, **values):
     return security
 
 
+def open_since(day: str):
+    """Move the open journal's creation date back to `day`.
+
+    A journal holds no answers before it existed, so a reconstruction of an
+    earlier date serves no free cash, no account total and no weight — see
+    journals.answers_on. That is correct and it is what every real backfill
+    meets, but a test about some *other* clock — which assessment stood, which
+    thesis was standing — needs the account arithmetic to stay out of its way.
+
+    Poked on the saved document rather than offered as a parameter, for the
+    same reason a dated entry cannot name its own date: a journal that could
+    be created into the past is a journal whose whole answer record could be.
+    """
+    from engine import journals
+    doc = journals.load(journals.resolve_open())
+    doc["created"] = f"{day}T00:00:00+00:00"
+    journals.save(doc)
+    return doc
+
+
 def journal_for(strategy_id, name="Test journal", inputs=None, config=None):
     """A journal stamped with a discovered strategy, saved and opened.
 
