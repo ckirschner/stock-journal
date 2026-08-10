@@ -94,11 +94,46 @@ function check(label, code) {
 }
 
 check("mast", "renderMast(); renderTabs(); 0");
-for (const t of ["holdings", "previous", "ideas", "strategy", "data"]) {
+for (const t of ["holdings", "previous", "ideas", "allocate", "strategy",
+                 "data"]) {
   run(`tab = ${JSON.stringify(t)};`);
   check(t, t === "strategy" ? "strategyView()"
-    : t === "data" ? "dataView()" : "listView()");
+    : t === "data" ? "dataView()"
+    : t === "allocate" ? "allocationView()" : "listView()");
 }
+// The allocation view's four standings, each rendered. Only one of them can
+// be true of any real journal, and the other three are exactly where an
+// empty screen would ship unnoticed — "nothing qualifies" is the ORDINARY
+// outcome of a disciplined strategy, so it is the branch a user sees most
+// and the one nothing would otherwise render.
+run('tab = "allocate";');
+for (const [id, headline] of [
+  ["empty", "Nothing is being tracked yet."],
+  ["unfunded", "1 position could take capital, and the free cash on record "
+    + "does not cover any of them."],
+  ["cash", "Nothing qualifies today."],
+  ["unavailable", "This journal's strategy could not be asked."],
+  ["open", "1 position may take capital now."],
+]) {
+  check(`allocate:${id}`, `(() => {
+    const a = S.allocation; S.allocation = ${JSON.stringify({})};
+    S.allocation = JSON.parse(JSON.stringify(a || {cash:{status:"absent",reason:"x"},
+      account_value:{status:"absent",reason:"x"}, ready:[], waiting:[], excluded:[]}));
+    S.allocation.standing = {id: ${JSON.stringify(id)},
+      headline: ${JSON.stringify(headline)},
+      detail: "A sentence the screen is supposed to carry.",
+      action: ${id === "empty" ? '"Add a security"' : "null"}};
+    const h = allocationView(); S.allocation = a; return h;
+  })()`);
+}
+// The screen itself failing to build is the only case that renders nothing.
+// A journal whose STRATEGY cannot be asked keeps a full allocation view —
+// that is the "unavailable" standing above — because this is the only screen
+// a purchase into a name you already hold can start from, and a screen that
+// disappears is a block on recording however it is described.
+check("allocate:unbuildable", `(() => {
+  const a = S.allocation; S.allocation = null;
+  const h = allocationView(); S.allocation = a; return h; })()`);
 run('tab = "holdings";');
 for (const s of state.securities) {
   check(`detail:${s.ticker}`, `detailView(find(${JSON.stringify(s.ticker)}))`);
@@ -106,10 +141,20 @@ for (const s of state.securities) {
 // The dialogs render from a strategy's declaration and from the lot list,
 // which is where a renamed key or an unhandled field type shows up first.
 // They write into the stub's dialog body rather than returning markup.
+/* Title, blurb and body — all three. The blurb is where a dialog says what
+   an action costs, and reading only the body meant a confirmation could lose
+   the sentence naming the cost with nothing here noticing. */
 const dlg = (label, code) => check(label,
-  `${code}; document.getElementById("dlgbody").innerHTML`);
+  `${code}; [document.getElementById("dlgtitle").textContent,
+             document.getElementById("dlgblurb").textContent,
+             document.getElementById("dlgbody").innerHTML].join("\\n")`);
 dlg("dlg:settings", "dlgSettings()");
 dlg("dlg:newjournal", "dlgNewJournal()");
+dlg("dlg:renamejournal", "dlgRenameJournal()");
+// The one destructive dialog in the program. It has to say what goes, and it
+// has to offer the export first — a confirmation that does not name the cost
+// is a confirmation nobody read.
+dlg("dlg:deletejournal", "dlgDeleteJournal()");
 const holding = state.securities.find((s) => s.bucket === "holdings");
 if (holding) dlg("dlg:sell", `dlgSell(find(${JSON.stringify(holding.ticker)}))`);
 
@@ -147,6 +192,30 @@ for (const ticker of Object.keys(state.__previews || {})) {
   await run(`dlgBuy(find(${JSON.stringify(ticker)}))`);
   check(`dlg:buy:${ticker}`, `document.getElementById("dlgbody").innerHTML`);
 }
+// A change row — how far a measure has moved since one of your own
+// purchases. No fixture journal here has two purchases into one holding, so
+// nothing in either payload carries one, and the branch that renders it
+// would ship unexercised: a change is its own subject kind, with its own
+// unit and its own sign rule, and the whole risk is a reader taking "6.0%"
+// for the margin rather than for the six points it fell.
+check("evidence:change", `(() => {
+  const row = (id, unit, value) => evidenceRow({
+    group: null,
+    subject: {kind: "change", id, since: "first-purchase", unit,
+              label: "Gross margin, change since you first bought",
+              explain: "How far this has moved since the day this holding began."},
+    observed: {status: "known", value, cautions: [], provenance: [
+      "40 on 2024-02-01, frozen at that purchase and not worked out again, against 34 now"]},
+    test: {phrase: "at least", threshold: -5, threshold_from:
+           {kind: "value", id: "drift", label: "Worst fall you will add behind",
+            unit}, absent: null},
+    outcome: "fail"}, 0);
+  return [row("gross_margin_ttm", "percentage_points", -6),
+          row("gross_margin_ttm", "percentage_points", 2),
+          row("current_ratio", "ratio", 0.2),
+          row("current_ratio", "ratio", -1.1)].join("");
+})()`);
+
 // the explain-this-figure branch, which only renders when a tip is open
 if (state.securities.length) {
   run('tipOpen = "ev:0";');
@@ -243,6 +312,33 @@ const must = [
   ["missing-strategy", "not installed", "a missing strategy says so"],
   ["welcome", "one strategy", "the empty state explains the commitment"],
   ["data", "Back up", "export is reachable"],
+  ["allocate:cash", "Nothing qualifies today.",
+   "the ordinary outcome renders as a position rather than an empty screen"],
+  // The host writes what a standing MEANS; this only proves the view puts it
+  // on the page. What those sentences actually say is pinned in
+  // tests/test_allocation.py, where the copy lives — asserting the backend's
+  // wording against a stub the harness itself wrote would prove nothing.
+  ["allocate:cash", "A sentence the screen is supposed to carry.",
+   "the standing's explanation reaches the screen, not just its headline"],
+  ["allocate:empty", "Add a security",
+   "the one standing with an action offers it"],
+  ["allocate:unbuildable", "nothing to allocate against",
+   "a screen that could not be built says so instead of rendering blank"],
+  ["dlg:deletejournal", "Export it first",
+   "the destructive dialog offers the backup before the deletion"],
+  ["dlg:deletejournal", "none of it can be recovered",
+   "the destructive dialog says the record is not recoverable"],
+  ["dlg:deletejournal", 'name="confirm_name"',
+   "the deletion is confirmed by typing the name, not by a bare yes"],
+  ["dlg:renamejournal", 'name="name"', "the rename dialog asks for a name"],
+  // A distance between two readings always shows its sign, in every unit.
+  // Unsigned, "0.20" beside a current ratio of 2.4 reads as a level rather
+  // than as a move, and the reader has no way to tell which.
+  ["evidence:change", "−6.0 pp", "a percent measure moves in points"],
+  ["evidence:change", "+2.0 pp", "a rise shows its sign"],
+  ["evidence:change", "+0.20", "a unit that does not sign itself is signed"],
+  ["evidence:change", "change since you first bought",
+   "the row says which purchase it measures from"],
 ];
 if (stamped) {
   // The whole point of carrying a caution: it is on screen beside the number
@@ -732,9 +828,15 @@ for (const s of twice) {
    the escaper chose. */
 const asMarkup = (v) => String(v).replace(/[&<>"']/g, (c) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+/* Whitespace-insensitive. Every screen here is built from template literals,
+   so a sentence breaks across source lines wherever that happens to be
+   convenient — an assertion failing on a line break would be testing the
+   indentation rather than the copy, and would break again the next time
+   somebody rewrapped a paragraph. */
+const flat = (t) => String(t ?? "").replace(/\s+/g, " ");
 for (const [screen, text, why] of must) {
-  const html = String(out[screen] ?? "");
-  if (!html.includes(text) && !html.includes(asMarkup(text))) {
+  const html = flat(out[screen]);
+  if (!html.includes(flat(text)) && !html.includes(flat(asMarkup(text)))) {
     problems.push(`${screen}: ${why} — expected "${text}"`);
   }
 }

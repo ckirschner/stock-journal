@@ -68,6 +68,7 @@ because updating a fact is not a change to what the rules demand.
 from __future__ import annotations
 
 import re
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -198,6 +199,88 @@ def load(journal_id: str) -> dict:
 
 def save(journal: dict) -> None:
     store.write_json(path_for(journal["id"]), journal)
+
+
+# -- renaming and deleting ---------------------------------------------------
+# Two operations on the journal as an object, rather than on anything it
+# records. They are here rather than in the app because the id/name split is a
+# storage fact, and a caller that did not know it would get renaming wrong in
+# the one way that matters.
+
+def rename(journal_id: str, name: str) -> dict:
+    """Give a journal a different name. Its id, and therefore its folder,
+    never moves.
+
+    The two are separate on purpose. The id is the address — `list_journals`
+    reads it off the directory, `load` overwrites the document's own copy with
+    the directory it came from, and every stamp, export bundle and
+    machine-local "which one is open" points at it. Moving the folder to match
+    a new name would break all of those to make a slug prettier, and the slug
+    is not what anyone reads: the name is, and it is free text with nothing
+    hanging off it.
+
+    So a journal renamed six times keeps `sample-graham-3` as its address
+    forever, and the switcher shows whatever it is now called. The only place
+    the old name survives is the id, which nobody is asked to read.
+
+    Nothing recorded is touched. A name is not a rule and not a decision, so
+    this goes on no change record and owes no reason — retitling a notebook
+    does not restate what is written in it.
+    """
+    clean = str(name or "").strip()
+    if not clean:
+        raise ValueError("A journal needs a name — it is how you tell two of "
+                         "them apart.")
+    journal = load(journal_id)
+    journal["name"] = clean
+    save(journal)
+    return journal
+
+
+def delete(journal_id: str) -> dict:
+    """Remove a journal and everything it recorded.
+
+    This is the one destructive operation in the program, and it is worth
+    saying plainly what it destroys: every position, every dated note, every
+    frozen snapshot of a decision, and the record of every rule change. None
+    of that is recoverable and none of it is anywhere else — principle 11
+    keeps a journal out of the repository, so there is no copy in version
+    control to fall back on.
+
+    Append-only is a rule about *editing* the record, and this does not edit
+    it. Removing a notebook whole is a different act from rewriting a page in
+    one, and refusing it would leave four journals called "SAMPLE — GRAHAM"
+    on screen forever with no way to tell them apart — a tool that cannot be
+    tidied stops being used, which loses the record anyway and more slowly.
+
+    What this will not do is decide for the user. It takes a journal id and
+    removes it; whether they were warned, and whether they were offered an
+    export first, belongs to the screen that calls it. The engine refuses
+    only what it can actually check: that the id names a journal directory
+    inside the journals directory and nothing else.
+
+    Returns what was removed, so a caller can say what happened rather than
+    reporting a bare success about a thing that is now gone.
+    """
+    path = path_for(journal_id)
+    folder = path.parent
+    if not folder.is_dir():
+        raise store.StoreError(
+            f'There is no journal called "{journal_id}" in {journals_dir()}.')
+    listed = next((j for j in list_journals() if j["id"] == journal_id), None)
+    removed = {"id": journal_id,
+               "name": (listed or {}).get("name") or journal_id,
+               "securities": (listed or {}).get("securities"),
+               "holdings": (listed or {}).get("holdings")}
+    shutil.rmtree(folder)
+    # The machine-local pointer would otherwise name a journal that is not
+    # there. `resolve_open` copes with that already, but leaving a dangling id
+    # behind means the next journal created with the same slug silently
+    # inherits "you had this one open", which is a small lie about a fact the
+    # user never stated.
+    if open_id() == journal_id:
+        set_open(None)
+    return removed
 
 
 # -- the open journal --------------------------------------------------------

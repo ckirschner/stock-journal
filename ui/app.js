@@ -14,6 +14,15 @@ const TABS = [
   ["holdings", "Current holdings"],
   ["previous", "Previous holdings"],
   ["ideas", "Ideas"],
+  /* Where capital goes is its own screen, and it is the ONLY place a
+     purchase into a name you already hold can be started. That is not a
+     layout preference. Asked on a holding's own page, "should I buy more of
+     this" is an averaging-down machine with an authority stamp on it —
+     nobody opens a holding's page at random, they open it because it is
+     down. Here the list is ordered by how far each position is from where
+     its own strategy wants it, so the thing you already hold too much of is
+     never what the screen suggests. */
+  ["allocate", "Where capital goes"],
   ["strategy", "Strategy"],
   ["metrics", "Metrics"],
   ["data", "Data"],
@@ -106,7 +115,16 @@ function fmtUnit(v, unit) {
    and through the contract's unit list otherwise. */
 function fmtSubject(subj, v) {
   const b = subj.kind === "measure" ? bankMeta(subj.id) : null;
-  return b && b.format ? fmtBank(v, b.format) : fmtUnit(v, subj.unit);
+  if (b && b.format) return fmtBank(v, b.format);
+  const out = fmtUnit(v, subj.unit);
+  /* A distance between two readings always shows its sign. The bank's format
+     is deliberately not used for one — "0.0%" over a six-point fall in a
+     margin renders "6.0%", which reads as the margin rather than as the move
+     — and a rise of 0.2 in a ratio renders "0.20", which reads the same way.
+     Some units sign themselves; the rest are signed here so no change row can
+     be mistaken for the level it moved from. */
+  return (subj.kind === "change" && Number.isFinite(Number(v)) && Number(v) >= 0
+    && !String(out).startsWith("+")) ? "+" + out : out;
 }
 
 const bankMeta = (id) => (S.bank_meta || {})[id] || null;
@@ -327,7 +345,17 @@ function renderTabs() {
        and closed twice is two things that happened, and counting it once
        hides the second. The other two count securities, because a security
        is either held now or it is not. */
+    /* The allocation count is what may take capital NOW — not what is
+       waiting on a condition and not what was turned down. A tab badge is
+       read at a glance and has one number's worth of room, so it has to be
+       the number somebody would act on. */
     const n = id === "previous" ? `<em>${allClosedPeriods().length}</em>`
+      : id === "allocate" ? (S.allocation
+        ? `<em>${(S.allocation.ready || []).length}</em>`
+        /* Not a zero. "Nothing may take capital" and "the strategy could
+           not be asked" are different facts, and a badge reading 0 for the
+           second says the discipline is working when nothing ran. */
+        : '<em title="This journal\'s strategy could not be asked">—</em>')
       : BUCKETS.includes(id) ? `<em>${inBucket(id).length}</em>` : "";
     return `<button class="tab" role="tab" aria-selected="${tab === id}" data-tab="${id}">${label}${n}</button>`;
   }).join("");
@@ -342,8 +370,79 @@ function journalBar() {
       data-journal="${esc(x.id)}" aria-pressed="${j && x.id === j.id}"
       ${x.problem ? `disabled title="${esc(x.problem)}"` : ""}>${esc(x.name)}</button>`).join("")}</span>
     <button class="btn" data-act="newjournal">New journal</button>
+    ${j ? `<button class="btn" data-act="renamejournal">Rename</button>
+    <button class="btn danger" data-act="deletejournal">Delete</button>` : ""}
     ${others.length ? "" : '<span class="dim">One strategy per journal. A second strategy means a second journal.</span>'}
   </div>`;
+}
+
+/* Renaming touches the name and nothing else. The journal's id is its
+   address on disk and never moves — which is why a journal renamed six times
+   still opens, still exports and still stamps the same way. Nothing recorded
+   is affected, so this owes no reason and goes on no change record: a name
+   is not a rule. */
+function dlgRenameJournal() {
+  const j = S.journal;
+  if (!j) return;
+  dialog({
+    title: "Rename this journal",
+    blurb: "Only the name changes. Everything recorded in it, and the folder "
+      + "it lives in, stay exactly where they are.",
+    body: field("name", "Name", j.name, "What you want to see in the journal "
+      + "switcher. Four journals with the same name is the problem this "
+      + "solves — give them names you can tell apart."),
+    confirm: "Rename",
+    onConfirm: async (d) => {
+      if (!String(d.name || "").trim()) return "A journal needs a name.";
+      /* apiRaw, not api: a refusal has to land in the dialog the user is
+         looking at. Through api() it becomes a toast that fades in four
+         seconds while the dialog closes as though the rename had worked,
+         and the switcher still showing the old name is the only clue. */
+      const r = await apiRaw("rename_journal", j.id, d.name);
+      if (!r.ok) return r.error;
+    },
+  });
+}
+
+/* The one destructive action in the program, and the dialog says exactly
+   what goes with it rather than asking "are you sure".
+
+   Two things stand in front of it: an export offered first, because the
+   record is nowhere else — principle 11 keeps a journal out of the
+   repository, so there is no copy in version control to fall back on — and
+   the journal's name typed out, checked on the backend rather than here. A
+   confirmation the browser could skip is not a confirmation the record
+   has. */
+function dlgDeleteJournal() {
+  const j = S.journal;
+  if (!j) return;
+  const listed = (S.journals || []).find((x) => x.id === j.id) || {};
+  const counts = listed.securities
+    ? `${listed.securities} securit${listed.securities === 1 ? "y" : "ies"}`
+      + (listed.holdings ? `, ${listed.holdings} of them held` : "")
+      + ", along with everything each of them has on record"
+    : "Nothing has been recorded in it yet";
+  dialog({
+    title: `Delete "${j.name}"`,
+    blurb: "This removes every position, every note, every recorded decision "
+      + "and the whole rule-change history in this journal. Nothing else "
+      + "holds a copy and none of it can be recovered.",
+    body: `<div class="notice"><h4>What goes</h4>
+      <p>${esc(counts)}. Other journals are untouched.</p></div>
+      <div class="notice quiet"><h4>Export it first</h4>
+      <p>Backing up on the Data tab writes the whole journal to a file you
+      choose. It takes a moment and it is the only thing that makes this
+      reversible.</p></div>
+      ${field("confirm_name", "Type the journal's name to confirm", "",
+        `Exactly as it reads: ${j.name}`)}`,
+    confirm: "Delete this journal",
+    danger: true,
+    onConfirm: async (d) => {
+      const r = await apiRaw("delete_journal", j.id, d.confirm_name || "");
+      if (!r.ok) return r.error;
+      openTicker = null; tab = "holdings";
+    },
+  });
 }
 
 const cfgErrorBox = (errs) => !errs.length ? "" :
@@ -572,16 +671,40 @@ function scorecards() {
    strategy that produced it, the sentence saying why, and each figure it
    cited with what was required and how the comparison came out. */
 
+/* How much, in whatever unit the strategy sized it in. The host's three, and
+   a strategy cannot add a fourth. */
+function sizeText(size) {
+  const s = size || {};
+  return s.unit === "weight" ? `${s.value}% of the account`
+    : s.unit === "usd" ? "$" + Number(s.value).toLocaleString()
+    : `${Number(s.value).toLocaleString()} shares`;
+}
+
+/* The tranches a staged entry is holding back, each with what releases it.
+   Rendered as intention and never as entitlement: the strategy re-runs every
+   time, so a tranche is only ever bought when that day's evaluation offers
+   it as the size in front of you. Saying "then 3% at a 40% discount" as a
+   promise would be this screen scheduling a purchase, which is the one thing
+   a pre-commitment must not become — the business is re-tested each time,
+   and it may fail. */
+function planText(plan) {
+  if (!plan || !plan.length) return "";
+  return `<div class="pe-block"><b>Held back, and what releases it</b>
+    <ul class="pe-nmw">${plan.map((t) =>
+      `<li>${esc(sizeText(t.size))} — once ${esc((t.condition || {}).summary)}</li>`).join("")}</ul>
+    <span class="dim">Written in advance, and re-tested every time. A tranche
+    goes in only when this strategy offers it on the day, which it will not do
+    if the business has stopped qualifying.</span></div>`;
+}
+
 function payloadText(d) {
   const p = d.payload || {};
   if (d.render === "commit") {
-    const size = p.size || {};
-    const how = size.unit === "weight" ? `${size.value}% of the account`
-      : size.unit === "usd" ? "$" + Number(size.value).toLocaleString()
-      : `${Number(size.value).toLocaleString()} shares`;
-    return p.condition
+    const how = sizeText(p.size);
+    const head = p.condition
       ? `Commit ${how} — once ${esc(p.condition.summary)}`
       : `Commit ${how}, now`;
+    return head + planText(p.plan);
   }
   if (d.render === "reduce") {
     const t = p.to || {};
@@ -685,6 +808,7 @@ function evidenceRow(item, i) {
          : subj.kind === "value" ? "A setting this strategy ships and you can change"
          : subj.kind === "input" ? "Something you told this journal at setup"
          : subj.kind === "fact" ? "A figure the journal reports about your position"
+         : subj.kind === "change" ? `How far this has moved since one of your own purchases. Both readings are the journal's — the one frozen at that purchase and the one on record now — and the distance between them is worked out here, not stated by the strategy. Bank entry <code>${esc(subj.id)}</code>`
          : "A figure the strategy worked out itself"}</span></div>` : "";
 
   /* No action here, deliberately. A verdict waiting on a question nobody
@@ -928,6 +1052,20 @@ function detailView(s) {
     ${!isHold && !isPrev ? '<button class="btn danger" data-act="remove">Remove</button>' : ""}
     ${isHold ? '<button class="btn danger" data-act="sell">Record a sale</button>' : ""}
     </div></div>`;
+  /* No way to buy more of it from here, and that costs a click on purpose.
+     This page is where you end up when a holding is down, and a button
+     offering more of it — with a size on it — is the tool lending its
+     authority to averaging down at the moment somebody is looking for
+     permission. Where the money goes is a question about the whole list and
+     is answered on the screen that can see all of it. The verdict above
+     still says whether this one is eligible; it just does not say how much. */
+  if (isHold) {
+    h += `<p class="hint">Putting more money into this is decided on
+      <button class="linkish" data-tab="allocate">Where capital goes</button>,
+      beside everything else your rules would take today. Your average cost
+      is on this page because it is worth knowing; what it is not is
+      available to any rule, on either screen.</p>`;
+  }
   if (fetching) {
     h += `<p class="hint" id="fetchstate" style="margin:8px 0 0">${esc(fetchStateText(s._fetch))}</p>`;
     startFetchPoll(s.ticker);
@@ -1839,6 +1977,151 @@ function welcomeView() {
   return h;
 }
 
+/* ------------------------------------------------- where capital goes ---- */
+/* One question — "I have money, where does it go" — asked across the whole
+   journal instead of one security at a time.
+
+   Every figure here comes off the backend's own allocation view. Nothing is
+   ranked, scored or converted in this file: the ordering is the amount each
+   position may take, descending, worked out against the same account value
+   every verdict on every other screen was measured against. Where a figure
+   could not be reached it arrives absent with the host's reason, and the
+   entry is shown unordered rather than given a made-up place in the list. */
+
+const allocAmount = (a) => (a && a.status === "known")
+  ? `<b>${esc(fmtUnit(a.value, "usd"))}</b>`
+  : `<span class="chip blank">not known</span>`;
+
+const allocWhy = (a) => (a && a.status !== "known")
+  ? `<div class="greynote">${esc(a.reason)}</div>` : "";
+
+const allocProv = (a) => (a && a.status === "known")
+  ? (a.provenance || []).map((p) => `<div class="greynote">${esc(p)}</div>`).join("")
+  : "";
+
+/* One line for a position that may take capital. The action is the same
+   recording dialog the security page uses, so a purchase started here is
+   captured exactly as any other is — the same frozen decision, the same
+   override capture where it is one. */
+function allocEntry(e) {
+  const cond = e.condition
+    ? `<div class="greynote">Held back until ${esc(e.condition.summary)}. Your
+       strategy will offer it as the size in front of you on the day it
+       decides that has happened.</div>` : "";
+  /* "May go in now" is only true where nothing is holding it back. A
+     conditioned commit is sized and waiting, and labelling its figure as
+     going in now would contradict the heading it renders under. */
+  const shape = [
+    ["Already in", e.committed],
+    [e.condition ? "Would go in" : "May go in now", e.amount],
+    ["Held back", e.plan ? e.plan.held_back : null],
+    ["Whole position", e.target],
+  ].filter(([, v]) => v).map(([label, v]) =>
+    /* An em-dash with the reason thrown away is the absence rule failing at
+       the last inch: the host worked out precisely why each of these could
+       not be reached, and a dash tells the reader only that something is
+       missing. The reason rides in the title, the way every other bare
+       figure on these screens carries its own. */
+    `<div class="fact" ${v.status === "known" ? "" :
+      `title="Not known: ${esc(v.reason)}"`}><i>${esc(label)}</i><b>${
+      v.status === "known" ? esc(fmtUnit(v.value, "usd")) : "—"}</b></div>`)
+    .join("");
+
+  return `<div class="pentry">
+    <div class="alloc-head">
+      <div><b><button class="linkish" data-act="opensec" data-t="${esc(e.ticker)}">${esc(e.ticker)}</button></b>
+        <span class="dim">${esc(e.name || "")}</span>
+        <div class="dim">${esc(e.state.name)} · ${esc(e.summary)}</div></div>
+      <div class="alloc-amt">${allocAmount(e.amount)}
+        <div class="dim">${esc(sizeText(e.size))}</div></div>
+    </div>
+    ${allocWhy(e.amount)}${allocProv(e.amount)}${cond}
+    <div class="facts">${shape}</div>
+    ${e.plan ? planText(e.plan.tranches) : ""}
+    <div class="toolbar"><button class="btn primary" data-act="buy"
+      data-t="${esc(e.ticker)}">${e.held ? "Record a purchase — adding to it"
+        : "Record a purchase"}</button></div>
+  </div>`;
+}
+
+/* The securities the strategy will not put capital into, each with the rule
+   that turned it down.
+
+   Listed rather than hidden, for two reasons. "Your strategy said no to
+   eleven names today" is the useful half of an empty screen — it is the
+   evidence that the rules are working rather than that something failed to
+   load. And a purchase made against the signal has to be recordable from
+   somewhere: the tool records decisions and never blocks them, and this is
+   the only screen a purchase into a name you already hold can start from. */
+function allocExcluded(e) {
+  return `<div class="pentry">
+    <div class="alloc-head">
+      <div><b><button class="linkish" data-act="opensec" data-t="${esc(e.ticker)}">${esc(e.ticker)}</button></b>
+        <span class="dim">${esc(e.name || "")}</span>
+        <div class="dim">${esc(e.summary)}</div></div>
+      <div><span class="chip ${"s-" + (RENDER_TONE[e.render] || "none")}">${esc(e.state.name)}</span></div>
+    </div>
+    <div class="toolbar"><button class="btn danger" data-act="buy"
+      data-t="${esc(e.ticker)}">Record a purchase against this</button></div>
+  </div>`;
+}
+
+function allocationView() {
+  const a = S.allocation;
+  /* Only when the screen itself could not be built — a data layer that threw
+     on the way here. A journal whose STRATEGY cannot be asked still gets a
+     full allocation view, with every security listed and the host's own
+     reason against each: this is the only screen a purchase into a name you
+     already hold starts from, so it must not be the screen that disappears
+     when something upstream breaks. */
+  if (!a) {
+    return `<section class="group"><div class="ghead"><h3>Where capital goes</h3></div>
+      <p class="hint">This screen could not be built, so there is nothing to
+      allocate against. Every security is still on the holdings and ideas
+      tabs, and nothing you have recorded is affected.</p></section>`;
+  }
+  const st = a.standing;
+  const figure = (label, v) => `<div class="fact"><i>${esc(label)}</i><b>${
+    v && v.status === "known" ? esc(fmtUnit(v.value, "usd")) : "—"}</b>${
+    v && v.status !== "known" ? `<div class="greynote">${esc(v.reason)}</div>` : ""}</div>`;
+
+  let h = `<section class="group">
+    <div class="ghead"><h3>Where capital goes</h3></div>
+    <div class="rollup"><div class="pe-head"><b>${esc(st.headline)}</b></div>
+      <div class="pe-why">${prose(st.detail)}</div>
+      ${st.action ? `<div class="toolbar"><button class="btn primary" data-act="add">${esc(st.action)}</button></div>` : ""}
+    </div>
+    <div class="facts">${figure("Free cash", a.cash)}${figure("Account value", a.account_value)}</div>
+  </section>`;
+
+  if (a.ready.length) {
+    h += `<section class="group"><div class="ghead"><h3>May take capital now</h3>
+      <span>${a.ready.length}</span></div>
+      <p class="hint">Furthest from where its own strategy wants it, first.
+      Every amount is what that strategy said, converted against your account
+      — nothing here ranks one business above another.</p>
+      <div class="plist">${a.ready.map(allocEntry).join("")}</div></section>`;
+  }
+  if (a.waiting.length) {
+    h += `<section class="group"><div class="ghead"><h3>Waiting on a condition</h3>
+      <span>${a.waiting.length}</span></div>
+      <p class="hint">Your strategy has sized these and is holding them back
+      until something it stated is true. It decides when that has happened —
+      nothing here checks the condition, and nothing here stops you.</p>
+      <div class="plist">${a.waiting.map(allocEntry).join("")}</div></section>`;
+  }
+  if (a.excluded.length) {
+    h += `<section class="group"><div class="ghead"><h3>Your strategy says no to these</h3>
+      <span>${a.excluded.length}</span></div>
+      <p class="hint">Listed with the rule that turned each one down. Buying
+      one anyway is allowed and always will be — it is recorded as going
+      against your own signal, with the reason you give, which is the part
+      worth reading in a year.</p>
+      <div class="plist">${a.excluded.map(allocExcluded).join("")}</div></section>`;
+  }
+  return h;
+}
+
 /* ---------------------------------------------------------------- render */
 function render() {
   if (!S) return;
@@ -1853,6 +2136,7 @@ function render() {
   } else if (tab === "strategy") v.innerHTML = strategyView();
   else if (tab === "metrics") v.innerHTML = metricsView();
   else if (tab === "data") v.innerHTML = dataView();
+  else if (tab === "allocate") v.innerHTML = allocationView();
   else v.innerHTML = listView();
 }
 
@@ -2352,7 +2636,12 @@ async function dlgBuy(s, dateChosen, keep, fallbackDate) {
       if (r.state_changed) {
         toast(`The state changed to ${r.state} between preview and commit (data or the strategy moved). The purchase is recorded under the new state${r.override ? " as an override — add a note with your reasoning" : ""}.`, !r.commit);
       }
-      tab = "holdings";
+      /* Stay where the purchase was started from. Someone allocating a sum
+         across a list has more of the list to get through, and throwing them
+         onto the holdings tab after each one turns a session into a series
+         of round trips. From anywhere else, the holding is what they just
+         acted on and is where they expect to land. */
+      if (tab !== "allocate") tab = "holdings";
     },
   });
   const dateEl = $("f_opened");
@@ -2590,10 +2879,21 @@ document.addEventListener("click", async (ev) => {
     return;
   }
 
-  const s = openTicker ? find(openTicker) : null;
+  /* A button may name the security it is about. The detail page's buttons do
+     not need to — there is only one security on it — but the allocation view
+     has a row per name, and resolving from `openTicker` there would silently
+     act on nothing. Named wins; the open ticker is the fallback. */
+  const s = act.dataset.t ? find(act.dataset.t)
+    : openTicker ? find(openTicker) : null;
   switch (act.dataset.act) {
     case "back": openTicker = null; tipOpen = null; return render();
+    case "opensec":
+      if (!s) return;
+      openTicker = s.ticker; tipOpen = null; render();
+      return window.scrollTo({ top: 0 });
     case "newjournal": return dlgNewJournal();
+    case "renamejournal": return dlgRenameJournal();
+    case "deletejournal": return dlgDeleteJournal();
     case "add": return dlgAdd();
     case "remove": {
       if (!s) return;

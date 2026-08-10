@@ -335,3 +335,23 @@ dialog::backdrop{background:rgba(18,23,27,.45)}
 @media (prefers-reduced-motion:no-preference){
   tbody tr{transition:background .12s ease}
 }
+
+/* where capital goes */
+/* One row per position that may take capital: what it is on the left, how
+   much on the right. The amount is the largest thing in the row because it
+   is what the ordering means — furthest from where its own strategy wants
+   it, first. No colour on it: the amount is arithmetic, not a verdict, and
+   colour here carries state and nothing else. */
+.alloc-head{display:flex;align-items:flex-start;justify-content:space-between;
+  gap:16px;flex-wrap:wrap}
+.alloc-amt{text-align:right;flex:0 0 auto}
+.alloc-amt b{font-family:var(--mono);font-size:19px;font-weight:600;
+  letter-spacing:-.01em;display:block}
+.pentry .facts{margin-top:12px}
+.pentry .toolbar{margin-top:12px;justify-content:flex-end}
+/* A button that reads as a link. Used where the thing being pressed is a
+   place to go rather than an action to take, so it must not compete with the
+   buttons in the same row that do something. */
+.linkish{background:none;border:0;padding:0;font:inherit;color:var(--ink-2);
+  cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.linkish:hover{color:var(--ink)}
