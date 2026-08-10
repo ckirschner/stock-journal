@@ -430,3 +430,202 @@ class TestVocabularyIsRefusedRatherThanGuessed:
             contract.test(context, {"measure": YEARS,
                                     "since": "first-purchase"})
         assert "only means something between numbers" in str(e.value)
+
+
+class TestHowFarHasTwoHonestAnswers:
+    """`change: proportion` — the second strategy's one demand on the
+    contract, and the thing v5 could not say at all.
+
+    A distance is the right answer for a measure whose levels mean something
+    on their own: half a turn off a current ratio is half a turn wherever it
+    started. It is the wrong answer for one whose levels do not. A rule
+    reading "the returns have fallen by a third" is a claim about proportion,
+    and a single tolerance in points either fires on a decline a high-return
+    business shrugs off or never fires on a low-return one.
+
+    What is pinned here is what would go wrong *quietly*:
+
+    - the two forms sharing a unit. "-6" and "-15%" describing one decline is
+      the entire point, and a screen rendering both the same way makes the
+      difference invisible exactly where it decides something.
+    - a signed denominator. A margin that was -4% and is now -8% has got
+      twice as bad, and dividing by a negative reports that as +100% — a
+      worsening rendered as an improvement, in a figure an exit fires on.
+    - a nought baseline producing a number. There is no share of nought, and
+      inventing an enormous one is principle 4 failing in the direction that
+      sells something.
+    - the default drifting. Every citation written before this key existed
+      means `distance`, and it has to go on meaning it bit for bit.
+    """
+
+    def _both(self, then, now, measure=MARGIN):
+        context = ctx(now={measure: now},
+                      first=anchor("2024-02-01", {measure: then}))
+        return (resolve({"measure": measure, "since": "first-purchase"},
+                        context),
+                resolve({"measure": measure, "since": "first-purchase",
+                         "change": "proportion"}, context))
+
+    def test_a_proportion_is_the_move_over_what_it_was(self):
+        _distance, share = self._both(40.0, 34.0)
+        assert share["observed"]["value"] == pytest.approx(-15.0)
+
+    def test_the_same_decline_is_two_different_numbers(self):
+        distance, share = self._both(40.0, 34.0)
+        assert distance["observed"]["value"] == pytest.approx(-6.0)
+        assert share["observed"]["value"] == pytest.approx(-15.0)
+
+    def test_a_proportion_is_a_percent_whatever_it_was_taken_of(self):
+        """Not the measure's unit and not the distance's. It is no longer in
+        the measure's units at all — it is the share of the old reading the
+        move came to."""
+        distance, share = self._both(3.6, 2.4, measure=RATIO)
+        assert distance["subject"]["unit"] == "ratio"
+        assert share["subject"]["unit"] == "percent"
+        assert share["observed"]["value"] == pytest.approx(-33.333, abs=0.01)
+
+    def test_a_percent_measure_does_not_render_a_proportion_as_points(self):
+        distance, share = self._both(40.0, 34.0)
+        assert distance["subject"]["unit"] == "percentage_points"
+        assert share["subject"]["unit"] == "percent"
+
+    def test_the_label_says_which_of_the_two_it_is(self):
+        distance, share = self._both(40.0, 34.0)
+        assert "as a share of what it was then" in share["subject"]["label"]
+        assert "as a share" not in distance["subject"]["label"]
+        assert "since you first bought" in share["subject"]["label"]
+
+    def test_it_explains_how_it_is_counted_as_well_as_what_it_is(self):
+        """Three things a reader needs: which purchase, how the move is
+        counted, and what the thing moving is. The middle one is new and is
+        the one nobody would guess."""
+        _distance, share = self._both(40.0, 34.0)
+        explain = share["subject"]["explain"]
+        assert "as a percentage of what it was at that purchase" in explain
+        assert "frozen" in explain
+        assert len(explain.split("\n\n")) >= 4
+
+    def test_a_negative_baseline_getting_worse_reads_as_a_fall(self):
+        """The sign trap. Measured against the size of the old reading and
+        not its sign, so a margin that was -4% and is now -8% reads as -100%
+        and not as +100%."""
+        _distance, share = self._both(-4.0, -8.0)
+        assert share["observed"]["value"] == pytest.approx(-100.0)
+
+    def test_a_negative_baseline_recovering_reads_as_a_rise(self):
+        _distance, share = self._both(-4.0, -2.0)
+        assert share["observed"]["value"] == pytest.approx(50.0)
+
+    def test_a_nought_baseline_is_absent_and_never_a_number(self):
+        """There is no share of nought. Not an enormous number, not a zero,
+        not quietly falling back to the distance — absent, with the reason,
+        because a value that cannot be right must not feed a verdict."""
+        context = ctx(now={MARGIN: 9.0},
+                      first=anchor("2024-02-01", {MARGIN: 0.0}))
+        row = resolve({"measure": MARGIN, "since": "first-purchase",
+                       "change": "proportion"}, context)
+        assert row["observed"]["status"] == "absent"
+        assert "share of nought" in row["observed"]["reason"]
+
+    def test_a_nought_baseline_can_never_come_out_as_a_pass(self):
+        context = ctx(now={MARGIN: 9.0},
+                      first=anchor("2024-02-01", {MARGIN: 0.0}))
+        item = {"measure": MARGIN, "since": "first-purchase",
+                "change": "proportion", "comparator": "at_least",
+                "threshold": -33.0}
+        assert contract.test(context, item) == contract.UNKNOWN
+        assert resolve(item, context)["outcome"] == contract.UNKNOWN
+
+    def test_a_nought_baseline_still_has_a_distance(self):
+        """The absence belongs to the proportion and not to the pair of
+        readings. Nought to nine is a rise of nine points, and saying so is
+        still honest."""
+        row = resolve({"measure": MARGIN, "since": "first-purchase"},
+                      ctx(now={MARGIN: 9.0},
+                          first=anchor("2024-02-01", {MARGIN: 0.0})))
+        assert row["observed"]["value"] == pytest.approx(9.0)
+
+    def test_left_out_it_is_a_distance(self):
+        """The default is what every citation written before this key existed
+        already computed. A default that changed the arithmetic would be the
+        silent misreading the contract version exists to refuse."""
+        stated = resolve({"measure": MARGIN, "since": "first-purchase",
+                          "change": "distance"},
+                         ctx(now={MARGIN: 34.0},
+                             first=anchor("2024-02-01", {MARGIN: 40.0})))
+        omitted = resolve({"measure": MARGIN, "since": "first-purchase"},
+                          ctx(now={MARGIN: 34.0},
+                              first=anchor("2024-02-01", {MARGIN: 40.0})))
+        assert stated == omitted
+
+    def test_the_proportion_carries_both_readings_qualifications(self):
+        """A change is exactly as trustworthy as the less trustworthy of the
+        two readings behind it, whichever way it is counted."""
+        context = ctx(
+            now={MARGIN: known(34.0, cautions=["the cost line was matched "
+                                               "loosely"])},
+            first=anchor("2024-02-01",
+                         {MARGIN: known(40.0, cautions=["approximated"])}))
+        row = resolve({"measure": MARGIN, "since": "first-purchase",
+                       "change": "proportion"}, context)
+        joined = " ".join(row["observed"]["cautions"])
+        assert "the reading now" in joined
+        assert "the reading you bought at" in joined
+
+    def test_the_provenance_states_the_proportion_it_worked_out(self):
+        _distance, share = self._both(40.0, 34.0)
+        line = share["observed"]["provenance"][0]
+        assert "40" in line and "34" in line and "2024-02-01" in line
+        assert "-15.0%" in line
+
+    def test_a_form_the_host_does_not_have_is_refused(self):
+        errors = contract.validate_decision(RECORD, {
+            "state": "watch", "payload": {},
+            "reason": {"rule": "r", "summary": "s", "evidence": [
+                {"measure": MARGIN, "since": "first-purchase",
+                 "change": "ratio"}]}})
+        assert any("`change` must be one of" in e for e in errors)
+
+    def test_a_form_with_no_baseline_is_refused(self):
+        """On its own there are not two readings to have moved between, so a
+        `change` without a `since` is a citation that means nothing."""
+        errors = contract.validate_decision(RECORD, {
+            "state": "watch", "payload": {},
+            "reason": {"rule": "r", "summary": "s", "evidence": [
+                {"measure": MARGIN, "change": "proportion"}]}})
+        assert any("only means something alongside `since`" in e
+                   for e in errors)
+
+    def test_absence_on_either_side_is_still_absence(self):
+        """The new form changes the arithmetic and nothing about what happens
+        when there is nothing to do arithmetic on."""
+        item = {"measure": MARGIN, "since": "first-purchase",
+                "change": "proportion", "comparator": "at_least",
+                "threshold": -33.0}
+        no_purchase = ctx(now={MARGIN: 34.0})
+        no_reading_then = ctx(now={MARGIN: 34.0},
+                              first=anchor("2024-02-01", {}))
+        no_reading_now = ctx(now={MARGIN: absent("nothing is on record")},
+                             first=anchor("2024-02-01", {MARGIN: 40.0}))
+        for context in (no_purchase, no_reading_then, no_reading_now):
+            assert contract.test(context, item) == contract.UNKNOWN
+            assert resolve(item, context)["observed"]["status"] == "absent"
+
+    def test_a_form_the_host_does_not_have_is_refused_while_deciding_too(self):
+        """Not only at validation. `test` is asked how a comparison came out
+        WHILE a strategy is choosing its state, before anything validates the
+        decision — so a misspelled form that quietly fell back to `distance`
+        would change the arithmetic a verdict was picked by, and the row
+        rendered underneath would agree with it. Loud in both places or the
+        guarantee is only half there."""
+        context = ctx(now={MARGIN: 34.0},
+                      first=anchor("2024-02-01", {MARGIN: 40.0}))
+        item = {"measure": MARGIN, "since": "first-purchase",
+                "change": "proprtion", "comparator": "at_least",
+                "threshold": -33.0}
+        with pytest.raises(ValueError) as e:
+            contract.test(context, item)
+        assert "not one of the ways the host counts a move" in str(e.value)
+        # And the same citation is refused legibly on the rendering path.
+        _rows, errors = contract.resolve_evidence(RECORD, context, [item])
+        assert errors and "counts a move" in errors[0]

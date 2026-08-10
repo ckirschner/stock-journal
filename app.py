@@ -1886,49 +1886,92 @@ class Api:
         journals.set_open(journals.resolve_open())
         return ok(summary=summary)
 
-    SAMPLE = Path(__file__).resolve().parent / "data.template" / "sample.json"
+    SAMPLES = Path(__file__).resolve().parent / "data.template"
 
-    @guarded
-    @locked
-    def load_sample(self):
-        """Create a demonstration journal from invented companies.
+    def _sample_files(self) -> list:
+        """Every shipped sample, discovered rather than listed.
 
-        A new journal rather than a fill of the open one, because a journal
-        has exactly one strategy: the sample is written against Graham, and
-        pouring its securities into a journal stamped with something else
-        would judge them by rules their stories were never about. Nothing
-        already here is touched.
-
-        The file holds securities exactly as a journal stores them —
-        appended lots, frozen entry snapshots, dated hand-entered figures
-        and dated notes — because it was built by driving this API against a
-        scratch directory (tools/make_sample.py). Every company and figure
-        in it is invented.
+        There is one per strategy that has one, and adding another is adding
+        a file — the same rule strategies themselves follow. A hardcoded list
+        here would be a second place the set of samples is written down, and
+        the day they disagreed the missing one would simply never appear.
         """
-        if not self.SAMPLE.exists():
-            return err("The sample file is not in this build. It is written "
-                       "by tools/make_sample.py.")
-        sample = json.loads(self.SAMPLE.read_text(encoding="utf-8"))
+        return sorted(self.SAMPLES.glob("sample-*.json"))
+
+    def _load_one_sample(self, path):
+        """(journal, securities) for one sample file, or (None, message).
+
+        Nothing already in the user's data is touched: a sample is always a
+        new journal, never a fill of the open one. That is principle 6 doing
+        the deciding rather than a preference — a journal has exactly one
+        strategy, and pouring these securities into a journal stamped with
+        another would judge them by rules their stories were never about.
+        """
+        try:
+            sample = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            return None, f"{path.name} could not be read ({e})."
         strategies, _ = self._strategies()
         record = strategies.get(sample.get("strategy"))
         if record is None:
-            return err(f'The sample is written against the '
-                       f'"{sample.get("strategy")}" strategy, which is not '
-                       "installed here, so its verdicts could not be "
-                       "produced.")
+            return None, (f'{path.name} is written against the '
+                          f'"{sample.get("strategy")}" strategy, which is '
+                          "not installed here, so its verdicts could not be "
+                          "produced.")
         inputs, problems = contract.check_inputs(
             record, {f["id"]: sample.get("free_cash")
                      for f in record.get("inputs", [])
                      if f.get("role") == "cash"},
             strategy_values.resolve(record)["values"])
         if problems:
-            return err(" ".join(problems))
+            return None, f"{path.name}: {' '.join(problems)}"
         journal = journals.create(f"Sample — {record['name']}", record,
                                   inputs=inputs)
         journal["securities"] = sample["securities"]
         journals.save(journal)
-        journals.set_open(journal["id"])
-        return ok(name=journal["name"], n=len(sample["securities"]))
+        return journal, None
+
+    @guarded
+    @locked
+    def load_sample(self):
+        """Create the demonstration journals from invented companies.
+
+        One journal per shipped sample, which is one per strategy that has
+        one. They arrive together on purpose: the most useful thing about
+        having two is that the same kind of company gets opposite verdicts
+        from them, and a reader who loaded only one would never see it. It is
+        also the plainest statement of the rule the whole program is built
+        on — trading two strategies means two journals, the way it would mean
+        two accounts.
+
+        Each file holds securities exactly as a journal stores them —
+        appended lots, frozen entry snapshots, dated hand-entered figures,
+        dated assessments and dated notes — because each was built by driving
+        this API against a scratch directory (tools/make_sample.py and its
+        siblings). Every company and every figure in them is invented.
+
+        A sample whose strategy is not installed is skipped with its reason
+        rather than taking the others down with it, for the same reason a
+        strategy that fails to load does not prevent the rest from loading.
+        """
+        files = self._sample_files()
+        if not files:
+            return err("No sample files are in this build. They are written "
+                       "by the scripts in tools/.")
+        made, skipped = [], []
+        for path in files:
+            journal, problem = self._load_one_sample(path)
+            if problem:
+                skipped.append(problem)
+            else:
+                made.append(journal)
+        if not made:
+            return err(" ".join(skipped))
+        journals.set_open(made[0]["id"])
+        return ok(names=[j["name"] for j in made],
+                  journals=len(made),
+                  n=sum(len(j["securities"]) for j in made),
+                  skipped=skipped)
 
     @guarded
     @locked

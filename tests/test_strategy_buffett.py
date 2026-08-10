@@ -1,0 +1,1062 @@
+"""Buffett, the second real strategy written against the contract.
+
+What is pinned here is what would fail *silently*, and three of those things
+are new — Graham exercised none of them.
+
+- **A question nobody answered is never a pass.** Most of what this strategy
+  is comes from three assessments the reader writes themselves, and the whole
+  arrangement is worthless if silence reads as agreement. An unanswered
+  question has to block a purchase, and it must block it by returning a state
+  that says so rather than by the host refusing a contradiction.
+- **A blocked verdict is never a dead end.** A strategy's blocked state gets
+  no button of its own from the host; the way in is the Judgements section on
+  the same page, and that section is built from what the decision *cited*. So
+  a block that fails to cite the questions it is waiting on is a trap, and
+  the citation is the only thing standing between the two.
+- **A fall of a third is not a fall of thirty-three points.** The exit on
+  returns is proportional, and the same absolute decline has to end a
+  position on a business that earned 15% and not on one that earned 45%.
+- **Nothing about price can end a position, and neither can time.** Five
+  exits and not one of them is a valuation measure; no holding period; and no
+  state anywhere in the bundle that trims. Each of those is a promise made in
+  prose everywhere else in the program, and prose decays.
+
+The contexts below are built by hand rather than from filings, for the same
+reason Graham's are: driving fifteen measures to chosen values through the
+compute layer would test the compute layer. One class at the end goes the
+whole way through `context.build_context` so the hand-built shape cannot
+drift from the real one.
+"""
+
+import pytest
+
+from conftest import entered, filing, dur, balance_face
+
+from engine import context, contract, facts_store, judgements
+from engine import strategy_loader, strategy_values
+
+QUALITATIVE = ("moat_durability", "management_integrity", "capital_allocation")
+
+MEASURES = ("roic_median_5y", "total_debt_to_ebitda", "owner_earnings_yield",
+            "interest_coverage", "gross_margin_range_5y",
+            "fcf_margin_median_5y", "cash_conversion_median_5y",
+            "diluted_share_count_change_5y", "roe_median_5y",
+            "revenue_cagr_5y", "ni_minus_revenue_cagr_spread_5y",
+            "goodwill_intangibles_to_assets", "effective_tax_rate_median_5y",
+            "current_ratio", "payout_to_fcf_median_5y", "fcf_margin_ttm",
+            "diluted_share_count_change_3y")
+
+# A business that clears every entry test. Invented, like everything else
+# presented as an example here.
+CLEARS_ENTRY = {
+    "roic_median_5y": 18.9, "total_debt_to_ebitda": 1.4,
+    "owner_earnings_yield": 6.2, "interest_coverage": 14.0,
+    "gross_margin_range_5y": 3.1, "fcf_margin_median_5y": 17.0,
+    "cash_conversion_median_5y": 1.05, "diluted_share_count_change_5y": -6.0,
+    "roe_median_5y": 22.0, "revenue_cagr_5y": 7.0,
+    "ni_minus_revenue_cagr_spread_5y": 1.8,
+    "goodwill_intangibles_to_assets": 12.0,
+    "effective_tax_rate_median_5y": 21.0, "current_ratio": 1.3,
+    "payout_to_fcf_median_5y": 55.0,
+}
+
+# The same business once held: the five exit measures matter now, and two of
+# them are measures the entry tests never looked at.
+CLEARS_EXITS = {**CLEARS_ENTRY, "fcf_margin_ttm": 16.0,
+                "diluted_share_count_change_3y": -4.0}
+
+# All three questions answered yes.
+SAID_YES = dict.fromkeys(QUALITATIVE, True)
+
+QUARTERS = ("2025-03-31", "2025-06-30", "2025-09-30", "2025-12-31",
+            "2026-03-31")
+
+
+@pytest.fixture
+def buffett():
+    strategies, reports = strategy_loader.discover()
+    record = strategies.get("buffett")
+    assert record is not None, [r["errors"] for r in reports if not r["ok"]]
+    return record
+
+
+def values_for(record, **override):
+    chain = strategy_values.resolve(
+        record, [("journal override", override)] if override else [])
+    assert chain["errors"] == [], chain["errors"]
+    return chain["values"]
+
+
+def _baseline(when, values):
+    """One anchor purchase as engine/context serves it: the day, and the
+    figures frozen onto that decision."""
+    return {"status": "known", "date": when, "lot": "l1",
+            "measures": {mid: {"status": "known", "value": v,
+                               "source": "frozen", "cautions": [],
+                               "provenance": []}
+                         for mid, v in values.items()}}
+
+
+def build(record, known=None, series=None, judged=None, held=False,
+          opened=None, weight=None, occupied=0, today="2026-08-09",
+          bought=None, purchases=1, **override):
+    """A context shaped exactly as engine/context builds one.
+
+    `judged` is {bank id: True|False} for the three questions; anything left
+    out is unanswered, which is the state a real journal starts in and the
+    one most of this file is about.
+
+    `bought` is what was on record at the anchor purchases. Left out on a
+    holding, both anchors carry today's figures — nothing has moved since
+    either purchase, so an unchanged business is the default and a fall in
+    returns is something a test has to ask for.
+    """
+    known, series, judged = known or {}, series or {}, judged or {}
+    measures = {}
+    for mid in MEASURES:
+        current = ({"status": "known", "value": known[mid],
+                    "source": "manual", "cautions": [], "provenance": []}
+                   if mid in known else
+                   {"status": "absent", "reason": "nothing is on record"})
+        points = [{"period_end": pe, "filed": pe, "form": "10-Q",
+                   "accession": pe, "value": value,
+                   "reason": None if value is not None else "unreadable",
+                   "cautions": [], "provenance": []}
+                  for pe, value in series.get(mid, ())]
+        measures[mid] = {"current": current,
+                         "series": {"cadence": "quarterly", "points": points,
+                                    "note": None, "truncated": False}}
+    # A judgement carries no series at all, exactly as engine/context serves
+    # one. Citing `at` on it is therefore always absent, which is why this
+    # strategy never does.
+    for mid in QUALITATIVE:
+        current = ({"status": "known", "value": judged[mid],
+                    "source": "judgement", "cautions": [],
+                    "provenance": ["your assessment of 2026-01-01", "because"]}
+                   if mid in judged else
+                   {"status": "absent",
+                    "reason": "assessed by you, not computed — nothing is "
+                              "recorded in this journal yet"})
+        measures[mid] = {"current": current,
+                         "series": {"cadence": None, "points": [],
+                                    "note": "assessed by you, not computed "
+                                            "— no filing series exists",
+                                    "truncated": False}}
+    absent = {"status": "absent", "reason": "no free cash is recorded"}
+    bought = bought or {}
+    no_purchase = {"status": "absent",
+                   "reason": "no position is held, so there is no purchase "
+                             "to measure from"}
+    baselines = {}
+    for anchor, key in (("first-purchase", "first"),
+                        ("last-purchase", "last")):
+        baselines[anchor] = (_baseline(opened, bought.get(key, known))
+                             if held else no_purchase)
+    return {
+        "contract": contract.CONTRACT_VERSION, "today": today,
+        "security": {"ticker": "WDGE", "name": "Wedgemoor Fasteners",
+                     "cik": None},
+        "measures": measures,
+        "price": {"latest": {"status": "absent", "reason": "no price"},
+                  "closes": [], "events": []},
+        "position": {
+            "held": held, "shares": 100.0 if held else 0.0, "opened": opened,
+            "months_held": (contract.months_between(opened, today)
+                            if held and opened else None),
+            "last_purchase": opened if held else None,
+            "purchases": purchases if held else 0,
+            "baselines": baselines,
+            "lots": [], "disposals": [],
+            "market_value": ({"status": "known", "value": 10_000.0,
+                              "source": "computed", "cautions": [],
+                              "provenance": []} if held else absent),
+            "weight": ({"status": "known", "value": weight,
+                        "source": "computed", "cautions": [],
+                        "provenance": []} if weight is not None else absent)},
+        "portfolio": {"cash": absent, "account_value": absent,
+                      "slots": {"occupied": occupied}, "holdings": []},
+        "values": values_for(record, **override), "inputs": {},
+    }
+
+
+def verdict(record, **kw):
+    result = contract.evaluate(record, build(record, **kw))
+    assert result["produced_by"] == "strategy", result["reason"]["summary"]
+    return result
+
+
+def key_of(item):
+    """A citation's address, unambiguous across one decision.
+
+    The group matters and so does the comparator: this strategy cites return
+    on invested capital three times in one add — as a knockout, as an exit
+    floor, and as a proportional fall — and two of those share a comparator.
+    """
+    s = item["subject"]
+    key = f'{item.get("group") or "-"}/{s.get("id") or s["label"]}'
+    if s.get("kind") == "change":
+        key += "~since"
+    if s.get("at"):
+        key += f'@{s["at"]}'
+    if (item.get("test") or {}).get("comparator"):
+        key += f':{item["test"]["comparator"]}'
+    return key
+
+
+def outcomes(result):
+    """{what was cited: how the host said the comparison came out}."""
+    return {key_of(i): i["outcome"] for i in result["reason"]["evidence"]}
+
+
+def rollup(result):
+    """{group id: the rollup the HOST counted from the rows it resolved}."""
+    return {g["id"]: g for g in result["reason"]["groups"]}
+
+
+def cited_judgements(result):
+    """The bank ids the host resolved as judgements — which is exactly the
+    list app.py builds the answering surface from."""
+    return [i["subject"]["id"] for i in result["reason"]["evidence"]
+            if i["subject"].get("kind") == "judgement"]
+
+
+# ---------------------------------------------------------------------------
+# the numbers themselves
+# ---------------------------------------------------------------------------
+
+class TestTheThresholdsAreTheReports:
+    """Every level, checked against the source as written rather than
+    against whatever the bundle happens to ship. A quiet retune is what this
+    project exists to catch, so the expected figures are typed out here."""
+
+    REPORT = {
+        "core-tests-required": 7,
+        "sell-confirmation-filings": 2, "fcf-exit-quarters": 4,
+        "min-roic": 15, "max-debt-to-ebitda": 2.5,
+        "min-owner-earnings-yield": 5,
+        "min-interest-coverage": 8, "max-gross-margin-range": 6,
+        "min-fcf-margin": 10, "min-cash-conversion": 0.90,
+        "max-share-count-change": 0, "min-roe": 15, "min-revenue-cagr": 4,
+        "min-profit-growth-spread": -1, "max-goodwill-to-assets": 40,
+        "min-effective-tax-rate": 10, "max-effective-tax-rate": 35,
+        "min-current-ratio": 1.0, "max-payout-to-fcf": 80,
+        "exit-roic-fall": -33, "exit-roic-level": 12,
+        "exit-debt-to-ebitda": 4.0, "exit-interest-coverage": 4,
+        "exit-fcf-margin": 0, "exit-share-count-change": 10,
+    }
+
+    # Not the report's. The report was scoped to selection and to exits.
+    PRACTICE = {"portfolio-slots": 10, "position-weight-cap": 40}
+
+    def test_every_level_is_what_the_source_says(self, buffett):
+        shipped = values_for(buffett)
+        assert {k: shipped[k] for k in self.REPORT} == self.REPORT
+
+    def test_sizing_is_buffetts_practice_and_says_so(self, buffett):
+        shipped = values_for(buffett)
+        assert {k: shipped[k] for k in self.PRACTICE} == self.PRACTICE
+        for v in buffett["values"]:
+            if v["id"] in self.PRACTICE:
+                assert "Buffett's own documented practice" in \
+                    v["source"]["name"]
+                assert "says nothing whatever about how much to buy" in \
+                    v["source"]["name"]
+
+    def test_the_report_is_not_claimed_for_what_it_did_not_say(self, buffett):
+        """Two values, and only two, are attributed to somewhere other than
+        the report. Every other one names the report, so a value added later
+        without provenance cannot hide in the count."""
+        by_source = {}
+        for v in buffett["values"]:
+            by_source.setdefault(v["source"]["name"].split(" —")[0]
+                                 .split(",")[0], []).append(v["id"])
+        practice = [ids for name, ids in by_source.items()
+                    if name.startswith("Buffett's own")]
+        assert practice and sorted(practice[0]) == sorted(self.PRACTICE)
+
+    def test_the_file_counts_its_own_thresholds_correctly(self, buffett):
+        """The module docstring makes a counting claim about provenance, and
+        a claim made once at the top of a file is exactly the kind nobody
+        rechecks when the twenty-eighth value is added."""
+        import re
+        doc = open(buffett["dir"] + "/strategy.py",
+                   encoding="utf-8").read().split('"""')[1]
+        claim = re.search(r"([\w-]+) of the ([\w-]+)\s+thresholds below", doc)
+        assert claim, "the docstring no longer states a threshold count"
+
+        words = {25: "twenty-five", 26: "twenty-six", 27: "twenty-seven",
+                 28: "twenty-eight", 29: "twenty-nine", 30: "thirty",
+                 31: "thirty-one", 32: "thirty-two", 33: "thirty-three"}
+        total = len(buffett["values"])
+        practice = len([v for v in buffett["values"]
+                        if v["source"]["name"].startswith("Buffett's own")])
+        assert claim.group(2).lower() == words[total], \
+            f"docstring says {claim.group(2)} values; there are {total}"
+        assert claim.group(1).lower() == words[total - practice], \
+            (f"docstring credits {claim.group(1)} to the report; "
+             f"{total - practice} name it")
+
+    def test_every_declared_value_ships_a_default_and_is_explained(
+            self, buffett):
+        shipped = values_for(buffett)
+        for v in buffett["values"]:
+            assert v["id"] in shipped, v["id"]
+            assert len(v["explain"]) > 120, v["id"]
+
+    def test_the_fall_in_returns_keeps_the_reports_magnitude(self, buffett):
+        """The one value written in a form the report does not use. Its size
+        is the report's 33; the sign is what makes it a fall, and the value
+        says so where a reader will look."""
+        v = next(x for x in buffett["values"] if x["id"] == "exit-roic-fall")
+        assert abs(values_for(buffett)["exit-roic-fall"]) == 33
+        assert v["source"]["reasoning"] is False
+        assert "states this level as 33" in v["explain"]
+
+
+# ---------------------------------------------------------------------------
+# what this strategy refuses to be able to do
+# ---------------------------------------------------------------------------
+
+class TestTheShapeOfTheBundleIsItselfAClaim:
+
+    def test_nothing_here_can_trim_a_position(self, buffett):
+        """Not "no trim fires in these fixtures" — no trim can be returned at
+        all, because no state renders as one. It is the only way to say "this
+        strategy will not sell a wonderful business for having got large"
+        that a reader can check without running anything."""
+        assert not [s for s in buffett["states"] if s["render"] == "reduce"]
+
+    def test_there_is_no_holding_period(self, buffett):
+        """Graham's clock is the thing that closes a position for having been
+        owned too long. This has no such value, and a test is the only place
+        that absence is checkable."""
+        ids = {v["id"] for v in buffett["values"]}
+        assert not [i for i in ids if "holding-period" in i]
+
+    def test_it_declares_fewer_states_than_the_cap(self, buffett):
+        assert len(buffett["states"]) == 12
+        assert len(buffett["states"]) <= contract.MAX_STATES
+
+
+def test_the_exits_are_all_about_the_business_never_the_price(buffett):
+    """Read off the bundle itself rather than off a list retyped here: the
+    five measures that can end a position, checked against the ones the metric
+    bank calls valuation measures."""
+    from engine import bank
+    entries = {str(e.get("id")): e for e in bank.load_bank()["entries"]}
+    exits = exit_measures(buffett)
+    priced = {"pe_ttm", "pe_3y_avg_eps", "price_to_book",
+              "price_to_net_tangible_assets", "graham_combined_multiple",
+              "ev_to_ebit", "owner_earnings_yield", "fcf_yield_on_ev",
+              "dividend_yield", "peg_trailing", "market_cap",
+              "enterprise_value", "ncav_to_market_cap"}
+    assert exits and not (exits & priced), exits & priced
+    assert exits <= set(entries)
+
+
+def exit_measures(record):
+    """The measures this bundle's exits are built from, taken from the
+    running strategy rather than from a list in this file."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "buffett_under_test", record["dir"] + "/strategy.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return {row[0] for row in mod.EXITS} | {mod.ROIC_DRIFT["measure"]}
+
+
+# ---------------------------------------------------------------------------
+# the three questions
+# ---------------------------------------------------------------------------
+
+class TestAQuestionNobodyAnsweredIsNeverAPass:
+
+    def test_the_numbers_alone_do_not_buy_anything(self, buffett):
+        """A business that clears all fifteen tests and has no assessment on
+        record is blocked, not bought. This is the whole point of the
+        strategy and the one thing that would be worth nothing if it broke
+        quietly."""
+        out = verdict(buffett, known=CLEARS_ENTRY)
+        assert out["state"]["id"] == "judgement-owed"
+        assert out["render"] == "blocked"
+        assert rollup(out)["knockouts"]["outcome"] == "pass"
+        assert rollup(out)["core"]["passed"] == 9
+
+    def test_the_unanswered_questions_resolve_as_unknown_never_pass(
+            self, buffett):
+        out = verdict(buffett, known=CLEARS_ENTRY)
+        for mid in QUALITATIVE:
+            assert outcomes(out)[f"quality/{mid}:equals"] == "unknown"
+        assert rollup(out)["quality"]["outcome"] == "unknown"
+        assert rollup(out)["quality"]["passed"] == 0
+
+    def test_two_answered_and_one_missing_is_still_blocked(self, buffett):
+        out = verdict(buffett, known=CLEARS_ENTRY,
+                      judged={"moat_durability": True,
+                              "management_integrity": True})
+        assert out["state"]["id"] == "judgement-owed"
+        assert rollup(out)["quality"]["passed"] == 2
+        assert rollup(out)["quality"]["unknown"] == 1
+        assert rollup(out)["quality"]["outcome"] == "unknown"
+
+    def test_all_three_answered_yes_buys_it(self, buffett):
+        out = verdict(buffett, known=CLEARS_ENTRY, judged=SAID_YES)
+        assert out["state"]["id"] == "wonderful-and-priced"
+        assert out["render"] == "commit"
+        assert rollup(out)["quality"]["outcome"] == "pass"
+
+    def test_one_answered_no_is_a_different_verdict_from_unanswered(
+            self, buffett):
+        """"You looked and said no" and "nobody has looked" are different
+        facts about a company, and a tool that rendered them the same would
+        be teaching that not deciding is a decision."""
+        out = verdict(buffett, known=CLEARS_ENTRY,
+                      judged={**SAID_YES, "moat_durability": False})
+        assert out["state"]["id"] == "you-marked-it-down"
+        assert out["render"] == "hold"
+        assert outcomes(out)["quality/moat_durability:equals"] == "fail"
+
+    def test_the_questions_are_not_asked_of_a_company_already_rejected(
+            self, buffett):
+        """Nobody should be assessing the durability of a business their own
+        rules have already turned down. Because the answering surface is
+        built from what the decision cited, not citing them is what keeps the
+        question off the screen."""
+        out = verdict(buffett, known={**CLEARS_ENTRY, "roic_median_5y": 6.0})
+        assert out["state"]["id"] == "not-wonderful-enough"
+        assert cited_judgements(out) == []
+
+    def test_a_host_that_could_not_read_the_numbers_asks_nothing_either(
+            self, buffett):
+        out = verdict(buffett, known={k: v for k, v in CLEARS_ENTRY.items()
+                                      if k != "roic_median_5y"})
+        assert out["state"]["id"] == "cannot-screen"
+        assert cited_judgements(out) == []
+
+
+class TestABlockedVerdictIsNeverADeadEnd:
+    """The host gives a strategy's blocked state no button of its own. The
+    way in is the Judgements section on the same page, and app.py builds that
+    from the ids the decision cited. So the citation is load-bearing: a block
+    that named its questions only in prose would be a trap."""
+
+    def test_the_block_cites_every_question_it_is_waiting_on(self, buffett):
+        out = verdict(buffett, known=CLEARS_ENTRY)
+        assert cited_judgements(out) == list(QUALITATIVE)
+
+    def test_it_cites_the_ones_already_answered_too(self, buffett):
+        """Not only the missing one. A reader looking at a block wants to see
+        the two they have done as well as the one they have not, and the
+        answering surface is where a change of mind starts."""
+        out = verdict(buffett, known=CLEARS_ENTRY,
+                      judged={"moat_durability": True})
+        assert cited_judgements(out) == list(QUALITATIVE)
+
+    def test_the_needs_name_the_questions_in_words_not_ids(self, buffett):
+        out = verdict(buffett, known=CLEARS_ENTRY,
+                      judged={"moat_durability": True,
+                              "management_integrity": True})
+        needs = out["payload"]["needs"]
+        assert any("spare cash" in n for n in needs)
+        assert not any("capital_allocation" in n for n in needs)
+        assert any("Your judgement" in n for n in needs)
+        assert any("not a fail" in n for n in needs)
+
+    def test_the_host_marks_them_as_judgements_and_not_measurements(
+            self, buffett):
+        """The kind comes from the bank and never from the strategy, so a
+        strategy cannot present an assessment as something the tool worked
+        out. Pinned here because this is the first bundle that depends on
+        it."""
+        out = verdict(buffett, known=CLEARS_ENTRY, judged=SAID_YES)
+        rows = [i for i in out["reason"]["evidence"]
+                if i["subject"].get("id") in QUALITATIVE]
+        assert len(rows) == 3
+        for row in rows:
+            assert row["subject"]["kind"] == "judgement"
+            assert row["subject"]["unit"] == "yes_no"
+            # The bank's own question, so the row can explain itself.
+            assert row["subject"]["explain"]
+            assert "?" in row["subject"]["explain"]
+
+
+class TestABusinessThatStoppedBeingWonderful:
+    """The case this strategy exists for, and the one no measure can see."""
+
+    def test_marking_a_question_down_on_a_holding_closes_it(self, buffett):
+        out = verdict(buffett, known=CLEARS_EXITS, judged={
+            **SAID_YES, "capital_allocation": False},
+            held=True, opened="2019-04-01", weight=14.0)
+        assert out["state"]["id"] == "stopped-being-wonderful"
+        assert out["render"] == "close"
+        assert out["payload"]["when"] == "2026-08-09"
+
+    def test_it_does_not_wait_for_a_second_filing(self, buffett):
+        """Confirmation counts filings because a filing can be a one-off. An
+        assessment is not a filing — it is a considered opinion with written
+        reasoning behind it, and demanding it be made twice would be the tool
+        arguing with its user."""
+        out = verdict(buffett, known=CLEARS_EXITS,
+                      judged={**SAID_YES, "moat_durability": False},
+                      held=True, opened="2019-04-01", weight=14.0,
+                      series={"roic_median_5y": [(q, 18.9) for q in QUARTERS]})
+        assert out["state"]["id"] == "stopped-being-wonderful"
+
+    def test_an_unanswered_question_never_closes_a_holding(self, buffett):
+        """Silence closes nothing. It is the difference between the tool
+        noticing something and the tool noticing nothing."""
+        out = verdict(buffett, known=CLEARS_EXITS, held=True,
+                      opened="2019-04-01", weight=14.0)
+        assert out["state"]["id"] == "hold"
+
+    def test_an_unanswered_question_does_stop_an_add(self, buffett):
+        out = verdict(buffett, known=CLEARS_EXITS, held=True,
+                      opened="2019-04-01", weight=14.0)
+        assert out["reason"]["rule"] == "questions-unanswered"
+        assert cited_judgements(out) == list(QUALITATIVE)
+
+    def test_a_measured_exit_outranks_an_assessed_one(self, buffett):
+        """Both close the position and the state says which. A confirmed
+        breach across filings is evidence; a mark is an opinion, and the
+        evidence is the one to lead with."""
+        out = verdict(
+            buffett,
+            known={**CLEARS_EXITS, "total_debt_to_ebitda": 5.2},
+            judged={**SAID_YES, "moat_durability": False},
+            held=True, opened="2019-04-01", weight=14.0,
+            series={"total_debt_to_ebitda": [(q, 5.2) for q in QUARTERS]})
+        assert out["state"]["id"] == "business-broken"
+        # And the mark is still on the screen, in a group demanding a pass.
+        assert outcomes(out)["quality/moat_durability:equals"] == "fail"
+
+
+# ---------------------------------------------------------------------------
+# the exits
+# ---------------------------------------------------------------------------
+
+class TestNothingFiresOnOneReading:
+
+    def test_one_bad_reading_is_a_breach_and_not_an_exit(self, buffett):
+        out = verdict(buffett, known={**CLEARS_EXITS,
+                                      "total_debt_to_ebitda": 5.2},
+                      judged=SAID_YES, held=True, opened="2019-04-01",
+                      weight=14.0,
+                      series={"total_debt_to_ebitda":
+                              [(q, 1.4) for q in QUARTERS[:-1]]
+                              + [(QUARTERS[-1], 5.2)]})
+        assert out["state"]["id"] == "one-reading-past"
+        assert out["render"] == "hold"
+
+    def test_two_bad_readings_end_it(self, buffett):
+        out = verdict(buffett, known={**CLEARS_EXITS,
+                                      "total_debt_to_ebitda": 5.2},
+                      judged=SAID_YES, held=True, opened="2019-04-01",
+                      weight=14.0,
+                      series={"total_debt_to_ebitda":
+                              [(q, 1.4) for q in QUARTERS[:-2]]
+                              + [(q, 5.2) for q in QUARTERS[-2:]]})
+        assert out["state"]["id"] == "business-broken"
+
+    def test_free_cash_flow_takes_four_quarters_and_not_two(self, buffett):
+        """The one exit with a window of its own. Three negative quarters is
+        still a breach; a full year is the exit, and the difference is the
+        report's."""
+        def at(n):
+            return verdict(
+                buffett, known={**CLEARS_EXITS, "fcf_margin_ttm": -3.0},
+                judged=SAID_YES, held=True, opened="2019-04-01", weight=14.0,
+                series={"fcf_margin_ttm":
+                        [(q, 16.0) for q in QUARTERS[:len(QUARTERS) - n]]
+                        + [(q, -3.0) for q in QUARTERS[len(QUARTERS) - n:]]})
+        assert at(3)["state"]["id"] == "one-reading-past"
+        assert at(4)["state"]["id"] == "business-broken"
+
+    def test_the_verdict_names_the_window_that_actually_ran(self, buffett):
+        """A verdict has to name the rule that produced it, and the number of
+        filings is the load-bearing part of this one. The sentence used to
+        say "more than one set of filings" whatever the settings held — the
+        shipped default speaking rather than the rule that ran, which is
+        exactly the quiet retune this journal exists to catch."""
+        def broke(**over):
+            return verdict(
+                buffett, known={**CLEARS_EXITS, "total_debt_to_ebitda": 5.2},
+                judged=SAID_YES, held=True, opened="2019-04-01", weight=14.0,
+                series={"total_debt_to_ebitda": [(q, 5.2) for q in QUARTERS]},
+                **over)["reason"]["summary"]
+
+        assert "on 2 consecutive filings" in broke()
+        # A journal that lowers it to one gets an exit on one reading, and is
+        # told that rather than the opposite.
+        one = broke(**{"sell-confirmation-filings": 1})
+        assert "on the most recent filing" in one
+        assert "change and not a wobble" not in one
+        assert "more than one" not in one
+
+    def test_the_free_cash_flow_window_says_four_and_not_two(self, buffett):
+        out = verdict(buffett, known={**CLEARS_EXITS, "fcf_margin_ttm": -3.0},
+                      judged=SAID_YES, held=True, opened="2019-04-01",
+                      weight=14.0,
+                      series={"fcf_margin_ttm": [(QUARTERS[0], 16.0)]
+                              + [(q, -3.0) for q in QUARTERS[1:]]})
+        assert "on 4 consecutive filings" in out["reason"]["summary"]
+
+    def test_a_gap_neither_confirms_a_breach_nor_forgives_one(self, buffett):
+        """A filing whose reading could not be worked out must not confirm
+        something nobody observed, and must not grant an indefinite reprieve
+        either."""
+        out = verdict(buffett, known={**CLEARS_EXITS,
+                                      "total_debt_to_ebitda": 5.2},
+                      judged=SAID_YES, held=True, opened="2019-04-01",
+                      weight=14.0,
+                      series={"total_debt_to_ebitda":
+                              [(QUARTERS[0], 1.4), (QUARTERS[1], 5.2),
+                               (QUARTERS[2], None), (QUARTERS[3], 5.2),
+                               (QUARTERS[4], 5.2)]})
+        assert out["state"]["id"] == "business-broken"
+
+    def test_absence_never_fires_an_exit(self, buffett):
+        """A missing reading is not evidence a company is in trouble, and
+        this program does not sell on silence."""
+        out = verdict(buffett, known={k: v for k, v in CLEARS_EXITS.items()
+                                      if k != "total_debt_to_ebitda"},
+                      judged=SAID_YES, held=True, opened="2019-04-01",
+                      weight=14.0)
+        assert out["state"]["id"] != "business-broken"
+        assert outcomes(out)["decay/total_debt_to_ebitda:at_most"] == "unknown"
+
+    def test_no_exit_readable_at_all_says_so(self, buffett):
+        out = verdict(buffett, known={}, judged=SAID_YES, held=True,
+                      opened="2019-04-01", weight=14.0)
+        assert out["state"]["id"] == "cannot-watch"
+        assert out["render"] == "unknown"
+
+
+class TestTheFallInReturnsIsProportional:
+    """The one thing this strategy needed that contract v5 could not say.
+
+    A fall of a third is not a fall of thirty-three points, and one tolerance
+    in points cannot mean the same thing to a business earning 45% and one
+    earning 15%. Both halves of the compound also have to fail before
+    anything happens.
+    """
+
+    def held(self, buffett, then, now, **kw):
+        return verdict(
+            buffett, known={**CLEARS_EXITS, "roic_median_5y": now},
+            judged=SAID_YES, held=True, opened="2019-04-01", weight=14.0,
+            bought={"first": {**CLEARS_EXITS, "roic_median_5y": then},
+                    "last": {**CLEARS_EXITS, "roic_median_5y": then}},
+            series={"roic_median_5y": [(q, now) for q in QUARTERS]}, **kw)
+
+    def test_a_third_off_a_low_return_business_ends_it(self, buffett):
+        """16% to 10% is six points, and it is 37.5% of what it was — past
+        the tolerance, and under the floor."""
+        out = self.held(buffett, 16.0, 10.0)
+        assert out["state"]["id"] == "business-broken"
+        row = next(i for i in out["reason"]["evidence"]
+                   if i["subject"].get("kind") == "change")
+        assert round(row["observed"]["value"], 1) == -37.5
+        assert row["subject"]["unit"] == "percent"
+        assert row["outcome"] == "fail"
+
+    def test_the_same_six_points_off_a_high_return_business_does_not(
+            self, buffett):
+        """45% to 39% is the same six points and only 13% of what it was.
+        The business still earns nearly three times its cost of capital, and
+        a tolerance in points would have sold it."""
+        out = self.held(buffett, 45.0, 39.0)
+        assert out["state"]["id"] != "business-broken"
+        row = next(i for i in out["reason"]["evidence"]
+                   if i["subject"].get("kind") == "change")
+        assert round(row["observed"]["value"], 1) == -13.3
+        assert row["outcome"] == "pass"
+
+    def test_a_big_fall_that_is_still_a_good_business_does_not_end_it(
+            self, buffett):
+        """40% to 25% has lost more than a third and is still well above the
+        floor. Both halves have to fail, and this is why."""
+        out = self.held(buffett, 40.0, 25.0)
+        assert out["state"]["id"] != "business-broken"
+        assert outcomes(out)["decay/roic_median_5y~since:above"] == "fail"
+        assert outcomes(out)["decay/roic_median_5y:at_least"] == "pass"
+
+    def test_a_business_that_was_always_mediocre_is_not_sold_for_it(
+            self, buffett):
+        """13% to 11.5% is under the floor and has no third to lose. Selling
+        it for being what it always was is the failure the compound
+        prevents."""
+        out = self.held(buffett, 13.0, 11.5)
+        assert out["state"]["id"] != "business-broken"
+        assert outcomes(out)["decay/roic_median_5y:at_least"] == "fail"
+        assert outcomes(out)["decay/roic_median_5y~since:above"] == "pass"
+
+    def test_a_fall_of_exactly_a_third_fires_it(self, buffett):
+        """The boundary, and the one place in this bundle where the source
+        states a level as a magnitude with the direction in the prose around
+        it. "Falls by at least 33%" fires AT a third, so what the holding
+        must keep is a change strictly above -33 — `at_least` would let the
+        exact case through, and a boundary that goes the wrong way goes wrong
+        silently."""
+        # 25.0 -> 16.75 is a fall of exactly a third, and lands on -33.0
+        # rather than near it, so this pins the comparator and not the
+        # floating-point weather around the boundary.
+        exact = self.held(buffett, 25.0, 16.75)
+        assert outcomes(exact)["decay/roic_median_5y~since:above"] == "fail"
+        # A hair short of a third does not.
+        assert outcomes(self.held(buffett, 25.0, 16.80))[
+            "decay/roic_median_5y~since:above"] == "pass"
+        # And where the floor has gone too, the exact case ends the position
+        # rather than surviving it by one tick.
+        assert self.held(buffett, 11.0, 7.37)["state"]["id"] == \
+            "business-broken"
+
+    def test_every_exit_lands_the_right_way_round_at_its_own_boundary(
+            self, buffett):
+        """Each exit's comparator against the level the source states, at the
+        exact level. A comparator one tick out never shows up on ordinary
+        data and decides the case the rule was written for."""
+        def at(**over):
+            return verdict(buffett, known={**CLEARS_EXITS, **over},
+                           judged=SAID_YES, held=True, opened="2019-04-01",
+                           weight=14.0,
+                           series={k: [(q, v) for q in QUARTERS]
+                                   for k, v in over.items()})
+        # "less_than 12" — 12 exactly does not fire.
+        assert outcomes(at(roic_median_5y=12.0))[
+            "decay/roic_median_5y:at_least"] == "pass"
+        assert outcomes(at(roic_median_5y=11.99))[
+            "decay/roic_median_5y:at_least"] == "fail"
+        # "greater_than 4.0" — 4.0 exactly does not fire.
+        assert outcomes(at(total_debt_to_ebitda=4.0))[
+            "decay/total_debt_to_ebitda:at_most"] == "pass"
+        assert outcomes(at(total_debt_to_ebitda=4.01))[
+            "decay/total_debt_to_ebitda:at_most"] == "fail"
+        # "less_than 4" — 4 exactly does not fire.
+        assert outcomes(at(interest_coverage=4.0))[
+            "decay/interest_coverage:at_least"] == "pass"
+        # "less_than 0" — nought exactly does not fire.
+        assert outcomes(at(fcf_margin_ttm=0.0))[
+            "decay/fcf_margin_ttm:at_least"] == "pass"
+        # "greater_than 10" — 10 exactly does not fire.
+        assert outcomes(at(diluted_share_count_change_3y=10.0))[
+            "decay/diluted_share_count_change_3y:at_most"] == "pass"
+
+    def test_a_baseline_nobody_could_read_leaves_it_unreadable(self, buffett):
+        """Not clear. A comparison nobody could make has not shown that
+        nothing happened, and an exit half that cannot be worked out must not
+        let the other half through on its own."""
+        out = verdict(
+            buffett, known={**CLEARS_EXITS, "roic_median_5y": 9.0},
+            judged=SAID_YES, held=True, opened="2019-04-01", weight=14.0,
+            bought={"first": {k: v for k, v in CLEARS_EXITS.items()
+                              if k != "roic_median_5y"},
+                    "last": CLEARS_EXITS},
+            series={"roic_median_5y": [(q, 9.0) for q in QUARTERS]})
+        assert out["state"]["id"] != "business-broken"
+        assert outcomes(out)["decay/roic_median_5y~since:above"] == "unknown"
+
+    def test_the_fall_is_cited_even_when_nothing_is_wrong(self, buffett):
+        """Half a rule shown is a rule nobody can check. The two halves are
+        one test and both are on the screen whatever the answer."""
+        out = self.held(buffett, 18.9, 18.9)
+        assert out["state"]["id"] == "room-for-more"
+        assert outcomes(out)["decay/roic_median_5y~since:above"] == "pass"
+
+    def test_a_half_failed_compound_is_accounted_for_in_the_summary(
+            self, buffett):
+        """The only place in this bundle where a red row sits beside a
+        sentence saying everything came back clear, and both are true: the
+        exit needs both halves and only one failed. A reader cannot be
+        expected to work that out from a red row and a summary that does not
+        mention it — "clear" is the claim they will believe."""
+        # Fallen more than a third, still well above the floor.
+        drifted = self.held(buffett, 40.0, 25.0)
+        assert drifted["state"]["id"] == "room-for-more"
+        assert outcomes(drifted)["decay/roic_median_5y~since:above"] == "fail"
+        assert "requires both" in drifted["reason"]["summary"]
+        assert "One red row below, and no exit" in drifted["reason"]["summary"]
+
+        # And the other way round: under the floor, with no third to lose.
+        floored = self.held(buffett, 13.0, 11.5)
+        assert outcomes(floored)["decay/roic_median_5y:at_least"] == "fail"
+        assert "requires both" in floored["reason"]["summary"]
+
+    def test_a_clean_holding_says_nothing_about_halves(self, buffett):
+        """The sentence is owed only where a row would otherwise contradict
+        the summary. A holding with nothing wrong must not carry it."""
+        assert "requires both" not in \
+            self.held(buffett, 18.9, 18.9)["reason"]["summary"]
+
+    def test_the_row_says_it_is_a_share_and_not_a_number_of_points(
+            self, buffett):
+        out = self.held(buffett, 16.0, 10.0)
+        row = next(i for i in out["reason"]["evidence"]
+                   if i["subject"].get("kind") == "change")
+        assert "as a share of what it was then" in row["subject"]["label"]
+        assert "since you first bought" in row["subject"]["label"]
+        # And it explains itself in place, for someone who has never done it:
+        # which purchase it measures from, how the move is counted, and what
+        # the thing moving actually is.
+        explain = row["subject"]["explain"]
+        assert "the day this holding began" in explain
+        assert "as a percentage of what it was at that purchase" in explain
+        assert "cents of profit" in explain
+
+
+# ---------------------------------------------------------------------------
+# sizing, and the thing this strategy will not do
+# ---------------------------------------------------------------------------
+
+class TestHowMuchAndHowMany:
+
+    def test_a_first_purchase_takes_an_equal_share(self, buffett):
+        out = verdict(buffett, known=CLEARS_ENTRY, judged=SAID_YES)
+        assert out["payload"]["size"] == {"unit": "weight", "value": 10.0}
+
+    def test_a_full_list_has_no_room_for_an_eleventh(self, buffett):
+        out = verdict(buffett, known=CLEARS_ENTRY, judged=SAID_YES,
+                      occupied=10)
+        assert out["state"]["id"] == "no-room"
+        assert out["render"] == "hold"
+
+    def test_an_add_goes_toward_the_cap_and_not_the_equal_share(self, buffett):
+        """The concentration rule, and the sharpest difference from Graham. A
+        holding already at 14% — above the 10% a first purchase takes — still
+        has room, because money goes to what keeps proving itself."""
+        out = verdict(buffett, known=CLEARS_EXITS, judged=SAID_YES, held=True,
+                      opened="2019-04-01", weight=14.0)
+        assert out["state"]["id"] == "room-for-more"
+        assert out["payload"]["size"] == {"unit": "weight", "value": 26.0}
+
+    def test_a_position_past_the_cap_is_held_and_never_trimmed(self, buffett):
+        """The promise the missing `reduce` state makes, kept. A holding at
+        52% of the account is left entirely alone."""
+        out = verdict(buffett, known=CLEARS_EXITS, judged=SAID_YES, held=True,
+                      opened="2019-04-01", weight=52.0)
+        assert out["state"]["id"] == "hold"
+        assert out["render"] == "hold"
+        assert out["reason"]["rule"] == "no-room-to-add"
+        assert "no trim" in out["reason"]["summary"]
+
+    def test_a_weight_nobody_could_work_out_stops_the_add(self, buffett):
+        out = verdict(buffett, known=CLEARS_EXITS, judged=SAID_YES, held=True,
+                      opened="2019-04-01")
+        assert out["state"]["id"] == "hold"
+        assert out["reason"]["rule"] == "size-unreadable"
+
+    def test_an_add_is_the_entry_tests_again_at_the_same_bar(self, buffett):
+        """Not a softer set because you already own it and not a harder one
+        because you are averaging in."""
+        out = verdict(buffett,
+                      known={**CLEARS_EXITS, "owner_earnings_yield": 3.1},
+                      judged=SAID_YES, held=True, opened="2019-04-01",
+                      weight=14.0)
+        assert out["state"]["id"] == "hold"
+        assert out["reason"]["rule"] == "would-not-buy-it-today"
+        assert outcomes(out)["knockouts/owner_earnings_yield:at_least"] == \
+            "fail"
+
+    def test_a_screen_that_did_not_finish_is_not_a_passing_one(self, buffett):
+        """A knockout nobody could read. Note it has to be a knockout: one
+        unreadable core test out of nine still leaves eight passing against a
+        bar of seven, and a screen that reached its bar without it has
+        finished."""
+        out = verdict(buffett,
+                      known={k: v for k, v in CLEARS_EXITS.items()
+                             if k != "owner_earnings_yield"},
+                      judged=SAID_YES, held=True, opened="2019-04-01",
+                      weight=14.0)
+        assert out["state"]["id"] == "hold"
+        assert out["reason"]["rule"] == "screen-unreadable"
+
+    def test_one_unreadable_core_test_does_not_stop_an_add(self, buffett):
+        """The other side of the same rule, and the reason the one above
+        names a knockout. Seven of nine were needed and eight passed."""
+        out = verdict(buffett,
+                      known={k: v for k, v in CLEARS_EXITS.items()
+                             if k != "goodwill_intangibles_to_assets"},
+                      judged=SAID_YES, held=True, opened="2019-04-01",
+                      weight=14.0)
+        assert out["state"]["id"] == "room-for-more"
+
+    def test_time_held_is_reported_so_a_permanent_hold_still_moves(
+            self, buffett):
+        """The commonest verdict here is the same word for years. The one
+        figure that visibly changes underneath it is how long you have owned
+        the thing, so it is always cited."""
+        out = verdict(buffett, known=CLEARS_EXITS, judged=SAID_YES, held=True,
+                      opened="2019-04-01", weight=52.0)
+        row = next(i for i in out["reason"]["evidence"]
+                   if i["subject"].get("id") == "position.months_held")
+        assert row["observed"]["value"] == 88
+        assert row["outcome"] == "noted"
+        assert "88 months" in out["reason"]["summary"]
+
+
+# ---------------------------------------------------------------------------
+# absence, and the rollup
+# ---------------------------------------------------------------------------
+
+class TestAbsenceIsNeverSuccessAndNeverFailure:
+
+    def test_a_missing_knockout_cannot_be_bought_through(self, buffett):
+        out = verdict(buffett,
+                      known={k: v for k, v in CLEARS_ENTRY.items()
+                             if k != "total_debt_to_ebitda"},
+                      judged=SAID_YES)
+        assert out["state"]["id"] == "cannot-screen"
+        assert rollup(out)["knockouts"]["outcome"] == "unknown"
+
+    def test_a_missing_core_test_that_cannot_change_the_answer_is_settled(
+            self, buffett):
+        """Seven of nine are needed. With three core tests failed outright,
+        seven is out of reach whatever the missing ones would have said, and
+        that is a no rather than a shrug."""
+        out = verdict(buffett, known={**CLEARS_ENTRY, "roe_median_5y": 4.0,
+                                      "revenue_cagr_5y": 0.5,
+                                      "interest_coverage": 2.0},
+                      judged=SAID_YES)
+        assert out["state"]["id"] == "not-wonderful-enough"
+        assert out["reason"]["rule"] == "core-tests-short"
+
+    def test_two_core_failures_still_buy_it(self, buffett):
+        """Seven of nine, so two may fail. The verdict has to survive its own
+        failed rows without the host refusing it as a contradiction."""
+        out = verdict(buffett, known={**CLEARS_ENTRY, "roe_median_5y": 4.0,
+                                      "revenue_cagr_5y": 0.5},
+                      judged=SAID_YES)
+        assert out["state"]["id"] == "wonderful-and-priced"
+        assert rollup(out)["core"]["passed"] == 7
+        assert rollup(out)["core"]["outcome"] == "pass"
+
+    def test_a_failed_bonus_test_never_blocks(self, buffett):
+        out = verdict(buffett, known={**CLEARS_ENTRY,
+                                      "payout_to_fcf_median_5y": 130.0,
+                                      "current_ratio": 0.6},
+                      judged=SAID_YES)
+        assert out["state"]["id"] == "wonderful-and-priced"
+        assert rollup(out)["bonus"]["outcome"] == "noted"
+
+    def test_the_tax_band_reads_as_two_tests_and_says_which_end(self, buffett):
+        out = verdict(buffett, known={**CLEARS_ENTRY,
+                                      "effective_tax_rate_median_5y": 4.0},
+                      judged=SAID_YES)
+        got = outcomes(out)
+        assert got["bonus/effective_tax_rate_median_5y:at_least"] == "fail"
+        assert got["bonus/effective_tax_rate_median_5y:at_most"] == "pass"
+
+    def test_the_rollup_is_the_hosts_count_and_not_a_tally(self, buffett):
+        out = verdict(buffett, known=CLEARS_ENTRY, judged=SAID_YES)
+        groups, got = rollup(out), outcomes(out)
+        assert groups["core"]["tested"] == 9
+        assert groups["core"]["passed"] == sum(
+            1 for k, v in got.items() if k.startswith("core/") and v == "pass")
+        assert groups["core"]["test"]["threshold"] == 7
+        assert groups["core"]["test"]["threshold_from"]["id"] == \
+            "core-tests-required"
+
+
+class TestEveryDeclaredStateIsReachable:
+    """A state nobody can reach is vocabulary the screen shows and the
+    journal never uses. Twelve declared, twelve driven."""
+
+    def test_all_twelve(self, buffett):
+        reached = {
+            verdict(buffett, known=CLEARS_ENTRY,
+                    judged=SAID_YES)["state"]["id"],
+            verdict(buffett, known=CLEARS_ENTRY)["state"]["id"],
+            verdict(buffett, known=CLEARS_ENTRY,
+                    judged={**SAID_YES, "moat_durability": False}
+                    )["state"]["id"],
+            verdict(buffett, known={**CLEARS_ENTRY, "roic_median_5y": 6.0}
+                    )["state"]["id"],
+            verdict(buffett, known={})["state"]["id"],
+            verdict(buffett, known=CLEARS_ENTRY, judged=SAID_YES,
+                    occupied=10)["state"]["id"],
+            verdict(buffett, known=CLEARS_EXITS, judged=SAID_YES, held=True,
+                    opened="2019-04-01", weight=52.0)["state"]["id"],
+            verdict(buffett, known=CLEARS_EXITS, judged=SAID_YES, held=True,
+                    opened="2019-04-01", weight=14.0)["state"]["id"],
+            verdict(buffett, known={**CLEARS_EXITS,
+                                    "total_debt_to_ebitda": 5.2},
+                    judged=SAID_YES, held=True, opened="2019-04-01",
+                    weight=14.0,
+                    series={"total_debt_to_ebitda":
+                            [(q, 1.4) for q in QUARTERS[:-1]]
+                            + [(QUARTERS[-1], 5.2)]})["state"]["id"],
+            verdict(buffett, known={**CLEARS_EXITS,
+                                    "total_debt_to_ebitda": 5.2},
+                    judged=SAID_YES, held=True, opened="2019-04-01",
+                    weight=14.0,
+                    series={"total_debt_to_ebitda":
+                            [(q, 5.2) for q in QUARTERS]})["state"]["id"],
+            verdict(buffett, known=CLEARS_EXITS,
+                    judged={**SAID_YES, "capital_allocation": False},
+                    held=True, opened="2019-04-01",
+                    weight=14.0)["state"]["id"],
+            verdict(buffett, known={}, judged=SAID_YES, held=True,
+                    opened="2019-04-01", weight=14.0)["state"]["id"],
+        }
+        assert reached == {s["id"] for s in buffett["states"]}
+
+
+# ---------------------------------------------------------------------------
+# through the real machinery
+# ---------------------------------------------------------------------------
+
+class TestThroughTheRealContext:
+    """One pass through the machinery the app actually uses, so the
+    hand-built contexts above cannot drift from the shape the host serves."""
+
+    def test_hand_entered_figures_and_a_real_assessment(self, buffett):
+        security = {"ticker": "WDGE", "name": "Wedgemoor Fasteners",
+                    "cik": 5151, "lots": []}
+        facts_store.save_filing(5151, filing(
+            "WDGE-1", "10-K", "2026-02-11", "2025-12-31",
+            [dur("us-gaap:Revenues", "2025-01-01", "2025-12-31", 900)]
+            + balance_face("2025-12-31", assets=700)))
+        entered(security, **CLEARS_ENTRY)
+
+        def evaluate():
+            return contract.evaluate(
+                buffett, context.build_context(security, [security],
+                                               values_for(buffett), {},
+                                               record=buffett))
+
+        blocked = evaluate()
+        assert blocked["state"]["id"] == "judgement-owed"
+        assert cited_judgements(blocked) == list(QUALITATIVE)
+
+        for mid in QUALITATIVE:
+            judgements.assess(security, mid, "pass",
+                              "Invented company; invented reasoning.")
+        bought = evaluate()
+        assert bought["state"]["id"] == "wonderful-and-priced"
+        row = next(i for i in bought["reason"]["evidence"]
+                   if i["subject"]["id"] == "moat_durability")
+        assert row["subject"]["kind"] == "judgement"
+        assert row["observed"]["value"] is True
+        assert row["outcome"] == "pass"
+        # The reasoning the user wrote travels with the answer, so a screen
+        # showing the verdict can show what they said.
+        assert any("Invented company" in p
+                   for p in row["observed"]["provenance"])
+
+    def test_a_number_can_never_be_typed_over_a_question(self, buffett):
+        """A judgement is not a measurement, and the refusal is structural on
+        both sides of the store rather than a convention this file keeps."""
+        security = {"ticker": "WDGE", "name": "Wedgemoor Fasteners",
+                    "lots": []}
+        from engine import hand_entered
+        with pytest.raises(ValueError) as caught:
+            hand_entered.record(security, "moat_durability", 1.0)
+        assert "judgement" in str(caught.value)
+
+    def test_a_journal_with_no_data_at_all_says_so(self, buffett):
+        security = {"ticker": "NONE", "name": "Nothing Fetched", "lots": []}
+        result = contract.evaluate(
+            buffett, context.build_context(security, [security],
+                                           values_for(buffett), {},
+                                           record=buffett))
+        assert result["state"]["id"] == "cannot-screen"
+        assert result["render"] == "unknown"

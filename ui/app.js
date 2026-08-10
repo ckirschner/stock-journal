@@ -978,7 +978,7 @@ function decisionSection(d, title) {
   const host = d.produced_by === "host";
   return `<section class="group"><div class="ghead"><h3>${esc(title || "The verdict")}</h3>
       <span>${esc((d.state || {}).name || "")}</span></div>
-    <p class="hint" style="margin:8px 0 0">${esc((d.state || {}).description || "")}</p>
+    <div class="hint" style="margin:8px 0 0">${prose((d.state || {}).description)}</div>
     <div class="rollup" style="margin-top:12px">
       <div class="pe-head"><b>${esc(r.summary || "")}</b></div>
       <div class="pe-sub" style="margin-top:6px">${host
@@ -1756,6 +1756,31 @@ const prose = (t) => !t ? "" : String(t).trim().split(/\n{2,}/)
 const oneline = (t) => esc(String(t == null ? "" : t).trim().replace(/\s+/g, " "));
 
 /* ------------------------------------------------- config: strategy page */
+/* What a strategy has no state for at all.
+
+   The states list reads as a menu of things that might happen, and for a
+   strategy that has deliberately given one of them up that is the wrong
+   impression in the direction that matters: somebody watching a holding
+   double and waiting to be told to trim it would wait forever, and nothing
+   on the page would say so.
+
+   Derived from the host's own render types against what the bundle declares,
+   so no strategy is named here and none could be. A strategy that adds a
+   state later loses the line about it without a word of this changing. */
+function neverSays(st) {
+  const has = new Set((st.states || []).map((s) => s.render));
+  const missing = Object.entries(S.render_types || {})
+    .filter(([id]) => !has.has(id)).map(([, t]) => t.meaning).filter(Boolean);
+  if (!missing.length) return "";
+  return `<div class="notice quiet" style="margin-top:14px">
+    <h4>What it will never say</h4>
+    <p>This strategy has no verdict at all that means:
+    <b>${missing.map(esc).join("</b>, <b>")}</b>. Not "it has not come up
+    yet" — there is nothing here that could reach it. Where another strategy
+    would have that verdict, this one has taken a settled position instead,
+    and its summary above says what that position is.</p></div>`;
+}
+
 /* Read-only, on purpose. A strategy is edited where it lives — as code and a
    values file beside it — and every change is caught and recorded here
    whether or not it came through this app. */
@@ -1784,15 +1809,17 @@ function strategyView() {
 
   h += `<section class="group" style="margin-top:26px"><div class="ghead"><h3>What it can say</h3>
     <span>${st.states.length} state${st.states.length === 1 ? "" : "s"}</span></div>
-    <p class="hint" style="margin:8px 0 0">Every verdict this journal produces is one of these, and only one.
-    Buying, holding, adding, trimming and exiting are outcomes of a single decision, not separate systems that
-    each reach their own conclusion.</p>
+    <p class="hint" style="margin:8px 0 0">Every verdict this journal produces is one of these, and only one —
+    a decision resolves to a single state rather than several systems each reaching their own conclusion.
+    <b>This is the list of what it <i>can</i> say, not a list of what it will.</b> A strategy may go years
+    without reaching some of these, and one or two may never come up in your journal at all. That is the
+    strategy having a settled view, not the tool failing to notice something.</p>
     <div class="slist" style="margin-top:12px">${st.states.map((s) => `<div class="srow">
       <div class="sname">${esc(s.name)}</div>
-      <div class="scond">${esc(s.description)}</div>
+      <div class="scond">${prose(s.description)}</div>
       <div class="sstate"><span class="chip s-${RENDER_TONE[s.render] || "none"}">${
         esc(((S.render_types || {})[s.render] || {}).meaning || "")}</span></div>
-    </div>`).join("")}</div></section>`;
+    </div>`).join("")}</div>${neverSays(st)}</section>`;
 
   if ((st.inputs || []).length) {
     const problems = st.input_problems || [];
@@ -2076,16 +2103,18 @@ function dataView() {
       <div class="toolbar" style="justify-content:flex-start;margin-top:8px">
         <button class="btn primary" data-act="save-valuation">Save defaults</button></div></div>
 
-    <div class="panel"><h3>Sample journal</h3><div class="sub">Invented companies and invented figures</div>
-      <p class="hint" style="margin-top:0">Creates a separate journal of made-up companies so you can see what a
+    <div class="panel"><h3>Sample journals</h3><div class="sub">Invented companies and invented figures</div>
+      <p class="hint" style="margin-top:0">Creates separate journals of made-up companies so you can see what a
       journal looks like once it has been used — a holding with nothing to do, one that crossed a sell line and is
-      waiting for a second filing before anything happens, one whose balance sheet came apart, one the two-year
-      clock has run out on, one that grew too large, a purchase made against the signal and one made without one.
-      Nothing in it is a real company or a recommendation.</p>
-      <p class="hint">It is its own journal because a journal has one strategy: the sample is written against
-      Graham. Nothing already here is touched.</p>
+      waiting for a second filing before anything happens, one whose balance sheet came apart, one that grew to
+      half the account, a business that quietly stopped being worth owning, a verdict that refuses to decide until
+      you have answered something, a purchase made against the signal and one made without one.
+      Nothing in any of them is a real company or a recommendation.</p>
+      <p class="hint">There is one per strategy, because a journal has exactly one strategy and it does not
+      change. Loading them together is the quickest way to see what that costs and what it buys: the same kind of
+      company gets opposite verdicts from them, and neither is wrong. Nothing already here is touched.</p>
       <div class="toolbar" style="justify-content:flex-start;margin-top:16px">
-        <button class="btn" data-act="sample">Load sample journal</button></div></div>
+        <button class="btn" data-act="sample">Load sample journals</button></div></div>
 
     <div class="panel"><h3>Back up</h3><div class="sub">Export to a folder you control</div>
       <p class="hint" style="margin-top:0">Writes one timestamped file containing every journal — positions, notes,
@@ -3423,17 +3452,23 @@ document.addEventListener("click", async (ev) => {
     }
     case "sample": {
       dialog({
-        title: "Load the sample journal",
-        blurb: "Ten invented companies in a journal of their own, so nothing you have recorded is touched.",
-        body: `<p class="hint">Every company, price and figure in it is made up. It exists to show what the
+        title: "Load the sample journals",
+        blurb: "Invented companies in journals of their own, so nothing you have recorded is touched.",
+        body: `<p class="hint">Every company, price and figure in them is made up. They exist to show what the
           verdicts look like once a journal has some history — including the uncomfortable ones.</p>
-          <p class="hint">You can empty or ignore it afterwards; it is an ordinary journal.</p>`,
-        confirm: "Load it",
+          <p class="hint">One journal per strategy, because a journal has exactly one. Open the same kind of
+          company in each and you will see them disagree, which is the thing worth understanding before you
+          pick one.</p>
+          <p class="hint">You can empty or ignore them afterwards; they are ordinary journals.</p>`,
+        confirm: "Load them",
         onConfirm: async () => {
           const r = await api("load_sample");
           if (!r) return " ";
           openTicker = null;
-          toast(`Created ${r.name} with ${r.n} securities.`);
+          const missed = (r.skipped || []).length
+            ? ` ${r.skipped.length} could not be loaded.` : "";
+          toast(`Created ${r.journals} journal${r.journals === 1 ? "" : "s"} `
+            + `with ${r.n} securities.${missed}`);
         },
       });
       return;
