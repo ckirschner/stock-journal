@@ -195,6 +195,11 @@ def _load_bundle(bundle_dir: Path) -> dict:
                                    "contract", "changelog", "states")}
     record["inputs"] = decl.get("inputs", [])
     record["values"] = decl.get("values", [])
+    # What this strategy will not evaluate, carried on the record so the host
+    # can answer for a declined company without importing the bundle again —
+    # and so the screen that offers a strategy can say what it covers before
+    # any journal is stamped with it.
+    record["declines"] = decl.get("declines", [])
     record["reference"] = MappingProxyType(reference)
     record["defaults"] = dict((values_doc or {}).get("values") or {})
     record["values_version"] = (values_doc or {}).get("version")

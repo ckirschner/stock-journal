@@ -135,6 +135,71 @@ def open_since(day: str):
     return doc
 
 
+def industry_node(cls=None, sic="3559",
+                  title="Special Industry Machinery, NEC"):
+    """The `security.industry` node a hand-built context needs.
+
+    Hand-built contexts exist so a test can drive fifteen measures to chosen
+    values without going through the compute layer, and this is one more node
+    they have to carry or they stop being the shape a strategy is really
+    handed. Built from `contract.INDUSTRY_CLASSES` rather than by typing the
+    label, so the one thing here that could drift — what a class reads as —
+    cannot. tests/test_industry.py pins this against what
+    `industry.observation` actually produces for a stored filer.
+    """
+    from engine import contract
+    label = (contract.INDUSTRY_CLASSES[cls]["label"] if cls
+             else "Ordinary operating business")
+    return {"status": "known", "value": label, "source": "sec",
+            "cautions": [], "provenance": [f"SIC {sic} ({title})"],
+            "class": cls, "sic": sic, "title": title}
+
+
+def filer(cik, name, sic, description=None, observed=None):
+    """Give a stored company the SEC identity a fetch would have written.
+
+    Through `facts_store.record_identity`, which is the same call the fetch
+    makes, so the append-only identity history a classification is read out of
+    is built the way the real one is rather than assembled here. Calling it
+    twice with different codes lays down a reclassification, which is the only
+    way to exercise one.
+
+    `observed` moves the stamp the record carries, for the tests that ask what
+    was known on a past day. Poked rather than offered as a parameter on the
+    real call, for the same reason a dated entry cannot name its own date.
+    """
+    from datetime import datetime
+
+    from engine import facts_store
+    real = facts_store._stamp
+    if observed:
+        facts_store._stamp = lambda: (
+            datetime.fromisoformat(f"{observed}T12:00:00")
+            .astimezone().isoformat(timespec="seconds"))
+    try:
+        doc = facts_store.load_company(int(cik))
+        facts_store.record_identity(doc, {
+            "cik": int(cik), "name": name, "tickers": [], "exchanges": [],
+            "sic": str(sic), "sic_description": description or "",
+            "fiscal_year_end": "1231", "former_names": [], "recent_forms": []})
+        facts_store.save_company(int(cik), doc)
+    finally:
+        facts_store._stamp = real
+    return int(cik)
+
+
+def tie(ticker, cik):
+    """Attach a security in the open journal to a stored company record —
+    what a fetch does once it has safely resolved the ticker."""
+    from engine import dataview, journals
+    doc = journals.load(journals.resolve_open())
+    next(s for s in doc["securities"] if s["ticker"] == ticker)["cik"] = \
+        int(cik)
+    journals.save(doc)
+    dataview.invalidate(int(cik))
+    return doc
+
+
 def journal_for(strategy_id, name="Test journal", inputs=None, config=None):
     """A journal stamped with a discovered strategy, saved and opened.
 

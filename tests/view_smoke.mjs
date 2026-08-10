@@ -142,6 +142,35 @@ run('tab = "holdings";');
 for (const s of state.securities) {
   check(`detail:${s.ticker}`, `detailView(find(${JSON.stringify(s.ticker)}))`);
 }
+/* The data-coverage panel with its payload already in hand.
+   The detail page above loads it asynchronously, so a synchronous render
+   only ever draws the "reading the stored filings" placeholder — which
+   means the panel's real body, thirty-odd rows and everything the host says
+   about the stored data, had never been rendered here at all. Primed the
+   same way the allocation standings above are, for the same reason.
+
+   Both branches of the industry line are drawn, because different journals
+   reach them and the absent one is the commoner. That the payload carries
+   the field at all is pinned on the Python side, in test_view_smoke.py — a
+   condition here that vanished along with the thing it asserts would pass
+   precisely when the field stopped being served. */
+const industryOf = (s) => ((((((state.__coverage || {})[s.ticker] || {})
+  .coverage || {}).status) || {}).industry || {}).industry || {};
+const classified = state.securities.find(
+  (s) => industryOf(s).status === "known");
+const unclassified = state.securities.find(
+  (s) => industryOf(s).status === "absent");
+for (const s of [classified, unclassified]) {
+  if (!s) continue;
+  const t = JSON.stringify(s.ticker);
+  check(`coverage:${s.ticker}`, `(() => {
+    const held = [C.coverage, C.coverageFor];
+    C.coverage = ${JSON.stringify(state.__coverage[s.ticker])};
+    C.coverageFor = ${t};
+    const h = coverageSection(find(${t}));
+    [C.coverage, C.coverageFor] = held;
+    return h; })()`);
+}
 // The dialogs render from a strategy's declaration and from the lot list,
 // which is where a renamed key or an unhandled field type shows up first.
 // They write into the stub's dialog body rather than returning markup.
@@ -387,6 +416,70 @@ if (fromHistory) {
     [`detail:${fromHistory.ticker}`, "entered from history",
      "the detail page says so before a single figure is read"],
     );
+}
+/* What a strategy will not evaluate, and what that looks like when it lands.
+
+   Both halves are asserted because they are read by different people at
+   different times: somebody reading the strategy needs to know the boundary
+   exists before they meet it, and somebody looking at a security that fell
+   outside it needs the verdict to say so in words rather than in a blank. A
+   boundary that only ever appears as a verdict is one a reader meets by
+   surprise, on the one security where it is least useful to be surprised.
+
+   Gated on the payload, like every other conditional here: a strategy that
+   declines nothing has nothing to draw, and demanding it would be testing
+   the fixture. */
+const declines = (state.strategy || {}).declines || [];
+if (declines.length) {
+  must.push(
+    ["strategy", "What it will not evaluate",
+     "the strategy screen says the boundary exists before a verdict does"],
+    ["strategy", declines[0].label,
+     "and names the kind of company rather than only that there is one"],
+    ["strategy", declines[0].because,
+     "in this strategy's own words, not the host's"]);
+}
+/* A render type only the host produces must never appear in the list of what
+   a strategy will never say. Nothing a strategy declares could reach one, so
+   listing it reports the contract's own shape as a position this strategy
+   took — and it is the sentence most likely to be believed, because it sits
+   under a heading that is true of everything beside it.
+
+   Unconditional and derived: every host-only type, on every journal. The
+   meaning of one can only reach the strategy screen through that list, since
+   the states above it are the strategy's own and it cannot declare one. */
+Object.values(state.render_types || {}).filter((t) => t.host_only)
+  .forEach((t) => mustNot.push(
+    ["strategy", t.meaning,
+     "a verdict only the host produces is not something this strategy "
+     + "declined to have"]));
+const outOfScope = state.securities.find(
+  (s) => (s._decision || {}).render === "inapplicable");
+if (outOfScope) {
+  must.push(
+    [`detail:${outOfScope.ticker}`, "Outside these rules",
+     "a company these rules do not cover says so as a verdict"],
+    [`detail:${outOfScope.ticker}`, "Produced by the journal itself",
+     "and says the strategy did not produce it"]);
+}
+// What the SEC says a filer is, on the page that reports every other fact
+// about the stored data. A figure that decides whether a whole rule set
+// applies, with nowhere on screen to read it, is exactly the invisible input
+// this program does not have.
+if (classified) {
+  must.push(
+    [`coverage:${classified.ticker}`, "What the SEC classifies this",
+     "the data panel reports the filer's kind"],
+    [`coverage:${classified.ticker}`, "SIC ",
+     "and the code it says it with, so the claim can be checked"]);
+}
+if (unclassified) {
+  must.push(
+    [`coverage:${unclassified.ticker}`, "not established",
+     "a filer whose kind is not known says so rather than reading as an "
+     + "ordinary business"],
+    [`coverage:${unclassified.ticker}`, industryOf(unclassified).reason,
+     "and gives the host's own reason for it"]);
 }
 // The two scorecard shapes, each gated on the journal actually having that
 // population. A panel demanded of a journal with nothing in it would be

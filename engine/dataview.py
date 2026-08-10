@@ -31,7 +31,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from . import compute, concept_map, crosscheck, facts_store
-from . import hand_entered, judgements, price_store
+from . import hand_entered, industry, judgements, price_store
 
 _cache: dict = {}
 
@@ -505,6 +505,12 @@ def data_status(cik: int | None) -> dict | None:
         "price_through": price_through,
         "terminal_series": terminal,
         "identity": (doc.get("identity") or {}).get("name"),
+        # What the SEC says this filer is, and what the host makes of it.
+        # Reported here rather than only handed to a strategy: it decides
+        # whether a whole rule set has anything to say about the company, and
+        # a figure that can do that with nowhere on screen to read it is the
+        # kind of invisible input this program exists to not have.
+        "industry": industry.report({"cik": cik}),
     }
 
 

@@ -46,7 +46,7 @@ computed and returns **one state** — buying, holding, adding, trimming and
 exiting are outcomes of a single decision, not separate systems that each
 reach their own conclusion.
 
-Every state a strategy declares maps onto one of six render types the host
+Every state a strategy declares maps onto one of the render types the host
 owns, which is how the host can sort, count and present a verdict whose
 meaning it does not know:
 
@@ -58,10 +58,25 @@ meaning it does not know:
 | `hold`    | no action                                          |
 | `blocked` | a decision is owed from you before any verdict     |
 | `unknown` | not enough data to say                             |
+| `inapplicable` | these rules do not evaluate this kind of company |
 
-The last two are about the evaluation, not the security, and are never
-averaged in with the others: "4 of 12 are hold" is a portfolio fact, "4 of 12
-cannot be evaluated" is a data problem.
+The last three are not about the security, and are never averaged in with the
+others — or with each other. "4 of 12 are hold" is a portfolio fact, "4 of 12
+cannot be evaluated" is a data problem, and "4 of 12 are outside these rules"
+is a fact about the journal you chose.
+
+A strategy also declares the **kinds of company it will not evaluate**, and
+the host answers for those before any of its logic runs. That is not a view
+about whether banks are worth owning; it is the narrower statement that the
+measures here were built for a company that sells something, and that a
+lender, an insurer and a property company each break them in a different way.
+A bank's cash from operations moves with the period's change in loans and
+deposits, so a *shrinking* bank generates enormous free cash flow — the one
+place a financial company produced a confident wrong answer rather than an
+honest absence. Which kind of company a filer is comes from the industry code
+the SEC publishes for it, code by code against the published list, and where
+that code covers businesses that are nothing alike the classification is
+absent rather than guessed.
 
 A verdict arrives with the reasoning attached. The strategy says what it
 looked at and what it required; the **host** answers with the figure, its

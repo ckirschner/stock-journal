@@ -31,7 +31,8 @@ from datetime import date
 
 import pytest
 
-from conftest import entered, filing, dur, balance_face
+from conftest import entered, filer, filing, dur, balance_face, \
+    industry_node
 
 from engine import context, contract, facts_store, strategy_loader
 from engine import strategy_values
@@ -90,7 +91,7 @@ def _baseline(when, values):
 
 def build(record, known=None, series=None, held=False, opened=None,
           weight=None, occupied=0, today="2026-08-09", bought=None,
-          purchases=1, **override):
+          purchases=1, industry=None, **override):
     """A context shaped exactly as engine/context builds one.
 
     `bought` is what was on record at the two anchor purchases:
@@ -128,7 +129,14 @@ def build(record, known=None, series=None, held=False, opened=None,
             baselines[anchor] = _baseline(opened, bought.get(key, known))
     return {
         "contract": contract.CONTRACT_VERSION, "today": today,
-        "security": {"ticker": "ARBR", "name": "Arbor Mills", "cik": None},
+        # The published industry code and what the host makes of it. An
+        # ordinary operating business unless a test asks otherwise — this
+        # strategy declines three kinds, and the gate refuses them before
+        # `decide` is called at all.
+        "security": {"ticker": "ARBR", "name": "Arbor Mills", "cik": None,
+                     "sic": {"status": "absent",
+                             "reason": "a hand-built context"},
+                     "industry": industry_node(industry)},
         "measures": measures,
         "price": {"latest": {"status": "absent", "reason": "no price"},
                   "closes": [], "events": []},
@@ -1076,3 +1084,72 @@ def test_the_clock_reads_the_hosts_figure_and_does_no_arithmetic(graham):
                  if e["subject"]["id"] == "position.months_held")
     assert cited["observed"]["value"] == contract.months_between(
         "2024-02-29", "2026-02-28")
+
+
+class TestTheCompaniesItWillNotJudge:
+    """Three kinds of company get a refusal rather than a verdict, and the
+    refusal is permanent.
+
+    It was producing verdicts on them, and the verdicts were arithmetic laid
+    over accounts these tests were never written for. Four of the fifteen
+    entry tests and three of the eight exits read a balance sheet split into
+    what falls due within the year and what does not — and a bank does not
+    split its balance sheet that way at all, so those came back unreadable
+    while the rest went on scoring the company. "Not cheap enough" reads as a
+    judgement about the business. It was not one.
+    """
+
+    def test_a_company_that_would_otherwise_buy_is_refused(self, graham):
+        """The strongest form of it. Every entry test passing and the verdict
+        is still a refusal, because the refusal is about the rules rather
+        than about the figures — and because a strategy that only declined
+        companies it was going to reject anyway would be decorative."""
+        result = contract.evaluate(
+            graham, build(graham, known=CLEARS_ENTRY,
+                          industry="depository-lending"))
+        assert result["render"] == "inapplicable"
+        assert result["produced_by"] == "host"
+        assert "Graham does not evaluate banks and lenders" in \
+            result["reason"]["summary"]
+
+    def test_a_holding_in_one_is_not_sold_and_owes_nothing(self, graham):
+        """Nothing is being sold, and the verdict asks nothing of the reader.
+        A rule set that stopped covering a company you already hold has not
+        found anything wrong with it."""
+        result = contract.evaluate(
+            graham, build(graham, known=CLEARS_EXITS, held=True,
+                          opened="2025-01-06", weight=4.0,
+                          industry="real-estate"))
+        assert result["render"] == "inapplicable"
+        assert contract.RENDER_TYPES["inapplicable"]["attention"] is False
+        assert result["payload"] == {}
+
+    @pytest.mark.parametrize(
+        "cls", ["depository-lending", "insurance", "real-estate"])
+    def test_every_declined_class_says_why_in_its_own_words(self, graham, cls):
+        result = contract.evaluate(
+            graham, build(graham, known=CLEARS_ENTRY, industry=cls))
+        because = contract.declined_classes(graham)[cls]
+        assert because in result["reason"]["summary"]
+
+    def test_an_ordinary_business_is_untouched(self, graham):
+        result = contract.evaluate(graham, build(graham, known=CLEARS_ENTRY))
+        assert result["produced_by"] == "strategy"
+        assert result["state"]["id"] == "buy"
+
+    def test_the_refusal_reaches_the_reader_through_a_real_context(
+            self, graham):
+        """Hand-built contexts prove the branch; this proves the wiring, from
+        a stored filer identity all the way to the verdict."""
+        security = {"ticker": "OKLL", "name": "Okell Savings", "lots": [],
+                    "cik": 990_412}
+        filer(990_412, "Okell Savings", "6035",
+              "Savings Institution, Federally Chartered")
+        result = contract.evaluate(
+            graham, context.build_context(security, [security],
+                                          values_for(graham), {},
+                                          record=graham))
+        assert result["state"]["id"] == "host:not-evaluated"
+        row = next(e for e in result["reason"]["evidence"]
+                   if e["subject"]["id"] == "security.industry")
+        assert row["observed"]["value"] == "Depository and lending"

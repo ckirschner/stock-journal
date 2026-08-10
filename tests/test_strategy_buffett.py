@@ -30,7 +30,8 @@ drift from the real one.
 
 import pytest
 
-from conftest import entered, filing, dur, balance_face
+from conftest import entered, filer, filing, dur, balance_face, \
+    industry_node
 
 from engine import context, contract, facts_store, judgements
 from engine import strategy_loader, strategy_values
@@ -99,7 +100,7 @@ def _baseline(when, values):
 
 def build(record, known=None, series=None, judged=None, held=False,
           opened=None, weight=None, occupied=0, today="2026-08-09",
-          bought=None, purchases=1, **override):
+          bought=None, purchases=1, industry=None, **override):
     """A context shaped exactly as engine/context builds one.
 
     `judged` is {bank id: True|False} for the three questions; anything left
@@ -154,8 +155,14 @@ def build(record, known=None, series=None, judged=None, held=False,
                              if held else no_purchase)
     return {
         "contract": contract.CONTRACT_VERSION, "today": today,
+        # An ordinary operating business unless a test asks otherwise.
+        # This strategy declines three kinds, and the gate refuses them
+        # before `decide` is called at all.
         "security": {"ticker": "WDGE", "name": "Wedgemoor Fasteners",
-                     "cik": None},
+                     "cik": None,
+                     "sic": {"status": "absent",
+                             "reason": "a hand-built context"},
+                     "industry": industry_node(industry)},
         "measures": measures,
         "price": {"latest": {"status": "absent", "reason": "no price"},
                   "closes": [], "events": []},
@@ -1060,3 +1067,61 @@ class TestThroughTheRealContext:
                                            record=buffett))
         assert result["state"]["id"] == "cannot-screen"
         assert result["render"] == "unknown"
+
+
+class TestTheCompaniesItWillNotJudge:
+    """Three kinds of company get a refusal rather than a verdict — and
+    unlike Graham's, this refusal is meant to be temporary.
+
+    All three tests this strategy will not bend are category errors on a
+    lender, and the third one is worse than useless. Owner earnings starts
+    from cash from operations, and for a bank that figure moves with the
+    period's change in loans and deposits rather than with the business — so
+    a bank that is SHRINKING produces the largest owner earnings of all. That
+    is not a gap that renders as grey and gets ignored. It is a big confident
+    number pointing the wrong way, on one of the three tests that decide
+    whether money goes in.
+    """
+
+    def test_a_company_that_would_otherwise_buy_is_refused(self, buffett):
+        result = contract.evaluate(
+            buffett, build(buffett, known=CLEARS_ENTRY,
+                           judged=dict.fromkeys(
+                               ("moat_durability", "management_integrity",
+                                "capital_allocation"), True),
+                           industry="depository-lending"))
+        assert result["render"] == "inapplicable"
+        assert result["produced_by"] == "host"
+        assert "Buffett does not evaluate banks and lenders" in \
+            result["reason"]["summary"]
+
+    def test_the_refusal_says_the_measures_are_missing_not_the_view(
+            self, buffett):
+        """The difference between this and Graham's, said out loud where a
+        reader will meet it. Buffett has plenty to say about banks; what is
+        missing is measures built for them."""
+        because = contract.declined_classes(buffett)["depository-lending"]
+        assert "not in this program" in because
+
+    def test_it_is_refused_before_the_three_questions_are_asked(self, buffett):
+        """Nobody should be assessing the durability of a business their own
+        rules are not going to evaluate. The gate runs first, so the
+        judgement questions are never cited and never appear."""
+        result = contract.evaluate(
+            buffett, build(buffett, known=CLEARS_ENTRY,
+                           industry="depository-lending"))
+        cited = {e["subject"]["id"] for e in result["reason"]["evidence"]}
+        assert cited == {"security.industry", "security.sic"}
+
+    @pytest.mark.parametrize(
+        "cls", ["depository-lending", "insurance", "real-estate"])
+    def test_every_declined_class_says_why_in_its_own_words(self, buffett,
+                                                            cls):
+        result = contract.evaluate(
+            buffett, build(buffett, known=CLEARS_ENTRY, industry=cls))
+        assert contract.declined_classes(buffett)[cls] in \
+            result["reason"]["summary"]
+
+    def test_an_ordinary_business_is_untouched(self, buffett):
+        result = contract.evaluate(buffett, build(buffett, known=CLEARS_ENTRY))
+        assert result["produced_by"] == "strategy"

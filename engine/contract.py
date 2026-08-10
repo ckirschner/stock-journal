@@ -2,7 +2,7 @@
 
 The host is the rendering engine; a strategy is the decision engine. This
 module is the line between them: what a strategy must declare about itself,
-what it receives, what it must return, and the six render types the host owns.
+what it receives, what it must return, and the render types the host owns.
 
 Everything that crosses the line is plain data. A strategy is handed one plain
 dict (built in engine/context.py) and returns one plain dict — a state it
@@ -169,25 +169,45 @@ _NO_REFERENCE = MappingProxyType({})
 
 
 # ---------------------------------------------------------------------------
-# The six render types — the one permanent host-owned list.
+# The seven render types — the one permanent host-owned list.
 #
 # Internal only; a user never sees these words. They exist so the host can
 # render, sort, count and aggregate a state whose meaning it does not know.
-# Four are about the security, two are about the evaluation, and the two
-# tiers must never be averaged together — "4 of 12 are hold" is a portfolio
-# fact, "4 of 12 cannot be evaluated" is a data problem.
+# Four are about the security, two are about the evaluation, one is about the
+# scope of the rules, and the three tiers must never be averaged together —
+# "4 of 12 are hold" is a portfolio fact, "4 of 12 cannot be evaluated" is a
+# data problem, and "4 of 12 are outside these rules" is a fact about the
+# journal you have chosen. Rolling any two of those into one number produces
+# a figure with no fix behind it.
+#
+# The third tier arrived with `inapplicable` and is the reason it is a render
+# type rather than a flag on `unknown`. The two look alike and behave
+# oppositely. `unknown` says a figure is missing and may not be next quarter,
+# so it asks for attention and belongs in the list of things to go and do.
+# `inapplicable` says these rules have nothing to say about this kind of
+# company, which is knowable in advance and will never change by itself — so
+# it must NOT ask for attention, because a permanent item in a list of things
+# to do is how that list stops being read. A flag could not carry that: the
+# view reads `attention` off this table and would have had to learn the flag.
 #
 # The mapping is a read-only proxy over dicts with tuple values: nothing
 # outside this file can add a type or edit one, by construction rather than
 # by convention. Adding a type is a host change and a deliberate one.
 # ---------------------------------------------------------------------------
 
-def _rt(tier, meaning, order, attention, payload_keys, optional_keys=()):
+def _rt(tier, meaning, order, attention, payload_keys, optional_keys=(),
+        host_only=False):
     return MappingProxyType({
-        "tier": tier,                    # "position" | "evaluation"
+        "tier": tier,               # "position" | "evaluation" | "scope"
         "meaning": meaning,              # for the contract docs, not the user
         "order": order,                  # sort rank across a list of results
         "attention": attention,          # surfaces in "needs attention"
+        # Whether a strategy may declare a state of this type. Carried here
+        # rather than checked against an id, because the screen that lists
+        # what a strategy will never say has to leave these out — and a view
+        # recognising a render type by name is the hardcoding principle 9
+        # refuses. One flag, read by the declaration check and by that screen.
+        "host_only": host_only,
         "payload_keys": payload_keys,    # every one of these, always
         # May also appear, and mean "no answer" by being left out. Reserved
         # for a fact that genuinely does not apply to most decisions of this
@@ -210,6 +230,111 @@ RENDER_TYPES = MappingProxyType({
                    "a decision is owed from the user before any verdict",
                    4, True, ("needs",)),
     "unknown": _rt("evaluation", "not enough data to say", 5, True, ()),
+    "inapplicable": _rt("scope",
+                        "these rules do not evaluate this kind of company",
+                        6, False, (), host_only=True),
+})
+
+# ---------------------------------------------------------------------------
+# The kinds of company a rule set can decline — the host's closed list.
+#
+# A fact, not an opinion. The SEC assigns every filer an industry code and
+# EDGAR publishes it; engine/industry.py turns that code into one of these,
+# or into an absence where the code does not settle it. Nothing here says a
+# bank is a bad investment. What it says is that the measures the host serves
+# were built for a company that sells something, and that these three kinds
+# of filer break them in three different ways.
+#
+# Each one is a *different* break, which is why there are three and not one:
+#
+#   depository-lending  operating cash flow moves with the period's change in
+#                       loans and deposits rather than with the business, so a
+#                       shrinking lender reports enormous free cash flow. There
+#                       is no current/non-current split on the balance sheet at
+#                       all. Interest is the cost of the product, so an
+#                       operating profit struck after interest is a category
+#                       error rather than an approximation.
+#   insurance           the investment portfolio is held against policy
+#                       reserves and belongs to policyholders, so returns on
+#                       capital measure the wrong capital. Cash flow carries
+#                       the growth of float, which is money owed out later
+#                       arriving now. No current/non-current split either.
+#   real-estate         depreciation on buildings is an accounting convention
+#                       rather than a cost being incurred, so net income and
+#                       everything built on it understates by design — the
+#                       industry replaces it with funds from operations, which
+#                       this host does not compute. Leverage is structural
+#                       rather than a choice.
+#
+# What is deliberately NOT here: a class for asset managers, exchanges,
+# insurance brokers or estate agents. Those are ordinary fee businesses that
+# the ordinary measures describe perfectly well, and a list that swept in
+# everything financial-sounding would refuse companies for no reason. And no
+# class for broker-dealers: the SEC's own codes cannot tell one from an asset
+# manager, so a filer there is reported as absent rather than as a class
+# nobody could stand behind.
+#
+# Adding a class is a host change in this one table, and it means a real
+# claim about a real break with real filers behind it.
+# ---------------------------------------------------------------------------
+
+INDUSTRY_CLASSES = MappingProxyType({
+    "depository-lending": MappingProxyType({
+        "label": "Depository and lending",
+        "noun": "banks and lenders",
+        "means": "banks, savings institutions, consumer and business lenders, "
+                 "finance lessors and securitisation vehicles",
+        "explain":
+            "A company whose product is credit: it takes deposits or borrows, "
+            "and lends the money out again.\n\n"
+            "Almost nothing on this page was built for one. The money moving "
+            "through it in a year is mostly loans going out and deposits "
+            "coming in, so what the accounts call cash from operations "
+            "describes the size of the loan book rather than how the business "
+            "did — a lender that is shrinking generates the most cash of all. "
+            "Its balance sheet is not divided into what falls due within the "
+            "year and what does not, so every measure that leans on that "
+            "division has nothing to read. And interest is what the product "
+            "costs rather than a financing decision, so a profit figure "
+            "struck after interest is not the same quantity it is anywhere "
+            "else.",
+    }),
+    "insurance": MappingProxyType({
+        "label": "Insurance",
+        "noun": "insurers",
+        "means": "life, health, property, casualty, surety and title "
+                 "insurance carriers",
+        "explain":
+            "A company that takes premiums now against claims later, and "
+            "invests the money in between.\n\n"
+            "That gap is called float, and it makes the ordinary measures "
+            "read wrongly in a particular direction. The investment portfolio "
+            "is large and is held against money owed to policyholders, so "
+            "returns measured against it are measuring the wrong capital. "
+            "Cash coming in includes premiums for claims not yet made, which "
+            "looks like cash the business generated and is really cash it is "
+            "holding. Like a bank, an insurer does not split its balance "
+            "sheet into current and non-current, so the liquidity measures "
+            "have nothing to work with.",
+    }),
+    "real-estate": MappingProxyType({
+        "label": "Real estate and REITs",
+        "noun": "property companies and REITs",
+        "means": "property owners, operators, developers and real estate "
+                 "investment trusts",
+        "explain":
+            "A company whose business is owning buildings and land.\n\n"
+            "The accounts charge depreciation against buildings every year as "
+            "though they were wearing out, and well-kept property mostly does "
+            "not — so reported profit is lower than what the business "
+            "actually earns, by a lot, and every measure built on profit "
+            "inherits that. The industry uses a different figure entirely "
+            "(funds from operations, which adds the depreciation back), and "
+            "this program does not compute it. Borrowing is also high by the "
+            "nature of the business rather than by choice, so a leverage "
+            "test set for a manufacturer refuses every property company "
+            "there is.",
+    }),
 })
 
 # ---------------------------------------------------------------------------
@@ -317,6 +442,39 @@ HOST_STATES = MappingProxyType({
         "description": "The strategy returned something outside the "
                        "contract, so its verdict cannot be trusted or "
                        "shown."}),
+    # The two states that come out of what a strategy DECLINES. Both are the
+    # host speaking, and that is the point of the arrangement: a strategy
+    # names the kinds of company it will not evaluate in its declaration, so
+    # the answer can be given before any of its logic runs, and the screen
+    # that offers a strategy can say what it covers without evaluating
+    # anything at all.
+    "host:not-evaluated": MappingProxyType({
+        "render": "inapplicable", "name": "Outside these rules", "fix": None,
+        "description": "This journal's strategy does not evaluate this kind "
+                       "of company, and says so rather than producing a "
+                       "verdict its own measures cannot support.\n\n"
+                       "Read that as a statement about the rules and not "
+                       "about the business. You have not been told this "
+                       "company is a poor investment, or a good one — you "
+                       "have been told these particular rules have nothing "
+                       "to say about it. Recording what you do here is not "
+                       "blocked, and never is."}),
+    "host:industry-unknown": MappingProxyType({
+        "render": "unknown", "name": "Industry not established", "fix": None,
+        "description": "This journal's strategy does not evaluate every kind "
+                       "of company, and the industry code the SEC publishes "
+                       "for this one does not say which kind it is — so it "
+                       "is not evaluated, rather than evaluated on the "
+                       "chance that it is covered.\n\n"
+                       "That is a real gap in the source and not a fault "
+                       "here. A few of the SEC's codes are given to "
+                       "businesses that have almost nothing in common: the "
+                       "one a large consumer lender files under is the same "
+                       "one a payments company files under, and no amount of "
+                       "reading the code will separate them. The reason "
+                       "below names the code and says what it covers.\n\n"
+                       "Nothing you record is affected, and recording a "
+                       "decision is never blocked by this."}),
 })
 
 VALUE_TYPES = ("number", "integer", "boolean", "text")
@@ -552,6 +710,33 @@ def _fact(label, unit, path, explain, bare=False, when_missing=None):
 # and the author's for a declared setting, so a row of evidence can always
 # be asked what it is regardless of which kind of thing it cites.
 HOST_FACTS = MappingProxyType({
+    "security.industry": _fact(
+        "Industry", "text", ("security", "industry"),
+        "What kind of company this filer is, worked out from the industry "
+        "code the SEC publishes for it.\n\n"
+        "It exists because a handful of kinds of company break the measures "
+        "on this page rather than merely reading oddly on them — a bank, an "
+        "insurer, a property company. Where this names one of those, a rule "
+        "set that says it does not evaluate that kind will say so instead of "
+        "producing a verdict.\n\n"
+        "\"Ordinary operating business\" is a real answer and covers almost "
+        "everything, asset managers and insurance brokers included. Absent "
+        "means one of two things and the reason says which: nothing has been "
+        "fetched for this company yet, or the code the SEC gave it is one "
+        "they hand to businesses that are nothing alike, so the code does "
+        "not settle it.\n\n"
+        "A strategy that routes on this reads the class id rather than this "
+        "sentence — see the reference."),
+    "security.sic": _fact(
+        "SEC industry code", "text", ("security", "sic"),
+        "The four-digit Standard Industrial Classification code the SEC has "
+        "assigned to this filer, with the SEC's own title for it. It is "
+        "published per company and appears on the cover of its filings.\n\n"
+        "It is reported as it stands rather than interpreted. What the code "
+        "implies about whether the measures here describe this company is a "
+        "separate figure — see \"Industry\" — because several codes cover "
+        "businesses whose accounts have nothing in common, and the raw code "
+        "on its own would look more decisive than it is."),
     "position.weight": _fact(
         "Position weight", "percent", ("position", "weight"),
         "How much of your whole account this one holding is, as a "
@@ -919,7 +1104,8 @@ def check_typed_value(spec: dict, value) -> str | None:
 # ---------------------------------------------------------------------------
 
 _DECL_KEYS = {"id", "name", "summary", "version", "contract", "changelog",
-              "states", "inputs", "values", "reference"}
+              "states", "inputs", "values", "reference", "declines"}
+_DECLINE_KEYS = {"class", "because"}
 _STATE_KEYS = {"id", "name", "description", "render", "fix"}
 _FIELD_KEYS = {"id", "label", "type", "unit", "required", "min", "max",
                "explain", "options", "role", "when", "min_from", "max_from",
@@ -1267,6 +1453,84 @@ def _check_state_fix(where: str, s: dict, errors: list) -> None:
             "missing from that list is a request against the host.")
 
 
+def _check_declines(decl: dict, errors: list) -> None:
+    """The kinds of company this strategy will not evaluate, and every way
+    the list goes wrong.
+
+    A declaration and not a branch, and the difference is what the whole
+    mechanism is for. A strategy that refused financials inside `decide` would
+    be indistinguishable, from outside, from one that evaluated them: the
+    screen offering the strategy could not say what it covers, a journal could
+    not be told before it was stamped, and the refusal would arrive as one
+    more verdict among fifteen rather than as a fact about the rule set. Here
+    it is readable without running anything, which is the same reason inputs
+    and values are declared rather than discovered.
+
+    It is also what makes the refusal structural rather than remembered. The
+    host does not hand a declined company to `decide` at all — see `evaluate`
+    — so a strategy cannot evaluate one by forgetting to check, and cannot be
+    made to by a later edit that adds a branch above the check.
+
+    `because` is required and is the strategy's own sentence, because the
+    reason genuinely differs between rule sets and only the author has it. One
+    strategy declines a bank permanently because its tests *are* the
+    liquidation-oriented balance sheet and substituting bank measures would
+    produce something that is not that strategy any more; another declines it
+    until measures it does not yet have arrive. Those are different
+    sentences, a reader deserves the right one, and a host-written "not
+    supported" would say neither.
+    """
+    declines = decl.get("declines")
+    if declines is None:
+        return
+    if not isinstance(declines, list) or not declines:
+        errors.append(
+            "`declines` must be a non-empty list of the kinds of company this "
+            "strategy will not evaluate, or be left out entirely. An empty "
+            "list declines nothing, which is what leaving it out already "
+            "says.")
+        return
+    seen = set()
+    for i, d in enumerate(declines):
+        where = f"declines {i + 1}"
+        if not isinstance(d, dict) or set(d) != _DECLINE_KEYS:
+            errors.append(
+                f"{where} must be exactly {{class: one of "
+                f"{', '.join(INDUSTRY_CLASSES)}, because: plain language "
+                "saying why this rule set has nothing to say about that kind "
+                "of company}.")
+            continue
+        cid = d["class"]
+        if not isinstance(cid, str) or cid not in INDUSTRY_CLASSES:
+            errors.append(
+                f'{where}: `class` must be one of '
+                f"{', '.join(INDUSTRY_CLASSES)} — the kinds of company this "
+                "host can tell apart from a filer's published industry code. "
+                "A strategy never invents one; anything missing is a request "
+                "against the host.")
+        elif cid in seen:
+            errors.append(f'{where}: "{cid}" is declined twice.')
+        else:
+            seen.add(cid)
+        if not _is_text(d.get("because")):
+            errors.append(
+                f"{where} needs a `because` — one plain sentence a reader "
+                "sees instead of a verdict. Saying a kind of company is not "
+                "evaluated without saying why leaves someone unable to tell "
+                "a considered boundary from a gap nobody has got to yet.")
+
+
+def declined_classes(record: dict) -> dict:
+    """{class id: why} for a loaded strategy. The one reader of `declines`,
+    so a screen that wants to say what a strategy covers and the gate in
+    `evaluate` cannot come apart."""
+    out = {}
+    for d in record.get("declines") or []:
+        if isinstance(d, dict) and d.get("class") in INDUSTRY_CLASSES:
+            out.setdefault(d["class"], d.get("because"))
+    return out
+
+
 def validate_declaration(decl) -> list[str]:
     """Every problem with a STRATEGY declaration, as legible sentences.
 
@@ -1359,10 +1623,38 @@ def validate_declaration(decl) -> list[str]:
                           "language.")
         if s.get("render") not in RENDER_TYPES:
             errors.append(f"{where} must set `render` to one of the host's "
-                          f"six types ({', '.join(RENDER_TYPES)}). A "
-                          "strategy cannot add a render type.")
+                          f"{len(RENDER_TYPES)} types "
+                          f"({', '.join(RENDER_TYPES)}). A strategy cannot "
+                          "add a render type.")
+        elif RENDER_TYPES[s["render"]]["host_only"]:
+            # Host-only, and refused here rather than discouraged in prose.
+            #
+            # `inapplicable` is the one verdict that says a thing will never
+            # change, and a permanent answer has to be traceable to something
+            # checkable. Declared, it is: the host reads `declines`, resolves
+            # the filer's published industry code, and produces the verdict
+            # itself — so a screen can say what a strategy covers before any
+            # journal is stamped with it, and the same answer comes out every
+            # time. Returned from `decide`, it would be a branch nobody
+            # outside the bundle could see, and the nearest way to smuggle a
+            # data gap past the reader as a settled boundary: a figure that
+            # is missing today and present next quarter, reported as
+            # something these rules will never evaluate. That is `unknown`
+            # wearing the wrong clothes, and it is the one substitution this
+            # whole arrangement exists to make impossible.
+            errors.append(
+                f'{where} sets `render: {s["render"]}`, which only the host '
+                "produces. Name the kinds of company you will not evaluate "
+                "in `declines` and the host answers for them before your "
+                "logic runs — that is what lets a screen say what this "
+                "strategy covers without evaluating anything. A branch "
+                "inside decide() cannot say it, and a permanent verdict "
+                "reached by a branch is indistinguishable from a missing "
+                "figure. Where your rules DO cover the company and simply "
+                "reach no action, that is a `hold`.")
         _check_state_fix(where, s, errors)
 
+    _check_declines(decl, errors)
     _check_fields("input", decl.get("inputs", []), errors)
     _check_fields("value", decl.get("values", []), errors)
     if isinstance(decl.get("inputs", []), list) \
@@ -2899,6 +3191,74 @@ def _failure_location(exc: BaseException, bundle_dir: str) -> str | None:
     return None
 
 
+_SCOPE_CITES = ({"fact": "security.industry"}, {"fact": "security.sic"})
+
+
+def _outside_scope(record: dict, ctx: dict):
+    """The verdict for a company this rule set says it does not evaluate, or
+    None where it does — or where it declines nothing at all.
+
+    This runs before everything, including the check that the journal's setup
+    is complete, and the order is the point. Asking somebody to finish a
+    setup screen for a company the strategy is never going to evaluate is a
+    dead end one screen further along, and the whole reason `declines` is a
+    declaration rather than a branch is that the answer does not depend on
+    anything the journal has been told.
+
+    A code that was published and cannot be classified comes back `unknown`
+    and never `inapplicable`, and that split is the entire point of the second
+    render type existing. A code that does not settle it may be reassigned, or
+    the host may learn to read it; a company that is a bank will not stop
+    being one. Reporting the first as the second would tell a reader a fixable
+    gap was permanent, and reporting the second as the first would leave a
+    permanent boundary sitting in the list of things to go and do, forever.
+
+    A security with no industry code AT ALL runs normally, and the asymmetry
+    is deliberate. A published code the host cannot act on is evidence: the
+    SEC has said something, and what it said points where these measures do
+    not go. No code is not evidence of anything — it is a security nobody has
+    fetched, or one whose figures are entered by hand and which was never tied
+    to a filer at all. Journals driven entirely by hand are a supported way to
+    use this program, and refusing every verdict in one on the chance that an
+    unnamed company might be a bank would be treating silence as an
+    accusation. A strategy that declines nothing is unaffected by any of this.
+    """
+    declined = declined_classes(record)
+    if not declined:
+        return None
+    node = _read(_read(ctx, "security"), "industry")
+    known = _is_mapping(node) and node.get("status") == "known"
+    if not known and not _read(node, "unclassifiable"):
+        return None
+    # Resolved, so the row a reader sees is the host's own answer with its
+    # unit and provenance, exactly as it would be if a strategy had cited it.
+    # A refusal is a verdict, and a verdict cites what it rested on.
+    try:
+        evidence, _issues = resolve_evidence(record, ctx, list(_SCOPE_CITES))
+    except Exception:  # noqa: BLE001 — a refusal must not become a crash
+        evidence = []
+    if not known:
+        # The short version. The whole reason — which code, what the SEC
+        # gives it to — is on the industry row below, resolved by the host
+        # like any other citation, and printing a paragraph twice on one
+        # screen is how a reader learns to skip the second copy.
+        code = _read(node, "sic")
+        return host_result(
+            "host:industry-unknown",
+            f'{record["name"]} does not evaluate every kind of company, and '
+            + (f"SIC {code} does not say which kind this one is"
+               if code else "what kind this one is could not be established")
+            + ". The industry row below says what that code covers.",
+            record, evidence=evidence)
+    if node.get("class") not in declined:
+        return None
+    spec = INDUSTRY_CLASSES[node["class"]]
+    return host_result(
+        "host:not-evaluated",
+        f'{record["name"]} does not evaluate {spec["noun"]}. '
+        f'{declined[node["class"]]}', record, evidence=evidence)
+
+
 def evaluate(record: dict, ctx: dict) -> dict:
     """Ask a loaded strategy for its one decision about one security.
 
@@ -2907,6 +3267,15 @@ def evaluate(record: dict, ctx: dict) -> dict:
     as a host-produced result in the same envelope: an error in place, not
     a crashed application, and never a blocked recording.
     """
+    # First, and before the journal's own setup is looked at: what a strategy
+    # will not evaluate is a fact about the strategy, and it is settled
+    # without asking the strategy anything. A declined company never reaches
+    # `decide` at all, which is what makes the boundary structural rather
+    # than something an author has to remember at the top of every branch.
+    outside = _outside_scope(record, ctx)
+    if outside is not None:
+        return outside
+
     _, problems = check_inputs(record, ctx.get("inputs") or {},
                                ctx.get("values") or {})
     if problems:

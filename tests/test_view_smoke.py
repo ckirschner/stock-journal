@@ -28,7 +28,8 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from conftest import balance_face, dur, filing, inst, open_since
+from conftest import (balance_face, dur, filer, filing, inst, journal_for,
+                      open_since, tie)
 
 from engine import contract, facts_store, journals, price_store
 from engine import strategy_loader
@@ -270,6 +271,13 @@ def test_every_screen_renders(strategies, tmp_path):
     assert state["pending_changes"], "the rule-change banner has nothing to say"
     assert state["input_changes"] == [], "no answer was edited by this path"
 
+    # The one field the harness's own condition cannot guard: a gate that
+    # vanished with the thing it asserts would pass exactly when the payload
+    # stopped carrying it. Pinned here instead, where its absence is a
+    # KeyError rather than a silently skipped assertion.
+    node = state["__coverage"]["ACME"]["coverage"]["status"]["industry"]
+    assert set(node) == {"sic", "industry"}, node
+
     r = _render(state, tmp_path)
     assert r.returncode == 0, r.stdout + r.stderr
 
@@ -279,17 +287,23 @@ def test_the_sample_journals_render(tmp_path):
     reaches.
 
     The awkward fixture above only ever produces hold, blocked and unknown,
-    so three of the host's six render types have never been drawn: a commit
+    so three of the host's render types have never been drawn: a commit
     with a size, a reduce with a level to reduce to, and a close with the
     day the exit is due. The shipped samples are the only thing in the
-    repository that produces all six, and an exit that renders as
+    repository that produces those, and an exit that renders as
     "Exit due undefined" would reach a user before it reached a test.
 
     Both journals are drawn, and every render type has to appear across
     them rather than within either. No single strategy owes the host all
-    six — one that never trims has no `reduce` to draw, and demanding one
-    would be this test asking a strategy to declare vocabulary it does not
-    believe in.
+    of them — one that never trims has no `reduce` to draw, and demanding
+    one would be this test asking a strategy to declare vocabulary it does
+    not believe in.
+
+    `inapplicable` is the one a sample structurally cannot reach, and the
+    reason is the one the sample kit already records about confirmed exits:
+    no company in a hand-built sample is tied to a CIK, so no filer identity
+    exists, so nothing in one has an industry the host could classify. It is
+    drawn by the test below instead, against a stored identity.
     """
     api = app_mod.Api()
     loaded = api.load_sample()
@@ -312,7 +326,45 @@ def test_the_sample_journals_render(tmp_path):
         r = _render(state, tmp_path, "render-only")
         assert r.returncode == 0, (row["id"], r.stdout + r.stderr)
 
-    assert drawn == set(contract.RENDER_TYPES), drawn
+    assert drawn == set(contract.RENDER_TYPES) - {"inapplicable"}, drawn
+
+
+def test_the_out_of_scope_verdict_renders(strategies, tmp_path):
+    """The seventh render type, which no sample can reach.
+
+    Worth drawing rather than trusting: it is the one verdict with no payload
+    and no strategy behind it, so every branch on the page that reaches for
+    `payload.size` or the strategy's rule name is a branch that has never run
+    against it. "Rule undefined inside undefined" does not throw.
+    """
+    strategies("picky")
+    api = app_mod.Api()
+    _, record = journal_for("picky", inputs={})
+    assert api.add_security("TRUST", "Kingsbridge Savings")["ok"]
+    filer(9_000_101, "Kingsbridge Savings", "6035",
+          "Savings Institution, Federally Chartered")
+    tie("TRUST", 9_000_101)
+
+    state = api.get_state()
+    assert state["ok"], state
+    verdict = state["securities"][0]["_decision"]
+    assert verdict["render"] == "inapplicable", verdict
+    assert verdict["produced_by"] == "host"
+    assert record["name"] in verdict["reason"]["summary"]
+
+    # Asserted here as well as in the harness, because the harness's own
+    # condition is "this panel has a body". If the payload lost the industry
+    # the harness would still demand the line and fail — but the reason it
+    # failed would read as a view problem, and it would not be one.
+    assert state["strategy"]["declines"], "the offer lost what it declines"
+    state["__previews"] = {s["ticker"]: api.preview_purchase(s["ticker"])
+                           for s in state["securities"]}
+    state["__coverage"] = {s["ticker"]: api.get_coverage(s["ticker"])
+                           for s in state["securities"]}
+    node = state["__coverage"]["TRUST"]["coverage"]["status"]["industry"]
+    assert node["industry"]["class"] == "depository-lending", node
+    r = _render(state, tmp_path, "render-only")
+    assert r.returncode == 0, r.stdout + r.stderr
 
 
 def test_every_screen_reads_one_shape_for_one_document(strategies):

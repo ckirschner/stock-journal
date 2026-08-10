@@ -40,13 +40,23 @@ def record(**over):
 
 
 class TestRenderTypes:
-    def test_exactly_six_with_their_tiers(self):
+    def test_exactly_seven_with_their_tiers(self):
         assert set(contract.RENDER_TYPES) == {
-            "commit", "hold", "reduce", "close", "blocked", "unknown"}
+            "commit", "hold", "reduce", "close", "blocked", "unknown",
+            "inapplicable"}
         tiers = {k: v["tier"] for k, v in contract.RENDER_TYPES.items()}
         assert tiers == {"commit": "position", "hold": "position",
                          "reduce": "position", "close": "position",
-                         "blocked": "evaluation", "unknown": "evaluation"}
+                         "blocked": "evaluation", "unknown": "evaluation",
+                         "inapplicable": "scope"}
+
+    def test_the_permanent_verdict_is_the_one_that_asks_nothing(self):
+        """`unknown` and `inapplicable` look alike and behave oppositely, and
+        the whole reason the second is a render type rather than a flag is
+        this line: a missing figure belongs in the list of things to go and
+        do, and a boundary that will never move must not sit in it forever."""
+        assert contract.RENDER_TYPES["unknown"]["attention"] is True
+        assert contract.RENDER_TYPES["inapplicable"]["attention"] is False
 
     def test_the_set_is_closed_by_construction(self):
         """Nothing outside the host can add a type or retune one."""
@@ -59,7 +69,7 @@ class TestRenderTypes:
         errors = contract.validate_declaration(decl(states=[
             {"id": "s", "name": "S", "render": "surge",
              "description": "An invented display type."}]))
-        assert any("six types" in e for e in errors)
+        assert any("cannot add a render type" in e for e in errors)
 
 
 class TestDeclarationValidation:
@@ -1513,12 +1523,23 @@ class TestHostResults:
         assert r["render"] == "blocked"
         assert r["payload"]["needs"]
 
-    def test_two_tiers_are_never_conflated(self):
-        """Host-produced results land on the evaluation tier — a data or
-        setup problem must never count as a portfolio fact."""
+    def test_no_host_result_is_ever_a_portfolio_fact(self):
+        """A data problem, a setup problem or a company these rules do not
+        cover must never count as something the portfolio did. Two tiers are
+        available to the host and neither of them is `position`."""
         for sid in contract.HOST_STATES:
             r = contract.host_result(sid, "Something is owed.")
-            assert r["tier"] == "evaluation"
+            assert r["tier"] in ("evaluation", "scope"), sid
+
+    def test_scope_and_evaluation_are_not_the_same_tier(self):
+        """"Cannot be evaluated" and "is not evaluated" are different facts
+        with different fixes — one is a data problem and the other is a fact
+        about the journal you chose. Sharing a tier would roll them into one
+        count with no fix behind it."""
+        tiers = {sid: contract.host_result(sid, "x")["tier"]
+                 for sid in contract.HOST_STATES}
+        assert tiers["host:not-evaluated"] == "scope"
+        assert tiers["host:industry-unknown"] == "evaluation"
 
 
 class TestAStrategyCannotRestateTheHostsFigures:

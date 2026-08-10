@@ -467,7 +467,7 @@ class TestAStagedEntryCommitsToAShape:
         assert {r: contract.RENDER_TYPES[r]["optional_keys"]
                 for r in contract.RENDER_TYPES if r != "commit"} == \
             {"hold": (), "reduce": (), "close": (), "blocked": (),
-             "unknown": ()}
+             "unknown": (), "inapplicable": ()}
 
     def test_a_malformed_plan_is_refused_and_never_rendered(self):
         """Validation says no; this is what the user sees when it does. A

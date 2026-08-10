@@ -137,6 +137,71 @@ lookup table produces plausible wrong answers, which is worse than not loading.
 | `inputs` | what it needs from the user. Optional. |
 | `values` | numbers it has an opinion about. Optional. |
 | `reference` | file names it ships beside its code. Optional. |
+| `declines` | kinds of company this strategy will not evaluate. Optional. |
+
+### What you will not evaluate
+
+Most measures the host serves were written for a company that sells something.
+A handful of kinds of filer do not merely read oddly on them — they *break*
+them, and they break them into confident numbers rather than into gaps. A
+lender's operating cash flow moves with the period's change in loans and
+deposits, so a shrinking bank generates enormous free cash flow. An insurer's
+cash flow carries the growth of float. A property company's depreciation is a
+convention rather than a cost, so every measure built on profit understates by
+design.
+
+Which kind of company a filer is, is a **fact**: the SEC assigns it an
+industry code, EDGAR publishes it, and the host resolves it into one of the
+classes in §13. What a strategy does about that is the strategy's business,
+and there are exactly two things it can do.
+
+**Route.** Read `ctx["security"]["industry"]["class"]` and branch. Nothing
+special about it — it is a host fact like any other and you may cite it as
+`{"fact": "security.industry"}`. Route on `["class"]`, never on the `value`
+beside it: the value is the sentence a reader sees, and comparing against a
+sentence is quoting the host.
+
+**Decline.** Say so in the declaration and the host answers for you:
+
+```python
+"declines": [
+    {"class": "depository-lending",
+     "because": "These tests are the liquidation-oriented balance sheet, and "
+                "a bank does not classify its assets as current or "
+                "non-current at all. Substituting bank measures would produce "
+                "something that is not this strategy any more."},
+],
+```
+
+A declined company never reaches `decide` at all. The host resolves the
+filer's class first — before it even checks that the journal's setup is
+complete — and returns a verdict of its own whose render type is
+`inapplicable`, carrying your `because` as the reason. Three consequences,
+and they are the reason this is a declaration and not a branch:
+
+- The screen that offers a strategy can say what it covers **before any
+  journal is stamped with it.** A branch inside `decide` is invisible until it
+  fires.
+- You cannot evaluate a declined company by forgetting to check, and neither
+  can whoever edits this file next.
+- `because` is yours because the reason genuinely differs. One rule set
+  declines a bank permanently, because its tests *are* the balance sheet it
+  cannot read. Another declines one until measures it does not yet have
+  arrive. A reader deserves the right sentence, and a host-written "not
+  supported" is neither.
+
+**Where the class cannot be established, a strategy that declines anything is
+not run**, and the verdict is `unknown` rather than `inapplicable`. That split
+is the whole point of the second render type. A missing industry code may
+resolve on the next fetch; a bank will not stop being a bank. Several codes
+the SEC publishes genuinely do not settle it — American Express and a payment
+processor file under the same one — and there the honest answer is that the
+code does not say, not a guess in either direction.
+
+You cannot declare a state whose render is `inapplicable`. It says a thing
+will never change, so it has to be traceable to something checkable from
+outside the bundle, and `declines` is that. Where your rules *do* cover the
+company and simply reach no action, that is a `hold`.
 
 ### States
 
@@ -830,17 +895,25 @@ Generated from `engine/contract.py`. Do not edit by hand; run
 `python -m tools.contract_reference`, and `tests/test_contract_docs.py` will
 tell you if you forgot.
 
-### The six render types
+### The render types
+
+Four are about the security, two are about the evaluation, and one is about
+the scope of the rules. The three tiers are never averaged together: "4 of 12
+are hold" is a fact about the portfolio, "4 of 12 cannot be evaluated" is a
+data problem, and "4 of 12 are outside these rules" is a fact about the
+journal you chose. `inapplicable` is the only one a strategy cannot declare —
+the host produces it, from `declines`.
 
 <!-- generated: render-types -->
-| `render` | tier | means | payload keys | may also carry | needs attention |
-|---|---|---|---|---|---|
-| `commit` | position | capital may go in | `size`, `condition` | `plan` | yes |
-| `reduce` | position | partial exit | `to` | — | yes |
-| `close` | position | full exit | `when` | — | yes |
-| `hold` | position | no action | — (none) | — | — |
-| `blocked` | evaluation | a decision is owed from the user before any verdict | `needs` | — | yes |
-| `unknown` | evaluation | not enough data to say | — (none) | — | yes |
+| `render` | tier | means | payload keys | may also carry | needs attention | a strategy may declare it |
+|---|---|---|---|---|---|---|
+| `commit` | position | capital may go in | `size`, `condition` | `plan` | yes | yes |
+| `reduce` | position | partial exit | `to` | — | yes | yes |
+| `close` | position | full exit | `when` | — | yes | yes |
+| `hold` | position | no action | — (none) | — | — | yes |
+| `blocked` | evaluation | a decision is owed from the user before any verdict | `needs` | — | yes | yes |
+| `unknown` | evaluation | not enough data to say | — (none) | — | yes | yes |
+| `inapplicable` | scope | these rules do not evaluate this kind of company | — (none) | — | — | — |
 <!-- end: render-types -->
 
 ### Where a blocked verdict sends someone
@@ -867,6 +940,8 @@ strategy verdict exists.
 | `host:strategy-error` | `unknown` | Strategy failed | nothing in the app resolves it |
 | `host:data-unreadable` | `unknown` | Data could not be read | nothing in the app resolves it |
 | `host:invalid-decision` | `unknown` | Strategy failed | nothing in the app resolves it |
+| `host:not-evaluated` | `inapplicable` | Outside these rules | nothing in the app resolves it |
+| `host:industry-unknown` | `unknown` | Industry not established | nothing in the app resolves it |
 <!-- end: host-states -->
 
 ### Comparisons
@@ -890,6 +965,8 @@ in `contract.HOST_FACTS`, which is what the reader sees.
 <!-- generated: host-facts -->
 | `fact` | label | unit |
 |---|---|---|
+| `security.industry` | Industry | `text` |
+| `security.sic` | SEC industry code | `text` |
 | `position.weight` | Position weight | `percent` |
 | `position.months_held` | Months held | `months` |
 | `position.market_value` | Position market value | `usd` |
@@ -923,6 +1000,23 @@ Cited as `{"measure": "<id>", "since": "<anchor>"}`.
 | `distance` | the measure's own | "…, change since you bought" |
 | `proportion` | `percent` | "…, change since you bought, as a share of what it was then" |
 <!-- end: change-forms -->
+
+### Kinds of company a strategy can decline
+
+Named in `declines`. Each is a *different* way the host's measures break, not
+a label for "financial" — asset managers, exchanges, insurance brokers and
+estate agents are ordinary businesses here and are deliberately not on this
+list. `engine/industry.py` holds the code-by-code mapping and the reasoning,
+against the SEC's published list in
+`tests/fixtures/groundtruth/sec-sic-6xxx.json`.
+
+<!-- generated: industry-classes -->
+| `class` | reads as | the refusal reads "does not evaluate …" | the filers it covers |
+|---|---|---|---|
+| `depository-lending` | Depository and lending | banks and lenders | banks, savings institutions, consumer and business lenders, finance lessors and securitisation vehicles |
+| `insurance` | Insurance | insurers | life, health, property, casualty, surety and title insurance carriers |
+| `real-estate` | Real estate and REITs | property companies and REITs | property owners, operators, developers and real estate investment trusts |
+<!-- end: industry-classes -->
 
 ### Input roles
 

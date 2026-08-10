@@ -62,6 +62,7 @@ class TestEveryHostTableIsDocumented:
     DOCUMENTED = {
         "RENDER_TYPES", "STATE_FIXES", "HOST_STATES", "COMPARATORS",
         "HOST_FACTS", "BASELINE_ANCHORS", "CHANGE_FORMS", "INPUT_ROLES",
+        "INDUSTRY_CLASSES",
         # Flattened into the vocabulary list rather than a table of their own.
         "VALUE_TYPES", "SIZE_UNITS", "EVIDENCE_UNITS", "OUTCOMES",
         "GROUP_REQUIREMENTS",

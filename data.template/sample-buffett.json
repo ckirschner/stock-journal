@@ -1,5 +1,5 @@
 {
- "built": "2026-08-10T15:18:23+00:00",
+ "built": "2026-08-10T21:37:36+00:00",
  "as_of": "2026-08-09",
  "free_cash": 40000.0,
  "strategy": "buffett",
@@ -806,7 +806,7 @@
        "strategy": {
         "id": "buffett",
         "name": "Buffett",
-        "version": 1,
+        "version": 3,
         "values_version": 1,
         "contract": 5
        }
@@ -814,7 +814,7 @@
       "strategy": {
        "id": "buffett",
        "name": "Buffett",
-       "version": 1,
+       "version": 3,
        "values_version": 1,
        "contract": 5
       },
@@ -1013,7 +1013,7 @@
         "total_debt_to_ebitda"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2021-03-15 could be consulted; 17 hand-entered values on record by 2021-03-15; judged by Buffett v1 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; this journal was created on 2024-01-02, so it held no answers on 2021-03-15 — free cash, and every figure measured against the account, are absent rather than taken from what you have told it since"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2021-03-15 could be consulted; 17 hand-entered values on record by 2021-03-15; judged by Buffett v3 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; this journal was created on 2024-01-02, so it held no answers on 2021-03-15 — free cash, and every figure measured against the account, are absent rather than taken from what you have told it since"
       },
       "thesis": null,
       "valuation": null,
@@ -2024,7 +2024,7 @@
        "strategy": {
         "id": "buffett",
         "name": "Buffett",
-        "version": 1,
+        "version": 3,
         "values_version": 1,
         "contract": 5
        }
@@ -2032,7 +2032,7 @@
       "strategy": {
        "id": "buffett",
        "name": "Buffett",
-       "version": 1,
+       "version": 3,
        "values_version": 1,
        "contract": 5
       },
@@ -2231,7 +2231,7 @@
         "total_debt_to_ebitda"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2023-09-12 could be consulted; 17 hand-entered values on record by 2023-09-12; judged by Buffett v1 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; this journal was created on 2024-01-02, so it held no answers on 2023-09-12 — free cash, and every figure measured against the account, are absent rather than taken from what you have told it since"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2023-09-12 could be consulted; 17 hand-entered values on record by 2023-09-12; judged by Buffett v3 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; this journal was created on 2024-01-02, so it held no answers on 2023-09-12 — free cash, and every figure measured against the account, are absent rather than taken from what you have told it since"
       },
       "thesis": null,
       "valuation": null,
@@ -3220,7 +3220,7 @@
        "strategy": {
         "id": "buffett",
         "name": "Buffett",
-        "version": 1,
+        "version": 3,
         "values_version": 1,
         "contract": 5
        }
@@ -3228,7 +3228,7 @@
       "strategy": {
        "id": "buffett",
        "name": "Buffett",
-       "version": 1,
+       "version": 3,
        "values_version": 1,
        "contract": 5
       },
@@ -3427,7 +3427,7 @@
         "total_debt_to_ebitda"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2021-06-21 could be consulted; 17 hand-entered values on record by 2021-06-21; judged by Buffett v1 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; this journal was created on 2024-01-02, so it held no answers on 2021-06-21 — free cash, and every figure measured against the account, are absent rather than taken from what you have told it since"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2021-06-21 could be consulted; 17 hand-entered values on record by 2021-06-21; judged by Buffett v3 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; this journal was created on 2024-01-02, so it held no answers on 2021-06-21 — free cash, and every figure measured against the account, are absent rather than taken from what you have told it since"
       },
       "thesis": null,
       "valuation": null,
@@ -4435,7 +4435,7 @@
        "strategy": {
         "id": "buffett",
         "name": "Buffett",
-        "version": 1,
+        "version": 3,
         "values_version": 1,
         "contract": 5
        }
@@ -4443,7 +4443,7 @@
       "strategy": {
        "id": "buffett",
        "name": "Buffett",
-       "version": 1,
+       "version": 3,
        "values_version": 1,
        "contract": 5
       },
@@ -4642,7 +4642,7 @@
         "total_debt_to_ebitda"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2022-10-11 could be consulted; 17 hand-entered values on record by 2022-10-11; judged by Buffett v1 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; this journal was created on 2024-01-02, so it held no answers on 2022-10-11 — free cash, and every figure measured against the account, are absent rather than taken from what you have told it since"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2022-10-11 could be consulted; 17 hand-entered values on record by 2022-10-11; judged by Buffett v3 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; this journal was created on 2024-01-02, so it held no answers on 2022-10-11 — free cash, and every figure measured against the account, are absent rather than taken from what you have told it since"
       },
       "thesis": null,
       "valuation": null,
@@ -4874,7 +4874,7 @@
       "strategy": {
        "id": "buffett",
        "name": "Buffett",
-       "version": 1,
+       "version": 3,
        "values_version": 1,
        "contract": 5
       },
@@ -4944,7 +4944,7 @@
         "label": "Most of free cash flow that may be paid out"
        }
       ],
-      "note": "no company is linked to this ticker, so no stored filing or price from 2023-02-14 could be consulted; judged by Buffett v1 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; this journal was created on 2024-01-02, so it held no answers on 2023-02-14 — free cash, and every figure measured against the account, are absent rather than taken from what you have told it since"
+      "note": "no company is linked to this ticker, so no stored filing or price from 2023-02-14 could be consulted; judged by Buffett v3 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; this journal was created on 2024-01-02, so it held no answers on 2023-02-14 — free cash, and every figure measured against the account, are absent rather than taken from what you have told it since"
      },
      "snapshot": {
       "frozen": "2023-02-14T12:00:00-05:00",
@@ -5466,7 +5466,7 @@
        "strategy": {
         "id": "buffett",
         "name": "Buffett",
-        "version": 1,
+        "version": 3,
         "values_version": 1,
         "contract": 5
        }
@@ -5474,7 +5474,7 @@
       "strategy": {
        "id": "buffett",
        "name": "Buffett",
-       "version": 1,
+       "version": 3,
        "values_version": 1,
        "contract": 5
       },
@@ -5491,7 +5491,7 @@
        "priced": null,
        "manual_on_record": [],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2023-02-14 could be consulted; judged by Buffett v1 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; this journal was created on 2024-01-02, so it held no answers on 2023-02-14 — free cash, and every figure measured against the account, are absent rather than taken from what you have told it since"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2023-02-14 could be consulted; judged by Buffett v3 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; this journal was created on 2024-01-02, so it held no answers on 2023-02-14 — free cash, and every figure measured against the account, are absent rather than taken from what you have told it since"
       },
       "thesis": null,
       "valuation": null,

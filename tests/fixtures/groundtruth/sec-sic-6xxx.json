@@ -1,0 +1,166 @@
+{
+ "6021": {
+  "office": "Office of Finance",
+  "title": "NATIONAL COMMERCIAL BANKS"
+ },
+ "6022": {
+  "office": "Office of Finance",
+  "title": "STATE COMMERCIAL BANKS"
+ },
+ "6029": {
+  "office": "Office of Finance",
+  "title": "COMMERCIAL BANKS, NEC"
+ },
+ "6035": {
+  "office": "Office of Finance",
+  "title": "SAVINGS INSTITUTION, FEDERALLY CHARTERED"
+ },
+ "6036": {
+  "office": "Office of Finance",
+  "title": "SAVINGS INSTITUTIONS, NOT FEDERALLY CHARTERED"
+ },
+ "6099": {
+  "office": "Office of Finance",
+  "title": "FUNCTIONS RELATED TO DEPOSITORY BANKING, NEC"
+ },
+ "6111": {
+  "office": "Office of Finance",
+  "title": "FEDERAL & FEDERALLY-SPONSORED CREDIT AGENCIES"
+ },
+ "6141": {
+  "office": "Office of Finance",
+  "title": "PERSONAL CREDIT INSTITUTIONS"
+ },
+ "6153": {
+  "office": "Office of Finance",
+  "title": "SHORT-TERM BUSINESS CREDIT INSTITUTIONS"
+ },
+ "6159": {
+  "office": "Office of Finance",
+  "title": "MISCELLANEOUS BUSINESS CREDIT INSTITUTION"
+ },
+ "6162": {
+  "office": "Office of Finance",
+  "title": "MORTGAGE BANKERS & LOAN CORRESPONDENTS"
+ },
+ "6163": {
+  "office": "Office of Finance",
+  "title": "LOAN BROKERS"
+ },
+ "6172": {
+  "office": "Office of Finance",
+  "title": "FINANCE LESSORS"
+ },
+ "6189": {
+  "office": "Office of Structured Finance",
+  "title": "ASSET-BACKED SECURITIES"
+ },
+ "6199": {
+  "office": "Office of Finance or Office of Crypto Assets",
+  "title": "FINANCE SERVICES"
+ },
+ "6200": {
+  "office": "Office of Crypto Assets",
+  "title": "SECURITY & COMMODITY BROKERS, DEALERS, EXCHANGES & SERVICES"
+ },
+ "6211": {
+  "office": "Office of Finance or Office of Crypto Assets",
+  "title": "SECURITY BROKERS, DEALERS & FLOTATION COMPANIES"
+ },
+ "6221": {
+  "office": "Office of Crypto Assets",
+  "title": "COMMODITY CONTRACTS BROKERS & DEALERS"
+ },
+ "6282": {
+  "office": "Office of Finance",
+  "title": "INVESTMENT ADVICE"
+ },
+ "6311": {
+  "office": "Office of Finance",
+  "title": "LIFE INSURANCE"
+ },
+ "6321": {
+  "office": "Office of Finance",
+  "title": "ACCIDENT & HEALTH INSURANCE"
+ },
+ "6324": {
+  "office": "Office of Finance",
+  "title": "HOSPITAL & MEDICAL SERVICE PLANS"
+ },
+ "6331": {
+  "office": "Office of Finance",
+  "title": "FIRE, MARINE & CASUALTY INSURANCE"
+ },
+ "6351": {
+  "office": "Office of Finance",
+  "title": "SURETY INSURANCE"
+ },
+ "6361": {
+  "office": "Office of Finance",
+  "title": "TITLE INSURANCE"
+ },
+ "6399": {
+  "office": "Office of Finance",
+  "title": "INSURANCE CARRIERS, NEC"
+ },
+ "6411": {
+  "office": "Office of Finance",
+  "title": "INSURANCE AGENTS, BROKERS & SERVICE"
+ },
+ "6500": {
+  "office": "Office of Real Estate & Construction",
+  "title": "REAL ESTATE"
+ },
+ "6510": {
+  "office": "Office of Real Estate & Construction",
+  "title": "REAL ESTATE OPERATORS (NO DEVELOPERS) & LESSORS"
+ },
+ "6512": {
+  "office": "Office of Real Estate & Construction",
+  "title": "OPERATORS OF NONRESIDENTIAL BUILDINGS"
+ },
+ "6513": {
+  "office": "Office of Real Estate & Construction",
+  "title": "OPERATORS OF APARTMENT BUILDINGS"
+ },
+ "6519": {
+  "office": "Office of Real Estate & Construction",
+  "title": "LESSORS OF REAL PROPERTY, NEC"
+ },
+ "6531": {
+  "office": "Office of Real Estate & Construction",
+  "title": "REAL ESTATE AGENTS & MANAGERS (FOR OTHERS)"
+ },
+ "6532": {
+  "office": "Office of Real Estate & Construction",
+  "title": "REAL ESTATE DEALERS (FOR THEIR OWN ACCOUNT)"
+ },
+ "6552": {
+  "office": "Office of Real Estate & Construction",
+  "title": "LAND SUBDIVIDERS & DEVELOPERS (NO CEMETERIES)"
+ },
+ "6770": {
+  "office": "Multiple Offices",
+  "title": "BLANK CHECKS"
+ },
+ "6792": {
+  "office": "Office of Energy & Transportation",
+  "title": "OIL ROYALTY TRADERS"
+ },
+ "6794": {
+  "office": "Office of Real Estate & Construction",
+  "title": "PATENT OWNERS & LESSORS"
+ },
+ "6795": {
+  "office": "Office of Energy & Transportation",
+  "title": "MINERAL ROYALTY TRADERS"
+ },
+ "6798": {
+  "office": "Office of Real Estate & Construction",
+  "title": "REAL ESTATE INVESTMENT TRUSTS"
+ },
+ "6799": {
+  "office": "Office of Real Estate & Construction",
+  "title": "INVESTORS, NEC"
+ }
+}

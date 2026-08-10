@@ -68,10 +68,11 @@ def _yes(flag) -> str:
 def _render_types() -> str:
     return _table(
         ["`render`", "tier", "means", "payload keys", "may also carry",
-         "needs attention"],
+         "needs attention", "a strategy may declare it"],
         [(f"`{k}`", v["tier"], v["meaning"],
           _code(v["payload_keys"]) or "— (none)",
-          _code(v["optional_keys"]) or "—", _yes(v["attention"]))
+          _code(v["optional_keys"]) or "—", _yes(v["attention"]),
+          _yes(not v["host_only"]))
          for k, v in sorted(contract.RENDER_TYPES.items(),
                             key=lambda kv: kv[1]["order"])])
 
@@ -122,6 +123,14 @@ def _change_forms() -> str:
          for k, v in contract.CHANGE_FORMS.items()])
 
 
+def _industry_classes() -> str:
+    return _table(
+        ["`class`", "reads as", "the refusal reads \"does not evaluate …\"",
+         "the filers it covers"],
+        [(f"`{k}`", v["label"], v["noun"], v["means"])
+         for k, v in contract.INDUSTRY_CLASSES.items()])
+
+
 def _input_roles() -> str:
     return _table(
         ["`role`", "declared as", "means", "unlocks"],
@@ -158,6 +167,7 @@ BLOCKS = {
     "host-facts": _host_facts,
     "baseline-anchors": _baseline_anchors,
     "change-forms": _change_forms,
+    "industry-classes": _industry_classes,
     "input-roles": _input_roles,
     "vocabulary": _vocabulary,
 }

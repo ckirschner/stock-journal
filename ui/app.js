@@ -41,11 +41,17 @@ let FETCH_POLLS = {};         // ticker -> true while a poll loop runs
 /* ------------------------------------------------------------------ words */
 /* Colour is semantic and never decorative, and every state carries its own
    text label besides — the label is the strategy's declared name for it, so
-   colour is only ever the second signal. Keyed on the host's six render
-   types, which is the one permanent list; a strategy cannot add one. */
+   colour is only ever the second signal. Keyed on the host's render types,
+   which is the one permanent list; a strategy cannot add one.
+
+   `inapplicable` is toneless on purpose, the same as `unknown`. It says these
+   rules do not cover this kind of company, which is neither good news nor bad
+   news about the company — colouring it either way would be this screen
+   holding an opinion the host does not have. It is told apart from `unknown`
+   by its words and by not asking for attention, never by a colour. */
 const RENDER_TONE = {
   commit: "pass", hold: "pass", reduce: "watch",
-  close: "fail", blocked: "watch", unknown: "none",
+  close: "fail", blocked: "watch", unknown: "none", inapplicable: "none",
 };
 const OUTCOME = {
   pass: ["meets it", "s-pass"],
@@ -1669,6 +1675,32 @@ async function loadCoverage(ticker) {
   if (openTicker) render();
 }
 
+/* What kind of company the SEC says this filer is, and the code it says it
+   with. On the data page rather than beside the verdict, because it is a
+   fact about the company like the filing count and the price series — and
+   because the verdict already says its own piece when a strategy declines.
+
+   Absence is drawn as absence and never as "ordinary": a code that covers
+   businesses with nothing in common has told us nothing, and rendering that
+   as a confident classification is the exact substitution the whole
+   arrangement refuses. */
+function industryLine(node) {
+  if (!node || !node.industry) return "";
+  const cls = node.industry, sic = node.sic || {};
+  const code = sic.status === "known" ? sic.value : null;
+  if (cls.status !== "known") {
+    return `<div class="notice quiet"><h4>What kind of company this is — not established</h4>
+      <p>${esc(cls.reason || "")}</p>
+      <p class="hint">A strategy that does not evaluate every kind of company will say so rather than
+      produce a verdict here. One that evaluates everything is unaffected.</p></div>`;
+  }
+  return `<p class="hint" style="margin:0 0 10px"><b>${esc(cls.value)}</b>${
+    code ? ` · SIC ${esc(code)}` : ""}. What the SEC classifies this filer as. It matters because a
+    strategy may say it does not evaluate a kind of company — its measures were built for one that sells
+    something, and a lender, an insurer and a property company each break them differently.
+    ${cautionMark(cls.cautions, "ind")}</p>${cautionBox(cls.cautions, "ind")}`;
+}
+
 function coverageSection(s) {
   let inner;
   if (!s.cik) {
@@ -1702,6 +1734,7 @@ function coverageSection(s) {
     (st.terminal_series || []).forEach((t) => {
       inner += `<div class="notice quiet"><h4>${esc(t.ticker)} price series is terminal</h4><p>${esc(t.reason)}</p></div>`;
     });
+    inner += industryLine(st.industry);
     /* The one inventory screen. Thirty-odd rows, and cautions propagate
        through derivation — one borrowed price lands on every measure built
        from market cap — so the sentences are marked here and opened in
@@ -1772,11 +1805,19 @@ const oneline = (t) => esc(String(t == null ? "" : t).trim().replace(/\s+/g, " "
 
    Derived from the host's own render types against what the bundle declares,
    so no strategy is named here and none could be. A strategy that adds a
-   state later loses the line about it without a word of this changing. */
+   state later loses the line about it without a word of this changing.
+
+   Host-only types are left out. Nothing a strategy declares could ever reach
+   one, so listing it would report the contract's own shape as a position this
+   strategy has taken — under a heading that is true of everything beside it,
+   which is exactly where a reader would believe it. The flag comes off the
+   host's table rather than from a list of ids here; a view that recognised a
+   render type by name is the hardcoding principle 9 refuses. */
 function neverSays(st) {
   const has = new Set((st.states || []).map((s) => s.render));
   const missing = Object.entries(S.render_types || {})
-    .filter(([id]) => !has.has(id)).map(([, t]) => t.meaning).filter(Boolean);
+    .filter(([id, t]) => !has.has(id) && !t.host_only)
+    .map(([, t]) => t.meaning).filter(Boolean);
   if (!missing.length) return "";
   return `<div class="notice quiet" style="margin-top:14px">
     <h4>What it will never say</h4>
@@ -1785,6 +1826,35 @@ function neverSays(st) {
     yet" — there is nothing here that could reach it. Where another strategy
     would have that verdict, this one has taken a settled position instead,
     and its summary above says what that position is.</p></div>`;
+}
+
+/* The kinds of company this strategy says it does not evaluate.
+
+   It earns a section rather than a footnote because it is the one thing on
+   this screen that changes what a whole category of security does, and
+   because a reader who meets it for the first time as a verdict has no way to
+   tell a considered boundary from a gap nobody got to. Two sentences per
+   kind: what the host means by it, which is the same for every strategy, and
+   why THIS one has nothing to say, which is not.
+
+   Nothing here is hardcoded — a strategy that declines nothing renders no
+   section, and a kind the host learns to name arrives with its own words. */
+function wontEvaluate(st) {
+  const list = st.declines || [];
+  if (!list.length) return "";
+  return `<section class="group" style="margin-top:26px">
+    <div class="ghead"><h3>What it will not evaluate</h3>
+      <span>${list.length} kind${list.length === 1 ? "" : "s"} of company</span></div>
+    <p class="hint" style="margin:8px 0 0">These are not verdicts and they are not opinions about whether such
+    companies are worth owning. They are this strategy saying its own measures do not describe them, and choosing
+    to say so rather than produce a number it cannot stand behind. A security of one of these kinds reads
+    <b>outside these rules</b>, asks nothing of you, and never blocks you recording whatever you decide to do.</p>
+    <div class="plist" style="margin-top:12px">${list.map((d) => `<div class="pentry">
+      <div class="pe-head"><b>${esc(d.label)}</b><code>${esc(d.class)}</code></div>
+      <div class="pe-sub">${esc(d.means)}</div>
+      <div class="pe-why">${prose(d.because)}</div>
+      <details class="whybox"><summary>Why this kind is different</summary>${prose(d.explain)}</details>
+    </div>`).join("")}</div></section>`;
 }
 
 /* Read-only, on purpose. A strategy is edited where it lives — as code and a
@@ -1825,7 +1895,7 @@ function strategyView() {
       <div class="scond">${prose(s.description)}</div>
       <div class="sstate"><span class="chip s-${RENDER_TONE[s.render] || "none"}">${
         esc(((S.render_types || {})[s.render] || {}).meaning || "")}</span></div>
-    </div>`).join("")}</div>${neverSays(st)}</section>`;
+    </div>`).join("")}</div>${neverSays(st)}</section>${wontEvaluate(st)}`;
 
   if ((st.inputs || []).length) {
     const problems = st.input_problems || [];
@@ -2522,7 +2592,12 @@ function dlgNewJournal(chosenId) {
          <select id="f_strategy" name="strategy">${opts}</select>
          <div class="help">${esc(cur.summary)}</div>
          <div class="help">v${esc(cur.version)} · settings v${esc(cur.values_version)} · speaks contract ${esc(cur.contract)} ·
-         can return: ${cur.states.map((s) => esc(s.name)).join(", ")}</div></div>`
+         can return: ${cur.states.map((s) => esc(s.name)).join(", ")}</div>
+         ${(cur.declines || []).length ? `<div class="help"><b>Does not evaluate ${
+           cur.declines.map((d) => esc(d.noun)).join(", ")}.</b> Its measures were not built for them, so a
+           security of one of those kinds reads “outside these rules” rather than getting a verdict. Said here
+           because it is knowable before the journal exists, and a journal cannot change strategy afterwards.</div>` : ""}
+         </div>`
       + (setup ? `<p class="hint" style="margin:4px 0 10px">${esc(cur.name)} asks for the following. These are things no
           strategy could ship a default for, because they are facts about you rather than opinions about investing.</p>${setup}` : ""),
     confirm: "Create journal",
