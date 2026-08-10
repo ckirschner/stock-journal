@@ -188,10 +188,14 @@ def _state(strategies, answers=ANSWERS) -> dict:
     return state
 
 
-def _render(state, tmp_path):
+def _render(state, tmp_path, mode="coverage"):
+    """Render the payload under Node. In "coverage" mode the harness also
+    insists the payload reached every surface the view draws; "render-only"
+    is for a payload built to draw branches the coverage fixture cannot, and
+    which is not expected to reach the ones it can."""
     payload = tmp_path / "state.json"
     payload.write_text(json.dumps(state), encoding="utf-8")
-    return subprocess.run(["node", str(HARNESS), str(payload), str(UI)],
+    return subprocess.run(["node", str(HARNESS), str(payload), str(UI), mode],
                           capture_output=True, text=True, timeout=120)
 
 
@@ -203,6 +207,35 @@ def test_every_screen_renders(strategies, tmp_path):
     assert state["input_changes"] == [], "no answer was edited by this path"
 
     r = _render(state, tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_the_sample_journal_renders(tmp_path):
+    """The other half of the render surface, which no fixture strategy
+    reaches.
+
+    The awkward fixture above only ever produces hold, blocked and unknown,
+    so three of the host's six render types have never been drawn: a commit
+    with a size, a reduce with a level to reduce to, and a close with the
+    day the exit is due. The shipped sample is the only thing in the
+    repository that produces all three, and an exit that renders as
+    "Exit due undefined" would reach a user before it reached a test.
+    """
+    api = app_mod.Api()
+    assert api.load_sample()["ok"]
+    state = api.get_state()
+    assert state["ok"], state
+    drawn = {s["_decision"]["render"] for s in state["securities"]}
+    assert {"commit", "reduce", "close", "hold", "unknown"} <= drawn, drawn
+
+    state["__previews"] = {s["ticker"]: api.preview_purchase(s["ticker"])
+                           for s in state["securities"]}
+    state["__coverage"] = {s["ticker"]: api.get_coverage(s["ticker"])
+                           for s in state["securities"]}
+    # The harness scans the rendered markup for `undefined`, `[object
+    # Object]` and NaN and fails on any of them, which is the shape this
+    # defect takes: "Exit due undefined" does not throw, it just prints.
+    r = _render(state, tmp_path, "render-only")
     assert r.returncode == 0, r.stdout + r.stderr
 
 

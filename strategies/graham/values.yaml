@@ -1,0 +1,61 @@
+# Shipped defaults for Graham's declared values.
+#
+# What each of these MEANS, why it sits where it does and where it misfires
+# lives in strategy.py beside the declaration. This file holds only the
+# numbers, so they can be read, compared and changed without touching logic
+# — and so a change to one of them is a recordable event rather than a diff
+# in a source file nobody reads.
+#
+# Every number below except `portfolio-slots` and `position-weight-cap` is
+# stated in the expert report, verbatim. Nothing is rounded or converted.
+# Those two are attributed to Graham's own documented practice; the report
+# was never asked about position sizing.
+#
+# Bump `version` whenever any number here moves. That is what makes the
+# change appear on the rule-change record of every journal running this
+# strategy, with a before and an after.
+version: 1
+
+values:
+
+  # How the fifteen entry tests roll up
+  core-tests-required: 6
+
+  # How much, and how many — Graham's practice, not the report
+  portfolio-slots: 20
+  position-weight-cap: 10
+
+  # The discipline that is not a measure
+  holding-period-months: 24
+  sell-confirmation-filings: 2
+
+  # The four knockouts
+  max-pe-3y-avg: 15
+  max-price-to-book: 1.5
+  max-combined-multiple: 22.5
+  min-current-ratio: 2.0
+
+  # The eight core tests
+  max-ltd-to-working-capital: 1.0
+  min-profitable-years: 10
+  min-altman-z: 3.0
+  min-eps-growth-10y: 33
+  min-dividend-years: 10
+  max-debt-to-equity: 1.0
+  max-price-to-tangible: 2.0
+  max-accruals-ratio: 0.10
+
+  # The three bonus tests
+  min-market-cap: 300000000
+  min-ncav-to-market-cap: 0.50
+  min-earnings-yield-multiple: 2
+
+  # The eight exits
+  exit-pe-3y-avg: 25
+  exit-price-to-book: 3.0
+  exit-combined-multiple: 50
+  exit-current-ratio: 1.2
+  exit-ltd-to-working-capital: 2.0
+  exit-altman-z: 1.8
+  exit-debt-to-equity: 2.0
+  exit-loss-years: 2

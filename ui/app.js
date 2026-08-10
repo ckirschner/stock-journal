@@ -1610,6 +1610,17 @@ function dataView() {
       <div class="toolbar" style="justify-content:flex-start;margin-top:8px">
         <button class="btn primary" data-act="save-valuation">Save defaults</button></div></div>
 
+    <div class="panel"><h3>Sample journal</h3><div class="sub">Invented companies and invented figures</div>
+      <p class="hint" style="margin-top:0">Creates a separate journal of made-up companies so you can see what a
+      journal looks like once it has been used — a holding with nothing to do, one that crossed a sell line and is
+      waiting for a second filing before anything happens, one whose balance sheet came apart, one the two-year
+      clock has run out on, one that grew too large, a purchase made against the signal and one made without one.
+      Nothing in it is a real company or a recommendation.</p>
+      <p class="hint">It is its own journal because a journal has one strategy: the sample is written against
+      Graham. Nothing already here is touched.</p>
+      <div class="toolbar" style="justify-content:flex-start;margin-top:16px">
+        <button class="btn" data-act="sample">Load sample journal</button></div></div>
+
     <div class="panel"><h3>Back up</h3><div class="sub">Export to a folder you control</div>
       <p class="hint" style="margin-top:0">Writes one timestamped file containing every journal — positions, notes,
       snapshots, the strategy each is stamped with and its rule-change record. Put it wherever you keep backups.
@@ -2523,6 +2534,23 @@ document.addEventListener("click", async (ev) => {
           toast(`Imported ${s.journals} journal${s.journals === 1 ? "" : "s"}, `
             + `${s.securities} securities.${gone}${kept}`);
           openTicker = null;
+        },
+      });
+      return;
+    }
+    case "sample": {
+      dialog({
+        title: "Load the sample journal",
+        blurb: "Ten invented companies in a journal of their own, so nothing you have recorded is touched.",
+        body: `<p class="hint">Every company, price and figure in it is made up. It exists to show what the
+          verdicts look like once a journal has some history — including the uncomfortable ones.</p>
+          <p class="hint">You can empty or ignore it afterwards; it is an ordinary journal.</p>`,
+        confirm: "Load it",
+        onConfirm: async () => {
+          const r = await api("load_sample");
+          if (!r) return " ";
+          openTicker = null;
+          toast(`Created ${r.name} with ${r.n} securities.`);
         },
       });
       return;
