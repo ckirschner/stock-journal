@@ -6,15 +6,17 @@
 # — and so a change to one of them is a recordable event rather than a diff
 # in a source file nobody reads.
 #
-# Every number below except `portfolio-slots` and `position-weight-cap` is
-# stated in the expert report, verbatim. Nothing is rounded or converted.
-# Those two are attributed to Graham's own documented practice; the report
-# was never asked about position sizing.
+# Every number below except `portfolio-slots`, `position-weight-cap` and the
+# five `drift-` tolerances is stated in the expert report, verbatim. Nothing
+# is rounded or converted. The first two are attributed to Graham's own
+# documented practice; the report was never asked about position sizing. The
+# drift tolerances are attributed to nobody but this strategy's author,
+# because neither source addresses adding to a position already held.
 #
 # Bump `version` whenever any number here moves. That is what makes the
 # change appear on the rule-change record of every journal running this
 # strategy, with a before and an after.
-version: 2
+version: 3
 
 values:
 
@@ -62,3 +64,14 @@ values:
   exit-altman-z: 1.8
   exit-debt-to-equity: 2.0
   exit-loss-years: 2
+
+  # How far a business may move from where it was at a purchase before this
+  # strategy stops putting more money into it. Signed: a negative number is
+  # the worst FALL that will still take an add, a positive one the worst
+  # RISE. Each is about half the distance between what this strategy
+  # requires to buy and what it requires to sell.
+  drift-current-ratio: -0.4
+  drift-ltd-to-working-capital: 0.5
+  drift-altman-z: -0.6
+  drift-debt-to-equity: 0.5
+  drift-loss-years: 0

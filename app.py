@@ -26,9 +26,9 @@ from pathlib import Path
 
 import webview
 
-from engine import (backup, bank, contract, context, dataview, fetch,
-                    hand_entered, journals, judgements, portfolio, secrets,
-                    store, strategy_loader, strategy_values, thesis as
+from engine import (allocation, backup, bank, contract, context, dataview,
+                    fetch, hand_entered, journals, judgements, portfolio,
+                    secrets, store, strategy_loader, strategy_values, thesis as
                     thesis_mod, tickermap, tiingo, valuation)
 from engine.expected_value import EV_METHODS, EVError
 from engine.portfolio import EXIT_REASONS
@@ -433,6 +433,60 @@ class Api:
             if closing else None,
         }
 
+    @staticmethod
+    def _price_known(view) -> dict:
+        """A price view as the rest of the host states a figure: known with a
+        value, or absent with the host's own reason. Never a bare number and
+        never a None that a caller has to invent a sentence for."""
+        if (view or {}).get("value") is None:
+            return {"status": "absent",
+                    "reason": (view or {}).get("reason")
+                    or "no price is on record for this security"}
+        return {"status": "known", "value": float(view["value"])}
+
+    def _allocation(self, securities, journal, record, chain, priced):
+        """Where capital goes, across the whole journal.
+
+        Built from the verdicts already computed above rather than from a
+        second pass. Two evaluations of the same security on one payload can
+        disagree — a fetch landing between them is enough — and this screen's
+        only job is to summarise the ones the security pages show.
+
+        Built even when the strategy cannot be asked at all — a missing
+        bundle, settings that will not resolve. The decisions are then the
+        host's own "we could not ask", nothing is eligible, and every
+        security lands in the list with that said against it. That is not a
+        nicety: this screen is the only place a purchase into a name you
+        already hold can be started, so a version of it that renders nothing
+        when the strategy is missing would make recording an add impossible
+        for exactly as long as the bundle is off the machine. The tool
+        records decisions and never blocks them, and a screen that vanishes
+        is a block however it is described.
+
+        Never raises. An allocation view is a convenience over facts that are
+        all visible elsewhere, and taking the window down for it would be the
+        tail wagging the dog.
+        """
+        try:
+            roles = {}
+            if record is not None and not chain["errors"]:
+                declared = {f["id"] for f in (record.get("inputs") or [])}
+                supplied = {k: v
+                            for k, v in (journal.get("inputs") or {}).items()
+                            if k in declared}
+                effective, _ = contract.check_inputs(record, supplied,
+                                                     chain["values"])
+                roles = contract.input_roles(record, effective)
+            folio = context.portfolio_view(securities, roles)
+            return allocation.view(
+                securities,
+                {s["ticker"]: s.get("_decision") for s in securities},
+                {t: self._price_known(v) for t, v in priced.items()},
+                folio)
+        except Exception:                               # noqa: BLE001
+            traceback.print_exc()
+            return None
+
     @guarded
     @locked
     def get_state(self):
@@ -566,6 +620,8 @@ class Api:
         by_ticker = dict(zip((s["ticker"] for s in securities), priced))
 
         return ok(
+            allocation=self._allocation(securities, journal, record, chain,
+                                        by_ticker),
             journal={k: journal[k] for k in
                      ("id", "name", "created", "strategy", "config",
                       "inputs", "settings")},
@@ -708,6 +764,49 @@ class Api:
             return err(listed[journal_id]["problem"])
         journals.set_open(journal_id)
         return ok(id=journal_id)
+
+    @guarded
+    @locked
+    def rename_journal(self, journal_id, name):
+        """Rename a journal. Its folder, and everything pointing at it, stay
+        where they are — see journals.rename."""
+        listed = {j["id"]: j for j in journals.list_journals()}
+        if journal_id not in listed:
+            return err("That journal is not on disk any more.")
+        renamed = journals.rename(journal_id, name)
+        return ok(id=journal_id, name=renamed["name"])
+
+    @guarded
+    @locked
+    def delete_journal(self, journal_id, confirm_name):
+        """Delete a journal and everything it recorded.
+
+        The typed name is checked here rather than trusted to the dialog. A
+        confirmation that the browser could skip is a confirmation the record
+        does not actually have, and this is the one call in the program that
+        destroys something no other copy exists of. Compared against the
+        journal's *name* and not its id, because the name is what the user
+        can see on the screen they are being asked about — asking someone to
+        retype a slug they have never been shown is a rubber stamp with extra
+        steps.
+
+        Deliberately not refused when it is the open journal, or the last
+        one. Both are recoverable situations — the next read resolves to
+        whatever is left, or to the welcome screen — and a rule that made the
+        final journal undeletable would leave a wrong first attempt on disk
+        for good.
+        """
+        listed = {j["id"]: j for j in journals.list_journals()}
+        if journal_id not in listed:
+            return err("That journal is not on disk any more.")
+        name = listed[journal_id].get("name") or journal_id
+        if str(confirm_name or "").strip() != str(name).strip():
+            return err(
+                f'Type the journal\'s name exactly — "{name}" — to delete it. '
+                "This removes every position, note and recorded decision in "
+                "it, and nothing else holds a copy.")
+        removed = journals.delete(journal_id)
+        return ok(**removed)
 
     @guarded
     @locked

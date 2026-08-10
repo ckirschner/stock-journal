@@ -309,6 +309,30 @@ def opened_on(security: dict, on_or_before=None):
     return period["opened"] if period else None
 
 
+def purchases_in_holding(security: dict, on_or_before=None) -> list[dict]:
+    """Every purchase that built the holding you have now, oldest first.
+
+    The period's buys, not the security's. A name bought, exited and bought
+    back has purchases belonging to a holding nobody currently owns, and a
+    question about *this* holding — when it began, when you last added to it,
+    what you were shown each time — must not reach them. That is the same
+    boundary `opened_on` reads, off the same period, so the first entry here
+    and the day the holding began are one value rather than two.
+
+    Trimming is deliberately ignored. A lot sold down to nothing is still a
+    day you looked at this business and said yes, and it is still one of the
+    moments a later decision might be measured against; whether any of those
+    particular shares survive is a different question, answered by
+    `open_lots`.
+
+    Empty where nothing is held. There is no period, so there is no purchase
+    that built it — not "no purchases", which a security you exited last year
+    would also be.
+    """
+    period = open_cycle(security, on_or_before)
+    return list(period["buys"]) if period else []
+
+
 def bucket_of(security: dict) -> str:
     """Derived, never stored. No lots is an idea; open lots is a holding;
     lots that are all closed is a previous holding."""
@@ -362,12 +386,33 @@ def is_commit(decision: dict | None) -> bool:
 
 def override_kind(decision: dict | None) -> str | None:
     """None when the strategy said commit. Otherwise which of the two kinds
-    of override this is — the distinction the learning loop depends on."""
+    of override this is — the distinction the learning loop depends on.
+
+    "Against" means the strategy reached a verdict and you went the other
+    way; "without" means there was no verdict to go against. The render
+    tier settles most of it — a `hold`, a `reduce` and a `close` are all
+    about the security, and `unknown` is about the evaluation.
+
+    `blocked` is the one that needs asking who produced it, and getting that
+    wrong matters because it feeds the scorecard that is supposed to be able
+    to indict the rules. The host's own blocked states mean "we could not
+    ask" — setup missing, values unresolved — and buying past one is buying
+    without a signal. A blocked state a *strategy* declared is the opposite:
+    it is a verdict, and a pointed one. "Read this again before adding" is
+    an answer, and going ahead anyway is going against it. Recorded as
+    "without a signal" it would sit in the scorecard beside purchases nobody
+    could evaluate, and the one rule most worth measuring — a bar on adding —
+    would be invisible in the count of times the user was right to overrule
+    it.
+    """
     if decision is None:
         return "unevaluated"
     if is_commit(decision):
         return None
-    return "against" if decision.get("tier") == "position" else "without"
+    if decision.get("tier") == "position":
+        return "against"
+    return ("against" if decision.get("render") == "blocked"
+            and decision.get("produced_by") == "strategy" else "without")
 
 
 # -- writing a lot -----------------------------------------------------------

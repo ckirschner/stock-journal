@@ -36,6 +36,16 @@ comparison came out rather than working it out itself. There is then one
 computation, not two that can disagree, and the comparators stay where the
 answers do.
 
+The same idea again, one level further out: a strategy may cite how far a
+measure has moved *since a purchase* (`since`), and the host does the
+subtraction. It could have taken one reading from the other itself — what it
+could not do is cite the answer, because a limit is a number stated outright
+or the id of a setting, and "five points below what it was when you bought"
+is neither. The baseline comes off what the purchase froze rather than a
+recomputation of that day: a restatement must not be able to move the level
+a re-underwrite is measured against. See BASELINE_ANCHORS for why there are
+two of them and why averaging them is wrong.
+
 A strategy also declares what it needs *from the user*. Declared values are
 numbers it has an opinion about and ships a default for; declared inputs are
 facts about the account that no strategy could guess. Inputs build the setup
@@ -112,6 +122,18 @@ from types import MappingProxyType
 #    value must now say where its number came from, the context is handed
 #    over frozen rather than copied, `position.months_held` joins HOST_FACTS,
 #    and the state cap moves to 16.
+#
+# Deliberately NOT bumped for what a position's baselines and a staged commit
+# added. A strategy may now cite how a measure has moved since a purchase
+# (`since`), and a commit may carry the tranches it is holding back (`plan`);
+# `position` gained `baselines`, `last_purchase` and `purchases` to serve the
+# first. Every one of those is additive and opt-in — a v5 bundle that reads
+# none of them is handed exactly what it was handed before and reaches exactly
+# the verdict it reached before. The test above is a *silent* misreading, and
+# there is none here: nothing changed meaning, nothing changed shape, and a
+# key nobody reads decides nothing. Bumping anyway would refuse fifteen
+# correct bundles to no end, and a version number that moves for additions
+# stops being evidence that a meaning moved.
 CONTRACT_VERSION = 5
 
 # A strategy may declare at most this many states. The cap is deliberate:
@@ -144,19 +166,27 @@ _NO_REFERENCE = MappingProxyType({})
 # by convention. Adding a type is a host change and a deliberate one.
 # ---------------------------------------------------------------------------
 
-def _rt(tier, meaning, order, attention, payload_keys):
+def _rt(tier, meaning, order, attention, payload_keys, optional_keys=()):
     return MappingProxyType({
         "tier": tier,                    # "position" | "evaluation"
         "meaning": meaning,              # for the contract docs, not the user
         "order": order,                  # sort rank across a list of results
         "attention": attention,          # surfaces in "needs attention"
-        "payload_keys": payload_keys,    # exactly these keys, no others
+        "payload_keys": payload_keys,    # every one of these, always
+        # May also appear, and mean "no answer" by being left out. Reserved
+        # for a fact that genuinely does not apply to most decisions of this
+        # kind — a staged entry is the only one so far. A required key with a
+        # nullable value is the better shape wherever the question is always
+        # worth answering, because it makes the author answer it; an optional
+        # key is right only where the absence is the ordinary case and
+        # writing `None` fifty times teaches nobody anything.
+        "optional_keys": optional_keys,
     })
 
 
 RENDER_TYPES = MappingProxyType({
     "commit":  _rt("position", "capital may go in", 0, True,
-                   ("size", "condition")),
+                   ("size", "condition"), ("plan",)),
     "reduce":  _rt("position", "partial exit", 1, True, ("to",)),
     "close":   _rt("position", "full exit", 2, True, ("when",)),
     "hold":    _rt("position", "no action", 3, False, ()),
@@ -262,6 +292,73 @@ PASS, FAIL, UNKNOWN, NOTED = "pass", "fail", "unknown", "noted"
 OUTCOMES = (PASS, FAIL, UNKNOWN, NOTED)
 
 
+# ---------------------------------------------------------------------------
+# Baselines — the two moments a measure can be compared against.
+#
+# A rule about a company you already own asks a question a rule about a
+# candidate cannot: has this changed since I last looked at it? There are two
+# honest answers to "since when", they are different questions, and picking
+# one and eating the other's cost is what this list refuses.
+#
+#   last-purchase   the last time you looked at this business and said yes.
+#                   A rule about the business deteriorating belongs here: a
+#                   position you consciously re-underwrote last quarter must
+#                   not fire an exit on a decline you already looked at and
+#                   accepted.
+#   first-purchase  the day the holding began. A rule about cumulative drift
+#                   belongs here, and it is the only place the boiling frog
+#                   is visible — six quarters of small declines, each one
+#                   fine against the quarter before it, and nothing anywhere
+#                   comparing the sixth against the first.
+#
+# A weighted average of the two, or of every purchase in between, is wrong
+# for both. There is no coherent dollar-weighted average of a gross margin:
+# averaging the readings at three purchases produces a number that was true
+# on no day, answers neither question, and cannot be checked against any
+# filing.
+#
+# Both are scoped to the holding you have now. Selling out entirely and
+# buying back later starts both again, for the same reason `position.opened`
+# does — that is a new decision about a name you happen to have owned before,
+# and inheriting a baseline from the last time would measure this holding
+# against a business case nobody re-made.
+#
+# What a baseline holds is what the record froze at that purchase, never a
+# recomputation of it. That is principle 3 doing load-bearing work rather
+# than decoration: a company that restates two years of accounts would
+# otherwise silently move the level you are being measured against, and the
+# question is what you were told when you said yes, not what the filings say
+# today about the day you said it.
+#
+# Adding an anchor is a host change in this one table.
+# ---------------------------------------------------------------------------
+
+BASELINE_ANCHORS = MappingProxyType({
+    "last-purchase": MappingProxyType({
+        "label": "since you last bought",
+        "means": "the last purchase into the holding you have now",
+        "explain":
+            "How far this has moved since the day you last put money into "
+            "this holding — the last time you looked at the business and "
+            "said yes. The figure is the one that was on record then, frozen "
+            "at that purchase and never worked out again, so a company "
+            "restating its accounts cannot quietly move what you are being "
+            "measured against.",
+    }),
+    "first-purchase": MappingProxyType({
+        "label": "since you first bought",
+        "means": "the purchase that took this holding up from nothing",
+        "explain":
+            "How far this has moved since the day this holding began. It is "
+            "the question the quarter-by-quarter view cannot answer: six "
+            "small declines can each look acceptable against the one before "
+            "it while the total is nothing you would have bought. The figure "
+            "is the one that was on record at that first purchase, frozen "
+            "then and never worked out again.",
+    }),
+})
+
+
 def _cmp(phrase, fn, numeric_only):
     return MappingProxyType({"phrase": phrase, "fn": fn,
                              "numeric_only": numeric_only})
@@ -351,6 +448,25 @@ HOST_FACTS = MappingProxyType({
         "holding away, so it answers when you started owning this, not how "
         "old your oldest remaining share is.", bare=True,
         when_missing="no position is held"),
+    "position.last_purchase": _fact(
+        "Last bought", "date", ("position", "last_purchase"),
+        "The day you last put money into this holding. On a position you "
+        "have bought once it is the same day you started; after that the "
+        "two part company, and which of them a rule should measure from "
+        "depends entirely on what the rule is asking.\n\n"
+        "The day you last bought is the day you last looked at this "
+        "business and said yes. A question about whether something has gone "
+        "wrong since then measures from here. A question about how far it "
+        "has drifted in total measures from the day you started — see "
+        "\"Held since\".", bare=True,
+        when_missing="no position is held, so nothing has been bought"),
+    "position.purchases": _fact(
+        "Purchases in this holding", "count", ("position", "purchases"),
+        "How many separate times you have bought this security during the "
+        "holding you have now. It counts from the purchase that took the "
+        "position up from nothing, so selling out and buying back starts it "
+        "again — that is a new holding and a new decision.", bare=True,
+        when_missing="no position is held"),
     "portfolio.cash": _fact(
         "Free cash", "usd", ("portfolio", "cash"),
         "Money in the account this journal covers that is not in any "
@@ -439,8 +555,8 @@ INPUT_ROLES = MappingProxyType({
 # Exactly one of these names the subject of an evidence item.
 _SUBJECT_KEYS = ("measure", "fact", "input", "value", "label")
 _ITEM_KEYS = {"measure", "fact", "input", "value", "label", "unit", "actual",
-              "absent", "at", "comparator", "threshold", "threshold_from",
-              "group"}
+              "absent", "at", "since", "comparator", "threshold",
+              "threshold_from", "group"}
 
 # What a group may demand of its members. Three words, host-owned, and a
 # strategy picks one — it never writes a rule of its own here, because the
@@ -1278,13 +1394,98 @@ def _names(keys) -> str:
     return ", ".join(sorted((str(k) for k in keys)))
 
 
+def _bad_size(size, *, above_zero=True) -> bool:
+    return not (isinstance(size, dict) and set(size) == {"unit", "value"}
+                and size.get("unit") in SIZE_UNITS
+                and _is_num(size.get("value"))
+                and (size["value"] > 0 if above_zero else size["value"] >= 0))
+
+
+def _bad_condition(cond) -> bool:
+    return not (isinstance(cond, dict) and set(cond) == {"summary"}
+                and _is_text(cond.get("summary")))
+
+
+def _check_plan(plan, unit, errors: list) -> None:
+    """The tranches a staged entry is holding back, and every way the list
+    goes wrong.
+
+    A staged entry is one decision, not several: the state is still `commit`
+    and the size in front of you is still the size in front of you. What the
+    plan adds is the part a single tranche cannot say — that this 2% is the
+    first third of an intended 6%, and what has to be true before the rest
+    goes in. Without it the screen cannot tell a whole position from the
+    opening slice of one, and the user cannot see at the moment of the first
+    purchase that they are committing to a shape at all, which is the entire
+    value of sizing something while calm.
+
+    Three refusals, each closing a way the list would say less than it looks
+    like it says:
+
+    - a tranche with no condition is not held back, it is just more of the
+      size in front of you. Left permissible, "3% now and 3% more, sometime"
+      would render as a plan while committing to nothing.
+    - the units have to match the size's. A first tranche in percent and a
+      second in dollars cannot be added up, so nothing could say what the
+      whole position is meant to be — and a screen would have to either
+      guess or quietly show one of the two.
+    - the host never checks whether a condition has been met, and must not
+      look as though it might. It is prose the strategy re-reads on its own
+      next evaluation: the day the condition holds, the strategy returns that
+      tranche as the size in front of you, with no condition on it. Nothing
+      is stored, nothing is scheduled, and the business is re-tested every
+      time — which is strictly better than a plan executing itself six months
+      after the last time anyone looked at the company.
+
+    Worth naming because it is the shape people reach for first and it is
+    absent by construction: a plan anchored to your own purchase price — a
+    third now, a third 25% below what you paid — cannot be written here at
+    all. Not because the payload lacks a field, but because nothing about
+    what a position cost is in the context (see HOST_FACTS), so no strategy
+    can know what "25% below what you paid" means. That is averaging down
+    with a schedule attached, and it is refused one level deeper than this
+    check. A plan anchored to what the business is worth — a third at a
+    third off intrinsic value, a third at half off — asks the same shape of
+    question about a number that is not about you, and writes fine.
+    """
+    if not isinstance(plan, list) or not plan:
+        errors.append(
+            "`plan` must be a non-empty list of the further tranches this "
+            "entry is holding back, or be left out entirely. An empty list "
+            "is a staged plan that stages nothing.")
+        return
+    for i, tranche in enumerate(plan):
+        where = f"`plan` tranche {i + 1}"
+        if not isinstance(tranche, dict) or set(tranche) != {"size",
+                                                             "condition"}:
+            errors.append(f"{where} must be exactly {{size, condition}}.")
+            continue
+        if _bad_size(tranche["size"]):
+            errors.append(f"{where}: `size` must be {{unit, value}} with unit "
+                          f"one of {', '.join(SIZE_UNITS)} and value above "
+                          "zero.")
+        elif tranche["size"]["unit"] != unit:
+            errors.append(
+                f'{where} is measured in {tranche["size"]["unit"]} and the '
+                f"size in front of you is in {unit}. Every tranche of one "
+                "plan has to be in the same unit, or nothing can say what "
+                "the whole position is meant to come to.")
+        if tranche["condition"] is None or _bad_condition(tranche["condition"]):
+            errors.append(
+                f"{where}: `condition` must be {{summary: plain language}} "
+                "saying what has to be true before this tranche goes in. A "
+                "tranche with no condition is not held back — it is more of "
+                "the size in front of you, and belongs in that number.")
+
+
 def _check_payload(render: str, payload, errors: list) -> None:
     keys = RENDER_TYPES[render]["payload_keys"]
+    optional = RENDER_TYPES[render]["optional_keys"]
     if not isinstance(payload, dict):
         errors.append("`payload` must be a mapping.")
         return
     missing = [k for k in keys if k not in payload]
-    extra = set(payload) - set(keys)
+    extra = set(payload) - set(keys) - set(optional)
     if missing:
         errors.append(f"a `{render}` state's payload must carry: "
                       f"{', '.join(missing)}. A bare word is not a "
@@ -1298,20 +1499,21 @@ def _check_payload(render: str, payload, errors: list) -> None:
 
     if render == "commit":
         size = payload["size"]
-        if not (isinstance(size, dict) and set(size) == {"unit", "value"}
-                and size.get("unit") in SIZE_UNITS
-                and _is_num(size.get("value")) and size["value"] > 0):
+        if _bad_size(size):
             errors.append("`size` must be {unit, value} with unit one of "
                           f"{', '.join(SIZE_UNITS)} and value above zero — "
                           "how much, or a staged entry collapses into buying "
                           "everything on day one.")
         cond = payload["condition"]
-        if cond is not None and not (
-                isinstance(cond, dict) and set(cond) == {"summary"}
-                and _is_text(cond.get("summary"))):
+        if cond is not None and _bad_condition(cond):
             errors.append("`condition` must be None (commit now, "
                           "unconditionally) or {summary: plain language} "
                           "saying what must be true first.")
+        if payload.get("plan") is not None:
+            # Checked against the size's own unit, so a malformed size does
+            # not also produce a wrong-unit complaint about every tranche.
+            _check_plan(payload["plan"], (size or {}).get("unit")
+                        if isinstance(size, dict) else None, errors)
     elif render == "reduce":
         to = payload["to"]
         if not (isinstance(to, dict) and set(to) == {"unit", "value"}
@@ -1539,6 +1741,24 @@ def _check_evidence_item(record, item, where, errors) -> None:
             errors.append(f"{where}: `at` must be the YYYY-MM-DD period end "
                           "of the reading being cited.")
 
+    if "since" in item:
+        if subject != "measure":
+            errors.append(f"{where}: `since` measures how far a bank measure "
+                          "has moved, so it only means something alongside "
+                          "`measure`.")
+        elif "at" in item:
+            errors.append(
+                f"{where} carries both `at` and `since`. `at` cites the "
+                "reading at one moment; `since` cites the distance between "
+                "two. One citation answers one question — cite the reading "
+                "and the change as two rows if you want both.")
+        elif item["since"] not in BASELINE_ANCHORS:
+            errors.append(
+                f'{where}: `since` must be one of '
+                f"{', '.join(BASELINE_ANCHORS)} — the moments the host can "
+                "anchor to. A strategy never invents one; anything missing "
+                "is a request against the host.")
+
     has_cmp = "comparator" in item
     limits = [k for k in ("threshold", "threshold_from") if k in item]
     if has_cmp:
@@ -1682,6 +1902,90 @@ def _measure_observation(ctx, item):
                      + list(hit.get("provenance") or [])), None
 
 
+def _baseline_observation(ctx, item):
+    """How far a measure has moved since a purchase.
+
+    The subtraction is the host's, and that is the whole point of the
+    citation existing. A strategy can already reach both readings and take
+    one from the other — what it cannot do is *cite* the answer, because an
+    evidence item compares an observation against a limit, and a limit is
+    either a number the strategy states outright or the id of one of its own
+    settings. "At least five points below what it was when you bought" is
+    neither: the number is baseline minus five, which the strategy would have
+    to work out and state, and the host would have no way to check. That is
+    the one hole left in cite-don't-quote, at the exact place a wrong number
+    is least visible — a drift test states a threshold that looks arbitrary
+    to a reader and cannot be traced to anything.
+
+    So the strategy owns the question — which measure, which anchor, which
+    direction, what tolerance — and the host owns every number in the row:
+    the reading then, the reading now, the distance between them, its unit,
+    and whether the tolerance was met.
+
+    The reading *then* comes off the snapshot the purchase froze, never a
+    recomputation of that day. Both are worth having and only one of them is
+    the baseline: a recomputation answers "what do today's filings say about
+    that day", and a restatement moves it. What a re-underwrite is measured
+    against is what you were shown when you said yes.
+
+    Absence on either side is absence, never a pass and never a zero. Two
+    sides means two reasons and they read differently — no purchase to
+    measure from, no reading on record at the purchase, no reading now — so
+    each says which it is rather than collapsing into one shrug.
+    """
+    mid, anchor_id = item["measure"], item["since"]
+    spec = BASELINE_ANCHORS.get(anchor_id)
+    if spec is None:
+        return None, (f'the baseline "{anchor_id}", which the host does not '
+                      "anchor to. It anchors to: "
+                      f"{', '.join(BASELINE_ANCHORS)}.")
+    entry = (ctx.get("measures") or {}).get(mid)
+    if entry is None:
+        return None, (f'the measure "{mid}", which is not in the metric '
+                      "bank. A strategy asks only for measures the host "
+                      "offers; anything missing is a request against the "
+                      "host, not something to work around.")
+
+    anchor = ((ctx.get("position") or {}).get("baselines") or {}).get(anchor_id)
+    if not _is_mapping(anchor) or anchor.get("status") != "known":
+        return _unobserved(
+            _read(anchor, "reason")
+            or f'there is no {spec["means"]} to measure from', "baseline"), None
+
+    when = anchor.get("date")
+    then = (anchor.get("measures") or {}).get(mid)
+    if not _is_mapping(then) or then.get("status") != "known":
+        return _unobserved(
+            _read(then, "reason")
+            or ("no reading of this was on record when you bought on "
+                f"{when}, so there is nothing to measure from"),
+            "baseline"), None
+
+    now = entry["current"]
+    if now["status"] != "known":
+        return _unobserved(
+            f'{now.get("reason") or "there is no reading now"}, so how far '
+            "it has moved cannot be worked out", "baseline"), None
+
+    before, after = then["value"], now["value"]
+    if not _is_num(before) or not _is_num(after):
+        return None, (f'how "{mid}" has moved since {spec["label"]}. It is '
+                      f"{_kind_of(after)} now and {_kind_of(before)} then, "
+                      "and a distance only means something between numbers.")
+
+    # Both sides' qualifications, each saying which reading it belongs to. A
+    # change is exactly as trustworthy as the less trustworthy of the two
+    # readings behind it, and dropping either half is how a figure built on
+    # an approximated market cap arrives on screen looking exact.
+    cautions = [f"the reading now — {c}" for c in (now.get("cautions") or [])]
+    cautions += [f"the reading you bought at — {c}"
+                 for c in (then.get("cautions") or [])]
+    return _observed(
+        after - before, "baseline", cautions,
+        [f"{before:g} on {when}, frozen at that purchase and not worked out "
+         f"again, against {after:g} now"]), None
+
+
 def _fact_observation(ctx, item):
     fid = item["fact"]
     spec = HOST_FACTS.get(fid)
@@ -1756,6 +2060,8 @@ def _observation(ctx, item, subject):
     disagree, and the whole reason v5 exists is that two of them did.
     """
     if subject == "measure":
+        if "since" in item:
+            return _baseline_observation(ctx, item)
         return _measure_observation(ctx, item)
     if subject == "fact":
         return _fact_observation(ctx, item)
@@ -1890,6 +2196,9 @@ def _cited_as(item) -> str:
         return "this citation"
     named = item[subject] if subject != "label" else item.get("label")
     at = f' at {item["at"]}' if "at" in item else ""
+    if "since" in item:
+        anchor = BASELINE_ANCHORS.get(item["since"]) or {}
+        at = f' {anchor.get("label", item["since"])}'
     return f'the test of "{named}"{at}'
 
 
@@ -1978,14 +2287,29 @@ def resolve_evidence(record: dict, ctx: dict, items: list):
             # a strategy that could choose the label could disguise it.
             meta = _bank_entry(item["measure"]) or {}
             judged = meta.get("kind") == "qualitative"
-            view = {"kind": "judgement" if judged else "measure",
-                    "id": item["measure"],
-                    "label": _bank_label(item["measure"]),
-                    "unit": _bank_unit(item["measure"]),
-                    "explain": meta.get("question") if judged else None}
-            if "at" in item:
-                view["at"] = item["at"]
-                view["cadence"] = _read(entry.get("series"), "cadence")
+            if "since" in item:
+                # A change is its own subject, not the measure with a note
+                # attached. It has a different label, a different unit and a
+                # different explanation, and the reader must never be able to
+                # mistake "gross margin, 34%" for "gross margin, down 6
+                # points" — the two render side by side on a re-underwrite
+                # screen and the second is the one deciding something.
+                anchor = BASELINE_ANCHORS.get(item["since"]) or {}
+                view = {"kind": "change", "id": item["measure"],
+                        "label": f'{_bank_label(item["measure"])}, change '
+                                 f'{anchor.get("label", "")}'.strip(),
+                        "unit": _change_unit(item["measure"]),
+                        "since": item["since"],
+                        "explain": _change_explain(item["measure"], anchor)}
+            else:
+                view = {"kind": "judgement" if judged else "measure",
+                        "id": item["measure"],
+                        "label": _bank_label(item["measure"]),
+                        "unit": _bank_unit(item["measure"]),
+                        "explain": meta.get("question") if judged else None}
+                if "at" in item:
+                    view["at"] = item["at"]
+                    view["cadence"] = _read(entry.get("series"), "cadence")
         elif subject == "fact":
             spec = HOST_FACTS.get(item["fact"])
             view = ({"kind": "fact", "id": item["fact"],
@@ -2155,7 +2479,13 @@ def _bank_entry(measure_id):
                 "label": str(e.get("label") or e.get("id")),
                 "unit": str(e.get("unit") or "none"),
                 "kind": str(e.get("kind") or ""),
-                "question": str(e.get("question") or "").strip() or None}
+                "question": str(e.get("question") or "").strip() or None,
+                # Under `explanation`, where the bank keeps it — the same
+                # sentence `bank.meta` hands the view as `plain`. Read from
+                # the entry's own shape rather than from a flattened copy, so
+                # there is one place the bank's layout is known.
+                "plain": str((e.get("explanation") or {}).get("plain")
+                             or "").strip() or None}
     return _bank_cache.get(measure_id)
 
 
@@ -2168,6 +2498,31 @@ def _bank_unit(measure_id):
     entry = _bank_entry(measure_id)
     unit = entry["unit"] if entry else "none"
     return unit if unit in EVIDENCE_UNITS else "none"
+
+
+def _change_unit(measure_id):
+    """How a distance between two readings renders.
+
+    A change in a percentage is not a percentage. Gross margin going from 40%
+    to 34% is six percentage points, and rendering that as "6%" invites the
+    reader to take it for a relative move — which is a different number
+    (fifteen percent of the original) pointing the same way, so the mistake
+    survives a sanity check. Everything else keeps its own unit, because the
+    distance between two ratios is a ratio and the distance between two
+    dollar figures is dollars.
+    """
+    unit = _bank_unit(measure_id)
+    return "percentage_points" if unit == "percent" else unit
+
+
+def _change_explain(measure_id, anchor):
+    """What a change row means, and what the thing changing is. Both, because
+    a reader who has never valued a company needs the second before the first
+    is worth anything — and the bank's account of the measure is the only
+    place either of them is written down once."""
+    entry = _bank_entry(measure_id) or {}
+    parts = [anchor.get("explain"), entry.get("plain")]
+    return "\n\n".join(p for p in parts if p) or None
 
 
 # ---------------------------------------------------------------------------

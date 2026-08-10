@@ -32,12 +32,15 @@ is where to look rather than here: this paragraph is the version that used
 to have to be believed, and a claim made once at the top of a file is a
 claim nobody can check against the twenty-ninth value somebody adds.
 
-Twenty-six of the twenty-eight thresholds below are the expert report's,
+Twenty-six of the thirty-four thresholds below are the expert report's,
 verbatim — nothing is rounded, converted or adjusted. Six of those carry
-the report's level and this strategy's reasoning, and say so. The last two,
+the report's level and this strategy's reasoning, and say so. Two more,
 `portfolio-slots` and `position-weight-cap`, come from Graham's own
 documented practice, because the report was scoped to selection and to exits
-and says nothing whatever about how much to buy.
+and says nothing whatever about how much to buy. The last six — the risk-free
+rate and the five drift tolerances — are attributed to nobody but this
+file's author, because no source here addresses adding to a position already
+held, and they are the numbers most worth arguing with.
 
 Nothing here computes a comparison. Every test is put to `contract.test` and
 then cited as the same item, so what a rule acted on and what the reader
@@ -136,6 +139,49 @@ EXITS_DISCOUNT = (
 # talking; it should send the reader to the filings, not to the sell button.
 DIVIDEND_RUN = "consecutive_dividend_years"
 
+# What must not have moved too far since a purchase, before more money goes
+# into the same name.
+#
+# The exits above are absolute: a current ratio below 1.2 is a sell whatever
+# it was when you bought. These are relative, and they exist because an
+# absolute level cannot see the shape this style of investing actually fails
+# in. A company bought at a current ratio of 3.1 that is now at 1.4 has not
+# tripped a single exit and is a different company from the one that was
+# bought. Nothing anywhere compared it against itself, because every quarter
+# looked acceptable against the quarter before it.
+#
+# The limit is the CHANGE, signed, so nothing here has to be negated — the
+# host reads the number out of the setting exactly as it reads every other
+# limit, and a reader sees "change since you first bought: -0.55, at least
+# your -0.4". A tolerance stated as a magnitude with the direction hidden in
+# the comparator is a limit whose sign lives in this file instead of in the
+# setting, which is the half nobody thinks to check when they retune it.
+#
+# The same five tolerances answer two different questions, from two different
+# anchors, and that is the whole reason the host offers both:
+#
+#   since the FIRST purchase   how far it has drifted in total. Failing this
+#                              does not sell anything; it demands a fresh
+#                              read before any more money goes in.
+#   since the LAST purchase    whether it has got worse since you last looked
+#                              at this business and said yes. Failing this
+#                              stops the add and nothing else — you already
+#                              own it, and a decline you have not yet
+#                              re-underwritten is not grounds for an exit the
+#                              absolute levels have not called for.
+#
+# One set of numbers because the question each answers is the same question —
+# how much movement in this measure means something has changed — asked from
+# two places. On a position bought once they are the same test, and the day
+# they part company is the day of the second purchase.
+DRIFT = (
+    ("current_ratio", "at_least", "drift-current-ratio"),
+    ("ltd_to_working_capital", "at_most", "drift-ltd-to-working-capital"),
+    ("altman_z_score", "at_least", "drift-altman-z"),
+    ("debt_to_equity", "at_most", "drift-debt-to-equity"),
+    ("consecutive_annual_loss_years", "at_most", "drift-loss-years"),
+)
+
 # ---------------------------------------------------------------------------
 # The headings the evidence is gathered under, and what each demands.
 #
@@ -174,6 +220,21 @@ SIZE_GROUP = {"id": "size", "name": "How big it has got", "requires": "all"}
 DIVIDEND_GROUP = {"id": "dividend", "name": "The dividend run",
                   "requires": "noted"}
 
+# The two drift families, and both demand `all`. That is not decoration: a
+# state whose render is `commit` is refused by the host when a group it
+# declared did not come out passed, so "no more money goes in until this is
+# still true" is enforced by the contract rather than by this file
+# remembering to check. An unreadable row is not good enough either — a
+# baseline nobody could recover has not shown that nothing has changed, and
+# treating it as though it had is exactly the absence-reads-as-success this
+# whole arrangement exists to refuse.
+DRIFT_GROUP = {"id": "drift",
+               "name": "How far it has drifted since you first bought",
+               "requires": "all"}
+WORSE_GROUP = {"id": "worse",
+               "name": "What has changed since you last bought",
+               "requires": "all"}
+
 
 # ---------------------------------------------------------------------------
 # Where the numbers came from.
@@ -182,7 +243,7 @@ DIVIDEND_GROUP = {"id": "dividend", "name": "The dividend run",
 # account in that value's own `explain` is the source's or this strategy's.
 #
 # The distinction is the whole reason these are fields and not prose. Six of
-# the twenty-eight values here have the report's level and an explanation
+# the thirty-four values here have the report's level and an explanation
 # this strategy wrote, and that used to be a paragraph pasted into six
 # `explain` strings — which is a claim nothing checks, on a value it is easy
 # to add a seventh of and forget. Two more come from somewhere else
@@ -200,6 +261,16 @@ GRAHAM_PRACTICE = {
             "nothing whatever about how much to buy, so its silence here is "
             "a gap in the source rather than a decision it made",
     "reasoning": True}
+# Nobody's but this file's. The drift tolerances have no source to cite:
+# neither the report nor Graham addresses adding to an open position, and
+# saying so plainly is better than attributing a number to a document that
+# does not contain it. These are the settings here most worth arguing with,
+# and the attribution is what makes that visible.
+AUTHOR = {
+    "name": "this strategy's own author. Neither the expert report nor "
+            "Graham addresses adding to a position already held, so there is "
+            "no source to attribute these to and none is claimed",
+    "reasoning": True}
 
 
 STRATEGY = {
@@ -209,7 +280,7 @@ STRATEGY = {
                "what its assets and its typical earnings justify, and sells "
                "when that gap closes, when the balance sheet stops being "
                "safe, or when two years are up — whichever comes first.",
-    "version": 3,
+    "version": 4,
     "contract": 5,
     "changelog": {
         1: "First version. The fifteen entry tests, the four-knockout / "
@@ -252,10 +323,36 @@ STRATEGY = {
            "where it used to show nothing at all. The rate ships at a "
            "starting figure and is the one setting here that has to be "
            "maintained: nothing fetches it.",
+        4: "This strategy can now add to a position you already hold, which "
+           "it never could before — a holding was watched only for exits, so "
+           "'buy' was unreachable the moment you owned any of it.\n\n"
+           "An add is the entry tests, unchanged. The same five knockouts "
+           "and the same eight core tests decide it, measured exactly as "
+           "they would be on a security you had never owned, because an add "
+           "is the same claim about the same business made again. What is "
+           "new is room: a holding may only be taken up to the same target "
+           "weight a first purchase is sized to, and the gap between where "
+           "it is and where that target sits is the whole of what may go "
+           "in. Nothing about what the position cost is available to any of "
+           "it — the host does not offer it, so an add cannot be triggered "
+           "by the price having fallen below what you paid.\n\n"
+           "Two new checks come with it, and they are the only new "
+           "thresholds. Five measures are compared against what they were "
+           "when you last bought, and against what they were when you first "
+           "bought; the first stops an add on a business that has got worse "
+           "since you last said yes, the second demands a fresh read of a "
+           "business that has drifted a long way in total without any single "
+           "quarter looking wrong. Neither sells anything. Both refuse an "
+           "add when they cannot be worked out, because a comparison nobody "
+           "could make has not shown that nothing changed.\n\n"
+           "No existing level moved and no exit changed. A holding that "
+           "would have read 'nothing to do' still does, unless it now has "
+           "room and still screens — in which case it says so, and the "
+           "reason names which of the several ways an add was refused.",
     },
 
     # -----------------------------------------------------------------
-    # Eleven states. Every one of them is something a reader has to be
+    # Thirteen states. Every one of them is something a reader has to be
     # able to tell apart from the others at a glance: "I would buy this
     # if I had room" is not "I would not buy this", and "the discount
     # closed" is not "the balance sheet broke", even though both end the
@@ -302,12 +399,48 @@ STRATEGY = {
                         "claimed. The reasons below say which figures are "
                         "absent and why."},
 
+        {"id": "add", "render": "commit",
+         "name": "Room for more of it",
+         "description": "You hold it, every exit test came back clear, and "
+                        "it still passes the tests that bought it — measured "
+                        "the same way a security you had never owned would "
+                        "be. It also sits below the size this strategy runs "
+                        "one name at, and that gap is the whole of what may "
+                        "go in.\n\n"
+                        "This says the position may take capital. It does "
+                        "not say to put any in, and it says nothing about "
+                        "whether this is the best place for it — that is a "
+                        "question about your whole list, and it is answered "
+                        "on the screen that can see all of it. Nothing here "
+                        "knows or can know what you paid."},
+
+        {"id": "re-underwrite-owed", "render": "blocked",
+         "name": "Read it again before adding",
+         "description": "The measures this strategy watches have moved "
+                        "further since your first purchase than it will put "
+                        "more money behind — not on any one filing, which is "
+                        "the point, but in total.\n\n"
+                        "Nothing is being sold and nothing is owed on the "
+                        "position you have: every exit test came back clear "
+                        "and this is a bar on adding, not a verdict on "
+                        "holding. What it is asking is that a fresh decision "
+                        "be made deliberately rather than arrived at one "
+                        "small purchase at a time."},
+
         {"id": "hold", "render": "hold",
          "name": "Nothing to do",
          "description": "You hold it, every exit test that could be run "
                         "came back clear, and the holding period you "
                         "committed to has not run out. Sitting still is the "
-                        "whole activity."},
+                        "whole activity.\n\n"
+                        "It also covers the several ways more money does not "
+                        "go in — no room left under the size this strategy "
+                        "runs one name at, a business that would not pass the "
+                        "tests today, a screen that could not be finished, or "
+                        "a comparison against your own purchases that could "
+                        "not be worked out. The rule named beside the verdict "
+                        "says which, and an unreadable test is never reported "
+                        "as a failed one."},
 
         {"id": "one-reading-past", "render": "hold",
          "name": "One reading past the line",
@@ -461,6 +594,87 @@ STRATEGY = {
                     "test reports that it could not be run.\n\n"
                     "Attributed to Graham's practice, not to the expert "
                     "report, which does not cover sizing."},
+
+        # -- how far a business may move before more money goes in ---------
+        #
+        # Five tolerances, stated as the worst CHANGE that will still take
+        # another purchase — signed, so the direction lives in the setting
+        # rather than in the code reading it. A reader retuning "-0.4" can
+        # see it is a fall; a reader retuning "0.4" beside a comparator in a
+        # file they never open cannot.
+        #
+        # Each level is roughly half the distance between what this strategy
+        # requires to buy and what it requires to sell, and that is where the
+        # reasoning comes from rather than from any source. Halfway from
+        # "would buy" to "would sell" is a business that has changed enough
+        # to be worth reading about again, and not so far that a normal
+        # quarter trips it. The expert report was scoped to selection and to
+        # exits and says nothing about adding, so nothing here is attributed
+        # to it — these are the author's, and they are the settings in this
+        # file most worth arguing with.
+        {"id": "drift-current-ratio",
+         "label": "Worst change in the current ratio you will add behind",
+         "type": "number", "unit": "ratio", "max": 0, "source": AUTHOR,
+         "explain": "How far the current ratio — what a company owes within "
+                    "the year against what it can readily turn into cash — "
+                    "may fall from where it was at a purchase before this "
+                    "strategy stops putting more money in.\n\n"
+                    "A negative number, because it is a fall. Minus 0.4 is "
+                    "about halfway from the 2.0 this strategy requires to "
+                    "buy to the 1.2 at which it sells: a company that has "
+                    "come that far has used up half the cushion that made it "
+                    "worth owning, without having crossed any line that "
+                    "would exit it.\n\n"
+                    "Move it toward zero and almost any decline stops you "
+                    "adding. Move it away and the position can double while "
+                    "the balance sheet quietly halves."},
+
+        {"id": "drift-ltd-to-working-capital",
+         "label": "Worst change in long-term debt against working capital "
+                  "you will add behind",
+         "type": "number", "unit": "ratio", "min": 0, "source": AUTHOR,
+         "explain": "How much further long-term debt may climb against "
+                    "working capital, from where it was at a purchase, "
+                    "before this strategy stops adding.\n\n"
+                    "A positive number, because on this measure it is the "
+                    "rise that is bad. Half a turn is about halfway from the "
+                    "1.0 required to buy to the 2.0 that sells."},
+
+        {"id": "drift-altman-z",
+         "label": "Worst change in the distress score you will add behind",
+         "type": "number", "unit": "score", "max": 0, "source": AUTHOR,
+         "explain": "How far the Altman Z-score — a combined read on how "
+                    "close a company is to financial distress — may fall "
+                    "from where it was at a purchase before this strategy "
+                    "stops adding.\n\n"
+                    "A negative number, because it is a fall. Minus 0.6 is "
+                    "half the distance from the 3.0 required to buy to the "
+                    "1.8 that sells, and the score is built to move slowly, "
+                    "so a fall of this size is not noise."},
+
+        {"id": "drift-debt-to-equity",
+         "label": "Worst change in debt against equity you will add behind",
+         "type": "number", "unit": "ratio", "min": 0, "source": AUTHOR,
+         "explain": "How much further total debt may climb against "
+                    "shareholders' equity, from where it was at a purchase, "
+                    "before this strategy stops adding. Positive, because "
+                    "the rise is what matters; half a turn is about halfway "
+                    "from the 1.0 required to buy to the 2.0 that sells."},
+
+        {"id": "drift-loss-years",
+         "label": "Extra losing years you will add behind",
+         "type": "integer", "unit": "count", "min": 0, "max": 10,
+         "source": AUTHOR,
+         "explain": "How many more consecutive loss-making years the record "
+                    "may show than it did at a purchase, before this "
+                    "strategy stops adding.\n\n"
+                    "Nought means any new losing year stops further "
+                    "purchases. That is deliberately the strictest of these "
+                    "five: this strategy already refuses to sell on a single "
+                    "losing year, and the space between \"not yet a sell\" "
+                    "and \"quietly buy more of it\" is exactly where a "
+                    "position gets averaged into a business that has stopped "
+                    "making money."},
 
         # -- the discipline that is not a measure --------------------------
         {"id": "holding-period-months", "label": "Months before time is up",
@@ -1035,6 +1249,25 @@ def _screen(ctx, rows, group):
     return cites, [contract.test(ctx, item) for item in cites]
 
 
+def _drift_cite(measure_id, comparator, value_id, anchor, group):
+    """One drift citation: which measure, which purchase to measure from,
+    which direction, and the setting holding the tolerance.
+
+    Not one number. The reading at the purchase, the reading now and the
+    distance between them are all the host's — this strategy could take one
+    from the other itself, and then the figure on screen would be one it had
+    stated rather than one anybody could check against the record.
+    """
+    return {"measure": measure_id, "since": anchor, "comparator": comparator,
+            "threshold_from": value_id, "group": group}
+
+
+def _drift(ctx, anchor, group):
+    """(citations, outcomes) for every drift test against one anchor."""
+    cites = [_drift_cite(m, c, v, anchor, group) for m, c, v in DRIFT]
+    return cites, [contract.test(ctx, item) for item in cites]
+
+
 # ---------------------------------------------------------------------------
 # the earnings yield against the risk-free rate
 #
@@ -1563,16 +1796,248 @@ def _on_a_holding(ctx):
         }
 
     unread = len(safety) + len(discount) - len(checked)
+    # What the clock actually said, not what it did not say. The ladder above
+    # acts on the clock having FAILED, so a clock nobody could read falls
+    # through it — and this sentence then asserted the holding period had not
+    # elapsed off a test that never ran. Absence reading as a pass in prose
+    # is still absence reading as a pass; the rows below would have shown
+    # "can't say" beside a summary claiming otherwise.
+    clear = ("All " + str(len(checked)) + " exit tests that could be run came "
+             "back clear"
+             + (" and the holding period has not elapsed."
+                if contract.test(ctx, CLOCK_CITE) == PASS
+                else ", and how long you have held this could not be worked "
+                     "out.")
+             + (f" {unread} could not be worked out and are listed below as "
+                "unknown rather than as passing." if unread else ""))
+    return _more_money(ctx, evidence, groups, note, clear)
+
+
+# -- may more money go into a name you already own ---------------------------
+#
+# Reached only when nothing above it fired: every exit that could be read came
+# back clear, the clock has not run, and the position is not over its cap. So
+# this asks one question, and it is deliberately not "is this a good idea" —
+# it is "would this strategy buy this today, and is there room".
+#
+# The tests are the entry tests, unchanged. Not a softer set because you
+# already own it and not a harder one because you are averaging in: an add is
+# the same claim about the same business, made again, and the only honest way
+# to make it is against the same bar. What is genuinely new is room, which is
+# invisible on a first purchase and binding most of the time afterwards.
+#
+# What is deliberately NOT re-tested is the slot count. A slot is a name, and
+# an add does not take a new one — citing the slot test here would refuse
+# every add in a full portfolio, which is the opposite of what running a
+# fixed number of positions means.
+#
+# What is deliberately NOT available is anything about what the position
+# cost. Not the average, not the last price paid, not the distance from
+# either. The host does not offer it, so a rule that put more money in
+# because the price had fallen below what you paid cannot be written here —
+# and that rule is the entire failure mode this screen was built against.
+
+def _size_row(room, group):
+    return {"label": "Room left under your target", "unit": "percent",
+            "actual": room, "group": group}
+
+
+def _sizing_cites(group):
+    return [{"value": "portfolio-slots", "group": group},
+            {"value": "position-weight-cap", "group": group}]
+
+
+def _target_weight(values):
+    """The share of the account one name is meant to reach: an equal share of
+    the places this strategy runs, capped. The same arithmetic a first
+    purchase is sized by, because it is the same question — this is where
+    this name is supposed to end up, and a purchase is how far it currently
+    is from there."""
+    equal_share = round(100.0 / values["portfolio-slots"], 2)
+    cap = float(values["position-weight-cap"])
+    return (min(equal_share, cap),
+            "an equal share of your places" if equal_share <= cap
+            else "the cap on any one name")
+
+
+def _more_money(ctx, evidence, groups, note, clear):
+    values = ctx.get("values") or {}
+    weight = ((ctx.get("position") or {}).get("weight")) or {}
+
+    def held(state, rule, summary, extra=(), more_groups=()):
+        return {"state": state, "payload": {},
+                "reason": {"rule": rule, "summary": f"{clear} {summary}",
+                           "evidence": evidence + list(extra),
+                           "groups": groups + list(more_groups),
+                           "note": note}}
+
+    # Every figure below is derived from the position's weight, so a weight
+    # nobody could work out is not a small gap — it is the whole question
+    # unanswerable. Said as its own outcome rather than folded into "hold",
+    # because "your rules would take more of this and the size could not be
+    # worked out" and "your rules want nothing more here" are different
+    # facts, and only one of them is fixed by finding a price.
+    if weight.get("status") != "known":
+        return held(
+            "hold", "size-unreadable",
+            "Whether there is room for more of it could not be worked out: "
+            + str(weight.get("reason") or "this holding has no weight on "
+                                          "record") + ".")
+
+    target, bound = _target_weight(values)
+    room = round(target - float(weight["value"]), 2)
+    sizing = _sizing_cites(SIZING_GROUP["id"]) + [
+        _size_row(room, SIZING_GROUP["id"])]
+
+    if room <= 0:
+        return held(
+            "hold", "no-room-to-add",
+            f"It is already at {float(weight['value']):g}% of the account "
+            f"against a target of {target:g}%, set by {bound}, so no more "
+            "money goes into it here.", sizing, [SIZING_GROUP])
+
+    # The two baselines, in the order their consequences differ. Cumulative
+    # drift is the stronger statement — it says the business you own is no
+    # longer the one you underwrote — so it is asked first, and its answer is
+    # a demand rather than a shrug.
+    drift_cites, drift_out = _drift(ctx, "first-purchase", DRIFT_GROUP["id"])
+    worse_cites, worse_out = _drift(ctx, "last-purchase", WORSE_GROUP["id"])
+    both = (list(drift_cites) + list(worse_cites), [DRIFT_GROUP, WORSE_GROUP])
+
+    if FAIL in drift_out:
+        n = drift_out.count(FAIL)
+        return {
+            "state": "re-underwrite-owed",
+            "payload": {"needs": [
+                f"Read the most recent filings for this company and record "
+                f"what you now think of it. {n} of the "
+                f"{len(DRIFT)} measures this strategy watches "
+                + ("has" if n == 1 else "have")
+                + " moved further since your first purchase than this "
+                  "strategy will put more money behind.",
+                "Nothing is being sold. Every exit test came back clear, and "
+                "this is a bar on adding to it, not a verdict on holding it.",
+                "If you still want the position, the honest way back is to "
+                "sell it and buy it again as a fresh decision — that is what "
+                "resets what you are measured against."]},
+            "reason": {
+                "rule": "drifted-since-first-purchase",
+                "summary": (
+                    f"{clear} But {n} of the measures this strategy watches "
+                    + ("has" if n == 1 else "have")
+                    + " drifted further since you first bought than it will "
+                      "add behind. No single quarter looked like this — that "
+                      "is what the comparison against your first purchase is "
+                      "for."),
+                "evidence": evidence + both[0], "groups": groups + both[1],
+                "note": note},
+        }
+
+    if UNKNOWN in drift_out or UNKNOWN in worse_out:
+        n = drift_out.count(UNKNOWN) + worse_out.count(UNKNOWN)
+        return held(
+            "hold", "drift-unreadable",
+            f"Whether it has changed since you bought could not be settled: "
+            f"{n} of the {len(DRIFT) * 2} comparisons against your purchases "
+            "could not be worked out. Nothing more goes in on a comparison "
+            "nobody could make.", both[0], both[1])
+
+    if FAIL in worse_out:
+        n = worse_out.count(FAIL)
+        return held(
+            "hold", "worse-since-you-last-bought",
+            f"{n} of the measures this strategy watches "
+            + ("is" if n == 1 else "are")
+            + " worse than when you last bought this, by more than it will "
+              "add behind. That is not an exit — the absolute levels have "
+              "not been crossed — it is a reason not to put more in until "
+              "they recover or you re-read the business.", both[0], both[1])
+
+    # It has not deteriorated and it has not drifted. Whether this strategy
+    # would buy it *today* is the same fifteen tests a candidate faces, run
+    # again from scratch. A holding that no longer screens is a holding this
+    # strategy will not add to, and saying so is most of what this branch is
+    # worth: it is the sentence that tells you your own rules would not buy
+    # what you own.
+    req_cites, req_out = _screen(ctx, REQUIRED, KNOCKOUTS["id"])
+    core_cites, core_out = _screen(ctx, CORE, CORE_GROUP["id"])
+    bonus_cites = _bonus_cites(ctx, values)
+    need = values.get("core-tests-required")
+    screen = (req_cites + core_cites + bonus_cites,
+              [KNOCKOUTS, CORE_GROUP, BONUS_GROUP])
+    req_fail, req_unknown = req_out.count(FAIL), req_out.count(UNKNOWN)
+    core_pass, core_unknown = core_out.count(PASS), core_out.count(UNKNOWN)
+    could_still_reach = (core_pass + core_unknown >= need
+                         if isinstance(need, int) else None)
+    core_met = core_pass >= need if isinstance(need, int) else None
+
+    # The clock and the cap are already cited above, and both sit in groups
+    # demanding a pass. A commit beside a group the host resolves as anything
+    # else is refused by the host — correctly — so this asks the same
+    # question first and returns a state that explains itself instead.
+    #
+    # PASS and not "did not fail": an unreadable clock or an unreadable cap
+    # has not shown there is room, and the ladder above only asked whether
+    # either had FAILED. Absence must not walk through a gate by not
+    # tripping it.
+    steady = (contract.test(ctx, CLOCK_CITE) == PASS
+              and contract.test(ctx, CAP_CITE) == PASS)
+
+    body = (both[0] + screen[0] + sizing,
+            both[1] + screen[1] + [SIZING_GROUP])
+
+    # A settled no and an unfinished screen are different answers, and this
+    # branch used to give the first one's sentence to both. A holding with an
+    # unreadable market cap came back "your rules would not buy this today: 8
+    # of 8 core passed and 0 of 5 knockouts came back against it" — a verdict
+    # stating figures that contradict it, over a measure the rows beside it
+    # showed as unknown. That is the exact failure the whole evidence
+    # arrangement exists to refuse, and the candidate path has always split
+    # them (`not-cheap-enough` against `cannot-screen`); only this one did
+    # not. Same split, same order, same reasoning.
+    if req_fail or could_still_reach is False:
+        return held(
+            "hold", "would-not-buy-it-today",
+            f"Your rules would not buy this today: {req_fail} of the "
+            f"{len(REQUIRED)} tests this strategy will not bend came back "
+            f"against it, and {core_pass} of {len(CORE)} core tests passed "
+            f"against a bar of {need}. Holding what you have is a different "
+            "question, and every exit test above came back clear.",
+            *body)
+
+    if not (core_met is True and not req_unknown and steady):
+        missing = req_unknown + core_unknown + (0 if steady else 1)
+        return held(
+            "hold", "screen-unreadable",
+            f"Whether your rules would buy this today could not be settled: "
+            f"{missing} of the tests that decide it could not be worked out "
+            "from the data on record, and the ones that could do not settle "
+            "it either way. Nothing more goes in on a screen that did not "
+            "finish — an unreadable test is not a passing one.",
+            *body)
+
     return {
-        "state": "hold", "payload": {},
+        "state": "add",
+        "payload": {"size": {"unit": "weight", "value": room},
+                    "condition": None,
+                    # Graham stages nothing, and should not. Buying a
+                    # statistical discount in thirds is a rule this strategy
+                    # does not have, and inventing one here so a screen has
+                    # something to render would be putting a recommendation
+                    # into shipped content. A strategy that genuinely stages
+                    # declares its tranches here.
+                    "plan": None},
         "reason": {
-            "rule": "all-exit-tests-clear",
+            "rule": "qualifies-and-has-room",
             "summary": (
-                f"All {len(checked)} exit tests that could be run came back "
-                "clear and the holding period has not elapsed."
-                + (f" {unread} could not be worked out and are listed below "
-                   "as unknown rather than as passing."
-                   if unread else "")),
-            "evidence": evidence, "groups": groups, "note": note,
-        },
+                f"{clear} It still passes the tests that bought it — "
+                f"{core_pass} of {len(CORE)} core against a bar of {need} — "
+                f"nothing has moved against you since either purchase, and "
+                f"it sits {room:g}% of the account below the {target:g}% "
+                f"target set by {bound}. That room is the whole of what may "
+                "go in; where it goes is a question about your other "
+                "holdings, not about this one."),
+            "evidence": evidence + both[0] + screen[0] + sizing,
+            "groups": groups + both[1] + screen[1] + [SIZING_GROUP],
+            "note": note},
     }

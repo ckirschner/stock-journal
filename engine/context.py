@@ -28,6 +28,10 @@ The shape, in full::
                   # All three describe the security this journal holds, and
                   # only it. See the reading rule on share classes below.
       "position": {"held", "shares", "opened", "months_held",
+                   "last_purchase", "purchases",
+                   "baselines": {anchor: {"status": "known", "date", "lot",
+                                          "measures": {bank id: known}}
+                                       | {"status": "absent", "reason"}},
                    "lots":      [{"date", "shares", "remaining", "open"}],
                    "disposals": [{"date", "shares"}],
                    "market_value": known-or-absent,
@@ -145,9 +149,23 @@ Reading rules a strategy can rely on:
   holding it belongs to, treat `disposals` as a fact about the security and
   not about the position, and do not derive "what this holding has sold" from
   it.
+- **`baselines` are what you were shown, not what today's filings say about
+  that day.** Each anchor carries the figures frozen onto that purchase's
+  own snapshot, copied and never recomputed. A company restating two years
+  of accounts cannot move them, which is the whole point: a rule asking
+  whether something has worsened since you last said yes is asking about
+  what you saw when you said it. A purchase with no frozen record is absent
+  with a reason, and a measure the record never held is absent too — neither
+  is ever a zero and neither can come out as a pass. `first-purchase` and
+  `last-purchase` are the same purchase until you buy a second time; see
+  contract.BASELINE_ANCHORS for why both exist and why averaging them is
+  wrong for both questions they answer.
 - **Nothing here says what a position cost.** Cost basis is reporting and is
   kept out of the context entirely, so a rule that fires on the distance
   from your own purchase price cannot be written. See contract.HOST_FACTS.
+  This is what makes "a third now, a third 25% below what I paid" not merely
+  unsupported but unwritable — a staged plan has to hang off what the
+  business is worth, not off what you paid for it.
 - **The account is derived, never declared.** `portfolio.account_value` is
   free cash plus the market value of every holding the journal knows about,
   which is why free cash is the one thing a strategy has to ask for. An
@@ -686,6 +704,71 @@ def _weight(market_value, account_value) -> dict:
                    f'{_usd(account_value["value"])}'])
 
 
+_NO_HOLDING = ("no position is held, so there is no purchase to measure "
+               "from")
+
+
+def _baseline_of(lot, anchor) -> dict:
+    """One anchor purchase, as a strategy reads it: the day, and every figure
+    that was frozen onto that decision.
+
+    Read off the snapshot and never recomputed. That is principle 3 being
+    load-bearing rather than decorative — a recomputation would answer "what
+    do today's filings say about that day", which a restatement moves, and
+    the question a re-underwrite asks is what you were shown when you said
+    yes. It also means a baseline can never be improved by fetching more
+    data, which is correct: the moment has passed and the record of it is
+    closed.
+
+    A purchase with no frozen record at all is absent rather than empty. The
+    two would otherwise read identically — "no reading of this was on record"
+    said thirty times over — and one of them is a gap in the data while the
+    other is a gap in the journal, which point at different fixes.
+    """
+    if lot is None:
+        return _absent(_NO_HOLDING)
+    snapshot = lot.get("snapshot")
+    if not isinstance(snapshot, dict):
+        return _absent(
+            f'the purchase on {lot.get("date")} that is {anchor["means"]} has '
+            "no frozen record of what was true then, so there is nothing to "
+            "measure against")
+    measures = {}
+    for eid, v in (snapshot.get("metrics") or {}).items():
+        if isinstance(v, dict) and "value" in v:
+            measures[eid] = _known(v["value"], v.get("source") or "frozen",
+                                   v.get("cautions"), v.get("provenance"))
+    return {"status": "known", "date": lot.get("date"), "lot": lot.get("id"),
+            "measures": measures}
+
+
+def _baselines(security, today) -> dict:
+    """The two moments a rule about a holding can measure from.
+
+    Both, always, and never one averaged out of the other. See
+    contract.BASELINE_ANCHORS for why they are different questions: a
+    business-deterioration rule anchored to the first purchase fires an exit
+    on a position you consciously re-underwrote last quarter, and a drift
+    rule anchored to the last purchase can never see six quarters of small
+    declines that each looked fine against the one before.
+
+    On a position bought exactly once the two are the same purchase, and that
+    is not a special case to collapse — it is the honest answer, and the day
+    they part company is the day the second purchase is recorded.
+
+    The clock governs which purchases exist, exactly as it governs everything
+    else here: under a pin, a purchase made after that day had not happened.
+    """
+    buys = portfolio.purchases_in_holding(security, today)
+    first, last = (buys[0], buys[-1]) if buys else (None, None)
+    return {
+        "first-purchase": _baseline_of(
+            first, contract.BASELINE_ANCHORS["first-purchase"]),
+        "last-purchase": _baseline_of(
+            last, contract.BASELINE_ANCHORS["last-purchase"]),
+    }
+
+
 def _position(security, today, as_of, account_value) -> dict:
     """The lot history as a strategy reads it: every acquisition with what
     remains of it, every disposal, and not one figure about cost.
@@ -699,10 +782,23 @@ def _position(security, today, as_of, account_value) -> dict:
     shares = round(sum(l["remaining"] for l in held_lots), 8)
     held = shares > 0
     opened = portfolio.opened_on(security, today)
+    # Every purchase that built the holding you have now — the same period
+    # `opened` is read off, so the first of these and `opened` are one value.
+    # A trimmed-away lot is still one of them: it is still a day somebody
+    # looked at this business and said yes.
+    bought = portfolio.purchases_in_holding(security, today)
     out = {
         "held": held,
         "shares": shares,
         "opened": opened,
+        # When you last put money in, and how many times you have. `opened`
+        # answers when you started; these answer when you last agreed and how
+        # often. They are the same day until the second purchase, and a rule
+        # that wants one of them must not silently be reading the other —
+        # which is why they are separate keys rather than one read two ways.
+        "last_purchase": bought[-1]["date"] if bought else None,
+        "purchases": len(bought),
+        "baselines": _baselines(security, today),
         # Whole months from `opened` to the clock's today, counted by the
         # host's own month arithmetic. It is here so that a strategy with a
         # holding period in it does not have to write that arithmetic again:
@@ -763,6 +859,21 @@ def _portfolio(journal_securities, subject, today, as_of, roles) -> dict:
         "slots": {"occupied": len(holdings)},
         "holdings": holdings,
     }
+
+
+def portfolio_view(journal_securities: list, roles: dict,
+                   today: str | None = None) -> dict:
+    """The journal's portfolio node on its own, without evaluating anything.
+
+    The same free cash, account value, slot count and per-holding market
+    values a strategy is handed — from the same code, not from a second
+    implementation that agrees today. A screen about where capital goes has
+    to measure against exactly the account the verdicts it is summarising
+    were measured against, or two screens report different totals for the
+    same holdings and neither is visibly the wrong one.
+    """
+    return _portfolio(journal_securities, None,
+                      today or date.today().isoformat(), None, roles)
 
 
 # -- the public build --------------------------------------------------------

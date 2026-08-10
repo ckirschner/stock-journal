@@ -250,12 +250,33 @@ being able to tell apart, and prose loses it first.
 
 `engine/contract.py` is the full specification and is written to be read.
 
+A citation can also ask **how far a measure has moved since one of your own
+purchases**, rather than what it is now. The strategy names the measure, the
+anchor — the first purchase into this holding, or the last — the direction
+and its own tolerance; the host finds both readings, takes one from the
+other, and answers with the change, its unit and whether the tolerance was
+met. The strategy could have done that subtraction itself. What it could not
+do is *cite* the answer, because a limit is a number stated outright or the
+id of a setting, and "five points below what it was when you bought" is
+neither — so the drift figure would have been one the strategy asserted and
+nobody could check.
+
+A commit can carry a **staged plan**: the tranches it is holding back and, in
+plain language, what releases each. The host never evaluates a condition. The
+strategy re-runs every time, so a held-back tranche is bought only when that
+day's evaluation offers it as the size in front of you — which is strictly
+better than a schedule executing itself six months after the last time
+anybody looked at the company. A plan anchored to your own purchase price is
+not merely unsupported but unwritable: nothing about what a position cost is
+in what a strategy receives.
+
 **`strategies/graham/` is the first real one.** It buys a statistical
-discount on a business it forms no opinion about, and sells when the discount
-closes, when the balance sheet stops being safe, or when two years are up. It
-declares eleven states, twenty-eight settings and one answer it needs from
-you, and every threshold in it carries what it means, why that number and
-where it misfires.
+discount on a business it forms no opinion about, adds to what it holds while
+that stays true and there is room, and sells when the discount closes, when
+the balance sheet stops being safe, or when two years are up. It declares
+thirteen states, thirty-four settings and one answer it needs from you, and
+every threshold in it carries what it means, why that number and where it
+misfires.
 
 **`strategies/proof/` is a scaffold, not a strategy.** It proves the boundary
 carries data both ways against real stored filings: it reads one measure,
@@ -317,6 +338,83 @@ sold without every figure derived below becoming fiction. Both bounds are
 checked — what is left of the lots, and what was held on the sale's own date
 — because a name bought back last year would otherwise accept an exit
 backfilled into a period when far less was held.
+
+### Adding to a position, and where that decision is made
+
+A position is revisited as often as it needs to be, and adding to one is a
+decision like any other: its own lot, its own frozen snapshot, its own record
+of whether it went with the signal or against it.
+
+What is deliberate is **where** it happens. The security's own page says
+whether a holding is eligible to receive capital. It does not say how much,
+and it has no button to add. That costs a click, and the click is the point:
+nobody opens a holding's page at random, they open it because it is down, and
+a verdict sitting there saying "yes, more, this much" is the tool lending its
+authority to averaging down at the moment somebody is looking for permission.
+
+How much, and which one, is a portfolio question, and it is answered on
+**Where capital goes** — a screen you have to visit on purpose. It lists
+every position your strategy will put money into, ordered by how far each is
+from where that strategy wants it, so the thing you already hold too much of
+is never what the screen suggests. The ordering is arithmetic over what the
+strategies said, converted against the same account value every other screen
+is measured against; nothing there ranks one business above another.
+
+Nothing on either screen can see what you paid. That is not a rule anybody
+has to remember — cost basis is not in what a strategy is handed, so a rule
+that added because the price had fallen below your purchase price cannot be
+written at all.
+
+Buying something your strategy said no to is still allowed, still recorded as
+an override with the reason you give, and reachable from the same screen. In
+a year that log is the most useful thing in the journal.
+
+### Two baselines, and why one of them is not enough
+
+A rule about a company you already own can ask something a rule about a
+candidate cannot: has this changed since I last looked at it? There are two
+honest answers to "since when", and a strategy can cite either.
+
+**Since you last bought** is the last time you looked at this business and
+said yes. A deterioration rule belongs here — anchored to the first purchase
+instead, it fires an exit on a position you consciously re-underwrote last
+quarter.
+
+**Since you first bought** is the day the holding began, and it is the only
+place the slow version is visible: six quarters of small declines, each one
+acceptable against the quarter before it, adding up to something you would
+never have bought. Graham uses it to demand a fresh read of the business
+before any more money goes in. It sells nothing.
+
+A weighted average of the two is wrong for both. There is no coherent
+dollar-weighted average of a gross margin — averaging the readings at three
+purchases produces a number that was true on no day and can be checked
+against no filing.
+
+Both figures come off **what the purchase froze**, never a recomputation of
+that day. A company restating two years of accounts cannot move the level a
+re-underwrite is measured against, because the question is what you were
+shown when you said yes, not what today's filings say about the day you said
+it. Where a purchase froze nothing, or froze nothing about that measure, the
+comparison is absent with its reason — and absent never buys.
+
+The subtraction is the host's. A strategy names the measure, the anchor, the
+direction and its own tolerance; every number in the row is the journal's, so
+a drift figure is one anybody can check rather than one the strategy asserted.
+
+### Renaming and deleting a journal
+
+A journal can be renamed. Only the name changes — the folder it lives in
+never moves, which is why a journal renamed six times still opens, still
+exports and still carries the same stamp. Nothing recorded is touched, so it
+goes on no change record and owes no reason: a name is not a rule.
+
+A journal can also be deleted, and it is the one destructive action in the
+program. It takes every position, note, frozen decision and rule change with
+it, nothing else holds a copy, and none of it comes back. So the dialog says
+what goes, offers the export first, and asks you to type the journal's name —
+checked on the backend, because a confirmation the browser could skip is not
+a confirmation the record has.
 
 ### A security is held more than once, and each time is its own trade
 
@@ -575,6 +673,9 @@ engine/                   no UI imports live here
                           could not; clearing one is an entry, not a delete
   portfolio.py            lot history, snapshots, the override log,
                           scorecards
+  allocation.py           where capital goes across the journal: what may
+                          take it, ordered by how far each is from its own
+                          strategy's target
   store.py                data paths and the two atomic primitives
   backup.py               export / import
   expected_value.py       the three EV calculators
@@ -675,15 +776,13 @@ with Windows 10 and 11, so the build stays around 20 MB rather than the
   strategy, shipped at a starting figure, and it is the one value in the
   program that goes wrong by sitting still. Changing it is recorded on the
   journal's rule-change record like any other rule change.
-- **Adding to a position, in the interface.** The lot record and the engine
-  serve several buys and partial sales against named lots, but the screens
-  offer no way to add to a position that is already open — that carries the
-  whole sizing and pre-commitment design. Buying back into a name you closed
-  is offered, and is a separate question.
+- **A strategy that stages an entry.** The contract carries staged plans and
+  the allocation view renders them; no shipped strategy declares one, because
+  Graham does not buy a statistical discount in thirds and inventing that
+  rule so a screen had something to show would put a recommendation into
+  shipped content.
 - **Choosing which lots a sale draws on.** The record holds whichever
   allocation it is given; the screens always propose oldest-first.
-- **An allocation view.** Weights are computed and cited, and nothing yet
-  puts them side by side.
 - **History charts.** Per-filing history exists, so there is something to
   chart.
 - **The screening funnel.** Deliberately later. This is the journal first.

@@ -78,9 +78,28 @@ def values_for(record, **override):
     return chain["values"]
 
 
+def _baseline(when, values):
+    """One anchor purchase as engine/context serves it: the day, and the
+    figures frozen onto that decision."""
+    return {"status": "known", "date": when, "lot": "l1",
+            "measures": {mid: {"status": "known", "value": v,
+                               "source": "frozen", "cautions": [],
+                               "provenance": []}
+                         for mid, v in values.items()}}
+
+
 def build(record, known=None, series=None, held=False, opened=None,
-          weight=None, occupied=0, today="2026-08-09", **override):
-    """A context shaped exactly as engine/context builds one."""
+          weight=None, occupied=0, today="2026-08-09", bought=None,
+          purchases=1, **override):
+    """A context shaped exactly as engine/context builds one.
+
+    `bought` is what was on record at the two anchor purchases:
+    {"first": {measure: value}, "last": {...}}. Left out on a holding, both
+    anchors carry today's figures — nothing has moved since either purchase,
+    which is what makes an unchanged business the default and drift
+    something a test has to ask for. Left out on a candidate, both are
+    absent, because there is no purchase to measure from.
+    """
     known, series = known or {}, series or {}
     measures = {}
     for mid in MEASURES:
@@ -97,6 +116,16 @@ def build(record, known=None, series=None, held=False, opened=None,
                          "series": {"cadence": "quarterly", "points": points,
                                     "note": None, "truncated": False}}
     absent = {"status": "absent", "reason": "no free cash is recorded"}
+    bought = bought or {}
+    no_purchase = {"status": "absent",
+                   "reason": "no position is held, so there is no purchase "
+                             "to measure from"}
+    baselines = {}
+    for anchor, key in (("first-purchase", "first"), ("last-purchase", "last")):
+        if not held:
+            baselines[anchor] = no_purchase
+        else:
+            baselines[anchor] = _baseline(opened, bought.get(key, known))
     return {
         "contract": contract.CONTRACT_VERSION, "today": today,
         "security": {"ticker": "ARBR", "name": "Arbor Mills", "cik": None},
@@ -111,6 +140,9 @@ def build(record, known=None, series=None, held=False, opened=None,
             # calendar in tests/test_contract.py, not here.
             "months_held": (contract.months_between(opened, today)
                             if held and opened else None),
+            "last_purchase": opened if held else None,
+            "purchases": purchases if held else 0,
+            "baselines": baselines,
             "lots": [], "disposals": [],
             "market_value": ({"status": "known", "value": 10_000.0,
                               "source": "computed", "cautions": [],
@@ -657,10 +689,25 @@ class TestABuyCannotContradictItsOwnEvidence:
 
 
 class TestEveryValueSaysWhereItCameFrom:
-    def test_all_twenty_eight_carry_a_source(self, graham):
+    def test_all_thirty_four_carry_a_source(self, graham):
+        assert len(graham["values"]) == 34
         for spec in graham["values"]:
             assert spec["source"]["name"], spec["id"]
             assert isinstance(spec["source"]["reasoning"], bool), spec["id"]
+
+    def test_the_drift_tolerances_claim_no_source_but_the_author(self, graham):
+        """Neither the expert report nor Graham addresses adding to a
+        position already held. Attributing these to either would be borrowing
+        authority for a number the source does not contain — and these are
+        the five settings in the file most worth arguing with, which is
+        exactly why the attribution has to say so."""
+        declared = {v["id"]: v for v in graham["values"]}
+        drift = [k for k in declared if k.startswith("drift-")]
+        assert len(drift) == 5
+        for key in drift:
+            name = declared[key]["source"]["name"]
+            assert "own author" in name
+            assert "no source" in name
 
     def test_the_two_sizing_values_are_not_the_reports(self, graham):
         """The report was scoped to selection and exits and says nothing
@@ -889,10 +936,23 @@ class TestEveryStateIsReachable:
     """A declared state nothing can produce is vocabulary a user will never
     see and a description nobody ever checks."""
 
-    def test_all_eleven(self, graham):
+    def test_all_thirteen(self, graham):
         held = {"held": True, "opened": "2025-09-01"}
         breach = {"price_to_book": [(QUARTERS[3], 3.1), (QUARTERS[4], 3.4)]}
+        # A holding that still screens, sits well under its target and has
+        # not moved since either purchase. Nothing here is about what it
+        # cost — the strategy has no access to that and could not use it.
+        room = {"known": {**CLEARS_ENTRY, **CLEARS_EXITS}, "weight": 2.0,
+                **held}
         reached = {
+            verdict(graham, **room)["state"]["id"],
+            # The same holding, where the current ratio stood at 3.6 when it
+            # was first bought and is 2.4 now. Not one exit has been crossed
+            # — 2.4 is comfortably above the 1.2 that sells — and the total
+            # move is further than this strategy will add behind.
+            verdict(graham, bought={"first": {**CLEARS_ENTRY, **CLEARS_EXITS,
+                                              "current_ratio": 3.6}},
+                    **room)["state"]["id"],
             verdict(graham, known=CLEARS_ENTRY)["state"]["id"],
             verdict(graham, known=CLEARS_ENTRY,
                     occupied=20)["state"]["id"],
@@ -980,12 +1040,13 @@ class TestThroughTheRealContext:
 
 
 def test_the_bundle_declares_fewer_states_than_the_cap(graham):
-    """Not an assertion that eleven is right — a marker that the most
-    mechanical style of investing there is needs eleven states, which is the
-    only evidence anyone has about where that cap belongs. It sat at twelve
-    and this bundle used eleven of them; the cap moved to sixteen on the
-    strength of exactly that measurement."""
-    assert len(graham["states"]) == 11
+    """Not an assertion that thirteen is right — a marker that the most
+    mechanical style of investing there is needs thirteen states, which is
+    the only evidence anyone has about where that cap belongs. It sat at
+    twelve and this bundle used eleven of them; the cap moved to sixteen on
+    the strength of exactly that measurement, and adding to an open position
+    then cost two more. Three left."""
+    assert len(graham["states"]) == 13
     assert len(graham["states"]) <= contract.MAX_STATES
 
 
