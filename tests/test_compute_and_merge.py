@@ -1,7 +1,8 @@
 """Computation semantics: absence over guessing, manual over fetched, and the
 public-float cross-check catching a wrong price basis."""
 
-from conftest import dur, entered, filing, inst, balance_face, no_filer
+from conftest import (dur, entered, filing, inst, balance_face, no_filer,
+                      symbols)
 
 from engine import context, crosscheck, dataview, price_store
 from engine.compute import Ctx, compute_all
@@ -25,7 +26,7 @@ def _synthetic_company():
 
 class TestAbsenceSemantics:
     def test_fcf_computes_and_carries_provenance(self):
-        res = compute_all(_synthetic_company(), None, ["SYN"],
+        res = compute_all(_synthetic_company(), None, symbols("SYN"),
                           industry=no_filer(),
                           entry_ids=["fcf_ttm"])
         r = res["fcf_ttm"]
@@ -43,7 +44,7 @@ class TestAbsenceSemantics:
                 end, 200, stmt="CashFlowStatement"),
             dur("us-gaap:Revenues", start, end, 1000),
         ])
-        r = compute_all([f], None, ["SYN"], industry=no_filer(),
+        r = compute_all([f], None, symbols("SYN"), industry=no_filer(),
                         entry_ids=["fcf_ttm"])["fcf_ttm"]
         assert r["status"] == "absent"
         assert "capital expenditure" in r["reason"]
@@ -55,7 +56,7 @@ class TestAbsenceSemantics:
                        inst("us-gaap:LongTermDebtNoncurrent", end, 100),
                        inst("us-gaap:StockholdersEquity", end, -40),
                    ]))
-        r = compute_all([f], None, ["SYN"], industry=no_filer(),
+        r = compute_all([f], None, symbols("SYN"), industry=no_filer(),
                         entry_ids=["debt_to_equity"])["debt_to_equity"]
         assert r["status"] == "absent"
         assert "Not meaningful" in r["reason"]
@@ -65,7 +66,7 @@ class TestAbsenceSemantics:
         def boom(ctx):
             raise RuntimeError("kaput")
         monkeypatch.setitem(compute_mod.REGISTRY, "current_ratio", boom)
-        res = compute_all(_synthetic_company(), None, ["SYN"],
+        res = compute_all(_synthetic_company(), None, symbols("SYN"),
                           industry=no_filer(),
                           entry_ids=["current_ratio", "fcf_ttm"])
         assert res["current_ratio"]["status"] == "absent"
@@ -155,7 +156,7 @@ class TestCrosscheck:
 
     def test_consistent_market_cap_passes(self):
         filings = self._filing_with_float(9.0e9, 1.0e9)   # float 9B
-        out = crosscheck.run(filings, self._prices(10.0), ["SYN"])  # mcap 10B
+        out = crosscheck.run(filings, self._prices(10.0), symbols("SYN"))  # mcap 10B
         assert out["checks"][0]["status"] == "pass"
 
     def test_adjusted_price_contamination_fails_loudly(self):
@@ -163,14 +164,14 @@ class TestCrosscheck:
         close; market cap lands under half of float — the exact signature the
         check exists for."""
         filings = self._filing_with_float(9.0e9, 1.0e9)
-        out = crosscheck.run(filings, self._prices(4.0), ["SYN"])
+        out = crosscheck.run(filings, self._prices(4.0), symbols("SYN"))
         c = out["checks"][0]
         assert c["status"] == "fail"
         assert "adjusted" in c["note"]
 
     def test_no_price_reports_why_it_could_not_run(self):
         filings = self._filing_with_float(9.0e9, 1.0e9)
-        out = crosscheck.run(filings, price_store.load(301), ["SYN"])
+        out = crosscheck.run(filings, price_store.load(301), symbols("SYN"))
         c = out["checks"][0]
         assert c["status"] == "skipped"
         assert "price" in c["note"]

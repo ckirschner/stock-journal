@@ -37,6 +37,15 @@ _cache: dict = {}
 
 CLASS_AXES = ("us-gaap:StatementClassOfStockAxis", "us-gaap:ClassOfStockAxis")
 
+# The cover page's "Securities registered pursuant to Section 12(b) of the
+# Act" table, as the filer tags it: one row per registered security, each
+# naming the instrument, the symbol it trades under and the exchange. It is
+# the only place in a filing where the company itself says what a symbol IS,
+# which is what engine/instruments.py needs and what no ticker list carries.
+_COVER_ROW_FIELDS = {"dei:Security12bTitle": "title",
+                     "dei:TradingSymbol": "symbol",
+                     "dei:SecurityExchangeName": "exchange"}
+
 
 def load_map() -> dict:
     """The concept map, cached by file mtime so edits show up without a restart."""
@@ -98,6 +107,7 @@ class FilingIndex:
         self._dei = {}          # concept -> [facts]
         self._class_shares = []   # dimensioned share-class cover counts
         self._class_symbols = []  # dimensioned per-class trading symbols
+        self._cover_rows = {}     # member -> the 12(b) row for that security
         self._cf_periods = set()  # durations with a cash-flow-statement face
         self._bs_dates = set()    # dates with a genuine balance-sheet face
         for f in filing.get("facts") or []:
@@ -109,6 +119,15 @@ class FilingIndex:
                         self._class_shares.append(f)
                     elif c == "dei:TradingSymbol":
                         self._class_symbols.append(f)
+                if c in _COVER_ROW_FIELDS:
+                    member = next((dims[a] for a in CLASS_AXES
+                                   if a in (dims or {})), None)
+                    row = self._cover_rows.setdefault(
+                        member, {"member": member, "symbol": None,
+                                 "title": None, "exchange": None})
+                    v = f.get("value")
+                    if v not in (None, ""):
+                        row[_COVER_ROW_FIELDS[c]] = str(v).strip()
                 if not dims:
                     self._dei.setdefault(c, []).append(f)
                 continue
@@ -169,6 +188,35 @@ class FilingIndex:
 
     def class_share_facts(self):
         return list(self._class_shares)
+
+    def cover_securities(self):
+        """The cover page's section 12(b) table: every security this filer
+        registers, as [{"member", "symbol", "title", "exchange"}].
+
+        Empty for a filing whose cover carries no such table — the tagging was
+        phased in over 2019-2021 and nothing before it has one. Empty is "the
+        filer did not say", never "there is nothing else"; see
+        engine/instruments.py for what is done with the difference.
+
+        A row with no title is dropped. The undimensioned `dei:TradingSymbol`
+        that older covers carry alone is not a row of this table — Alphabet's
+        2017 10-K tags it as the single string "GOOG, GOOGL" — and reading it
+        as one symbol would invent an instrument that does not exist.
+
+        A row is only a row where the axis pairs its facts. A filer with one
+        registered security tags the three undimensioned, and that is one
+        security's title beside its own symbol. A filer that tags *several*
+        undimensioned has stated a title and a symbol with nothing joining
+        them, so the whole undimensioned row is dropped rather than assembled
+        out of two securities — which would name one instrument and price
+        another, silently, which is the failure this table exists to end.
+        """
+        rows = dict(self._cover_rows)
+        if len(self._dei.get("dei:Security12bTitle") or ()) > 1 \
+                or len(self._dei.get("dei:TradingSymbol") or ()) > 1:
+            rows.pop(None, None)
+        return [dict(r) for r in rows.values()
+                if r.get("title") and r.get("symbol")]
 
     def class_symbol(self, member: str):
         """The trading symbol the cover page tags for a share class, if any."""

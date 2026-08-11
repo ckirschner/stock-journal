@@ -36,10 +36,29 @@ from statistics import median
 from . import bank as bank_mod
 from . import concept_map as cm
 from . import industry as industry_mod
-from . import price_store
+from . import instruments, price_store
 from .periods import ANNUAL_FORMS, SeriesBuilder, absent, is_absent, label
 
 QUARTERS_FOR_OWN_MEDIAN = 20
+
+
+def _one_symbol(ticker, caller: str) -> str:
+    """Refuse a list where an instrument is wanted.
+
+    The same guard dataview puts on the price a *holding* is valued at, on the
+    price a *company* measure is valued at, and for the same reason: iterating
+    a company's symbols and keeping one close is how a share count came to be
+    multiplied by a warrant's price. A string would iterate into characters
+    and fail quietly; this is the version that cannot.
+    """
+    if not isinstance(ticker, str):
+        raise TypeError(
+            f"{caller} prices one instrument and takes one symbol, not "
+            f"{type(ticker).__name__}. A company's warrants, units, listed "
+            "notes and preferred series are different instruments at "
+            "different prices — handing them over is what let a share count "
+            "be valued at one of them.")
+    return ticker
 
 
 # --------------------------------------------------------------------------
@@ -49,11 +68,19 @@ QUARTERS_FOR_OWN_MEDIAN = 20
 class Ctx:
     """One company's computation context: filings, prices, memoised entries.
 
-    `price_cutoff` turns the context into an as-of observation: price_now()
-    then serves the close on or shortly before that day instead of the newest
-    close, and `today` should be pinned to the same day so nothing in the
-    context runs on two clocks. Used for per-filing confirmation readings —
-    "what was observable when this filing arrived" — never for the live view.
+    `symbols` is an instruments.CompanySymbols — every symbol the SEC maps to
+    this filer, with the one that is its *common stock* already picked out by
+    the filer's own cover page. It is that type and not a list, because a list
+    is what let a whole-company share count be priced at whichever symbol had
+    the newest close: a warrant, a listed note, a preferred series. There is
+    nothing here to iterate and take a newest from, so the substitution cannot
+    come back without first changing this line. See engine/instruments.py.
+
+    `price_cutoff` turns the context into an as-of observation: prices then
+    serve the close on or shortly before that day instead of the newest close,
+    and `today` should be pinned to the same day so nothing in the context
+    runs on two clocks. Used for per-filing confirmation readings — "what was
+    observable when this filing arrived" — never for the live view.
 
     `industry` is what the SEC says this filer is, as engine/industry.history
     reads it off the identity record — the whole append-only history rather
@@ -78,11 +105,21 @@ class Ctx:
     """
 
     def __init__(self, filings: list[dict], prices_doc: dict | None,
-                 tickers: list[str], *, industry: dict,
+                 symbols, *, industry: dict,
                  today: str | None = None, price_cutoff: str | None = None):
+        if not isinstance(symbols, instruments.CompanySymbols):
+            raise TypeError(
+                "Ctx takes an instruments.CompanySymbols, not "
+                f"{type(symbols).__name__}. A bare list of a company's "
+                "symbols is what priced a whole-company share count at "
+                "whichever one closed most recently — build it with "
+                "instruments.company_symbols(filings, tickers) so the common "
+                "stock is identified before anything is multiplied by a "
+                "price.")
         self.sb = SeriesBuilder(filings)
         self.prices = prices_doc or {"series": {}}
-        self.tickers = [str(t).upper() for t in tickers if t]
+        self.symbols = symbols
+        self.tickers = list(symbols.all)
         self.today = today or date.today().isoformat()
         self.price_cutoff = str(price_cutoff)[:10] if price_cutoff else None
         self.industry = industry
@@ -108,31 +145,35 @@ class Ctx:
         return self._industry_node
 
     # -- prices -------------------------------------------------------------
-    def price_now(self):
-        """(date, close, ticker) of the newest as-traded close held for any of
-        this company's tickers — or, under a price_cutoff, the close on or
-        shortly before that day. Staleness is answered by the date itself."""
-        best = None
-        for t in self.tickers:
-            if self.price_cutoff:
-                got = price_store.close_on(self.prices, t, self.price_cutoff)
-            else:
-                got = price_store.latest_close(self.prices, t)
-            if got and (best is None or got[0] > best[0]):
-                best = (got[0], got[1], t)
-        if best is None:
-            if self.price_cutoff:
-                return absent("no close is stored on or shortly before "
-                              f"{self.price_cutoff} for "
-                              + (", ".join(self.tickers) or "this security"))
-            return absent("no price history is stored for "
-                          + (", ".join(self.tickers) or "this security")
-                          + " — fetch prices, or check the price source "
-                            "settings")
-        self.price_dates_served.add(best[0])
-        return {"date": best[0], "close": best[1], "ticker": best[2]}
+    # There is deliberately no "newest close across this company's symbols"
+    # here. That function existed, three computations called it, and what it
+    # returned was whichever instrument the price source had updated most
+    # recently — the common stock on most days and a warrant, a listed note or
+    # a preferred series on the days one of those traded later. Every caller
+    # now names one symbol, and the only way to get the one that means
+    # "this company's shares" is `common_class`, which refuses rather than
+    # choosing.
+
+    def common_class(self, shares_total: float):
+        """The whole share count as one priced class, or an absence saying why
+        this company's shares cannot be located under a single symbol.
+
+        Shaped as a one-entry class list so that a filer stating one total and
+        a filer stating a count per class go through exactly the same pricing
+        code. What differs between them is where the counts come from, which
+        is a fact about the filing; how they are priced is not, and it used to
+        be — the per-class path blended on the largest priced class and this
+        one took the newest close of anything.
+        """
+        got = self.symbols.common_or_absent()
+        if got.get("absent"):
+            return absent(got["reason"]
+                          + ", so market capitalization cannot be computed")
+        return [{"member": "common stock", "label": "common stock",
+                 "value": shares_total, "symbol": got["symbol"]}]
 
     def price_on(self, ticker, day):
+        _one_symbol(ticker, "price_on")
         got = price_store.close_on(self.prices, ticker, day)
         if got:
             self.price_dates_served.add(got[0])
@@ -151,6 +192,7 @@ class Ctx:
         own — which is the difference between using this class's close and
         borrowing a sibling's.
         """
+        _one_symbol(ticker, "price_for")
         if self.price_cutoff:
             got = price_store.close_on(self.prices, ticker, self.price_cutoff)
         else:
@@ -597,13 +639,30 @@ def _fcf_per_year(ctx, n):
 def _cover_shares(ctx):
     """The newest cover-fact shares resolution, falling back through earlier
     filings — some 10-Qs omit the cover fact. Absent with the reason when no
-    stored filing answers."""
+    stored filing answers.
+
+    The fallback walks every stored filing newest-first, by the same ordering
+    `latest_fi` uses. It used to walk `indices[:-1]` reversed, which is a
+    different ordering entirely: `indices` is sorted by *filed date* and
+    "newest" here means newest *reporting period*, so on any company where
+    those disagree — a late-filed amendment of an old quarter, two filings
+    posted the same day — the walk dropped a filing that was never tried and
+    retried one that had already refused. What it produced was an absent
+    market capitalization, and with it an absent enterprise value, P/E and
+    every yield, for a company whose share count was sitting in the store.
+    """
     fi = ctx.sb.latest_fi()
     if fi is None:
         return absent("no filings are stored, so shares outstanding is unknown")
     shares = cm.resolve_cover_shares(fi)
     if shares is None:
-        for older in reversed(ctx.sb.indices[:-1]):
+        newest_first = sorted(
+            ctx.sb.indices,
+            key=lambda i: (i.period_of_report or "", i.filed or "",
+                           i.accession or ""), reverse=True)
+        for older in newest_first:
+            if older is fi:
+                continue
             shares = cm.resolve_cover_shares(older)
             if shares is not None:
                 break
@@ -732,9 +791,53 @@ def blend_classes(ctx, classes: list, on: str | None = None):
             "oldest": min(dates)}
 
 
+def _classes_to_price(ctx, shares):
+    """The share classes a market capitalization has to price, or an absence.
+
+    One function and one answer, where there were two branches. A filer that
+    tags its cover count per class hands over the classes with their own
+    symbols, each dimension-matched to the count beside it. A filer that tags
+    one total hands over one class, and *which symbol denominates it* is the
+    question engine/instruments.py answers off the filer's own cover page.
+
+    Both then go through `blend_classes`, which is the point of doing it this
+    way: there is one rule for pricing a class list, one rule for what to do
+    with a class that has no close of its own, and one place where either can
+    be argued with. The second branch never had a rule — it took whichever of
+    the company's symbols had closed most recently, which on a company with a
+    listed warrant is the warrant on any day the warrant traded later.
+    """
+    if shares.get("classes"):
+        return shares["classes"]
+    return ctx.common_class(shares["total"])
+
+
+def _unidentified_traded(ctx, classes) -> list[str]:
+    """Symbols that trade against this filer, are not what we priced, and that
+    nothing has identified — as a caution, one sentence.
+
+    Narrowed from "every other symbol with a price", which named a company's
+    preferred series back at the reader as though they were a doubt. A
+    preferred series the filer registers and the host has read is a fact. What
+    is worth saying is the opposite case: something is trading against this
+    company, the cover page does not account for it, and if it is another
+    class of common then the one count being priced here covers shares this
+    price does not describe.
+    """
+    priced = {str(c.get("symbol") or "").upper() for c in classes}
+    live = [t for t in ctx.symbols.unclassified
+            if t.upper() not in priced and ctx.price_for(t)]
+    if not live:
+        return []
+    return [f"{', '.join(live)} also trade against this filer and no cover "
+            "page says what they are. If any of them is another class of "
+            "common stock, the share count priced here covers shares this "
+            "price does not describe"]
+
+
 def _market_cap_result(ctx):
-    """Market cap = shares outstanding (cover) × as-traded price, summed per
-    class for multi-class filers because each class has its own price."""
+    """Market cap = shares outstanding (cover) × the as-traded price of the
+    common stock, per class where the cover states a count per class."""
     shares = _cover_shares(ctx)
     if is_absent(shares):
         if "cover" in shares["reason"]:
@@ -742,40 +845,19 @@ def _market_cap_result(ctx):
                           + ", so market capitalization cannot be computed")
         return shares
 
+    classes = _classes_to_price(ctx, shares)
+    if is_absent(classes):
+        return _absent_result(classes)
+    blend = blend_classes(ctx, classes)
+    if is_absent(blend):
+        return _absent_result(blend)
+
     cautions = list(shares.get("cautions") or [])
     prov = [f"shares outstanding from {shares['source']}, filing "
             f"{shares['accession']}"]
-
-    if shares.get("classes"):
-        blend = blend_classes(ctx, shares["classes"])
-        if is_absent(blend):
-            return _absent_result(blend)
-        total = blend["total"]
-        prov.extend(blend["provenance"])
-        cautions.extend(blend["cautions"])
-        # The OLDEST close in the blend, not the newest. Staleness measured
-        # against the freshest class cannot see a second class whose prices
-        # stopped updating months ago, which is precisely the one worth
-        # knowing about.
-        pdate = blend["oldest"]
-    else:
-        p = ctx.price_now()
-        if is_absent(p):
-            return p
-        total = shares["total"] * p["close"]
-        prov.append(f"{p['ticker']} close {p['close']:,.2f} on {p['date']}")
-        # One count for the whole company and more than one symbol trading
-        # against it: the count covers shares this price does not describe,
-        # and the cover gave nothing to split them by.
-        others = [t for t in ctx.tickers
-                  if t != p["ticker"] and ctx.price_for(t)]
-        if others:
-            cautions.append(
-                f"the cover states one share count for the whole company, but "
-                f"{', '.join(others)} also trade against it; every share is "
-                f"valued here at the {p['ticker']} close")
-        pdate = p["date"]
-
+    prov.extend(blend["provenance"])
+    cautions.extend(blend["cautions"])
+    cautions.extend(_unidentified_traded(ctx, classes))
     # The price's age, stated always and judged never. This used to be a
     # caution that appeared only past seven days, which made the fact
     # conditional on a host opinion: a six-day-old close said nothing about
@@ -783,9 +865,14 @@ def _market_cap_result(ctx):
     # is current" from "nobody asked". Seven days is a judgement, it differs
     # between strategies, and it belonged to nobody — the host carries the
     # date, and what is too old is the strategy's call.
-    cautions.append(_price_age(ctx, pdate))
-    cautions.extend(_ended_series(ctx))
-    return computed(total, prov, cautions)
+    #
+    # The OLDEST close in the blend, not the newest. Staleness measured
+    # against the freshest class cannot see a second class whose prices
+    # stopped updating months ago, which is precisely the one worth knowing
+    # about.
+    cautions.append(_price_age(ctx, blend["oldest"]))
+    cautions.extend(_ended_series(ctx, classes))
+    return computed(blend["total"], prov, cautions)
 
 
 def _price_age(ctx, pdate) -> str:
@@ -811,13 +898,20 @@ def _price_age(ctx, pdate) -> str:
                else "today"))
 
 
-def _ended_series(ctx) -> list[str]:
-    """A word for every one of this company's symbols whose price series has
+def _ended_series(ctx, classes) -> list[str]:
+    """A word for every symbol *this figure was priced from* whose series has
     ended. A fact about the instrument, not a judgement about age: a series
     that stopped last week and one that will never trade again look identical
-    in a list of closes, and only one of them still has a price."""
+    in a list of closes, and only one of them still has a price.
+
+    Scoped to what was priced rather than to every symbol mapped to the filer.
+    A dead warrant series has nothing to do with a market capitalization
+    denominated in the common stock, and a caution that fires about instruments
+    the figure never touched is one a reader learns to skip past — including on
+    the day it is about the instrument that matters.
+    """
     out = []
-    for t in ctx.tickers:
+    for t in [c.get("symbol") for c in classes if c.get("symbol")]:
         mark = price_store.terminal_of(ctx.prices, t)
         if mark:
             out.append(f"the {t} price series has ended ("
@@ -1339,10 +1433,45 @@ def _eps_ttm(ctx):
     return out
 
 
+def _price_per_common_share(ctx):
+    """What one common share costs: market capitalization ÷ the cover share
+    count. Absent, with market cap's own reason, where that cannot be reached.
+
+    Derived rather than read off a symbol, and that is not a detour. Earnings
+    per share is a whole-company figure divided by every common share there
+    is, so the price it is compared against has to be denominated the same
+    way; on a company with two classes at two prices, the honest per-share
+    price is the average the market actually pays, which is exactly market cap
+    over the count. On a single-class company it is that class's close to the
+    cent, so nothing changes for almost every filer.
+
+    What it ends is a P/E built on a different instrument from the market cap
+    beside it. The two used to be able to disagree — market cap blended across
+    classes, P/E took whichever symbol had closed most recently — and "P/E
+    against its own five-year median" then compared a figure built one way
+    against a history built the other, which is the one comparison that must
+    not do that. The history has always been market cap over the count; now
+    the current reading is too, and the special case that used to paper over
+    the difference for multi-class filers is gone.
+    """
+    mc = ctx.entry("market_cap")
+    if mc["status"] != "computed":
+        return mc
+    shares = _cover_shares(ctx)
+    if is_absent(shares):
+        return _absent_result(shares)
+    if not shares["total"]:
+        return _absent_result(absent("the cover states no shares outstanding, "
+                                     "so there is no per-share price"))
+    return computed(mc["value"] / shares["total"],
+                    ["market capitalization ÷ shares outstanding"]
+                    + mc["provenance"], mc["cautions"])
+
+
 def pe_ttm(ctx):
-    p = ctx.price_now()
-    if is_absent(p):
-        return _absent_result(p)
+    p = _price_per_common_share(ctx)
+    if p["status"] != "computed":
+        return p
     eps = _eps_ttm(ctx)
     if is_absent(eps):
         return _absent_result(eps)
@@ -1350,15 +1479,15 @@ def pe_ttm(ctx):
         return not_meaningful(
             "pe_ttm", "diluted earnings per share (TTM) is zero or negative",
             f"diluted EPS is {eps['value']:,.2f}")
-    return computed(p["close"] / eps["value"],
-                    [f"{p['ticker']} close {p['close']:,.2f} on {p['date']}",
-                     _prov_point(eps)], _cautions_of(eps))
+    return computed(p["value"] / eps["value"],
+                    p["provenance"] + [_prov_point(eps)],
+                    sorted(set(p["cautions"] + _cautions_of(eps))))
 
 
 def pe_3y_avg_eps(ctx):
-    p = ctx.price_now()
-    if is_absent(p):
-        return _absent_result(p)
+    p = _price_per_common_share(ctx)
+    if p["status"] != "computed":
+        return p
     eps = _window(ctx, "diluted_eps", 3)
     if is_absent(eps):
         return _absent_result(eps)
@@ -1369,10 +1498,10 @@ def pe_3y_avg_eps(ctx):
             "the three-year average diluted EPS is zero or negative",
             f"the average is {avg:,.2f}")
     years = [pt["end"] for pt in eps["points"]]
-    return computed(p["close"] / avg,
-                    [f"{p['ticker']} close {p['close']:,.2f} on {p['date']}",
-                     f"diluted EPS FY {years[0]}..{years[-1]}"],
-                    _cautions_of(eps))
+    return computed(p["value"] / avg,
+                    p["provenance"]
+                    + [f"diluted EPS FY {years[0]}..{years[-1]}"],
+                    sorted(set(p["cautions"] + _cautions_of(eps))))
 
 
 def price_to_book(ctx):
@@ -1491,28 +1620,35 @@ def _quarterly_ratio_series(ctx, kind):
     for fi in fis:
         q = fi.period_of_report
         shares = cm.resolve_cover_shares(fi)
-        price = None
+        mcap, why = None, "no shares-outstanding cover fact in that filing"
         if shares is not None:
-            if shares.get("classes"):
-                # The same blend as the live figure, by the same anchor rule.
-                # This side used to borrow from the first class that happened
-                # to have a price and the live side from whichever series was
-                # newest — so "P/E against its own five-year median" compared
-                # two numbers built on different share classes, which is the
-                # one thing that comparison must not do.
-                blend = blend_classes(ctx, shares["classes"], on=q)
-                mcap = None if is_absent(blend) else blend["total"]
+            # The same class list and the same blend as the live figure, by
+            # the same anchor rule. Every part of that had to be made true
+            # separately: this side used to borrow from the first class that
+            # happened to have a price, and — where the cover stated one total
+            # — to price it at the first of the company's symbols that had a
+            # close near the quarter, which is alphabetical order deciding
+            # whether a share count is multiplied by a share or by a warrant.
+            # "P/E against its own five-year median" compared numbers built
+            # two different ways, which is the one thing that comparison must
+            # not do.
+            classes = _classes_to_price(ctx, shares)
+            if is_absent(classes):
+                why = classes["reason"]
             else:
-                for t in ctx.tickers:
-                    price = ctx.price_on(t, q)
-                    if price:
-                        break
-                mcap = shares["total"] * price[1] if price else None
-        else:
-            mcap = None
+                blend = blend_classes(ctx, classes, on=q)
+                if is_absent(blend):
+                    why = blend["reason"]
+                else:
+                    mcap = blend["total"]
         if mcap is None:
-            misses.append(f"{q}: no shares-outstanding cover fact or no "
-                          "price near that date")
+            # The quarter's own reason, not one sentence covering three
+            # different ones. "No cover fact" is a gap in the filings, "no
+            # close near that date" is a gap in the price history, and "which
+            # symbol is the common stock is not established" is neither — they
+            # point at different things to go and do, and a reader looking at
+            # twenty of these needs to see which.
+            misses.append(f"{q}: {why}")
             continue
 
         if kind == "ev_ebit":
@@ -1570,31 +1706,21 @@ def pe_to_own_5y_median_pe(ctx):
             "P/E (TTM) is not meaningful in the current period",
             cur.get("reason", "") + ", and a ratio against a median needs a "
             "current value")
-    cur_value, cur_note = cur["value"], "current P/E"
-    fi = ctx.sb.latest_fi()
-    shares = cm.resolve_cover_shares(fi) if fi else None
-    if shares and shares.get("classes"):
-        # The historical observations are market-cap-per-share (a blend
-        # across classes); the current side must be built the same way or a
-        # persistent class premium reads as a standing dis/count vs history.
-        mc = ctx.entry("market_cap")
-        eps = _eps_ttm(ctx)
-        if mc["status"] == "computed" and not is_absent(eps) \
-                and eps["value"] > 0:
-            total = sum(c["value"] for c in shares["classes"])
-            if total > 0:
-                cur_value = mc["value"] / total / eps["value"]
-                cur_note = ("current P/E on the class-blended price (market "
-                            "cap ÷ total shares), matching how the history "
-                            "is built")
+    # No re-derivation here any more. The current P/E and every historical
+    # observation are both market capitalization ÷ shares ÷ EPS, from the same
+    # class list priced by the same blend, so the two sides of this comparison
+    # are built the same way by construction rather than by a correction
+    # applied at the last moment for multi-class filers and forgotten for the
+    # single-class filer whose common stock shares a CIK with a warrant.
     hist = _quarterly_ratio_series(ctx, "pe")
     if is_absent(hist):
         return _absent_result(hist)
     if hist["median"] == 0:
         return _absent_result(absent("the five-year median P/E is zero"))
-    return computed(cur_value / hist["median"],
-                    [f"{cur_note} over the median of {hist['n']} trailing "
-                     "quarterly observations"],
+    return computed(cur["value"] / hist["median"],
+                    [f"current P/E over the median of {hist['n']} trailing "
+                     "quarterly observations, each priced and measured as of "
+                     "its own quarter"],
                     cur["cautions"])
 
 
@@ -2763,7 +2889,7 @@ REGISTRY = {fn.__name__: fn for fn in (
 
 
 def compute_all(filings: list[dict], prices_doc: dict | None,
-                tickers: list[str], *, industry: dict, entry_ids=None,
+                symbols, *, industry: dict, entry_ids=None,
                 today: str | None = None) -> dict:
     """Every requested bank entry for one company.
 
@@ -2771,7 +2897,7 @@ def compute_all(filings: list[dict], prices_doc: dict | None,
     absent reason rather than taking the others down — a wrong number is
     the enemy, but so is one bad entry hiding fifty good ones.
     """
-    ctx = Ctx(filings, prices_doc, tickers, today=today, industry=industry)
+    ctx = Ctx(filings, prices_doc, symbols, today=today, industry=industry)
     out = {}
     for entry_id in (entry_ids or REGISTRY.keys()):
         fn = REGISTRY.get(entry_id)
@@ -2807,7 +2933,7 @@ CADENCE = {
     "gross_margin_range_5y": "annual", "fcf_margin_median_5y": "annual",
     "cash_conversion_median_5y": "annual",
     "effective_tax_rate_median_5y": "annual",
-    "payout_to_fcf_median_5y": "annual", "pe_3y_avg_eps": "annual",
+    "payout_to_fcf_median_5y": "annual",
     "revenue_cagr_5y": "annual", "revenue_cagr_3y": "annual",
     "net_income_cagr_5y": "annual", "eps_cagr_5y": "annual",
     "eps_growth_10y": "annual",
@@ -2833,7 +2959,14 @@ CADENCE = {
     "fcf_margin_ttm": "quarterly", "fcf_yield_on_ev": "quarterly",
     "accruals_ratio": "quarterly", "operating_income_ttm": "quarterly",
     "market_cap": "quarterly", "enterprise_value": "quarterly",
-    "pe_ttm": "quarterly", "price_to_book": "quarterly",
+    "pe_ttm": "quarterly",
+    # Annual EPS on top, and a cover share count underneath: the per-share
+    # price both P/E entries divide by is market capitalization over the
+    # count, and a 10-Q restates that count. Declared annual while the price
+    # came straight off a symbol, which stopped being true when the symbol
+    # stopped being chosen from a list.
+    "pe_3y_avg_eps": "quarterly",
+    "price_to_book": "quarterly",
     "price_to_net_tangible_assets": "quarterly",
     "graham_combined_multiple": "quarterly",
     "owner_earnings_yield": "quarterly", "ev_to_ebit": "quarterly",
@@ -2896,7 +3029,7 @@ def confirmation_boundaries(filings: list[dict], cadence: str) -> list[dict]:
 
 
 def confirmation_history(filings: list[dict], prices_doc: dict | None,
-                         tickers: list[str], entry_id: str, *, industry: dict,
+                         symbols, entry_id: str, *, industry: dict,
                          max_boundaries: int = CONFIRMATION_BOUNDARY_CAP
                          ) -> dict:
     """Per-filing readings of one bank entry, newest first, for
@@ -2937,7 +3070,7 @@ def confirmation_history(filings: list[dict], prices_doc: dict | None,
                   if str(f.get("filed") or "")[:10] <= b["filed"]]
         priced = None
         try:
-            ctx = Ctx(prefix, prices_doc, tickers,
+            ctx = Ctx(prefix, prices_doc, symbols,
                       today=b["filed"], price_cutoff=b["filed"],
                       industry=industry)
             r = ctx.entry(entry_id)

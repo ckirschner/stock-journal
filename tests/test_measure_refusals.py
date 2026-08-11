@@ -30,7 +30,7 @@ has no way to doubt.
 """
 
 import pytest
-from conftest import balance_face, dur, filing, inst, no_filer
+from conftest import balance_face, dur, filing, inst, no_filer, symbols
 
 from engine import concept_map as cm
 from engine.compute import compute_all
@@ -85,7 +85,7 @@ def five(**over):
 
 
 def entry(filings, eid):
-    return compute_all(filings, None, ["SYN"], industry=no_filer(),
+    return compute_all(filings, None, symbols("SYN"), industry=no_filer(),
                        entry_ids=[eid])[eid]
 
 

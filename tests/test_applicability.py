@@ -35,6 +35,7 @@ import pathlib
 
 import pytest
 from conftest import (balance_face, dur, filer, filing, inst, journal_for,
+                      symbols,
                       no_filer)
 
 from engine import (bank, compute, context, contract, dataview, facts_store,
@@ -587,8 +588,8 @@ class TestItReachesEveryReading:
         """No default. A context built by somebody who has not read any of
         this is refused rather than silently ungated."""
         with pytest.raises(TypeError):
-            compute.Ctx([], None, ["SYN"])          # noqa: no industry
-        compute.Ctx([], None, ["SYN"], industry=no_filer())
+            compute.Ctx([], None, symbols("SYN"))   # noqa: no industry
+        compute.Ctx([], None, symbols("SYN"), industry=no_filer())
 
 
 class TestTheClassIsReadOnTheDayBeingAsked:

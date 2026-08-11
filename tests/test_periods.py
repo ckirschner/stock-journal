@@ -7,7 +7,8 @@ ever disagrees because no year was reported on both bases), and the
 transition-stub gap that breaks year tiling.
 """
 
-from conftest import annual_filing, dur, filing, inst, balance_face, no_filer
+from conftest import (annual_filing, dur, filing, inst, balance_face,
+                      no_filer, symbols)
 
 from engine.periods import SeriesBuilder, is_absent
 
@@ -153,7 +154,7 @@ class TestStreaks:
         filings = [year(1, "2021-12-31", "2021-01-01", 0),
                    year(2, "2022-12-31", "2022-01-01", 10),
                    year(3, "2023-12-31", "2023-01-01", 12)]
-        ctx = Ctx(filings, None, ["SYN"], industry=no_filer())
+        ctx = Ctx(filings, None, symbols("SYN"), industry=no_filer())
         r = consecutive_dividend_years(ctx)
         assert r["status"] == "computed"
         assert r["value"] == 2
