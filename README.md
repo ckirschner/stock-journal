@@ -282,8 +282,8 @@ gone stale is a failing test rather than a paragraph nobody re-reads.
 `engine/contract.py` is the specification itself and is written to be read.
 
 **`docs/example-strategy/` is a complete worked bundle** and the fastest way
-in: a two-tier rollup, one exit confirmed across consecutive filings, and one
-question no filing answers with a state that blocks until it is answered.
+in: a two-tier rollup, one exit that does not act on a single bad reading, and
+one question no filing answers with a state that blocks until it is answered.
 It is deliberately not under `strategies/`, so the app never offers it and no
 journal can be created against its invented thresholds — copy the directory
 in to watch it run, and take it out again. It is loaded and exercised by the
@@ -638,8 +638,28 @@ A measure that cannot be computed is absent with the reason, in place: source
 doesn't carry it, the mapping is ambiguous, a restatement makes the window
 mix accounting bases, or the data simply hasn't been fetched. Absence is
 never zero. Multi-year windows refuse to mix accounting bases by construction
-— a five-year CAGR spliced across a restatement is arithmetic on two
+— a five-year growth rate spliced across a restatement is arithmetic on two
 different definitions, so it reports why it can't compute instead.
+
+**Growth rates average three fiscal years at each end**, five years centre to
+centre, which is Graham's own construction. Between two single years, a rate
+describes whatever one-off sat in either of them — and the damaging case is
+not the company that fails high and is rejected but the one that lands
+mid-band: a business compounding at 7% whose base year carried a charge reads
+around 20%, passes every test, and nothing anywhere says so. The cost is eight
+fiscal years of history on one basis rather than six, so some companies that
+had a growth rate now have an absence instead. That is the right trade and it
+is not a hidden one: the absence names what is missing.
+
+**How much evidence it takes to act on a breach follows from how the measure
+is read**, not from a setting. Two consecutive readings of a rolling five-year
+median share four of five years — they are the same data looked at twice, and
+the year that produced the breach does not leave the window by being looked at
+again. So a median acts on the reading in front of you; a balance-sheet ratio,
+which is one morning's photograph, still wants a second filing; and a measure
+read across a window is asked instead whether its failure survives dropping
+the single year that most favours the company. The metric bank states how each
+measure is read, so an author of a new one cannot get it wrong.
 
 Fetching happens only when you press the button. The SEC requires every
 automated tool to identify itself (name + monitored email — set it on the

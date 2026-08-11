@@ -7,10 +7,12 @@ copied and cut down rather than read straight through:
   1. **A two-tier rollup.** Some tests every one of which must pass, and some
      where a count is enough — with the count read out of a declared setting
      rather than written into the logic.
-  2. **A confirmed exit.** A rule that does not fire on one bad reading. The
-     host cannot express "for two filings running", so the walk back through
-     the filing series is here, and every reading in it is put to the host
-     through the citation the reader will see beside it.
+  2. **A confirmed exit.** A rule that does not fire on one bad reading —
+     asked of the host, which knows how the measure is read and therefore
+     how much evidence a breach of it needs. This file states no number of
+     filings and declares no setting for one, because it has no way to know
+     whether the measure it exits on is a balance-sheet date, a trailing
+     twelve months or a five-year median, and those need different things.
   3. **A judgement with a blocked branch.** A question no filing answers,
      cited like any other measure, with a state that stops and says where
      the answer is given.
@@ -279,18 +281,6 @@ STRATEGY = {
                     "buy one, deliberately: a business that has slipped from "
                     "comfortable to merely adequate is not a business in "
                     "trouble, and selling on that is selling on noise."},
-        {"id": "exit-confirmation-filings",
-         "label": "Filings that confirm an exit", "type": "integer",
-         "unit": "count", "min": 1, "max": 8, "source": INVENTED,
-         "explain": "How many consecutive filings the exit level has to be "
-                    "breached on before anything is sold. Set to 1 the exit "
-                    "fires on a single reading, which is what this counts "
-                    "filings to avoid — a bad quarter is not a broken "
-                    "business.\n\n"
-                    "Filings, not days or quarters. A company that stops "
-                    "filing stops confirming, which is correct: nobody "
-                    "observed anything, so nothing is confirmed."},
-
         # -- how much goes in ------------------------------------------
         {"id": "position-weight-cap",
          "label": "Largest a position may get", "type": "number",
@@ -551,49 +541,6 @@ def _on_a_candidate(ctx):
 # a security you hold
 # ---------------------------------------------------------------------------
 
-def _points(ctx, measure_id):
-    """One measure's per-filing readings, oldest first."""
-    entry = (ctx.get("measures") or {}).get(measure_id) or {}
-    return ((entry.get("series") or {}).get("points")) or []
-
-
-def _confirmation_run(ctx, group):
-    """(consecutive filings the exit test failed on, counting back from the
-    newest, and the period ends of those filings).
-
-    The host cannot express "for two filings running", so the walk is here —
-    but every reading in it is still put to the host, at its own period,
-    through the same citation the reader will see beside it. Nothing in this
-    function compares a number.
-
-    A filing whose reading could not be worked out neither advances the run
-    nor resets it. A gap must not confirm a breach nobody observed, and must
-    not grant an indefinite reprieve either.
-
-    Worth knowing before you rely on this: the series is built from FILINGS.
-    A figure you typed in by hand answers `current` and adds no point here,
-    so on a security with no stored filings this run is always nought and an
-    exit written this way can never fire. That is honest — nobody observed a
-    second reading — but it is a real consequence for a journal driven by
-    hand-entered numbers, and it is invisible until an exit quietly never
-    fires. A strategy meant for hand-entered data wants an exit that acts on
-    one reading, and should say in its state description that it does.
-    """
-    measure_id, comparator, value_id = EXIT
-    run, periods = 0, []
-    for point in reversed(_points(ctx, measure_id)):
-        outcome = contract.test(
-            ctx, _cite(measure_id, comparator, value_id, group,
-                       at=point["period_end"]))
-        if outcome == UNKNOWN:
-            continue
-        if outcome != FAIL:
-            break
-        run += 1
-        periods.append(point["period_end"])
-    return run, periods
-
-
 def _on_a_holding(ctx):
     """One exit, asked once, and the three ways it can answer."""
     measure_id, comparator, value_id = EXIT
@@ -629,16 +576,29 @@ def _on_a_holding(ctx):
                 "evidence": [live] + holding, "groups": groups},
         }
 
-    need = (ctx.get("values") or {}).get("exit-confirmation-filings")
-    run, periods = _confirmation_run(ctx, EXITS["id"])
+    # The host answers this, not the walk this file used to carry. It knows
+    # from the metric bank that interest coverage is a trailing twelve
+    # months, so a second filing genuinely rolls a quarter and tells you
+    # something; had this exit been written on a five-year median it would
+    # act on the first reading instead, because a second one would share
+    # four of the same five years.
+    #
+    # Worth knowing before you rely on it: the run is counted over FILINGS.
+    # A figure typed in by hand answers `current` and adds no filing, so on
+    # a security with nothing fetched an exit needing two of them can never
+    # fire. That is honest — nobody observed a second reading — and it is
+    # invisible until an exit quietly never fires. Where a measure needs no
+    # confirmation at all this does not arise, which is one more reason not
+    # to state a number of filings by hand.
+    found = contract.confirm(ctx, live)
     # The confirming readings are cited, not summarised. Citing them is what
-    # lets a reader check the confirmation rule against the filings instead
-    # of taking this file's word for it.
+    # lets a reader check the rule against the filings instead of taking
+    # this file's word for it.
     confirming = [_cite(measure_id, comparator, value_id, EXITS["id"],
-                        at=period) for period in periods]
+                        at=period) for period in found["periods"]]
     evidence = [live] + confirming + holding
 
-    if isinstance(need, int) and run >= need:
+    if found["confirmation"] == contract.CONFIRMED:
         return {
             "state": "exit-confirmed",
             # The day the exit is due. A close with no date makes a scheduled
@@ -648,10 +608,9 @@ def _on_a_holding(ctx):
             "reason": {
                 "rule": "coverage-exit-confirmed",
                 "summary": (
-                    f"Interest coverage has been under the level this "
-                    f"example exits on for {run} consecutive filings, which "
-                    f"is the {need} it asks for. That is a change and not a "
-                    "wobble."),
+                    "Interest coverage is under the level this example exits "
+                    "on, and that is established rather than glimpsed: "
+                    + found["why"] + "."),
                 "evidence": evidence, "groups": groups},
         }
 
@@ -660,11 +619,10 @@ def _on_a_holding(ctx):
         "reason": {
             "rule": "breach-awaiting-confirmation",
             "summary": (
-                f"Interest coverage is under the level this example exits "
-                f"on, on {run} consecutive "
-                + ("filing" if run == 1 else "filings")
-                + f", and it acts at {need}. Nothing is sold on a reading "
-                  "that has not been confirmed."),
+                "Interest coverage is under the level this example exits on, "
+                "and that is not enough on its own: " + found["why"]
+                + ". Nothing is sold on a reading that has not been "
+                  "confirmed."),
             "evidence": evidence, "groups": groups},
     }
 

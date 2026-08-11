@@ -13,13 +13,21 @@ buy-and-hold-forever strategy genuinely part company. When the discount
 closes, the reason to own the security is gone, and holding on means
 switching to a thesis that was never tested.
 
-**Nothing fires on one reading.** Every exit has to appear on two
-consecutive filings before it counts. One goodwill impairment, one legal
-settlement, one inventory build, and a measure crosses a line on noise —
-and a tool whose purpose is preventing panic decisions must not use its own
-authority to cause one. A crossed line that is not yet confirmed is a state
-of its own, so the user can see the rule declining to panic rather than
-seeing nothing at all.
+**Nothing fires on noise, and what counts as noise is the measure's
+business rather than this file's.** One goodwill impairment, one legal
+settlement, one inventory build, and a measure crosses a line because of
+something that happened once — and a tool whose purpose is preventing panic
+decisions must not use its own authority to cause one. What it takes to
+believe a crossed line is asked of the host, which knows how each of these
+eight measures is read. Seven of them are readings at a moment — a balance
+sheet is one morning's photograph, and a multiple against a price is a new
+number every day — so a second filing genuinely says something the first
+did not, and the report's two consecutive filings stand. The eighth counts
+annual reports, and a level of two losing years already means two annual
+filings; asking for two filings on top of it would be asking for a third
+year. A crossed line that is not yet established is a state of its own, so
+the user can see the rule declining to panic rather than seeing nothing at
+all.
 
 **There is a clock.** Sell after two years regardless of what happened. No
 measure can hold "it has been two years", and without it there is no exit
@@ -118,29 +126,29 @@ BONUS = (
 # exactly the wrong thing from it. Cited as "stay below 3.0", the same
 # holding is eight passes and a breach is the one that is not.
 #
-# The fourth element says the failure counts its own filings. It is true of
-# exactly one measure here: a run of consecutive annual losses is itself a
-# count of annual reports, so a level of two already means two filings and
-# the confirmation rule must not be charged a second time on top of it.
+# Nothing here says how much evidence a breach needs, and there used to be a
+# fourth column that did. How many readings it takes to believe one is a
+# property of the measure — of how a five-year median moves against how a
+# balance-sheet date moves — and the host derives it from what the metric
+# bank declares about each. See contract.ESTIMATORS.
 #
-# Whether that actually holds is DERIVED from the two settings rather than
-# asserted here — see _self_confirms. A journal that lowers the exit to one
-# losing year has a level that no longer embodies the confirmation, and the
-# ordinary rule has to come back rather than a hardcoded True asserting a
-# confirmation that never happened.
+# The column that went was the run of annual losses saying it counted its own
+# filings, which was true and is now true for a better reason: the bank says
+# that measure is a count of annual reports, so its level already carries the
+# persistence and the host asks for no repetition on top. What was a special
+# case worked out inside this file is a fact about the measure everywhere.
 EXITS_SAFETY = (
-    ("current_ratio", "at_least", "exit-current-ratio", False),
-    ("ltd_to_working_capital", "at_most", "exit-ltd-to-working-capital",
-     False),
-    ("altman_z_score", "at_least", "exit-altman-z", False),
-    ("debt_to_equity", "below", "exit-debt-to-equity", False),
-    ("consecutive_annual_loss_years", "below", "exit-loss-years", True),
+    ("current_ratio", "at_least", "exit-current-ratio"),
+    ("ltd_to_working_capital", "at_most", "exit-ltd-to-working-capital"),
+    ("altman_z_score", "at_least", "exit-altman-z"),
+    ("debt_to_equity", "below", "exit-debt-to-equity"),
+    ("consecutive_annual_loss_years", "below", "exit-loss-years"),
 )
 
 EXITS_DISCOUNT = (
-    ("pe_3y_avg_eps", "below", "exit-pe-3y-avg", False),
-    ("price_to_book", "below", "exit-price-to-book", False),
-    ("graham_combined_multiple", "below", "exit-combined-multiple", False),
+    ("pe_3y_avg_eps", "below", "exit-pe-3y-avg"),
+    ("price_to_book", "below", "exit-price-to-book"),
+    ("graham_combined_multiple", "below", "exit-combined-multiple"),
 )
 
 # The dividend run is watched but never acts. A cut is real information about
@@ -214,11 +222,11 @@ BONUS_GROUP = {"id": "bonus", "name": "Reported, never blocking",
 SIZING_GROUP = {"id": "sizing", "name": "Room in the list, and how much",
                 "requires": "all"}
 
-# On a holding, the two exit families demand nothing of a single reading —
-# that is the confirmation rule, and it counts filings, which is not
-# something the host can express. So they are `noted`: the host reports how
-# they came out and this strategy decides what a run of them means. What the
-# group names is which kind of news they are.
+# On a holding, the two exit families are `noted`: the host reports how each
+# came out and this strategy decides what to do about the ones that are
+# established. It is the ladder below that acts, not the rollup, because a
+# single failed exit closes a position and no count of them says more than
+# that. What the group names is which kind of news they are.
 SAFETY_GROUP = {"id": "safety",
                 "name": "The balance sheet and the earnings record",
                 "requires": "noted"}
@@ -352,7 +360,7 @@ STRATEGY = {
                "what its assets and its typical earnings justify, and sells "
                "when that gap closes, when the balance sheet stops being "
                "safe, or when two years are up — whichever comes first.",
-    "version": 6,
+    "version": 7,
     "contract": 5,
     "declines": DECLINES,
     "changelog": {
@@ -465,6 +473,32 @@ STRATEGY = {
            "balance sheets, several of them screen well here, and refusing "
            "everything that sounds financial would have been this strategy "
            "declining companies it can perfectly well judge.",
+        7: "TWO CHANGES TO HOW EVIDENCE IS WEIGHED. No level moved, and one "
+           "setting is gone.\n\n"
+           "Growth is now measured between the averages of three fiscal "
+           "years at each end of the window rather than between the two "
+           "single years at its ends. That is Graham's own construction — "
+           "it was already how the ten-year earnings growth test worked, "
+           "and now every compound rate in the program works that way. It "
+           "matters most where it is least visible: a company growing 7% a "
+           "year whose base year carried a one-off charge used to measure "
+           "around 20%, sit comfortably inside any band, and pass. The cost "
+           "is history. Eight fiscal years on one accounting basis are "
+           "needed where six were before, so growth will be absent for some "
+           "companies it used to answer for — a recent listing, or a "
+           "restatement that was never carried back through the older "
+           "years. Absent is the honest answer there, and it is not a "
+           "fail.\n\n"
+           "AND `sell-confirmation-filings` NO LONGER EXISTS. It said two "
+           "consecutive filings for all eight exits; how much evidence a "
+           "breach needs is now worked out from how each measure is read. "
+           "Seven of the eight behave exactly as before — a current ratio, "
+           "the debt tests and the three valuation multiples are readings "
+           "at a moment, and a second filing genuinely tells you something "
+           "new about them. One changed: a run of annual losses now acts on "
+           "its own level, which is what it always meant, so lowering that "
+           "level to one losing year now acts on one losing year instead of "
+           "quietly waiting for a second.",
     },
 
     # -----------------------------------------------------------------
@@ -817,28 +851,6 @@ STRATEGY = {
                     "not finished closing. Lengthen it and you are "
                     "reintroducing exactly the open-ended patience it "
                     "exists to refuse."},
-
-        {"id": "sell-confirmation-filings",
-         "label": "Filings an exit must appear on",
-         "type": "integer", "unit": "count", "min": 1, "max": 8,
-         "source": REPORT,
-         "explain": "How many consecutive filings an exit level has to be "
-                    "breached on before this strategy will act. Two is the "
-                    "report's figure, and it applies to every exit here.\n\n"
-                    "One goodwill impairment, one legal settlement, one "
-                    "inventory build, and a measure crosses a line because "
-                    "of something that happened once. Acting on that would "
-                    "be the tool using its own authority to cause the panic "
-                    "decision it exists to prevent — which is the worst "
-                    "thing it could possibly do. Set it to one and you get "
-                    "that behaviour back.\n\n"
-                    "A filing whose reading could not be worked out neither "
-                    "advances the count nor resets it: a gap must not "
-                    "confirm something nobody observed, and must not grant "
-                    "an indefinite reprieve either. The one exit this does "
-                    "not apply to is the run of annual losses, because two "
-                    "consecutive losing years are already two consecutive "
-                    "filings."},
 
         # -- the four knockouts --------------------------------------------
         {"id": "max-pe-3y-avg",
@@ -1324,12 +1336,12 @@ STRATEGY = {
                     "in a row is the business, and the stability that was "
                     "the reason to accept an unremarkable company has "
                     "gone.\n\n"
-                    "This is the one exit the two-filing confirmation rule "
-                    "is not applied to a second time. Two consecutive "
-                    "annual losses are already two consecutive annual "
-                    "filings; requiring another two would mean waiting four "
-                    "years to act on a company that has been losing money "
-                    "throughout."},
+                    "Nothing is asked on top of this level. The measure "
+                    "counts annual reports, so two losing years already "
+                    "means two annual filings — and the host knows that "
+                    "from the metric bank rather than from a note here, "
+                    "which is why lowering this to one now acts on one "
+                    "losing year instead of quietly waiting for a second."},
     ],
 }
 
@@ -1339,7 +1351,10 @@ STRATEGY = {
 # ---------------------------------------------------------------------------
 
 PASS, FAIL, UNKNOWN = contract.PASS, contract.FAIL, contract.UNKNOWN
-FIRED, BREACHED, CLEAR, UNREADABLE = "fired", "breached", "clear", "unreadable"
+# How an exit came out. Imported rather than spelled out here: they are the
+# host's words now, because the host is what decides which of them applies.
+CLEAR, BREACHED = contract.CLEAR, contract.BREACHED
+CONFIRMED, UNREADABLE = contract.CONFIRMED, contract.UNREADABLE
 
 
 def _points(ctx, measure_id):
@@ -1348,13 +1363,20 @@ def _points(ctx, measure_id):
     return ((entry.get("series") or {}).get("points")) or []
 
 
-def _cite(measure_id, comparator, value_id, group, at=None):
+def _cite(measure_id, comparator, value_id, group, at=None, without=None):
     """One citation: which measure, which direction, and the setting the
-    host reads the limit out of. Nothing here is a number."""
+    host reads the limit out of. Nothing here is a number.
+
+    `at` cites the reading at one past filing; `without` cites the current
+    window with the single year that most favours the requirement taken out.
+    Both are the host's arithmetic on the host's figures — this file names
+    the question and never the answer."""
     item = {"measure": measure_id, "comparator": comparator,
             "threshold_from": value_id, "group": group}
     if at is not None:
         item["at"] = at
+    if without is not None:
+        item["without"] = without
     return item
 
 
@@ -1469,72 +1491,29 @@ def _bonus_cites(ctx, values):
 # the exits, and the confirmation walk
 # ---------------------------------------------------------------------------
 
-def _confirmation_run(ctx, measure_id, comparator, value_id, group):
-    """(consecutive filings on which the requirement failed, counting back
-    from the newest, and the period ends of those filings).
-
-    Every reading is put to the host, at its own period, through the same
-    citation the reader will see beside it. A filing whose reading could not
-    be worked out neither advances the run nor resets it: a gap must not
-    confirm a breach nobody observed, and must not grant an indefinite
-    reprieve either — it pauses, and the periods returned say which filings
-    actually carried the breach.
-    """
-    run, periods = 0, []
-    for point in reversed(_points(ctx, measure_id)):
-        outcome = contract.test(
-            ctx, _cite(measure_id, comparator, value_id, group,
-                       at=point["period_end"]))
-        if outcome == UNKNOWN:
-            continue
-        if outcome != FAIL:
-            break
-        run += 1
-        periods.append(point["period_end"])
-    return run, periods
-
-
-def _exit_state(ctx, group, measure_id, comparator, value_id,
-                self_confirming):
-    """One exit as fired / breached / clear / unreadable, with the filing
-    periods that confirm it. `comparator` is what the holding must keep
+def _exit_state(ctx, group, measure_id, comparator, value_id):
+    """One exit as confirmed / breached / clear / unreadable, with whatever
+    the host leant on to say so. `comparator` is what the holding must keep
     being true; the exit is that failing.
+
+    This file used to walk the filing series itself and compare the run
+    against a setting. It no longer does, and the setting is gone with it:
+    how much evidence a breach needs is a property of the measure, and this
+    strategy had no way to know that the eight exits below are read four
+    different ways. A balance-sheet ratio is a photograph of one morning and
+    wants a second filing; a price against three-year average earnings is a
+    new number every day and wants the same; a run of losing years counts
+    annual reports and needs nothing on top; and the tests that read a
+    window of years cannot be confirmed by waiting at all, because the year
+    that produced the breach is still in the window next quarter.
 
     Absence never fires an exit. A missing reading is not evidence that a
     company is in trouble, and this program does not sell on silence — but
-    it does not report it as clear either, so the caller can tell the
-    difference between an exit that was checked and one that was not.
+    it is not reported as clear either, so the caller can tell an exit that
+    was checked from one that was not.
     """
-    outcome = contract.test(ctx, _cite(measure_id, comparator, value_id,
+    return contract.confirm(ctx, _cite(measure_id, comparator, value_id,
                                        group))
-    if outcome == UNKNOWN:
-        return UNREADABLE, []
-    if outcome != FAIL:
-        return CLEAR, []
-    values = ctx.get("values") or {}
-    need = values.get("sell-confirmation-filings")
-    if self_confirming and _counts_its_own_filings(values.get(value_id),
-                                                   need):
-        return FIRED, []
-    run, periods = _confirmation_run(ctx, measure_id, comparator, value_id,
-                                     group)
-    if isinstance(need, int) and run >= need:
-        return FIRED, periods[:need]
-    return BREACHED, periods
-
-
-def _counts_its_own_filings(limit, need):
-    """Whether an exit whose measure counts annual reports already carries
-    the confirmation in its own level.
-
-    A run of two losing years spans two annual filings, so demanding two
-    consecutive filings on top of it would demand a third losing year. That
-    reasoning holds only while the level is at least the confirmation count
-    — set the exit to one losing year and it stops holding, so it is worked
-    out rather than declared.
-    """
-    return (isinstance(limit, (int, float)) and isinstance(need, int)
-            and not isinstance(limit, bool) and limit >= need)
 
 
 def _dividend_cut(ctx):
@@ -1748,19 +1727,55 @@ CAP_CITE = {"fact": "position.weight", "comparator": "at_most",
             "group": SIZE_GROUP["id"]}
 
 
-def _exit_evidence(group, rows, states):
-    """Every exit test, cited, with the confirming filings named where an
-    exit actually fired. Citing the confirming readings is what lets the
-    reader check the two-filing rule instead of taking it on trust."""
+def _exit_evidence(group, rows, found):
+    """Every exit test, cited, with whatever established it named beside it.
+
+    Citing what the host leant on is what lets a reader check the rule
+    instead of taking it on trust, and there are two things to cite because
+    the host does two different jobs. Where a breach was established by
+    filings agreeing, the confirming readings are cited at their own
+    periods. Where the measure reads a window of years — a median, a range,
+    a growth rate — no number of filings can establish anything, and what
+    the host asked instead was whether the failure survives dropping the
+    year that most favours it. That reading is cited too, because a verdict
+    reached on a recomputation the reader cannot see is a verdict they have
+    to believe.
+    """
     out = []
-    for (measure_id, comparator, value_id, _self), (state, periods) in zip(
-            rows, states):
+    for (measure_id, comparator, value_id), f in zip(rows, found):
         out.append(_cite(measure_id, comparator, value_id, group))
-        if state in (FIRED, BREACHED):
-            for period in periods:
+        if f["confirmation"] in (CONFIRMED, BREACHED):
+            for period in f["periods"]:
                 out.append(_cite(measure_id, comparator, value_id, group,
                                  at=period))
+            if f["robust"] is not None:
+                out.append(_cite(measure_id, comparator, value_id, group,
+                                 without="one-year"))
     return out
+
+
+def _established_on(found) -> str:
+    """How the exits that fired were established, in a clause.
+
+    Counted rather than asserted. The sentence used to read "on more than
+    one set of filings" whatever had happened, which is one rule speaking
+    for eight exits that are now read four different ways — and a verdict
+    has to name the rule that produced it.
+    """
+    ways = set()
+    for f in found:
+        if f["robust"]:
+            ways.add("surviving the loss of the year that most favours it")
+        elif f["needs"] <= 0:
+            ways.add("on the current reading, which is all a measure this "
+                     "smooth can be asked for")
+        elif f["needs"] == 1:
+            ways.add("on the newest filing")
+        else:
+            ways.add(f"on {f['needs']} consecutive filings")
+    if len(ways) != 1:
+        return " each on the evidence its own measure can carry"
+    return " " + ways.pop()
 
 
 def _on_a_holding(ctx):
@@ -1796,10 +1811,10 @@ def _on_a_holding(ctx):
                 "are usually already talking. Go and read the filing.")
 
     def fired(states, rows):
-        return [rows[i][0] for i, (state, _p) in enumerate(states)
-                if state == FIRED]
+        return [f for f in states if f["confirmation"] == CONFIRMED]
 
-    waiting = [state for state, _p in safety + discount if state == BREACHED]
+    waiting = [f for f in safety + discount
+               if f["confirmation"] == BREACHED]
 
     def also_waiting():
         """A closing verdict still has to account for every red row on the
@@ -1826,9 +1841,10 @@ def _on_a_holding(ctx):
                 "summary": (
                     f"{len(broken)} of the balance-sheet and earnings "
                     "tests " + ("has" if len(broken) == 1 else "have")
-                    + " failed on more than one reading, so this is a change "
-                    "and not a wobble. The cushion that made an unremarkable "
-                    "business acceptable is gone." + also_waiting()),
+                    + " failed" + _established_on(broken)
+                    + ", so this is a change and not a wobble. The cushion "
+                    "that made an unremarkable business acceptable is gone."
+                    + also_waiting()),
                 "evidence": evidence, "groups": groups, "note": note,
             },
         }
@@ -1843,9 +1859,9 @@ def _on_a_holding(ctx):
                 "summary": (
                     f"{len(closed)} of the valuation tests "
                     + ("has" if len(closed) == 1 else "have")
-                    + " failed on the run of filings this strategy "
-                    "demands before acting. The gap you bought has closed, "
-                    "which is this strategy working rather than failing."
+                    + " failed" + _established_on(closed)
+                    + ". The gap you bought has closed, which is this "
+                    "strategy working rather than failing."
                     + also_waiting()),
                 "evidence": evidence, "groups": groups, "note": note,
             },
@@ -1902,8 +1918,8 @@ def _on_a_holding(ctx):
             },
         }
 
-    checked = [state for state, _p in safety + discount
-               if state != UNREADABLE]
+    checked = [f for f in safety + discount
+               if f["confirmation"] != UNREADABLE]
     if not checked:
         return {
             "state": "cannot-watch", "payload": {},

@@ -62,10 +62,10 @@ class TestEveryHostTableIsDocumented:
     DOCUMENTED = {
         "RENDER_TYPES", "STATE_FIXES", "HOST_STATES", "COMPARATORS",
         "HOST_FACTS", "BASELINE_ANCHORS", "CHANGE_FORMS", "INPUT_ROLES",
-        "INDUSTRY_CLASSES",
+        "INDUSTRY_CLASSES", "ESTIMATORS", "ROBUSTNESS",
         # Flattened into the vocabulary list rather than a table of their own.
         "VALUE_TYPES", "SIZE_UNITS", "EVIDENCE_UNITS", "OUTCOMES",
-        "GROUP_REQUIREMENTS",
+        "GROUP_REQUIREMENTS", "CONFIRMATIONS",
         # Prose, not a table: the sentence is quoted where the split is
         # explained, and pinning it here would pin a paragraph.
         "SPLIT_TEST",
@@ -75,7 +75,10 @@ class TestEveryHostTableIsDocumented:
         exported = {name for name in dir(contract)
                     if name.isupper() and not name.startswith("_")
                     and name not in ("CONTRACT_VERSION", "MAX_STATES",
-                                     "PASS", "FAIL", "UNKNOWN", "NOTED")}
+                                     "BREAKDOWN_OBSERVATIONS",
+                                     "PASS", "FAIL", "UNKNOWN", "NOTED",
+                                     "CLEAR", "BREACHED", "CONFIRMED",
+                                     "UNREADABLE")}
         assert exported == self.DOCUMENTED, (
             "engine/contract.py exports vocabulary this document does not "
             "cover. Add a generated block for it, or add it to DOCUMENTED "

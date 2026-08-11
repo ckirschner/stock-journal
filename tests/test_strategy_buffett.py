@@ -238,7 +238,6 @@ class TestTheThresholdsAreTheReports:
 
     REPORT = {
         "core-tests-required": 7,
-        "sell-confirmation-filings": 2, "fcf-exit-quarters": 4,
         "min-roic": 15, "max-debt-to-ebitda": 2.5,
         "min-owner-earnings-yield": 5,
         "min-interest-coverage": 8, "max-gross-margin-range": 6,
@@ -291,7 +290,9 @@ class TestTheThresholdsAreTheReports:
         claim = re.search(r"([\w-]+) of the ([\w-]+)\s+thresholds below", doc)
         assert claim, "the docstring no longer states a threshold count"
 
-        words = {25: "twenty-five", 26: "twenty-six", 27: "twenty-seven",
+        words = {22: "twenty-two", 23: "twenty-three",
+                 24: "twenty-four",
+                 25: "twenty-five", 26: "twenty-six", 27: "twenty-seven",
                  28: "twenty-eight", 29: "twenty-nine", 30: "thirty",
                  31: "thirty-one", 32: "thirty-two", 33: "thirty-three"}
         total = len(buffett["values"])
@@ -564,10 +565,15 @@ class TestNothingFiresOnOneReading:
                               + [(q, 5.2) for q in QUARTERS[-2:]]})
         assert out["state"]["id"] == "business-broken"
 
-    def test_free_cash_flow_takes_four_quarters_and_not_two(self, buffett):
-        """The one exit with a window of its own. Three negative quarters is
-        still a breach; a full year is the exit, and the difference is the
-        report's."""
+    def test_free_cash_flow_takes_two_filings_and_not_four_quarters(
+            self, buffett):
+        """The report gives this exit a year and it now takes two filings.
+
+        The departure is deliberate and it is in the changelog. The measure
+        is already a trailing twelve months, so a single odd quarter is a
+        quarter of it before anything waits; four consecutive readings of it
+        span seven quarters of data to establish a claim about one year.
+        What a trailing window can be asked to confirm is two filings."""
         def at(n):
             return verdict(
                 buffett, known={**CLEARS_EXITS, "fcf_margin_ttm": -3.0},
@@ -575,37 +581,72 @@ class TestNothingFiresOnOneReading:
                 series={"fcf_margin_ttm":
                         [(q, 16.0) for q in QUARTERS[:len(QUARTERS) - n]]
                         + [(q, -3.0) for q in QUARTERS[len(QUARTERS) - n:]]})
-        assert at(3)["state"]["id"] == "one-reading-past"
-        assert at(4)["state"]["id"] == "business-broken"
+        assert at(1)["state"]["id"] == "one-reading-past"
+        assert at(2)["state"]["id"] == "business-broken"
 
-    def test_the_verdict_names_the_window_that_actually_ran(self, buffett):
-        """A verdict has to name the rule that produced it, and the number of
-        filings is the load-bearing part of this one. The sentence used to
-        say "more than one set of filings" whatever the settings held — the
-        shipped default speaking rather than the rule that ran, which is
-        exactly the quiet retune this journal exists to catch."""
-        def broke(**over):
+    def test_a_five_year_median_does_not_wait_for_a_second_reading(
+            self, buffett):
+        """The exit this strategy is really about, and the one the change is
+        for. Returns on capital are a five-year median: the next filing's
+        reading shares four of the same five years, so waiting for it was
+        waiting for the same data to be looked at again.
+
+        Both halves of the compound have to fail, so the baseline is set
+        high enough that the fall is past the tolerance as well."""
+        out = verdict(
+            buffett, known={**CLEARS_EXITS, "roic_median_5y": 8.0},
+            judged=SAID_YES, held=True, opened="2019-04-01", weight=14.0,
+            bought={"first": {**CLEARS_EXITS, "roic_median_5y": 22.0},
+                    "last": {**CLEARS_EXITS, "roic_median_5y": 22.0}},
+            series={"roic_median_5y": [(q, 22.0) for q in QUARTERS[:-1]]
+                    + [(QUARTERS[-1], 8.0)]})
+        assert out["state"]["id"] == "business-broken"
+
+    def test_the_share_count_takes_one_filing_and_not_two(self, buffett):
+        """A change between two single years is not a long-window measure
+        however many years it spans — it is two observations, and the newest
+        of them is what the next filing replaces. One filing, never four."""
+        def at(n):
             return verdict(
-                buffett, known={**CLEARS_EXITS, "total_debt_to_ebitda": 5.2},
+                buffett,
+                known={**CLEARS_EXITS, "diluted_share_count_change_3y": 18.0},
                 judged=SAID_YES, held=True, opened="2019-04-01", weight=14.0,
-                series={"total_debt_to_ebitda": [(q, 5.2) for q in QUARTERS]},
-                **over)["reason"]["summary"]
+                series={"diluted_share_count_change_3y":
+                        [(q, 0.0) for q in QUARTERS[:len(QUARTERS) - n]]
+                        + [(q, 18.0) for q in QUARTERS[len(QUARTERS) - n:]]})
+        assert at(0)["state"]["id"] == "one-reading-past"
+        assert at(1)["state"]["id"] == "business-broken"
 
-        assert "on 2 consecutive filings" in broke()
-        # A journal that lowers it to one gets an exit on one reading, and is
-        # told that rather than the opposite.
-        one = broke(**{"sell-confirmation-filings": 1})
-        assert "on the most recent filing" in one
-        assert "change and not a wobble" not in one
-        assert "more than one" not in one
+    def test_the_verdict_names_what_actually_established_the_exit(
+            self, buffett):
+        """A verdict has to name the rule that produced it, and here that is
+        different for different exits. The sentence used to say "more than
+        one set of filings" whatever had happened — one rule speaking for
+        five exits that are read three different ways."""
+        debt = verdict(
+            buffett, known={**CLEARS_EXITS, "total_debt_to_ebitda": 5.2},
+            judged=SAID_YES, held=True, opened="2019-04-01", weight=14.0,
+            series={"total_debt_to_ebitda": [(q, 5.2) for q in QUARTERS]},
+        )["reason"]["summary"]
+        assert "on 2 consecutive filings" in debt
 
-    def test_the_free_cash_flow_window_says_four_and_not_two(self, buffett):
-        out = verdict(buffett, known={**CLEARS_EXITS, "fcf_margin_ttm": -3.0},
-                      judged=SAID_YES, held=True, opened="2019-04-01",
-                      weight=14.0,
-                      series={"fcf_margin_ttm": [(QUARTERS[0], 16.0)]
-                              + [(q, -3.0) for q in QUARTERS[1:]]})
-        assert "on 4 consecutive filings" in out["reason"]["summary"]
+        shares = verdict(
+            buffett,
+            known={**CLEARS_EXITS, "diluted_share_count_change_3y": 18.0},
+            judged=SAID_YES, held=True, opened="2019-04-01", weight=14.0,
+            series={"diluted_share_count_change_3y":
+                    [(QUARTERS[-1], 18.0)]})["reason"]["summary"]
+        assert "on the newest filing" in shares
+        assert "consecutive filings" not in shares
+
+        median = verdict(
+            buffett, known={**CLEARS_EXITS, "roic_median_5y": 8.0},
+            judged=SAID_YES, held=True, opened="2019-04-01", weight=14.0,
+            bought={"first": {**CLEARS_EXITS, "roic_median_5y": 22.0},
+                    "last": {**CLEARS_EXITS, "roic_median_5y": 22.0}},
+        )["reason"]["summary"]
+        assert "nothing to wait for" in median
+        assert "consecutive filings" not in median
 
     def test_a_gap_neither_confirms_a_breach_nor_forgives_one(self, buffett):
         """A filing whose reading could not be worked out must not confirm

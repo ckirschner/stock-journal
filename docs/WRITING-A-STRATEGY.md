@@ -764,17 +764,18 @@ says in a comment why it is closed and what adding to it costs.
 Two strategies and one worked example are the whole of the experience behind
 this list. It is in order of what each one actually cost.
 
-### Confirmation counts filings, so a hand-driven journal can never confirm
+### Confirmation counts filings, so a hand-driven journal may never confirm
 
-A rule of the form "this has to be true on two consecutive filings" walks
+`contract.confirm` counts consecutive readings out of
 `measures[id]["series"]["points"]`. Those points are built from **filings**, and
 from nothing else.
 
 A figure the user typed in by hand answers `current` and adds no point. So on a
 security with no stored filings — no CIK, nothing fetched, every number entered
-by hand — the run is always nought, and an exit written this way **can never
-fire**, however bad the number gets. The strategy is not broken and the host is
-not lying: nobody observed a second reading, so nothing is confirmed.
+by hand — the run is always nought, and an exit on a measure whose estimator
+asks for two of them **can never fire**, however bad the number gets. The
+strategy is not broken and the host is not lying: nobody observed a second
+reading, so nothing is confirmed.
 
 `engine/context.py` states the fact. Nobody states the consequence, and it is
 invisible until an exit quietly never fires — there is no error, no absence, no
@@ -782,9 +783,13 @@ caution. It is true of real journals and not only of demonstration data: a user
 who tracks a company the SEC does not cover, or who has not fetched, is in
 exactly this position.
 
-If your strategy is meant to work on hand-entered data, give it an exit that
-acts on one reading and say so in that state's description. If it is not, say
-*that* — the state description is the only place a user finds out.
+Which measures this bites is now visible rather than a matter of what you wrote:
+it is the ones whose estimator asks for filings at all. An exit on a five-year
+median, a growth rate or a run of annual losses fires on the current reading and
+works perfectly well in a hand-driven journal; an exit on a balance-sheet ratio
+or a trailing twelve months does not. If your strategy is meant for hand-entered
+data, choose what it exits on with that in mind, and say so in the state's
+description — that is the only place a user finds out.
 
 ### A commit is refused beside a group that did not pass, so every other branch comes first
 
@@ -1001,6 +1006,49 @@ Cited as `{"measure": "<id>", "since": "<anchor>"}`.
 | `proportion` | `percent` | "…, change since you bought, as a share of what it was then" |
 <!-- end: change-forms -->
 
+### How a measure is read, and what a breach of it therefore needs
+
+You do not declare this and you cannot override it. The metric bank states how
+every measure is read, and the host derives from that how much evidence a
+breach of one of your levels needs — because that is a fact about the
+estimator, not an opinion about investing.
+
+The reason it is not yours is worth reading once. Two consecutive readings of a
+rolling five-year median share four of five years: they are the same data
+looked at twice, and the year that produced the breach does not leave the
+window by being looked at again. A rule saying "not on one reading" is a bet
+that the next reading carries new information, and on a long window that bet
+loses. Where it loses, the host asks the question that does work instead —
+drop the year that most favours you and see whether the answer holds.
+
+Patience is still yours. It lives in the level: a strategy that wants to be
+slower to sell asks for a worse number, which is a claim about the business, not
+for more repetitions, which is a claim about the data that is not true.
+
+<!-- generated: estimators -->
+| `kind` | reads as | filings a breach needs | must survive dropping a year |
+|---|---|---|---|
+| `instant` | read at one date | 2 | — |
+| `trailing` | a trailing window | 2 | — |
+| `endpoint` | two readings, one at each end | 1 | — |
+| `averaged` | means at both ends | 0 | yes |
+| `median` | the middle of a window | 0 | under 5 observations |
+| `range` | the spread across a window | 0 | yes |
+| `count` | a count of annual reports | 0 | — |
+| `assessed` | assessed, not measured | 0 | — |
+<!-- end: estimators -->
+
+Ask for the answer with `contract.confirm(ctx, item)`, passing the citation
+that says what the holding must keep being true. Where an estimator asks for
+the one-year-dropped reading you may cite it too, so the reader can check the
+rule rather than take it on trust:
+
+<!-- generated: robustness -->
+| `without` | reads as |
+|---|---|
+| `one-year` | with its most favourable year dropped |
+<!-- end: robustness -->
+
 ### Kinds of company a strategy can decline
 
 Named in `declines`. Each is a *different* way the host's measures break, not
@@ -1035,6 +1083,8 @@ against the SEC's published list in
 - **Units a `size` may be in** — `weight`, `usd`, `shares` (`weight` is a percent number).
 - **Units a cited figure may render in** — `percent`, `percentage_points`, `times`, `ratio`, `score`, `usd`, `shares`, `years`, `months`, `days`, `count`, `times_own_median`, `date`, `text`, `yes_no`, `none`. A strategy picks one; it never invents a rendering.
 - **How a comparison can come out** — `pass`, `fail`, `unknown`, `noted`. The host derives one; a strategy branches on it and never asserts one.
+- **How an established breach can come out** — `clear`, `breached`, `confirmed`, `unreadable`. `contract.confirm` derives one; a strategy branches on it and never asserts one.
+- **Observations at which a median stops needing help** — `5`. Below it, a breach of a median must also survive dropping a year.
 - **What a group may demand** — `all`, `at_least`, `noted`.
 <!-- end: vocabulary -->
 

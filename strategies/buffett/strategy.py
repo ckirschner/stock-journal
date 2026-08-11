@@ -59,7 +59,7 @@ Sources, and which is which, because a reader auditing a number later has to
 be able to tell. Every value carries its own `source` saying so, which is
 where to look rather than here.
 
-Twenty-five of the twenty-seven thresholds below are the expert report's, at
+Twenty-three of the twenty-five thresholds below are the expert report's, at
 the level it states. Two — `portfolio-slots` and `position-weight-cap` — come
 from Buffett's own documented practice, because the report was scoped to
 selection and to exits and says nothing whatever about how much to buy. That
@@ -148,21 +148,28 @@ QUALITATIVE = ("moat_durability", "management_integrity", "capital_allocation")
 # condition that ends it, so a healthy holding reads as passes and a breach
 # is the one row that is not.
 #
-# The fourth element names the declared value holding how many consecutive
-# filings the breach must appear on. Four of the five take the report's
-# default of two; free cash flow takes its own window, because the report
-# states one for it and a single negative quarter is working capital timing
-# rather than news.
+# Nothing here says how much evidence a breach needs, and there used to be a
+# fourth column naming a setting that did. It is a property of the measure —
+# of how far one filing can move a five-year median against how far it can
+# move a single balance-sheet date — and the host derives it from what the
+# metric bank declares. See contract.ESTIMATORS.
+#
+# Two of these five changed when it moved. Returns on capital are a five-year
+# median: one year cannot move a median past the observation next to it, the
+# window already did the smoothing a second reading was being asked for, and
+# a second reading re-reads four of the same five years. That exit now acts
+# on the reading in front of you. And the share count is a change between two
+# single years, which is not a long-window measure however many years it
+# spans; it takes one filing rather than two.
+#
+# Free cash flow is the one worth arguing with, and it is set out in the
+# changelog: the report gives it four quarters and it now takes two filings.
 EXITS = (
-    ("roic_median_5y", "at_least", "exit-roic-level",
-     "sell-confirmation-filings"),
-    ("total_debt_to_ebitda", "at_most", "exit-debt-to-ebitda",
-     "sell-confirmation-filings"),
-    ("interest_coverage", "at_least", "exit-interest-coverage",
-     "sell-confirmation-filings"),
-    ("fcf_margin_ttm", "at_least", "exit-fcf-margin", "fcf-exit-quarters"),
-    ("diluted_share_count_change_3y", "at_most", "exit-share-count-change",
-     "sell-confirmation-filings"),
+    ("roic_median_5y", "at_least", "exit-roic-level"),
+    ("total_debt_to_ebitda", "at_most", "exit-debt-to-ebitda"),
+    ("interest_coverage", "at_least", "exit-interest-coverage"),
+    ("fcf_margin_ttm", "at_least", "exit-fcf-margin"),
+    ("diluted_share_count_change_3y", "at_most", "exit-share-count-change"),
 )
 
 # The index of the return-on-capital exit inside EXITS. It is the one that is
@@ -348,10 +355,51 @@ STRATEGY = {
                "and only at a price that leaves something on the table. "
                "Sells when the business breaks — never when the price gets "
                "high, and never because time has passed.",
-    "version": 3,
+    "version": 4,
     "contract": 5,
     "declines": DECLINES,
     "changelog": {
+        4: "HOW MUCH EVIDENCE AN EXIT NEEDS IS NO LONGER A SETTING, AND TWO "
+           "OF THE FIVE EXITS NOW ACT SOONER. No level moved.\n\n"
+           "`sell-confirmation-filings` and `fcf-exit-quarters` are gone. "
+           "They asked for a number of consecutive filings, and that number "
+           "is now worked out from how each measure is read — because the "
+           "five exits here are read three different ways and neither "
+           "setting could tell them apart.\n\n"
+           "RETURNS ON CAPITAL, the exit this strategy is really about, now "
+           "acts on the reading in front of you. It is a five-year median: "
+           "one year cannot move a median past the observation next to it, "
+           "and the next filing's reading shares four of the same five "
+           "years — so waiting for a second was waiting for the same data "
+           "to be looked at again. Where the fall was real this now closes "
+           "the position a quarter or two earlier; where it was not, the "
+           "median never crossed the floor in the first place. THE SHARE "
+           "COUNT takes one filing rather than two, for the opposite "
+           "reason: a change between two single years is not a long-window "
+           "measure however many years it spans, and the newest of those "
+           "two is what the next filing replaces.\n\n"
+           "AND FREE CASH FLOW TAKES TWO FILINGS RATHER THAN FOUR "
+           "QUARTERS, which is a departure from the report and the one to "
+           "argue with. The report's reasoning is that a single negative "
+           "quarter is working-capital timing rather than news, and it is "
+           "right — but the measure is already a trailing twelve months, so "
+           "one quarter is a quarter of it before anything waits, and four "
+           "consecutive readings of it span seven quarters of data to "
+           "establish a condition about one year. Two filings is what a "
+           "trailing window can be asked to confirm. If you were relying on "
+           "the longer wait to sit through a deliberate investment cycle, "
+           "the honest place for that is `exit-fcf-margin` — say what level "
+           "of cash generation you will accept, rather than how long you "
+           "will wait to believe the reading.\n\n"
+           "Separately, growth rates are now measured between three-year "
+           "averages at each end of the window rather than between single "
+           "years. That changes `min-revenue-cagr` and the profit-growth "
+           "spread from figures a one-off charge could swing by several "
+           "points into figures it cannot, and it needs eight fiscal years "
+           "of history where six did before — so both will be absent for "
+           "some companies they used to answer for. Absent is not a fail, "
+           "but it does mean two of the nine core tests cannot be counted "
+           "towards the seven.",
         3: "THIS STRATEGY NO LONGER EVALUATES BANKS, LENDERS, INSURERS OR "
            "PROPERTY COMPANIES. No threshold moved and no test changed; "
            "three kinds of company now get a refusal instead of a "
@@ -675,50 +723,6 @@ STRATEGY = {
                     "size rules report that they could not be run.\n\n"
                     "Attributed to Buffett's practice, not to the expert "
                     "report, which does not cover sizing."},
-
-        # -- the discipline that is not a measure --------------------------
-        {"id": "sell-confirmation-filings",
-         "label": "Filings an exit must appear on",
-         "type": "integer", "unit": "count", "min": 1, "max": 8,
-         "source": REPORT,
-         "explain": "How many consecutive filings an exit level has to be "
-                    "breached on before this strategy will act. Two is the "
-                    "report's figure, and it applies to every exit here "
-                    "except free cash flow, which has a window of its "
-                    "own.\n\n"
-                    "One goodwill impairment, one legal settlement, one "
-                    "inventory build, and a measure crosses a line because "
-                    "of something that happened once. For a tool whose "
-                    "purpose is preventing panic decisions, firing on one "
-                    "quarter's one-off charge is the worst possible failure: "
-                    "it would use the authority of the system to cause "
-                    "exactly the behaviour it exists to prevent. Set it to "
-                    "one and you get that behaviour back.\n\n"
-                    "A filing whose reading could not be worked out neither "
-                    "advances the count nor resets it: a gap must not "
-                    "confirm something nobody observed, and must not grant "
-                    "an indefinite reprieve either."},
-
-        {"id": "fcf-exit-quarters",
-         "label": "Quarters of negative free cash flow that end it",
-         "type": "integer", "unit": "count", "min": 1, "max": 12,
-         "source": REPORT,
-         "explain": "How many consecutive quarterly readings of free cash "
-                    "flow have to come back negative before this strategy "
-                    "acts on it. Four is the report's figure — a full "
-                    "year.\n\n"
-                    "It is longer than the two filings every other exit here "
-                    "takes, and deliberately so. A single negative quarter "
-                    "is working capital timing and nothing else. A full year "
-                    "of it in a mature business means the thing you bought "
-                    "no longer produces cash for its owners, which is the "
-                    "whole thesis gone.\n\n"
-                    "Where it misfires, and it is worth knowing before you "
-                    "buy: a company deliberately in a heavy investment cycle "
-                    "shows negative free cash flow as a choice rather than a "
-                    "failure, and this will call it broken. If you are "
-                    "buying that pattern on purpose, this is the number to "
-                    "widen."},
 
         # -- the three knockouts -------------------------------------------
         {"id": "min-roic", "label": "Lowest return on invested capital",
@@ -1207,22 +1211,26 @@ STRATEGY = {
 # ---------------------------------------------------------------------------
 
 PASS, FAIL, UNKNOWN = contract.PASS, contract.FAIL, contract.UNKNOWN
-FIRED, BREACHED, CLEAR, UNREADABLE = "fired", "breached", "clear", "unreadable"
+# How an exit came out. Imported rather than spelled out here: they are the
+# host's words now, because the host is what decides which of them applies.
+CLEAR, BREACHED = contract.CLEAR, contract.BREACHED
+CONFIRMED, UNREADABLE = contract.CONFIRMED, contract.UNREADABLE
 
 
-def _points(ctx, measure_id):
-    """One measure's per-filing readings, oldest first."""
-    entry = (ctx.get("measures") or {}).get(measure_id) or {}
-    return ((entry.get("series") or {}).get("points")) or []
-
-
-def _cite(measure_id, comparator, value_id, group, at=None):
+def _cite(measure_id, comparator, value_id, group, at=None, without=None):
     """One citation: which measure, which direction, and the setting the
-    host reads the limit out of. Nothing here is a number."""
+    host reads the limit out of. Nothing here is a number.
+
+    `at` cites the reading at one past filing; `without` cites the current
+    window with the single year that most favours the requirement taken
+    out. Both are the host's arithmetic on the host's figures — this file
+    names the question and never the answer."""
     item = {"measure": measure_id, "comparator": comparator,
             "threshold_from": value_id, "group": group}
     if at is not None:
         item["at"] = at
+    if without is not None:
+        item["without"] = without
     return item
 
 
@@ -1280,58 +1288,27 @@ def _marked_down(outcomes):
 # the exits, and the confirmation walk
 # ---------------------------------------------------------------------------
 
-def _confirmation_run(ctx, measure_id, comparator, value_id, group):
-    """(consecutive filings on which the requirement failed, counting back
-    from the newest, and the period ends of those filings).
-
-    Every reading is put to the host, at its own period, through the same
-    citation the reader will see beside it. A filing whose reading could not
-    be worked out neither advances the run nor resets it: a gap must not
-    confirm a breach nobody observed, and must not grant an indefinite
-    reprieve either.
-    """
-    run, periods = 0, []
-    for point in reversed(_points(ctx, measure_id)):
-        outcome = contract.test(
-            ctx, _cite(measure_id, comparator, value_id, group,
-                       at=point["period_end"]))
-        if outcome == UNKNOWN:
-            continue
-        if outcome != FAIL:
-            break
-        run += 1
-        periods.append(point["period_end"])
-    return run, periods
-
-
-def _exit_state(ctx, group, measure_id, comparator, value_id, window_id):
-    """One exit as fired / breached / clear / unreadable, with the filing
-    periods that confirm it. `comparator` is what the holding must keep
+def _exit_state(ctx, group, measure_id, comparator, value_id):
+    """One exit as confirmed / breached / clear / unreadable, with whatever
+    the host leant on to say so. `comparator` is what the holding must keep
     being true; the exit is that failing.
 
-    `window_id` names the declared value holding how many consecutive
-    filings this particular exit needs. Four of the five name the shared
-    default and free cash flow names its own — read out of the settings
-    rather than written here, so a journal that retunes either gets the
-    behaviour it asked for.
+    This file used to walk the filing series itself and compare the run
+    against a setting it declared. It no longer does, and the settings are
+    gone with them: how much evidence a breach needs is a property of the
+    measure, and this strategy had no way to know that its five exits are
+    read three different ways. A five-year median cannot be confirmed by
+    waiting — the next reading shares four of its five years — while a
+    trailing twelve months genuinely rolls a quarter, and a change between
+    two single years is not a long-window measure at all.
 
     Absence never fires an exit. A missing reading is not evidence that a
     company is in trouble, and this program does not sell on silence — but
     it is not reported as clear either, so the caller can tell an exit that
     was checked from one that was not.
     """
-    outcome = contract.test(ctx, _cite(measure_id, comparator, value_id,
+    return contract.confirm(ctx, _cite(measure_id, comparator, value_id,
                                        group))
-    if outcome == UNKNOWN:
-        return UNREADABLE, []
-    if outcome != FAIL:
-        return CLEAR, []
-    need = (ctx.get("values") or {}).get(window_id)
-    run, periods = _confirmation_run(ctx, measure_id, comparator, value_id,
-                                     group)
-    if isinstance(need, int) and run >= need:
-        return FIRED, periods[:need]
-    return BREACHED, periods
 
 
 def _roic_exit(ctx, group, absolute):
@@ -1350,12 +1327,12 @@ def _roic_exit(ctx, group, absolute):
     that nothing happened.
     """
     drift = contract.test(ctx, {**ROIC_DRIFT, "group": group})
-    state, periods = absolute
-    if drift == PASS or state == CLEAR:
-        return CLEAR, []
-    if drift == UNKNOWN or state == UNREADABLE:
-        return UNREADABLE, []
-    return state, periods
+    found = absolute
+    if drift == PASS or found["confirmation"] == CLEAR:
+        return {**found, "confirmation": CLEAR}
+    if drift == UNKNOWN or found["confirmation"] == UNREADABLE:
+        return {**found, "confirmation": UNREADABLE}
+    return found
 
 
 def _exit_states(ctx, group):
@@ -1376,10 +1353,10 @@ def _half_failed(ctx, group, states):
     cannot be expected to work that out from a red row and a sentence that
     does not mention it. The same reason `also_waiting` exists.
     """
-    if states[ROIC][0] != CLEAR:
+    if states[ROIC]["confirmation"] != CLEAR:
         return None
     drift = contract.test(ctx, {**ROIC_DRIFT, "group": group})
-    level = contract.test(ctx, _cite(*EXITS[ROIC][:3], group))
+    level = contract.test(ctx, _cite(*EXITS[ROIC], group))
     if drift == FAIL:
         return ("Returns on capital have fallen further from where they were "
                 "when you first bought than this strategy will sit through — "
@@ -1395,29 +1372,33 @@ def _half_failed(ctx, group, states):
 
 
 def _confirmed_on(broken):
-    """How many consecutive filings the exits that fired actually carried.
+    """What the exits that fired were established on, in a clause.
 
-    Counted rather than asserted. The sentence used to read "on more than
-    one set of filings" whatever the settings said, which is the shipped
-    default speaking rather than the rule that ran: a journal that lowers
-    the confirmation to a single filing gets an exit that fires on one
-    reading and a summary telling it the opposite, and a journal reading the
-    free-cash-flow window gets four described as "more than one". A verdict
-    has to name the rule that produced it, and this is the number in it.
+    Derived rather than asserted. The sentence used to read "on more than
+    one set of filings" whatever had happened, which is one rule speaking
+    for five exits that are read three different ways — and a verdict has to
+    name the rule that produced it, or the reader is being asked to take the
+    strongest available reading of a sentence on trust.
 
-    The two exits here can demand different windows, so where they disagree
-    the count is not stated at all rather than a wrong one being picked.
+    Where the five disagree the clause does not state a number at all,
+    rather than picking one of them and being wrong about the others.
     """
-    counts = {n for _m, n in broken}
-    if len(counts) != 1:
-        return (" on the run of consecutive filings this strategy demands "
-                "for each of them")
-    n = counts.pop()
-    if n <= 1:
-        return (" on the most recent filing — this journal's settings ask "
-                "for no more than that before acting")
-    return (f" on {n} consecutive filings, so this is a change and not a "
-            "wobble")
+    ways = set()
+    for f in broken:
+        if f["robust"]:
+            ways.add(" and the failure survives dropping the year that most "
+                     "favours the company, which one bad year would not")
+        elif f["needs"] <= 0:
+            ways.add(" on a reading a single year cannot have moved, so "
+                     "there is nothing to wait for")
+        elif f["needs"] == 1:
+            ways.add(" on the newest filing")
+        else:
+            ways.add(f" on {f['needs']} consecutive filings, so this is a "
+                     "change and not a wobble")
+    if len(ways) != 1:
+        return " each on the evidence its own measure can carry"
+    return ways.pop()
 
 
 def _exit_evidence(group, states):
@@ -1428,17 +1409,24 @@ def _exit_evidence(group, states):
     The fall in returns is cited beside the floor it is compounded with,
     always, and not only when it fires — the two are one test and a reader
     shown one of them has been shown half a rule.
+
+    Where the host established a breach by dropping a year rather than by
+    counting filings, that reading is cited as well. A verdict reached on a
+    recomputation the reader cannot see is a verdict they have to believe.
     """
     out = []
-    for i, ((measure_id, comparator, value_id, _w), (state, periods)) in \
+    for i, ((measure_id, comparator, value_id), f) in \
             enumerate(zip(EXITS, states)):
         out.append(_cite(measure_id, comparator, value_id, group))
         if i == ROIC:
             out.append({**ROIC_DRIFT, "group": group})
-        if state in (FIRED, BREACHED):
-            for period in periods:
+        if f["confirmation"] in (CONFIRMED, BREACHED):
+            for period in f["periods"]:
                 out.append(_cite(measure_id, comparator, value_id, group,
                                  at=period))
+            if f["robust"] is not None:
+                out.append(_cite(measure_id, comparator, value_id, group,
+                                 without="one-year"))
     return out
 
 
@@ -1723,7 +1711,7 @@ def _on_a_holding(ctx):
         + list(TIME_CITES)
     groups = [DECAY_GROUP, QUALITY_GROUP, TIME_GROUP]
 
-    waiting = [s for s, _p in states if s == BREACHED]
+    waiting = [f for f in states if f["confirmation"] == BREACHED]
 
     def also_waiting():
         """A closing verdict still has to account for every red row on the
@@ -1742,8 +1730,7 @@ def _on_a_holding(ctx):
     # and because leverage is the thing that takes the business away from you
     # while a leaking moat only takes the returns. Both close the position;
     # the state says which happened, and either way all of it is cited.
-    broken = [(EXITS[i][0], len(p)) for i, (s, p) in enumerate(states)
-              if s == FIRED]
+    broken = [f for f in states if f["confirmation"] == CONFIRMED]
     if broken:
         return {
             "state": "business-broken",
@@ -1795,7 +1782,7 @@ def _on_a_holding(ctx):
             },
         }
 
-    checked = [s for s, _p in states if s != UNREADABLE]
+    checked = [f for f in states if f["confirmation"] != UNREADABLE]
     if not checked:
         return {
             "state": "cannot-watch", "payload": {},

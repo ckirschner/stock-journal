@@ -14,7 +14,7 @@
 # on the rule-change record of every journal running this bundle, with a
 # before and an after. Move a number and leave the version alone and the host
 # still catches it, and reports it as the louder thing it is.
-version: 1
+version: 2
 
 values:
 
@@ -30,11 +30,14 @@ values:
   min-fcf-margin: 5
   min-interest-coverage: 8
 
-  # The exit, and what confirms it. The exit level sits well below the entry
-  # level on the same measure on purpose: what it takes to be bought is not
-  # what it takes to be kept.
+  # The exit. Its level sits well below the entry level on the same measure
+  # on purpose: what it takes to be bought is not what it takes to be kept.
+  #
+  # There is no setting here for how many filings confirm it, and there was
+  # one. How much evidence a breach needs follows from how the measure is
+  # read, which the metric bank declares and the host derives — see
+  # `contract.confirm` in strategy.py.
   exit-interest-coverage: 4
-  exit-confirmation-filings: 2
 
   # How much goes in.
   position-weight-cap: 10

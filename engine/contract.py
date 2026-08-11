@@ -657,6 +657,166 @@ CHANGE_FORMS = MappingProxyType({
 })
 
 
+# ---------------------------------------------------------------------------
+# Estimators — what one more filing can do to a reading, and therefore how
+# much evidence a breach of it needs.
+#
+# Confirmation exists to filter measurement noise: a rule saying "not on one
+# reading" is a bet that the next reading carries information the last one
+# did not. Whether that bet pays is a property of the *estimator*, and it was
+# being set per threshold, by hand, by strategy authors who had no way to know.
+#
+# Two consecutive readings of a rolling five-year median share four of five
+# years. They are 80% the same data, so demanding four of them accumulates one
+# piece of evidence and nine years — and the offending observation does not
+# leave the window by being looked at again. Where a window already did the
+# smoothing, confirmation is a delay dressed as rigour.
+#
+# So the host derives it, from a property the bank declares beside every
+# measure, and a strategy no longer states it at all. That is not the host
+# taking an opinion: how far one observation can move a median is arithmetic,
+# the same arithmetic that makes "18.9 is at least 15" the host's to do. What
+# to *do* about an established breach remains entirely the strategy's, and a
+# strategy that wants to be slower to act says so with a level — which is a
+# claim about the business — rather than with repetition, which is a claim
+# about the data that is not true.
+#
+#   `confirmations`  how many consecutive filings must carry the failure
+#                    before it is established, counting the current reading.
+#                    0 means the current reading is enough.
+#   `robustness`     whether the breach must also survive dropping the single
+#                    annual observation that most favours it — see ROBUSTNESS.
+#                    `short-window` means only where the window holds fewer
+#                    than BREAKDOWN_OBSERVATIONS.
+#
+# `observations` is declared beside the kind in the bank, and says how many
+# annual observations the estimator reads. It is what separates a five-point
+# median, which one outlier cannot move past the adjacent order statistic,
+# from a three-point one, which it can.
+#
+# Adding a kind is a host change in this one table, and the bank is validated
+# against it: an entry declaring a kind that is not here fails to load, and so
+# does one declaring none at all.
+# ---------------------------------------------------------------------------
+
+BREAKDOWN_OBSERVATIONS = 5
+
+
+def _est(label, means, confirmations, robustness, explain):
+    return MappingProxyType({"label": label, "means": means,
+                             "confirmations": confirmations,
+                             "robustness": robustness, "explain": explain})
+
+
+ESTIMATORS = MappingProxyType({
+    "instant": _est(
+        "read at one date", "a figure as it stood on a single day", 2, "no",
+        "A balance sheet is a photograph of one morning, and a bond issued "
+        "the week before the year end is in it. The next filing brings a "
+        "wholly new reading rather than a slightly updated one, so a second "
+        "filing agreeing with the first is real evidence — and it is the "
+        "only measure of robustness available, because there is no window "
+        "to drop a year out of."),
+    "trailing": _est(
+        "a trailing window", "a flow added up over the months just gone, "
+        "usually the last four quarters", 2, "no",
+        "A trailing twelve months has already absorbed one odd quarter into "
+        "four, and the next filing rolls one quarter out and one in. Two "
+        "consecutive readings share three quarters, so the second is weak "
+        "evidence — but it is evidence, which is more than repeating a "
+        "long-window figure gives you."),
+    "endpoint": _est(
+        "two readings, one at each end", "a change between two single "
+        "periods some years apart", 1, "no",
+        "This is not a long-window measure however many years it spans: it "
+        "is two observations with a gap between them, and a one-off charge "
+        "in the newest of them moves the answer by more than most of the "
+        "history. One confirmation, because the next filing replaces the "
+        "end that carries the noise. Dropping a year is not available — "
+        "there are only two, and one of them is the answer."),
+    "averaged": _est(
+        "means at both ends", "a change between two multi-year averages",
+        0, "always",
+        "Averaging each end is what makes a rate about the business rather "
+        "than about which two years happened to sit at the ends. A single "
+        "distorted year still moves a three-year mean by a third of its "
+        "distortion, so the answer must survive dropping that year — and "
+        "waiting for another filing would not help, because the distorted "
+        "year stays in the window for years."),
+    "median": _est(
+        "the middle of a window", "the middle annual observation of several",
+        0, "short-window",
+        "A median is the estimator confirmation was invented for, already "
+        "applied: one outlier cannot move it past the observation next to "
+        "it. Reading it again next quarter tells you nothing, because the "
+        "window is the same window. Below five observations there is less "
+        "of that protection, and the breach is asked to survive dropping "
+        "one."),
+    "range": _est(
+        "the spread across a window", "the distance between the highest and "
+        "lowest annual observation", 0, "always",
+        "A range is the least robust statistic there is — one year sets the "
+        "top of it single-handed, and that year stays in the window for as "
+        "long as the window is long. Waiting cannot help; dropping the year "
+        "and asking again is the only test that means anything."),
+    "count": _est(
+        "a count of annual reports", "how many years met a condition", 0,
+        "no",
+        "The unit is annual reports, so a level already says how many "
+        "filings it takes. Two consecutive losing years spans two annual "
+        "reports; demanding two consecutive filings on top of that would "
+        "quietly demand a third year. The persistence is in the level, "
+        "which is where it belongs and where a reader can see it."),
+    "assessed": _est(
+        "assessed, not measured", "a judgement the reader recorded", 0, "no",
+        "Nothing was measured, so there is no measurement noise to filter. "
+        "A judgement changes when the person holding it changes it, and "
+        "waiting for a filing to agree with them would be waiting for the "
+        "wrong thing."),
+})
+
+# What a breach must survive, where its estimator asks for it.
+#
+# One form, and it is the whole idea: recompute the measure with the single
+# annual observation that most favours the requirement taken out, and ask
+# again. Still failing means the deterioration is in the business rather than
+# in one year, so there is nothing to wait for. Passing means one year was
+# carrying it, and the honest answer is to wait — which is what confirmation
+# was reaching for and could not do at one filing.
+#
+# It is the measure's, never the threshold's. Whether dropping a year can
+# change the answer is arithmetic about the window; a strategy that could
+# switch it off would be asking the host to act on evidence the host already
+# knows is one year. What a strategy still owns is the level, and a stricter
+# reading of a measure — "the median that survives dropping its best year" —
+# is a different measure and belongs in the bank as one, not as a flag here.
+#
+# Adding a form is a host change in this one table.
+
+ROBUSTNESS = MappingProxyType({
+    "one-year": MappingProxyType({
+        "label": "with its most favourable year dropped",
+        "explain":
+            "The same figure worked out again with one fiscal year taken "
+            "out of the window — the single year whose removal most helps "
+            "the requirement be met.\n\n"
+            "It answers the question a second reading cannot. A five-year "
+            "window barely moves between filings, so watching it again next "
+            "quarter mostly re-reads the same years; taking the flattering "
+            "year out asks whether the rest of the record says the same "
+            "thing. Where it does, one bad year was not what produced the "
+            "answer.",
+    }),
+})
+
+# How an established breach comes out. The host derives one of these and a
+# strategy never asserts one — but it does branch on them, so the words live
+# here to be imported rather than spelled out again inside a bundle.
+CLEAR, BREACHED, CONFIRMED, UNREADABLE = (
+    "clear", "breached", "confirmed", "unreadable")
+CONFIRMATIONS = (CLEAR, BREACHED, CONFIRMED, UNREADABLE)
+
+
 def _cmp(phrase, fn, numeric_only):
     return MappingProxyType({"phrase": phrase, "fn": fn,
                              "numeric_only": numeric_only})
@@ -880,8 +1040,8 @@ INPUT_ROLES = MappingProxyType({
 # Exactly one of these names the subject of an evidence item.
 _SUBJECT_KEYS = ("measure", "fact", "input", "value", "label")
 _ITEM_KEYS = {"measure", "fact", "input", "value", "label", "unit", "actual",
-              "absent", "at", "since", "change", "comparator", "threshold",
-              "threshold_from", "group"}
+              "absent", "at", "since", "change", "without", "comparator",
+              "threshold", "threshold_from", "group"}
 
 # What a group may demand of its members. Three words, host-owned, and a
 # strategy picks one — it never writes a rule of its own here, because the
@@ -2226,6 +2386,25 @@ def _check_evidence_item(record, item, where, errors) -> None:
                 "anchor to. A strategy never invents one; anything missing "
                 "is a request against the host.")
 
+    if "without" in item:
+        if subject != "measure":
+            errors.append(f"{where}: `without` drops a year out of a bank "
+                          "measure's own window, so it only means something "
+                          "alongside `measure`.")
+        elif "at" in item or "since" in item:
+            errors.append(
+                f"{where} carries `without` beside "
+                + ("`at`" if "at" in item else "`since`")
+                + ". `without` re-reads the current window with a year "
+                  "dropped; a past reading and a move from a baseline are "
+                  "different questions. One citation answers one.")
+        elif item["without"] not in ROBUSTNESS:
+            errors.append(
+                f'{where}: `without` must be one of '
+                f"{', '.join(ROBUSTNESS)} — the ways the host re-reads a "
+                "window. A strategy never invents one; anything missing is "
+                "a request against the host.")
+
     if "change" in item:
         if "since" not in item:
             errors.append(
@@ -2346,6 +2525,51 @@ def _unobserved(reason, source) -> dict:
     return {"status": "absent", "reason": reason, "source": source}
 
 
+def _leave_one_out(ctx, entry, item):
+    """The one-out reading a `without` citation asks for: the same window
+    with the single annual observation that most favours the requirement
+    taken out.
+
+    Which one that is depends on the comparator, so it is chosen here rather
+    than in the computation — the engine hands over every one-out value it
+    can form and the direction of the test picks among them. Where the
+    requirement is unreadable in every one of them, or the engine formed
+    none, the answer is absence with the reason, never the full-window
+    figure standing in for it: a robustness check that silently falls back
+    to the number it was checking is not a check.
+    """
+    cur = entry["current"]
+    if cur["status"] != "known":
+        return _unobserved(cur["reason"], "measure")
+    outs = cur.get("leave_one_out")
+    if not outs:
+        return _unobserved(
+            "this measure is not read over a window of fiscal years, so "
+            "there is no year to drop out of it", "measure")
+    cmp_ = COMPARATORS.get(item.get("comparator"))
+    if cmp_ is None or "comparator" not in item:
+        # No requirement to favour: the reading that moves furthest from the
+        # full-window figure is the honest single answer to "and without a
+        # year?", and a bare observation is a fine thing to cite.
+        best = max(outs, key=lambda o: abs(o["value"] - cur["value"]))
+    else:
+        limit, absent_why = _limit(ctx, item)
+        favourable = [o for o in outs
+                      if absent_why is None
+                      and isinstance(limit, (int, float))
+                      and not isinstance(limit, bool)
+                      and cmp_["fn"](o["value"], limit)]
+        pool = favourable or outs
+        # Furthest in the direction that helps the requirement pass.
+        best = max(pool, key=lambda o: o["value"]) \
+            if item["comparator"] in ("at_least", "above") \
+            else min(pool, key=lambda o: o["value"])
+    return _observed(
+        best["value"], "measure", cur.get("cautions"),
+        [f'the same window with FY ending {best["dropped"]} left out']
+        + list(cur.get("provenance") or []))
+
+
 def _measure_observation(ctx, item):
     mid = item["measure"]
     entry = (ctx.get("measures") or {}).get(mid)
@@ -2354,6 +2578,8 @@ def _measure_observation(ctx, item):
                       "bank. A strategy asks only for measures the host "
                       "offers; anything missing is a request against the "
                       "host, not something to work around.")
+    if "without" in item:
+        return _leave_one_out(ctx, entry, item), None
     if "at" not in item:
         cur = entry["current"]
         if cur["status"] == "known":
@@ -2722,6 +2948,9 @@ def _cited_as(item) -> str:
         return "this citation"
     named = item[subject] if subject != "label" else item.get("label")
     at = f' at {item["at"]}' if "at" in item else ""
+    if "without" in item:
+        form = ROBUSTNESS.get(item["without"]) or {}
+        at = " " + form.get("label", item["without"])
     if "since" in item:
         anchor = BASELINE_ANCHORS.get(item["since"]) or {}
         form = _change_form(item)
@@ -2786,6 +3015,146 @@ def test(ctx: dict, item: dict) -> str:
     return outcome
 
 
+def _confirmation_run(ctx, item):
+    """(consecutive filings carrying the failure, newest first, and their
+    period ends).
+
+    Every reading is put through the same citation the reader will see beside
+    it, at its own period. A filing whose reading could not be worked out
+    neither advances the run nor resets it: a gap must not confirm a breach
+    nobody observed, and must not grant an indefinite reprieve either.
+    """
+    entry = (ctx.get("measures") or {}).get(item["measure"]) or {}
+    points = _read(entry.get("series"), "points") or []
+    run, periods = 0, []
+    for point in reversed(points):
+        at = {**item, "at": point["period_end"]}
+        at.pop("without", None)
+        outcome = test(ctx, at)
+        if outcome == UNKNOWN:
+            continue
+        if outcome != FAIL:
+            break
+        run += 1
+        periods.append(point["period_end"])
+    return run, periods
+
+
+def confirm(ctx: dict, item: dict) -> dict:
+    """Whether a requirement's failure is established, and on what.
+
+    `item` is the citation saying what the holding must keep being true —
+    the same one the reader will see. The failure of it is the breach. This
+    answers, in the host, the question every strategy used to answer for
+    itself: is one reading enough?
+
+    It is the host's because the answer is a property of the measure. How
+    far one observation can move a median, and whether the offending
+    observation leaves the window by being looked at again, is arithmetic
+    about the estimator — see ESTIMATORS for why that stopped being a
+    strategy's setting. What the strategy still owns is the level, and what
+    to do when a breach is established.
+
+    Returns a plain dict:
+
+        confirmation  one of CONFIRMATIONS. `clear` — the requirement holds.
+                      `unreadable` — it could not be tested, which is never
+                      evidence that anything is wrong. `breached` — it fails
+                      on this reading and the failure is not established
+                      yet. `confirmed` — it is.
+        estimator     how the measure is read, with the number of filings its
+                      breach needs and whether it must survive dropping a
+                      year.
+        run/periods   consecutive filings carrying the failure, newest first.
+        robust        True where the failure survives dropping its most
+                      favourable year, False where dropping it clears the
+                      requirement, None where the estimator does not ask.
+        why           one sentence naming the rule that produced the answer,
+                      because a verdict that cannot say why teaches nothing.
+
+    Raises ValueError where the citation cannot carry a confirmation at all
+    — no comparator, or a subject with no filing history behind it. That is
+    a fault in the strategy rather than a fact about the security, and
+    `evaluate` contains it as an error in place.
+    """
+    if not _is_mapping(item):
+        raise ValueError("a confirmation needs an evidence item, which is a "
+                         "mapping.")
+    if "measure" not in item:
+        raise ValueError(
+            "a confirmation reads a bank measure's filing history, so it "
+            "needs a citation naming `measure`. Nothing else the host serves "
+            "has readings at past filings to count.")
+    if "comparator" not in item:
+        raise ValueError(
+            f"{_cited_as(item)} states no requirement, so there is nothing "
+            "for a filing to confirm. Cite what the holding must keep being "
+            "true and the breach is that failing.")
+    outcome = test(ctx, item)
+    est = estimator_of(item["measure"])
+    if est is None:
+        raise ValueError(
+            f'the metric bank does not say how "{item["measure"]}" is read, '
+            "so how much evidence a breach of it needs cannot be worked out. "
+            "That is a hole in the bank, not something to work around.")
+    base = {"estimator": est, "needs": est["confirmations"], "run": 0,
+            "periods": [], "robust": None}
+    if outcome == UNKNOWN:
+        return {**base, "confirmation": UNREADABLE,
+                "why": "the requirement could not be tested on the current "
+                       "reading, and a figure nobody could read is not "
+                       "evidence that anything is wrong"}
+    if outcome != FAIL:
+        return {**base, "confirmation": CLEAR,
+                "why": "the requirement holds on the current reading"}
+
+    run, periods = _confirmation_run(ctx, item)
+    needs = est["confirmations"]
+    # Capped at what the rule actually leant on, so a reader is shown the
+    # evidence and not the archive. A measure needing none is answered by the
+    # reading in front of them — citing eleven older filings that agree would
+    # be density standing in for an argument, and on a five-year window most
+    # of them are the same years anyway.
+    base = {**base, "run": run, "periods": periods[:needs]}
+
+    if est["robustness"] == "always":
+        without = test(ctx, {**item, "without": "one-year"})
+        if without == UNKNOWN:
+            return {**base, "confirmation": BREACHED, "robust": None,
+                    "why": (f"this is {est['label']}, so the failure has to "
+                            "survive dropping the year that most favours it "
+                            "— and that reading could not be worked out, "
+                            "which is not evidence either way")}
+        if without != FAIL:
+            return {**base, "confirmation": BREACHED, "robust": False,
+                    "why": (f"this is {est['label']}: drop the single year "
+                            "that most favours it and the requirement is "
+                            "met again, so one year is carrying this rather "
+                            "than the record")}
+        base = {**base, "robust": True}
+
+    if run >= needs:
+        return {**base, "confirmation": CONFIRMED,
+                "why": _why_confirmed(est, run, needs)}
+    return {**base, "confirmation": BREACHED,
+            "why": (f"this is {est['label']}, which takes {needs} "
+                    f"consecutive filings to establish; {run} "
+                    + ("carries" if run == 1 else "carry") + " it so far")}
+
+
+def _why_confirmed(est, run, needs) -> str:
+    if est["robustness"] == "always":
+        return (f"this is {est['label']}, so waiting for another filing "
+                "would re-read the same years; the failure survives dropping "
+                "the year that most favours it, which one bad year would not")
+    if needs == 0:
+        return (f"this is {est['label']}, and the window has already done "
+                "the smoothing a second reading would be asked for — one "
+                "observation cannot move it past the one next to it")
+    return (f"this is {est['label']}, and {needs} consecutive filings "
+            f"{'carries' if needs == 1 else 'carry'} the failure")
+
+
 def resolve_evidence(record: dict, ctx: dict, items: list):
     """(rendered, errors) — every citation answered by the host.
 
@@ -2833,6 +3202,18 @@ def resolve_evidence(record: dict, ctx: dict, items: list):
                         "since": item["since"], "change": form,
                         "explain": _change_explain(item["measure"], anchor,
                                                    form)}
+            elif "without" in item:
+                # Also its own subject. "18.9%" and "18.9% with its worst
+                # year dropped" are two different figures, they render side
+                # by side on an exit, and the second is the one deciding
+                # whether the first is a year or a trend.
+                form = ROBUSTNESS.get(item["without"]) or {}
+                view = {"kind": "robustness", "id": item["measure"],
+                        "label": f'{_bank_label(item["measure"])}, '
+                                 + form.get("label", item["without"]),
+                        "unit": _bank_unit(item["measure"]),
+                        "without": item["without"],
+                        "explain": form.get("explain")}
             else:
                 view = {"kind": "judgement" if judged else "measure",
                         "id": item["measure"],
@@ -3024,6 +3405,43 @@ _bank_cache: dict = {}
 _bank_doc = None
 
 
+def _plain_estimator(node):
+    """{"kind", "observations"} off a bank entry, or None.
+
+    Tolerant here and strict in `bank.load_bank`, which refuses an entry that
+    declares no estimator or an unknown kind. Rendering must not depend on
+    the bank being well formed — but nothing downstream may quietly treat a
+    malformed one as a known kind, so it comes back as nothing at all.
+    """
+    if not _is_mapping(node):
+        return None
+    kind = str(node.get("kind") or "")
+    if kind not in ESTIMATORS:
+        return None
+    obs = node.get("observations")
+    return {"kind": kind,
+            "observations": int(obs) if isinstance(obs, int)
+            and not isinstance(obs, bool) else None}
+
+
+def estimator_of(measure_id):
+    """How a measure is read, and therefore what a breach of it needs:
+    {"kind", "observations", "confirmations", "robustness"} or None where the
+    bank does not say."""
+    meta = _bank_entry(measure_id) or {}
+    est = meta.get("estimator")
+    if not est:
+        return None
+    spec = ESTIMATORS[est["kind"]]
+    robustness = spec["robustness"]
+    if robustness == "short-window":
+        obs = est.get("observations")
+        robustness = "always" if isinstance(obs, int) \
+            and obs < BREAKDOWN_OBSERVATIONS else "no"
+    return {**est, "confirmations": spec["confirmations"],
+            "robustness": robustness, "label": spec["label"]}
+
+
 def _bank_entry(measure_id):
     """Label, unit and kind for a bank measure. Read from the bank so a
     measure reads the same in a strategy's reason as it does anywhere else.
@@ -3048,6 +3466,7 @@ def _bank_entry(measure_id):
                 "label": str(e.get("label") or e.get("id")),
                 "unit": str(e.get("unit") or "none"),
                 "kind": str(e.get("kind") or ""),
+                "estimator": _plain_estimator(e.get("estimator")),
                 "question": str(e.get("question") or "").strip() or None,
                 # Under `explanation`, where the bank keeps it — the same
                 # sentence `bank.meta` hands the view as `plain`. Read from

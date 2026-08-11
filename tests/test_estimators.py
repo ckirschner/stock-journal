@@ -1,0 +1,642 @@
+"""Averaged endpoints, and confirmation keyed to the estimator.
+
+Two structural changes with one thing in common: both replace a rule that
+looked rigorous with one that measures what it claims to.
+
+**Averaged endpoints.** A compound rate between two single years describes
+whatever one-off sat in either of them. The dangerous case is not the company
+that fails high and gets rejected — it is the one that fails *mid-band*: a
+true 7% grower whose base year carried a charge reads about 20%, passes every
+plausible test, and nothing anywhere says so. That case is pinned below, and
+it is the reason for the whole change.
+
+**Confirmation keyed to the estimator.** Two consecutive readings of a rolling
+five-year window share four of five years. Demanding several of them
+accumulates one piece of evidence and several years, and the year that
+produced the breach does not leave the window by being looked at again. Where
+that is true the host asks a different question instead — does the failure
+survive dropping the year that most favours the company — and where it is not
+true, confirmation still counts filings.
+
+On why the arithmetic here is checked against synthetic filings rather than
+hand-read ones: what an averaged rate should be, given eight annual figures,
+is the definition of the measure and not a fact about any company. The
+expected values below are worked out from that definition, never through the
+code path under test. Extraction from real filings — which IS a fact about a
+company — is pinned against hand-read primary documents elsewhere, in
+tests/fixtures/groundtruth.
+"""
+
+import pytest
+from conftest import dur, filing
+
+from engine import bank, contract
+from engine.compute import compute_all
+
+
+# ---------------------------------------------------------------------------
+# builders
+# ---------------------------------------------------------------------------
+
+def years(series, concept="us-gaap:Revenues", extra=None):
+    """A 10-K per fiscal year carrying that year's figure.
+
+    `series` is {year: value}; `extra` is {year: [more facts]}. One filing per
+    year, each filed the following February, which is what makes the eight
+    annual observations tile and sit on one vintage.
+    """
+    out = []
+    for y, v in sorted(series.items()):
+        facts = [dur(concept, f"{y}-01-01", f"{y}-12-31", v)]
+        facts.extend((extra or {}).get(y, []))
+        out.append(filing(f"F-{y}", "10-K", f"{y + 1}-02-15",
+                          f"{y}-12-31", facts))
+    return out
+
+
+def with_income(revenue, net_income):
+    """Filings carrying both revenue and net income for the same years."""
+    return years(revenue, extra={
+        y: [dur("us-gaap:NetIncomeLoss", f"{y}-01-01", f"{y}-12-31", v)]
+        for y, v in net_income.items()})
+
+
+def one(filings, entry_id):
+    return compute_all(filings, None, ["SYN"], entry_ids=[entry_id])[entry_id]
+
+
+def averaged(values, span=5):
+    """The expected rate, from the definition and not from the engine."""
+    base = sum(values[:3]) / 3.0
+    end = sum(values[-3:]) / 3.0
+    return ((end / base) ** (1.0 / span) - 1) * 100.0
+
+
+# ---------------------------------------------------------------------------
+# Outcome 1 — every CAGR uses averaged endpoints
+# ---------------------------------------------------------------------------
+
+class TestTheCaseThatMotivatesIt:
+    """A true 7.4% grower whose base year carried a one-off charge.
+
+    Nothing about this company is unusual and nothing about the wrong answer
+    looks wrong. That is the point: 20% on a business compounding at 7% is
+    not caught by an upper band, because it is not absurd — it is the number
+    a good business would produce. A reject silently becomes a buy and no
+    rule anywhere fires.
+
+    The charge sits in the year that was the BASE of the old six-year
+    window, which is where it does the damage.
+    """
+
+    CLEAN = {y: 100.0 * (1.074 ** (y - 2019)) for y in range(2019, 2027)}
+    CHARGED = {**CLEAN, 2021: CLEAN[2021] * 0.5717}
+    FLAT = {y: 100_000.0 for y in range(2019, 2027)}
+
+    def rate(self, ni):
+        r = one(with_income(self.FLAT, ni), "net_income_cagr_5y")
+        assert r["status"] == "computed"
+        return r
+
+    def endpoint(self, ni):
+        """What the old construction served, worked out here from the same
+        figures — the size of the change belongs on the record rather than
+        in a comment."""
+        base, last = ni[2021], ni[2026]
+        return ((last / base) ** (1 / 5) - 1) * 100.0
+
+    def test_the_averaged_rate_is_what_the_definition_says(self):
+        r = self.rate(self.CHARGED)
+        assert r["value"] == pytest.approx(
+            averaged([self.CHARGED[y] for y in sorted(self.CHARGED)]),
+            abs=1e-9)
+
+    def test_the_charge_costs_the_old_construction_thirteen_points(self):
+        assert self.endpoint(self.CLEAN) == pytest.approx(7.4, abs=0.1)
+        assert self.endpoint(self.CHARGED) == pytest.approx(20.1, abs=0.3)
+
+    def test_and_lands_it_mid_band_where_nothing_catches_it(self):
+        """Not a rejection. 20% is inside any plausible fast-grower band, so
+        every test passes and the reader is told a 7% company grows at 20%."""
+        assert 15.0 < self.endpoint(self.CHARGED) < 25.0
+
+    def test_averaging_absorbs_most_of_it(self):
+        """Three years at each end leave a third of one year's distortion,
+        not all of it. Four points of error against thirteen."""
+        moved = self.rate(self.CHARGED)["value"] \
+            - self.rate(self.CLEAN)["value"]
+        assert 0 < moved < 4.0
+        endpoint_moved = self.endpoint(self.CHARGED) \
+            - self.endpoint(self.CLEAN)
+        assert endpoint_moved > 12.0
+
+    def test_dropping_the_charged_year_recovers_the_rest(self):
+        """And so the leave-one-out reading, which is what a breach of a
+        windowed measure has to survive, lands on the underlying rate."""
+        r = self.rate(self.CHARGED)
+        outs = {o["dropped"]: o["value"] for o in r["leave_one_out"]}
+        assert outs["2021-12-31"] == pytest.approx(7.4, abs=1.0)
+
+
+class TestEightYearsAndNoFallback:
+    def test_seven_years_is_a_named_absence(self):
+        r = one(years({y: 100.0 + y for y in range(2020, 2027)}),
+                "revenue_cagr_5y")
+        assert r["status"] == "absent"
+        assert "7 fiscal year" in r["reason"] and "8 are needed" in r["reason"]
+
+    def test_eight_years_computes(self):
+        vals = {y: 100.0 * (1.08 ** (y - 2019)) for y in range(2019, 2027)}
+        r = one(years(vals), "revenue_cagr_5y")
+        assert r["status"] == "computed"
+        assert r["value"] == pytest.approx(
+            averaged([vals[y] for y in sorted(vals)]), abs=1e-9)
+
+    def test_the_three_year_rate_needs_six_and_not_four(self):
+        five = {y: 100.0 + y for y in range(2022, 2027)}
+        assert one(years(five), "revenue_cagr_3y")["status"] == "absent"
+        six = {y: 100.0 + y for y in range(2021, 2027)}
+        got = one(years(six), "revenue_cagr_3y")
+        assert got["status"] == "computed"
+        assert got["value"] == pytest.approx(
+            averaged([six[y] for y in sorted(six)], span=3), abs=1e-9)
+
+    def test_a_thinner_window_is_never_quietly_substituted(self):
+        """The absence has to stay an absence. A measure that silently
+        becomes a two-year mean when the eighth year is missing reads
+        identically on screen and answers a different question."""
+        r = one(years({y: 100.0 + y for y in range(2020, 2027)}),
+                "revenue_cagr_5y")
+        assert r["status"] == "absent"
+        assert "value" not in r
+
+
+class TestTheSpreadsInheritIt:
+    def test_a_spread_is_the_difference_of_two_averaged_rates(self):
+        rev = {y: 1000.0 * (1.05 ** (y - 2019)) for y in range(2019, 2027)}
+        ni = {y: 100.0 * (1.09 ** (y - 2019)) for y in range(2019, 2027)}
+        got = one(with_income(rev, ni), "ni_minus_revenue_cagr_spread_5y")
+        assert got["status"] == "computed"
+        assert got["value"] == pytest.approx(
+            averaged([ni[y] for y in sorted(ni)])
+            - averaged([rev[y] for y in sorted(rev)]), abs=1e-9)
+
+    def test_a_spread_drops_the_same_year_from_both_sides(self):
+        """A difference between one rate missing FY2021 and another missing
+        FY2019 is a number that answers nothing and reads like an answer."""
+        rev = {y: 1000.0 * (1.05 ** (y - 2019)) for y in range(2019, 2027)}
+        ni = {y: 100.0 * (1.09 ** (y - 2019)) for y in range(2019, 2027)}
+        filings = with_income(rev, ni)
+        spread = one(filings, "ni_minus_revenue_cagr_spread_5y")
+        a = compute_all(filings, None, ["SYN"],
+                        entry_ids=["net_income_cagr_5y", "revenue_cagr_5y"])
+        left = {o["dropped"]: o["value"]
+                for o in a["net_income_cagr_5y"]["leave_one_out"]}
+        right = {o["dropped"]: o["value"]
+                 for o in a["revenue_cagr_5y"]["leave_one_out"]}
+        for o in spread["leave_one_out"]:
+            assert o["value"] == pytest.approx(
+                left[o["dropped"]] - right[o["dropped"]], abs=1e-9)
+        assert set(o["dropped"] for o in spread["leave_one_out"]) \
+            == set(left) & set(right)
+
+
+# ---------------------------------------------------------------------------
+# Genuine smallness — the earnings that appeared rather than grew
+# ---------------------------------------------------------------------------
+
+class TestEarningsThatAppeared:
+    """Both halves are required, and each exists because the other misfires.
+
+    Measured against 380 real filers: the margin half alone fires on
+    companies whose base-period earnings were substantial — it is
+    algebraically a margin-expansion test, which this bank already publishes
+    separately. The multiple half alone fires on a company whose revenue
+    multiplied about as fast as its earnings, which is growth. Together they
+    fired on one filer in 380, and that filer's earnings came from emerging
+    from bankruptcy while its revenue shrank.
+    """
+
+    FLAT_REVENUE = {y: 1000.0 for y in range(2019, 2027)}
+
+    def test_earnings_that_appeared_are_routed_not_greyed(self):
+        # Net margin 0.5% at the base, 8% at the end, on flat revenue.
+        ni = {2019: 5.0, 2020: 5.0, 2021: 5.0, 2022: 30.0,
+              2023: 60.0, 2024: 80.0, 2025: 80.0, 2026: 80.0}
+        r = one(with_income(self.FLAT_REVENUE, ni), "net_income_cagr_5y")
+        assert r["status"] == "absent"
+        assert "does not establish a grower" in r["reason"]
+        assert "appeared" in r["reason"]
+        # It points at the right question rather than saying "unanswerable".
+        assert "margin recovery or a turnaround" in r["reason"]
+        assert "0.50%" in r["reason"] and "8.00%" in r["reason"]
+
+    def test_a_real_grower_whose_revenue_grew_too_is_not_refused(self):
+        """Earnings multiplied nearly twentyfold and so did revenue. The multiple half fires and the margin half does not, so the
+        rate stands — which is the whole reason both halves are required."""
+        rev = {2019: 100.0, 2020: 110.0, 2021: 120.0, 2022: 400.0,
+               2023: 900.0, 2024: 1500.0, 2025: 2000.0, 2026: 2400.0}
+        ni = {y: v * 0.30 for y, v in rev.items()}
+        r = one(with_income(rev, ni), "net_income_cagr_5y")
+        assert r["status"] == "computed"
+
+    def test_a_margin_expander_with_real_base_earnings_is_not_refused(self):
+        """Net margin roughly doubled on a base that was already 10%. The margin half fires and the multiple half does not."""
+        rev = {y: 1000.0 * (1.14 ** (y - 2019)) for y in range(2019, 2027)}
+        ni = {y: v * (0.10 if y < 2022 else 0.21) for y, v in rev.items()}
+        r = one(with_income(rev, ni), "net_income_cagr_5y")
+        assert r["status"] == "computed"
+
+    def test_the_gate_reads_earnings_and_not_per_share(self):
+        """Per-share growth is gated on net income, because a share count
+        that halved says nothing about whether the company had earnings."""
+        ni = {2019: 5.0, 2020: 5.0, 2021: 5.0, 2022: 30.0,
+              2023: 60.0, 2024: 80.0, 2025: 80.0, 2026: 80.0}
+        extra = {y: [dur("us-gaap:NetIncomeLoss",
+                         f"{y}-01-01", f"{y}-12-31", v),
+                     dur("us-gaap:EarningsPerShareDiluted",
+                         f"{y}-01-01", f"{y}-12-31", v / 100.0)]
+                 for y, v in ni.items()}
+        r = one(years(self.FLAT_REVENUE, extra=extra), "eps_cagr_5y")
+        assert r["status"] == "absent"
+        assert "does not establish a grower" in r["reason"]
+
+    def test_revenue_growth_is_never_gated_on_it(self):
+        """A company selling ten times what it sold is a company selling ten
+        times what it sold. Revenue has no margin under it and a small
+        revenue base is the thing itself, not an artefact of one."""
+        rev = {2019: 10.0, 2020: 12.0, 2021: 14.0, 2022: 200.0,
+               2023: 600.0, 2024: 900.0, 2025: 1100.0, 2026: 1300.0}
+        ni = {y: v * 0.02 for y, v in rev.items()}
+        r = one(with_income(rev, ni), "revenue_cagr_5y")
+        assert r["status"] == "computed"
+
+    def test_an_unreadable_margin_check_refuses_rather_than_serves(self):
+        """A tenfold rise in earnings with no revenue to check it against
+        cannot be told from a margin coming back off the floor. If it cannot
+        be right, it is absent — the caution would be read by a person and
+        ignored by the arithmetic."""
+        ni = {2019: 5.0, 2020: 5.0, 2021: 5.0, 2022: 30.0,
+              2023: 60.0, 2024: 80.0, 2025: 80.0, 2026: 80.0}
+        filings = years(ni, concept="us-gaap:NetIncomeLoss")
+        r = one(filings, "net_income_cagr_5y")
+        assert r["status"] == "absent"
+        assert "Revenue could not be read" in r["reason"]
+
+
+# ---------------------------------------------------------------------------
+# Outcome 2 — the estimator, declared and enforced
+# ---------------------------------------------------------------------------
+
+class TestTheBankDeclaresHowEveryMeasureIsRead:
+    def test_every_entry_declares_a_kind_the_host_knows(self):
+        for e in bank.load_bank()["entries"]:
+            est = contract.estimator_of(str(e["id"]))
+            assert est is not None, e["id"]
+            assert est["kind"] in contract.ESTIMATORS
+
+    def test_an_entry_with_no_estimator_is_refused_at_load(self, tmp_path,
+                                                           monkeypatch):
+        """Refused rather than defaulted. Every fallback is either the strict
+        one, which silently stops exits firing, or the loose one, which
+        silently fires them on a single year."""
+        (tmp_path / "holed.yaml").write_text(
+            "schema: ledger.metric-bank/1\n"
+            "entries:\n  - id: x\n    kind: computed\n", encoding="utf-8")
+        monkeypatch.setattr(bank, "CONFIG_DIR", tmp_path)
+        bank._bank_cache.clear()
+        with pytest.raises(ValueError, match="declares no `estimator`"):
+            bank.load_bank("holed")
+
+    def test_an_unknown_kind_is_refused_at_load(self, tmp_path, monkeypatch):
+        (tmp_path / "odd.yaml").write_text(
+            "schema: ledger.metric-bank/1\n"
+            "entries:\n  - id: x\n    kind: computed\n"
+            "    estimator:\n      kind: vibes\n", encoding="utf-8")
+        monkeypatch.setattr(bank, "CONFIG_DIR", tmp_path)
+        bank._bank_cache.clear()
+        with pytest.raises(ValueError, match="not one of"):
+            bank.load_bank("odd")
+
+    def test_a_windowed_kind_must_say_how_many_observations(self, tmp_path,
+                                                            monkeypatch):
+        """A three-point median and a five-point one do not resist an outlier
+        equally, and the policy turns on exactly that."""
+        (tmp_path / "vague.yaml").write_text(
+            "schema: ledger.metric-bank/1\n"
+            "entries:\n  - id: x\n    kind: computed\n"
+            "    estimator:\n      kind: median\n", encoding="utf-8")
+        monkeypatch.setattr(bank, "CONFIG_DIR", tmp_path)
+        bank._bank_cache.clear()
+        with pytest.raises(ValueError, match="how many annual observations"):
+            bank.load_bank("vague")
+
+    def test_every_estimator_that_asks_for_a_dropped_year_supplies_one(self):
+        """The quiet failure this guards: an entry whose estimator demands
+        the one-year-dropped reading and whose computation never forms one
+        can never establish a breach, and nothing says so — the exit simply
+        stops firing.
+        """
+        rev = {y: 1000.0 * (1.05 ** (y - 2019)) for y in range(2019, 2027)}
+        ni = {y: 100.0 * (1.09 ** (y - 2019)) for y in range(2019, 2027)}
+        filings = with_income(rev, ni)
+        want = [str(e["id"]) for e in bank.load_bank()["entries"]
+                if (contract.estimator_of(str(e["id"])) or {})
+                .get("robustness") == "always"]
+        assert want, "no measure asks for a dropped year, which cannot be right"
+        got = compute_all(filings, None, ["SYN"], entry_ids=want)
+        formed = [eid for eid, r in got.items()
+                  if r.get("status") == "computed"]
+        assert formed, "none of them computed on this fixture"
+        for eid in formed:
+            assert got[eid].get("leave_one_out"), eid
+
+
+# ---------------------------------------------------------------------------
+# what confirm() does with each kind
+# ---------------------------------------------------------------------------
+
+QUARTERS = ["2025-03-31", "2025-06-30", "2025-09-30", "2025-12-31",
+            "2026-03-31"]
+
+
+def ctx_for(measure, current, points=(), leave_one_out=None, limit=1.0):
+    """A context shaped exactly as engine/context.py builds one, holding one
+    measure and one setting."""
+    cur = ({"status": "known", "value": current, "source": "computed",
+            "cautions": [], "provenance": []}
+           if current is not None
+           else {"status": "absent", "reason": "not on record"})
+    if leave_one_out is not None:
+        cur["leave_one_out"] = list(leave_one_out)
+    return {
+        "measures": {measure: {
+            "current": cur,
+            "series": {"cadence": "quarterly", "note": None,
+                       "truncated": False,
+                       "points": [{"period_end": p, "filed": p,
+                                   "form": "10-Q", "accession": "A",
+                                   "value": v, "reason":
+                                       None if v is not None else "no data",
+                                   "cautions": [], "provenance": []}
+                                  for p, v in points]}}},
+        "values": {"floor": limit},
+        "today": "2026-08-10",
+    }
+
+
+def item(measure, comparator="at_least"):
+    return {"measure": measure, "comparator": comparator,
+            "threshold_from": "floor"}
+
+
+class TestConfirmationFollowsTheEstimator:
+    def test_a_five_year_median_fires_on_the_first_breach(self):
+        """One outlier cannot move a median past the observation next to it —
+        the window already did the smoothing confirmation is for, and the
+        next reading shares four of the same five years."""
+        ctx = ctx_for("roic_median_5y", 8.0,
+                      [(q, 20.0) for q in QUARTERS[:-1]]
+                      + [(QUARTERS[-1], 8.0)], limit=12.0)
+        got = contract.confirm(ctx, item("roic_median_5y"))
+        assert got["confirmation"] == contract.CONFIRMED
+        assert got["needs"] == 0
+        assert "already done the smoothing" in got["why"]
+
+    def test_a_reading_at_one_date_takes_two_filings(self):
+        """A bond issued the week before the year end is in the balance
+        sheet, and the next filing brings a wholly new reading."""
+        one_bad = ctx_for("current_ratio", 0.9,
+                          [(q, 2.4) for q in QUARTERS[:-1]]
+                          + [(QUARTERS[-1], 0.9)], limit=1.2)
+        assert contract.confirm(one_bad, item("current_ratio"))[
+            "confirmation"] == contract.BREACHED
+
+        two_bad = ctx_for("current_ratio", 0.9,
+                          [(q, 2.4) for q in QUARTERS[:-2]]
+                          + [(q, 0.9) for q in QUARTERS[-2:]], limit=1.2)
+        got = contract.confirm(two_bad, item("current_ratio"))
+        assert got["confirmation"] == contract.CONFIRMED
+        assert got["needs"] == 2 and got["periods"] == QUARTERS[::-1][:2]
+
+    def test_two_readings_at_each_end_take_one_filing(self):
+        """Not a long-window measure however many years it spans: two
+        observations, and the next filing replaces the one carrying the
+        noise. One confirmation, never four."""
+        none_yet = ctx_for("diluted_share_count_change_5y", 14.0,
+                           [(q, 0.0) for q in QUARTERS], limit=0.0)
+        got = contract.confirm(none_yet,
+                               item("diluted_share_count_change_5y",
+                                    "at_most"))
+        assert got["confirmation"] == contract.BREACHED and got["needs"] == 1
+
+        one_bad = ctx_for("diluted_share_count_change_5y", 14.0,
+                          [(q, 0.0) for q in QUARTERS[:-1]]
+                          + [(QUARTERS[-1], 14.0)], limit=0.0)
+        assert contract.confirm(one_bad,
+                                item("diluted_share_count_change_5y",
+                                     "at_most"))[
+            "confirmation"] == contract.CONFIRMED
+
+    def test_a_count_of_annual_reports_asks_for_nothing_on_top(self):
+        """The unit is annual reports, so the level already says how many
+        filings it takes. Two losing years spans two annual reports;
+        demanding two consecutive filings would quietly demand a third."""
+        ctx = ctx_for("consecutive_annual_loss_years", 2.0, [], limit=2.0)
+        got = contract.confirm(ctx, item("consecutive_annual_loss_years",
+                                         "below"))
+        assert got["confirmation"] == contract.CONFIRMED
+        assert got["needs"] == 0 and got["run"] == 0
+
+    def test_a_measure_needing_no_confirmation_fires_without_any_filings(
+            self):
+        """The consequence worth naming: a journal driven by hand-entered
+        figures has no filing series at all, so an exit that counted filings
+        could never fire in one however bad the number got. Where the
+        estimator asks for none, it can."""
+        ctx = ctx_for("roic_median_5y", 3.0, [], limit=12.0)
+        assert contract.confirm(ctx, item("roic_median_5y"))[
+            "confirmation"] == contract.CONFIRMED
+
+    def test_a_gap_neither_confirms_a_breach_nor_forgives_one(self):
+        ctx = ctx_for("current_ratio", 0.9,
+                      [(QUARTERS[0], 2.4), (QUARTERS[1], 0.9),
+                       (QUARTERS[2], None), (QUARTERS[3], 0.9),
+                       (QUARTERS[4], 0.9)], limit=1.2)
+        assert contract.confirm(ctx, item("current_ratio"))[
+            "confirmation"] == contract.CONFIRMED
+
+    def test_absence_is_unreadable_and_never_a_confirmation(self):
+        ctx = ctx_for("current_ratio", None,
+                      [(q, 0.9) for q in QUARTERS], limit=1.2)
+        got = contract.confirm(ctx, item("current_ratio"))
+        assert got["confirmation"] == contract.UNREADABLE
+        assert got["run"] == 0
+
+    def test_a_requirement_that_holds_is_clear(self):
+        ctx = ctx_for("current_ratio", 2.4,
+                      [(q, 2.4) for q in QUARTERS], limit=1.2)
+        assert contract.confirm(ctx, item("current_ratio"))[
+            "confirmation"] == contract.CLEAR
+
+
+class TestTheDroppedYear:
+    """A range over five years is the least robust statistic there is: one
+    year sets the top of it single-handed, and that year stays in the window
+    for as long as the window is long. Waiting cannot help."""
+
+    def test_a_breach_one_year_is_carrying_waits(self):
+        ctx = ctx_for("gross_margin_range_5y", 9.0, [],
+                      leave_one_out=[{"dropped": "2022-12-31", "value": 3.0},
+                                     {"dropped": "2023-12-31", "value": 8.8}],
+                      limit=6.0)
+        got = contract.confirm(ctx, item("gross_margin_range_5y", "at_most"))
+        assert got["confirmation"] == contract.BREACHED
+        assert got["robust"] is False
+        assert "one year is carrying this" in got["why"]
+
+    def test_a_breach_the_record_carries_fires_now(self):
+        ctx = ctx_for("gross_margin_range_5y", 9.0, [],
+                      leave_one_out=[{"dropped": "2022-12-31", "value": 8.2},
+                                     {"dropped": "2023-12-31", "value": 8.8}],
+                      limit=6.0)
+        got = contract.confirm(ctx, item("gross_margin_range_5y", "at_most"))
+        assert got["confirmation"] == contract.CONFIRMED
+        assert got["robust"] is True
+
+    def test_a_check_that_cannot_be_made_never_passes_itself(self):
+        """A robustness check that silently falls back to the number it was
+        checking is not a check."""
+        ctx = ctx_for("gross_margin_range_5y", 9.0, [], limit=6.0)
+        got = contract.confirm(ctx, item("gross_margin_range_5y", "at_most"))
+        assert got["confirmation"] == contract.BREACHED
+        assert got["robust"] is None
+        assert "could not be worked out" in got["why"]
+
+    def test_the_dropped_year_is_the_one_that_most_favours_the_company(self):
+        """Cited, so a reader can check the rule rather than take it on
+        trust — and it is the host that picks which year, from the direction
+        of the test."""
+        ctx = ctx_for("gross_margin_range_5y", 9.0, [],
+                      leave_one_out=[{"dropped": "2022-12-31", "value": 3.0},
+                                     {"dropped": "2023-12-31", "value": 8.8}],
+                      limit=6.0)
+        rendered, errors = contract.resolve_evidence(
+            {"values": [{"id": "floor", "label": "Widest swing",
+                         "type": "number", "unit": "percentage_points",
+                         "source": {"name": "invented", "reasoning": False},
+                         "explain": "x" * 130}]},
+            ctx, [{**item("gross_margin_range_5y", "at_most"),
+                   "without": "one-year"}])
+        assert errors == []
+        assert rendered[0]["observed"]["value"] == 3.0
+        assert rendered[0]["outcome"] == contract.PASS
+        assert "most favourable year dropped" in rendered[0]["subject"]["label"]
+        assert "2022-12-31" in rendered[0]["observed"]["provenance"][0]
+
+
+class TestWhatAConfirmationRefuses:
+    def test_a_citation_with_no_requirement_raises(self):
+        ctx = ctx_for("current_ratio", 2.4, [])
+        with pytest.raises(ValueError, match="nothing for a filing to confirm"):
+            contract.confirm(ctx, {"measure": "current_ratio"})
+
+    def test_a_subject_with_no_filing_history_raises(self):
+        ctx = ctx_for("current_ratio", 2.4, [])
+        with pytest.raises(ValueError, match="needs a citation naming"):
+            contract.confirm(ctx, {"fact": "position.weight",
+                                   "comparator": "at_most",
+                                   "threshold_from": "floor"})
+
+    def test_a_dropped_year_beside_a_past_reading_is_refused(self):
+        errors = contract.validate_decision(
+            {"states": [{"id": "s", "render": "hold", "name": "S"}]},
+            {"state": "s", "payload": {},
+             "reason": {"rule": "r", "summary": "s", "note": None,
+                        "groups": [],
+                        "evidence": [{"measure": "roic_median_5y",
+                                      "at": "2025-12-31",
+                                      "without": "one-year"}]}})
+        assert any("different questions" in e for e in errors)
+
+    def test_an_invented_robustness_form_is_refused(self):
+        errors = contract.validate_decision(
+            {"states": [{"id": "s", "render": "hold", "name": "S"}]},
+            {"state": "s", "payload": {},
+             "reason": {"rule": "r", "summary": "s", "note": None,
+                        "groups": [],
+                        "evidence": [{"measure": "roic_median_5y",
+                                      "without": "two-years"}]}})
+        assert any("never invents one" in e for e in errors)
+
+
+class TestNoStrategyStatesAConfirmationCount:
+    def test_no_shipped_bundle_declares_one(self):
+        """The structural half of the change. A setting that could ask for
+        four readings of a five-year median is not discouraged, it is
+        unavailable — including to whoever writes the next bundle and does
+        not know why it mattered."""
+        from engine import strategy_loader
+        loaded, _reports = strategy_loader.discover()
+        assert loaded
+        for record in loaded.values():
+            for spec in record.get("values") or []:
+                assert "confirmation" not in spec["id"], \
+                    f'{record["id"]} declares {spec["id"]}'
+                assert "quarters" not in spec["id"], \
+                    f'{record["id"]} declares {spec["id"]}'
+
+
+# ---------------------------------------------------------------------------
+# and across the boundary a strategy actually reads
+# ---------------------------------------------------------------------------
+
+class TestTheDroppedYearReachesAStrategy:
+    """The one-out readings are computed in the engine and consumed in the
+    contract, and everything above tests those two ends separately. This is
+    the join.
+
+    It is worth its own test because of how it fails: stop carrying them over
+    the boundary and nothing raises, nothing renders wrong, and no measure
+    goes absent — every exit on a windowed measure simply stops firing, for
+    ever, in silence.
+    """
+
+    def _stored(self, cik, margins):
+        """Five fiscal years of gross margin, from one filing each."""
+        from engine import facts_store
+        for i, (y, gm) in enumerate(sorted(margins.items())):
+            rev = 1000.0
+            f = filing(f"G-{y}", "10-K", f"{y + 1}-02-15", f"{y}-12-31", [
+                dur("us-gaap:Revenues", f"{y}-01-01", f"{y}-12-31", rev),
+                dur("us-gaap:GrossProfit", f"{y}-01-01", f"{y}-12-31",
+                    rev * gm / 100.0),
+            ])
+            f["cik"] = cik
+            facts_store.save_filing(cik, f)
+
+    def test_a_strategy_can_ask_whether_a_breach_survives_a_dropped_year(
+            self):
+        from engine import context
+        # Four steady years and one that swings the range wide on its own.
+        self._stored(4242, {2022: 40.0, 2023: 41.0, 2024: 40.5,
+                            2025: 41.5, 2026: 28.0})
+        sec = {"ticker": "SYN", "name": "Synthetic Co", "cik": 4242,
+               "lots": []}
+        ctx = context.build_context(sec, [sec], {"floor": 6.0}, {})
+
+        cur = ctx["measures"]["gross_margin_range_5y"]["current"]
+        assert cur["status"] == "known"
+        assert cur["leave_one_out"], \
+            "the one-out readings did not cross the boundary"
+
+        cite = {"measure": "gross_margin_range_5y", "comparator": "at_most",
+                "threshold_from": "floor"}
+        got = contract.confirm(ctx, cite)
+        # The full window is far over the limit; drop the one bad year and it
+        # is comfortably inside. One year is carrying it, so nothing fires.
+        assert contract.test(ctx, cite) == contract.FAIL
+        assert got["confirmation"] == contract.BREACHED
+        assert got["robust"] is False
+        assert contract.test(ctx, {**cite, "without": "one-year"}) \
+            == contract.PASS

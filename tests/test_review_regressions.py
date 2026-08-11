@@ -200,10 +200,16 @@ class TestNegativeEndpointCagr:
     def test_cagr_to_a_loss_year_is_cleanly_not_meaningful(self):
         """A positive base compounding to a negative endpoint went complex
         ((-x) ** (1/5)) and leaked a TypeError into six entries. It must be a
-        readable not-meaningful absence instead."""
+        readable not-meaningful absence instead.
+
+        Eight fiscal years since growth rates average three at each end, and
+        the losses are at the newest three so the LATER mean is what comes
+        out negative — the endpoint version of this could reach the same
+        place with one loss year, and that is exactly the sensitivity the
+        averaging removed."""
         filings = []
-        values = [(2021, 100), (2022, 120), (2023, 90), (2024, 40),
-                  (2025, 10), (2026, -55)]
+        values = [(2019, 100), (2020, 110), (2021, 100), (2022, 120),
+                  (2023, 90), (2024, -40), (2025, -10), (2026, -55)]
         for y, ni in values:
             start, end = f"{y}-01-01", f"{y}-12-31"
             filings.append(filing(f"C-{y}", "10-K", f"{y + 1}-02-15", end, [

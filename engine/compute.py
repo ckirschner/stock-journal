@@ -132,9 +132,29 @@ def _prov_point(p: dict) -> str:
     return f"{what} for {when} from {p.get('form') or 'filing'} {p.get('accession')}"
 
 
-def computed(value, provenance=None, cautions=None) -> dict:
-    return {"status": "computed", "value": float(value),
-            "provenance": provenance or [], "cautions": cautions or []}
+def computed(value, provenance=None, cautions=None, leave_one_out=None) -> dict:
+    """One entry's answer.
+
+    `leave_one_out` is the same figure worked out again with each single
+    fiscal year of its window taken out — [{"dropped": year end, "value":
+    v}, ...]. It is carried by every entry whose estimator reads a window,
+    because a breach of a window measure cannot be confirmed by waiting: the
+    offending year stays in the window, so two consecutive readings are
+    mostly the same data. Dropping the flattering year and asking again is
+    the test that means something, and the host does it rather than a
+    strategy, for the reason it does every other comparison.
+
+    Absent where the estimator reads no window. Never a copy of the
+    full-window value — a robustness check that silently falls back to the
+    number it was checking is not a check, so nothing at all is safer.
+    """
+    out = {"status": "computed", "value": float(value),
+           "provenance": provenance or [], "cautions": cautions or []}
+    if leave_one_out:
+        out["leave_one_out"] = [{"dropped": str(o["dropped"]),
+                                 "value": float(o["value"])}
+                                for o in leave_one_out]
+    return out
 
 
 def _absent_result(a) -> dict:
@@ -173,6 +193,99 @@ def _window(ctx, input_id, n):
     if key not in ctx._memo:
         ctx._memo[key] = ctx.sb.annual_window(input_id, n)
     return ctx._memo[key]
+
+
+# --------------------------------------------------------------------------
+# window statistics, and what they look like with one year taken out
+#
+# Every statistic read over a window of fiscal years is computed here rather
+# than inline, so the one-year-dropped readings come out of the same
+# arithmetic as the full-window one. Two implementations of a median — one
+# for the answer and one for the robustness check — would be two things that
+# agree until they don't, which is the failure the whole citation split
+# exists to prevent one level up.
+# --------------------------------------------------------------------------
+
+def _with_one_out(values, years, stat):
+    """(the statistic, [{"dropped": year, "value": v}, ...]).
+
+    One entry per fiscal year in the window. A window of two would leave one
+    observation behind and there is no statistic of one worth reporting, so
+    nothing is offered there.
+    """
+    full = stat(values)
+    if len(values) < 3:
+        return full, []
+    outs = []
+    for i, y in enumerate(years):
+        rest = values[:i] + values[i + 1:]
+        outs.append({"dropped": y, "value": stat(rest)})
+    return full, outs
+
+
+def _median_of(values, years):
+    return _with_one_out(values, years, median)
+
+
+def _range_of(values, years):
+    return _with_one_out(values, years, lambda vs: max(vs) - min(vs))
+
+
+# How many fiscal years are averaged at each end of a growth window. Three,
+# which is Graham's own construction and the only one already in this bank —
+# see eps_growth_10y, where it was doing this job alone.
+GROWTH_ENDS = 3
+
+
+def _growth_window(span, ends=GROWTH_ENDS):
+    """How many fiscal years a growth rate over `span` years needs.
+
+    The two averages are centred `span` years apart, so the window runs from
+    the oldest year of the earlier average to the newest of the later one:
+    span + ends. Five years centre to centre with three-year averages is
+    eight fiscal years of history.
+    """
+    return span + ends
+
+
+def _averaged_ends(values, years, ends=GROWTH_ENDS):
+    """(base mean, end mean, [(year, base mean, end mean) with that year
+    dropped]).
+
+    Only the years inside the two averages are offered as one-out readings.
+    The years in the gap between them are in neither average, so dropping one
+    changes nothing, and handing the same number back as a robustness check
+    would be worse than handing back none.
+    """
+    def mean(xs):
+        return sum(xs) / len(xs)
+
+    base, late = mean(values[:ends]), mean(values[-ends:])
+    outs = []
+    for i in range(ends):
+        outs.append((years[i],
+                     mean(values[:ends][:i] + values[:ends][i + 1:]), late))
+    for i in range(ends):
+        j = len(values) - ends + i
+        outs.append((years[j], base,
+                     mean(values[-ends:][:i] + values[-ends:][i + 1:])))
+    return base, late, outs
+
+
+def _averaged_cagr_from(values, years, span, ends=GROWTH_ENDS):
+    """(rate, one-out rates, base mean, end mean), or (None, ...) where no
+    compound rate exists from this base."""
+    base, late, outs = _averaged_ends(values, years, ends)
+    if base <= 0 or late < 0:
+        return None, [], base, late
+
+    def rate_of(b, e):
+        return ((e / b) ** (1.0 / span) - 1) * 100.0
+
+    return (rate_of(base, late),
+            [{"dropped": y, "value": rate_of(b, e)}
+             for y, b, e in outs if b > 0 and e >= 0],
+            base, late)
 
 
 def _total_debt_with_leases(ctx):
@@ -553,8 +666,9 @@ def roic_median_5y(ctx):
         roics.append(ebit["values"][i] * (1 - rate) / invested * 100.0)
     prov = [f"EBIT, tax and pre-tax income for FY {years[0]}..{years[-1]}",
             "debt, equity and cash at each fiscal year end"]
-    return computed(median(roics), prov,
-                    _cautions_of(ebit, tax, pretax, debt, eq, cash))
+    value, outs = _median_of(roics, years)
+    return computed(value, prov,
+                    _cautions_of(ebit, tax, pretax, debt, eq, cash), outs)
 
 
 def roe_median_5y(ctx):
@@ -579,10 +693,11 @@ def roe_median_5y(ctx):
                 f"Not meaningful here: average shareholders' equity for FY "
                 f"ending {y} is zero or negative (the bank's own test)"))
         roes.append(ni["values"][i] / avg_eq * 100.0)
-    return computed(median(roes),
+    value, outs = _median_of(roes, years)
+    return computed(value,
                     [f"net income FY {years[0]}..{years[-1]}",
                      "equity at the six bracketing year ends"],
-                    _cautions_of(ni, eq))
+                    _cautions_of(ni, eq), outs)
 
 
 def total_debt_to_ebitda(ctx):
@@ -739,9 +854,10 @@ def gross_margin_range_5y(ctx):
     gm = _gross_margin_annual_pct(ctx, 5)
     if is_absent(gm):
         return _absent_result(gm)
-    return computed(max(gm["values"]) - min(gm["values"]),
+    value, outs = _range_of(gm["values"], gm["years"])
+    return computed(value,
                     [f"annual gross margins for FY {gm['years'][0]}.."
-                     f"{gm['years'][-1]}"], gm["cautions"])
+                     f"{gm['years'][-1]}"], gm["cautions"], outs)
 
 
 def gross_margin_change_3y(ctx):
@@ -813,10 +929,11 @@ def fcf_margin_median_5y(ctx):
     if any(r == 0 for r in rev["values"]):
         return _absent_result(absent("a fiscal year in the window has zero revenue"))
     vals = [f / r * 100.0 for f, r in zip(fcf["values"], rev["values"])]
-    return computed(median(vals),
+    value, outs = _median_of(vals, fcf["years"])
+    return computed(value,
                     [f"CFO − capex over revenue, FY {fcf['years'][0]}.."
                      f"{fcf['years'][-1]}"],
-                    sorted(set(fcf["cautions"] + _cautions_of(rev))))
+                    sorted(set(fcf["cautions"] + _cautions_of(rev))), outs)
 
 
 def fcf_yield_on_ev(ctx):
@@ -853,10 +970,11 @@ def cash_conversion_median_5y(ctx):
                 f"net income for FY ending {y} is zero; conversion against "
                 "it has no meaning"))
         vals.append(f / n)
-    return computed(median(vals),
+    value, outs = _median_of(vals, fcf["years"])
+    return computed(value,
                     [f"(CFO − capex) ÷ net income, FY {fcf['years'][0]}.."
                      f"{fcf['years'][-1]}"],
-                    sorted(set(fcf["cautions"] + _cautions_of(ni))))
+                    sorted(set(fcf["cautions"] + _cautions_of(ni))), outs)
 
 
 def accruals_ratio(ctx):
@@ -889,9 +1007,10 @@ def effective_tax_rate_median_5y(ctx):
                 f"pre-tax income for FY ending {y} is zero or negative; an "
                 "effective rate against it has no meaning"))
         rates.append(t / p * 100.0)
-    return computed(median(rates),
+    value, outs = _median_of(rates, years)
+    return computed(value,
                     [f"tax ÷ pre-tax income, FY {years[0]}..{years[-1]}"],
-                    _cautions_of(tax, pretax))
+                    _cautions_of(tax, pretax), outs)
 
 
 def payout_to_fcf_median_5y(ctx):
@@ -919,9 +1038,10 @@ def payout_to_fcf_median_5y(ctx):
         cautions.append("free cash flow is negative in at least one window "
                         "year; the bank notes those years' ratios are "
                         "uninterpretable before the median is taken")
-    return computed(median(vals),
+    value, outs = _median_of(vals, fcf["years"])
+    return computed(value,
                     [f"(dividends + buybacks − issuance) ÷ FCF, FY "
-                     f"{fcf['years'][0]}..{fcf['years'][-1]}"], cautions)
+                     f"{fcf['years'][0]}..{fcf['years'][-1]}"], cautions, outs)
 
 
 def operating_income_ttm(ctx):
@@ -1318,55 +1438,161 @@ def net_cash_to_market_cap(ctx):
                     sorted(set(_cautions_of(cash, sti, debt) + mc["cautions"])))
 
 
-def _cagr(ctx, input_id, years_span):
-    w = _window(ctx, input_id, years_span + 1)
+# How small a base may be against the end of the same window before the
+# compound rate between them stops being a growth rate. A tenth: earnings that
+# multiplied more than tenfold over five years did not compound at 58% a year,
+# they arrived.
+#
+# It is here rather than in any strategy because it is an applicability test —
+# the bank's own kind of level, a statement that the number does not mean
+# anything for this company rather than a judgement about what to do. And it is
+# a refusal rather than a caution, because this value feeds verdicts: a wrong
+# number with a warning beside it is still a wrong verdict, since the caution
+# is read by a person and ignored by the arithmetic. It used to be a caution.
+APPEARED_MULTIPLE = 0.10
+
+# And the second half of the same test, which is what stops the first from
+# firing on a business that genuinely grew tenfold. Earnings can multiply by
+# ten because the company sells ten times as much, or because a margin came
+# back from nothing; only the second is an appearance. Measured as the base
+# period's net margin against the end period's, both from the same three
+# fiscal years the averages already use.
+#
+# Both halves are needed and neither is enough, and that was measured rather
+# than assumed. Across 380 real filers sampled by size, the margin half alone
+# fires on about one in seven — including several whose base-period earnings
+# were plainly substantial, because it is algebraically a margin-expansion
+# test, which this bank already publishes as ni_minus_revenue_cagr_spread_5y.
+# The multiple half alone fires on a company whose revenue multiplied about as
+# fast as its earnings, which is growth. Together they fired on one filer in
+# 380: base-period net margin of 0.05%, revenue shrinking, and earnings that
+# came from emerging from bankruptcy.
+APPEARED_MARGIN = 0.50
+
+
+def _appeared_rather_than_grew(ctx, years, base_ends=GROWTH_ENDS):
+    """An absent reason where the earnings at the base of this window
+    appeared rather than grew, or None.
+
+    Routing rather than greying. A tiny base says something specific — that
+    a margin came back or a turnaround landed — and a margin recovery has a
+    ceiling that unit growth does not. So the reason says which question the
+    reader is actually looking at, rather than reporting the record as
+    unanswerable.
+
+    `years` are the measure's own fiscal years, so net income and revenue are
+    read over exactly the window whose rate is in question rather than over
+    whatever eight years those two inputs happen to reach on their own.
+    """
+    n = len(years)
+    ni = _window(ctx, "net_income", n)
+    if is_absent(ni) or [p["end"] for p in ni["points"]] != years:
+        return None
+    base_ni = sum(ni["values"][:base_ends])
+    end_ni = sum(ni["values"][-base_ends:])
+    if end_ni <= 0 or base_ni <= 0 or base_ni >= APPEARED_MULTIPLE * end_ni:
+        return None
+
+    rev = _window(ctx, "revenue", n)
+    aligned = (not is_absent(rev)
+               and [p["end"] for p in rev["points"]] == years)
+    base_rev = sum(rev["values"][:base_ends]) if aligned else 0.0
+    end_rev = sum(rev["values"][-base_ends:]) if aligned else 0.0
+    multiple = end_ni / base_ni
+    grew = (f"net income over FY {years[0]}..{years[base_ends - 1]} was "
+            f"{base_ni:,.0f} against {end_ni:,.0f} over FY "
+            f"{years[-base_ends]}..{years[-1]} — {multiple:,.0f} times as "
+            "much")
+    if not aligned or base_rev <= 0 or end_rev <= 0:
+        return absent(
+            "The record does not establish a grower here: " + grew
+            + ". Revenue could not be read over the same fiscal years, so "
+            "whether the company grew that much or its margin came back "
+            "from nothing cannot be told apart — and a compound rate off "
+            "that base would answer as though it could")
+    base_margin = base_ni / base_rev * 100.0
+    end_margin = end_ni / end_rev * 100.0
+    if base_margin >= APPEARED_MARGIN * end_margin:
+        return None
+    return absent(
+        "The record does not establish a grower here: " + grew
+        + f", while net margin went from {base_margin:,.2f}% to "
+          f"{end_margin:,.2f}%. The earnings did not grow, they appeared — "
+          "this is a margin recovery or a turnaround, and a compound rate "
+          "measures the recovery, which has a ceiling that selling more "
+          "does not. Read the base years before treating any of it as a "
+          "growth rate")
+
+
+def _cagr(ctx, input_id, span, gated=False):
+    """A compound annual rate between the averages of the three fiscal years
+    at each end of a `span`-year gap.
+
+    Averaged rather than endpoint to endpoint, and that is the whole change:
+    a single year at either end carries whatever one-off sat in it, and the
+    rate then describes the one-off. The case that matters is not the company
+    that fails high — a true 7.4% grower whose base year carried a charge
+    reads as 20.1%, sits mid-band, and passes, and nothing anywhere catches
+    it. Three years at each end is Graham's own construction; it was already
+    in this bank at eps_growth_10y and used nowhere else.
+
+    The cost is real and is paid in history: eight fiscal years on one
+    accounting basis rather than six. Where they are not there the rate is
+    absent, and the reason says so — there is no shorter-window fallback,
+    because a measure that quietly becomes a weaker estimator when the data
+    thins is the same failure in a different coat.
+    """
+    n = _growth_window(span)
+    w = _window(ctx, input_id, n)
     if is_absent(w):
         return w
-    base, last = w["values"][0], w["values"][-1]
+    years = [p["end"] for p in w["points"]]
+    rate, outs, base, late = _averaged_cagr_from(w["values"], years, span)
     if base <= 0:
-        return absent(f"Not meaningful here: {label(input_id)} "
-                      f"{years_span} fiscal years ago is zero or negative "
-                      "(the bank's own test — no compound rate exists from "
-                      "that base)")
-    if last < 0:
+        return absent(
+            f"Not meaningful here: mean {label(input_id)} over FY "
+            f"{years[0]}..{years[GROWTH_ENDS - 1]} is zero or negative "
+            f"({base:,.2f}) — no compound rate exists from that base")
+    if rate is None:
         # A fractional power of a negative ratio is a complex number in
         # Python — and a nonsense answer in accounting. Positive-to-negative
         # has no compound annual rate; refusing beats a stack trace.
-        ends0 = [p["end"] for p in w["points"]]
-        return absent(f"Not meaningful here: {label(input_id)} for the "
-                      f"latest fiscal year ({ends0[-1]}) is negative — no "
-                      "compound annual rate exists from a positive base to "
-                      "a negative endpoint")
-    ends = [p["end"] for p in w["points"]]
-    cautions = list(w["cautions"])
-    if last > 0 and base < 0.10 * last:
-        # The bank marks a "very small" base not meaningful for EPS and warns
-        # about trough-base compounding generally. What counts as very small
-        # is a judgement this engine may not make, so the tiny base is named
-        # loudly instead of gated silently.
-        cautions.append(
-            f"the base year ({ends[0]}) is under a tenth of the latest year "
-            f"({base:,.2f} against {last:,.2f}); a compound rate from a tiny "
-            "base overstates growth, which the bank flags as the moment this "
-            "measure misleads")
-    return {"value": ((last / base) ** (1.0 / years_span) - 1) * 100.0,
-            "prov": [f"{label(input_id)} FY {ends[0]} → FY {ends[-1]}, "
-                     "endpoints of a basis-checked window"],
-            "cautions": cautions}
+        return absent(
+            f"Not meaningful here: mean {label(input_id)} over FY "
+            f"{years[-GROWTH_ENDS]}..{years[-1]} is negative "
+            f"({late:,.2f}) — no compound annual rate exists from a positive "
+            "base to a negative end")
+    if gated:
+        appeared = _appeared_rather_than_grew(ctx, years)
+        if appeared is not None:
+            return appeared
+    return {"value": rate, "leave_one_out": outs,
+            "prov": [f"mean {label(input_id)} of FY {years[0]}.."
+                     f"{years[GROWTH_ENDS - 1]} ({base:,.2f}) against FY "
+                     f"{years[-GROWTH_ENDS]}..{years[-1]} ({late:,.2f}), "
+                     f"{span} years centre to centre, from a basis-checked "
+                     "window"],
+            "cautions": list(w["cautions"])}
+
+
+def _cagr_result(ctx, input_id, span, gated=False):
+    r = _cagr(ctx, input_id, span, gated=gated)
+    if is_absent(r):
+        return _absent_result(r)
+    return computed(r["value"], r["prov"], r["cautions"],
+                    r["leave_one_out"])
 
 
 def revenue_cagr_5y(ctx):
-    r = _cagr(ctx, "revenue", 5)
-    if is_absent(r):
-        return _absent_result(r)
-    return computed(r["value"], r["prov"], r["cautions"])
+    # Ungated. Revenue has no margin under it, and revenue growing from a
+    # small base is the thing itself rather than an artefact of one — a
+    # company selling ten times what it sold is a company selling ten times
+    # what it sold, whatever happened to its earnings.
+    return _cagr_result(ctx, "revenue", 5)
 
 
 def revenue_cagr_3y(ctx):
-    r = _cagr(ctx, "revenue", 3)
-    if is_absent(r):
-        return _absent_result(r)
-    return computed(r["value"], r["prov"], r["cautions"])
+    return _cagr_result(ctx, "revenue", 3)
 
 
 def _families_of(res) -> set:
@@ -1444,33 +1670,51 @@ def _prior_year_ttm(ctx, input_id):
 
 
 def net_income_cagr_5y(ctx):
-    r = _cagr(ctx, "net_income", 5)
-    if is_absent(r):
-        return _absent_result(r)
-    return computed(r["value"], r["prov"], r["cautions"])
+    return _cagr_result(ctx, "net_income", 5, gated=True)
 
 
 def eps_cagr_5y(ctx):
-    r = _cagr(ctx, "diluted_eps", 5)
-    if is_absent(r):
-        return _absent_result(r)
-    return computed(r["value"], r["prov"], r["cautions"])
+    # Gated on net income and not on earnings per share, deliberately. What
+    # the gate asks is whether the company had earnings at the base of the
+    # window; a share count that halved in between moves per-share and says
+    # nothing about that. The window is this measure's own fiscal years, so
+    # the two are read over exactly the same period.
+    return _cagr_result(ctx, "diluted_eps", 5, gated=True)
 
 
 def eps_growth_10y(ctx):
     w = _window(ctx, "diluted_eps", 10)
     if is_absent(w):
         return _absent_result(w)
-    early = sum(w["values"][:3]) / 3.0
-    late = sum(w["values"][-3:]) / 3.0
+    ends = [p["end"] for p in w["points"]]
+    early, late, outs = _averaged_ends(w["values"], ends)
     if early <= 0:
         return _absent_result(absent(
             "Not meaningful here: the earlier three-year mean EPS is zero "
             "or negative (the bank's own test)"))
-    ends = [p["end"] for p in w["points"]]
+    appeared = _appeared_rather_than_grew(ctx, ends)
+    if appeared is not None:
+        return _absent_result(appeared)
     return computed((late / early - 1) * 100.0,
                     [f"mean EPS of FY {ends[0]}..{ends[2]} against mean of "
-                     f"FY {ends[-3]}..{ends[-1]}"], w["cautions"])
+                     f"FY {ends[-3]}..{ends[-1]}"], w["cautions"],
+                    [{"dropped": y, "value": (e / b - 1) * 100.0}
+                     for y, b, e in outs if b > 0])
+
+
+def _spread_one_out(a, b):
+    """One-out readings of a spread: the same fiscal year dropped from both
+    sides.
+
+    Only the years both components offer. Dropping FY2021 from one CAGR and
+    FY2019 from the other would produce a difference between two rates
+    measured over different histories — a number that answers nothing and
+    reads like an answer.
+    """
+    left = {o["dropped"]: o["value"] for o in (a.get("leave_one_out") or [])}
+    right = {o["dropped"]: o["value"] for o in (b.get("leave_one_out") or [])}
+    return [{"dropped": y, "value": left[y] - right[y]}
+            for y in sorted(set(left) & set(right))]
 
 
 def ni_minus_revenue_cagr_spread_5y(ctx):
@@ -1484,7 +1728,8 @@ def ni_minus_revenue_cagr_spread_5y(ctx):
                 "meaningless number is meaningless — the bank's own test"))
     return computed(a["value"] - b["value"],
                     ["net income CAGR minus revenue CAGR, both computed "
-                     "above"], sorted(set(a["cautions"] + b["cautions"])))
+                     "above"], sorted(set(a["cautions"] + b["cautions"])),
+                    _spread_one_out(a, b))
 
 
 def eps_minus_revenue_cagr_spread_5y(ctx):
@@ -1497,7 +1742,8 @@ def eps_minus_revenue_cagr_spread_5y(ctx):
                 + c.get("reason", "") + ")"))
     return computed(a["value"] - b["value"],
                     ["diluted EPS CAGR minus revenue CAGR, both computed "
-                     "above"], sorted(set(a["cautions"] + b["cautions"])))
+                     "above"], sorted(set(a["cautions"] + b["cautions"])),
+                    _spread_one_out(a, b))
 
 
 def _same_filing_revenue_yoy(ctx, fi):

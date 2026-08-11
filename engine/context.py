@@ -242,10 +242,24 @@ def _tickers_of(security: dict) -> list:
     return [ticker] if ticker else []
 
 
-def _known(value, source, cautions=None, provenance=None) -> dict:
-    return {"status": "known", "value": value, "source": source,
-            "cautions": list(cautions or []),
-            "provenance": list(provenance or [])}
+def _known(value, source, cautions=None, provenance=None,
+           leave_one_out=None) -> dict:
+    """One measure as a strategy reads it.
+
+    `leave_one_out` travels beside the value because it is part of the same
+    answer: for a measure read over a window of fiscal years, "and what does
+    it say without its most flattering year?" is not a second measure, it is
+    the only robustness test available — waiting for another filing re-reads
+    the same years. Present only where the estimator reads a window; absent,
+    never a copy of the value, so a check that cannot be made comes back
+    unmade rather than passing itself.
+    """
+    out = {"status": "known", "value": value, "source": source,
+           "cautions": list(cautions or []),
+           "provenance": list(provenance or [])}
+    if leave_one_out:
+        out["leave_one_out"] = [dict(o) for o in leave_one_out]
+    return out
 
 
 def _absent(reason: str) -> dict:
@@ -285,7 +299,8 @@ def _current_values(security, cik, tickers, registry_ids, as_of):
         for eid, r in results.items():
             if r.get("status") == "computed":
                 out[eid] = _known(r["value"], "computed",
-                                  r.get("cautions"), r.get("provenance"))
+                                  r.get("cautions"), r.get("provenance"),
+                                  r.get("leave_one_out"))
             else:
                 out[eid] = _absent(r.get("reason")
                                    or "the value could not be computed")
