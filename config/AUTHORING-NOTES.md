@@ -135,6 +135,24 @@ between the repo and the user data directory is the next task's problem.
    arm" are written as prose `test:` strings under `not_meaningful_when`. They
    are not derivable from XBRL company facts.
 
+   > **Settled since, and the prose was the bug.** Two of the three are
+   > derivable — not from company facts, but from the industry code the SEC
+   > publishes beside them, which `engine/industry.py` now reads. They are
+   > `industry: [class ids]`, the host evaluates them before the formula runs,
+   > and the measure reports `inapplicable` rather than a number. `test:` is
+   > gone: a condition that names a kind of company can only be written in the
+   > key that is checked, and prose naming one is refused at load.
+   >
+   > The captive finance arm is the third, and it is the one that could not
+   > be settled — those filers are automakers and equipment makers, nowhere
+   > near the codes this host can read, and the split needs segment facts
+   > tagged against a dimension that nothing here reads. It is declared as
+   > `undetected`, with `needs` saying what would close it, and drawn where
+   > the reader is told in as many words that this one is theirs to check.
+   > Moving it into `misfires` would have been the easy answer and the wrong
+   > one: it is not something a reader can weigh, it is a number that may be
+   > describing a different company.
+
 10. **Conditional reconfiguration advice has no mechanism.** Buffett 6 ("drop
     this to BONUS or raise the sell window" if buying heavy-investment
     companies on purpose) and Lynch 12 ("promote this to CORE" if the growth

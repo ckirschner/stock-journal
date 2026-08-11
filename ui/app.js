@@ -854,9 +854,17 @@ function evidenceRow(item, i) {
   const obs = item.observed || {};
   const [word, cls] = OUTCOME[item.outcome] || [item.outcome, "s-none"];
   const known = obs.status === "known";
+  /* Two ways to have no figure, and the row must not draw them alike. "Not
+     known" says go and look — fetch, wait a quarter, answer the question.
+     "Not applicable" says this measure was never built to describe this kind
+     of company, and no amount of looking will change it. The outcome beside
+     them is the same word on purpose: neither was tested, and a fifth
+     outcome would be a word every strategy written before today would fall
+     straight through. */
   const val = known
     ? `<b>${esc(fmtSubject(subj, obs.value))}</b>`
-    : `<span class="chip blank">not known</span>`;
+    : `<span class="chip blank">${obs.status === "inapplicable"
+        ? "not applicable" : "not known"}</span>`;
 
   /* The limit, and whose it is. Where the strategy named one of its own
      settings the host read the number out of that setting — so it renders in
@@ -1743,6 +1751,13 @@ function coverageSection(s) {
        from market cap — so the sentences are marked here and opened in
        place rather than repeated down the page. Provenance stays inline:
        it is specific to its own row and does not multiply. */
+    const scoped = cov.entries.filter((e) => e.status === "inapplicable");
+    if (scoped.length) {
+      inner += `<p class="hint" style="margin:0 0 10px">${scoped.length} of
+        ${cov.entries.length} measures were never built to describe this kind of company, and say so
+        rather than computing. Nothing is missing and there is nothing to fetch — open one to read
+        which kind of company the SEC says this is, and why the measure cannot describe it.</p>`;
+    }
     const marked = cov.entries.filter((e) => (e.cautions || []).length);
     if (marked.length) {
       inner += `<p class="hint" style="margin:0 0 10px">${marked.length} of
@@ -1750,11 +1765,18 @@ function coverageSection(s) {
         valued at another's close, a line matched by its label, a price no longer current.
         Each is marked <b>qualified</b>; open one to read what it rests on.</p>`;
     }
+    /* Three states and not two, and the third is counted apart above. A
+       measure that cannot describe this kind of company will never compute,
+       so listing it beside the gaps would leave a permanent item among the
+       things to go and do — which is how that list stops being read. The
+       word carries it; the dashed edge is the same one `absent` wears. */
     inner += cov.entries.map((e) => {
       const val = e.status === "computed" ? fmtBank(e.value, e.format) : "—";
       const chip = e.status === "computed"
         ? '<span class="chip s-none">computed</span>'
-        : '<span class="chip blank">absent</span>';
+        : e.status === "inapplicable"
+          ? '<span class="chip blank">not applicable</span>'
+          : '<span class="chip blank">absent</span>';
       const why = e.status === "computed"
         ? (e.provenance || []).map((p) => `<div class="greynote">${esc(p)}</div>`).join("")
         : `<div class="greynote">${esc(e.reason || "")}</div>`;
@@ -2177,9 +2199,22 @@ function bankCard(e) {
       <p class="hint">This measure reports absent everywhere until the contract gains a way to hand one in.</p></div>`;
   }
   if (e.not_meaningful_when && e.not_meaningful_when.length) {
+    /* Two kinds of condition and they are refused by different things, so
+       each says which. An industry condition is settled from the SEC's own
+       code before anything is computed; a data condition is the formula
+       refusing its own arithmetic. A reader who cannot tell them apart
+       cannot tell "this will never apply to this company" from "this one
+       quarter came out unreadable". */
     h += `<div class="pe-block"><i>Not meaningful when</i><ul class="pe-nmw">${
-      e.not_meaningful_when.map((t) => `<li>${oneline(t.test)}${
-        t.because ? ` <span class="dim">— ${oneline(t.because)}</span>` : ""}</li>`).join("")}</ul></div>`;
+      e.not_meaningful_when.map((t) => {
+        const what = t.industry
+          ? `the company is ${t.industry.map((c) => `<b>${esc(c.label)}</b> <span class="dim">(${esc(c.means)})</span>`).join(", or ")}
+             <div class="pe-sub">Settled from the industry code the SEC publishes, before anything is
+             computed. This measure reports <i>not applicable</i> for such a filer rather than a number.</div>`
+          : `${oneline(t.data)} <span class="dim">— refused by the calculation itself, from the figures</span>`;
+        return `<li>${what}${
+          t.because ? `<div class="pe-why" style="margin-top:4px">${prose(t.because)}</div>` : ""}</li>`;
+      }).join("")}</ul></div>`;
   }
   if (x.misfires || x.attribution) {
     h += `<details class="whybox"><summary>Where it misfires · where it comes from</summary>
@@ -2716,6 +2751,13 @@ function dlgMetrics(s) {
          at the only moment it changes what the reader does. */
       compNote = `<div class="u">Computed from filings: <b>${fmtBank(comp.value, m.format)}</b> — a value typed here overrides it; blank uses it.</div>`
         + cautionLines(comp.cautions);
+    } else if (comp && comp.status === "inapplicable") {
+      /* The one place a typed figure is refused rather than preferred. This
+         screen exists to let someone type over a computed number; here there
+         is no number to type over, because the measure does not describe this
+         company at all. Said before they type, not after. */
+      compNote = `<div class="u">Not applicable to this company — ${esc(comp.reason)}
+        A figure typed here is kept and dated, and is not used while this holds.</div>`;
     } else if (comp && comp.status === "absent" && comp.reason) {
       compNote = `<div class="u">Not computed — ${esc(comp.reason)}</div>`;
     }

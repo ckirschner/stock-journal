@@ -445,8 +445,17 @@ top-level keys:
 
 A **known-or-absent** node is either
 `{"status": "known", "value", "source", "cautions", "provenance"}` or
-`{"status": "absent", "reason"}`. There is no third case and no null value
-standing in for one.
+`{"status": "absent", "reason"}`. There is no null value standing in for one.
+
+A **measure** has one more: `{"status": "inapplicable", "reason", "industry"}`,
+where the metric bank says the measure was never built to describe this kind of
+company — a lender has no invested capital in the sense return on it means, and
+no filing will ever supply one. It is settled from the industry code the SEC
+publishes before any arithmetic runs. You do not have to know the word: every
+rule here asks whether a status is `"known"`, so an inapplicable measure can no
+more come out of a test as a pass than an absent one can. What it is *not* is
+`absent` — that is a gap a fetch may close, and this is a boundary that holds
+for as long as the company is the kind of company it is.
 
 ### Reading rules you can rely on
 
@@ -462,7 +471,13 @@ standing in for one.
 - **Absence is never success.** The host's own arithmetic turns an absent figure
   into `unknown`, never `pass` and never `fail`. What you *do* about that is
   yours — but if you branch on it yourself, branch on `unknown`, never on
-  "did not fail".
+  "did not fail". The same holds for an inapplicable one.
+- **A measure can refuse a company outright.** Where the bank says a measure
+  cannot describe this kind of filer, its status is `"inapplicable"` and it
+  never computes. If your rules rest on such a measure for a kind of company
+  you evaluate, you will get `unknown` on that test rather than a number — which
+  is a signal that the honest declaration is `declines`, so the reader is told
+  the rules do not cover it instead of watching a verdict fail to assemble.
 - **A qualified number says so.** Where a figure rests on an approximation or a
   loosely matched line, its `cautions` say so, on `current` and on every series
   point alike. You never restate a caution; the host carries it to the screen.

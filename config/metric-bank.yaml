@@ -77,7 +77,55 @@ schema: ledger.metric-bank/1
 #
 # not_meaningful_when
 #                 Conditions under which the value does not mean anything for
-#                 this company. Stated only where the source report states it.
+#                 this company. Two forms, and the difference is WHO REFUSES:
+#
+#                   industry: [class ids]
+#                       The HOST refuses, before the formula runs, from the
+#                       industry code the SEC publishes for the filer. Class
+#                       ids come from engine/contract.py INDUSTRY_CLASSES and
+#                       nowhere else; an unknown one fails the load. The
+#                       measure reports `inapplicable` — permanently, and
+#                       distinctly from a figure that is merely missing.
+#
+#                   data: <prose>
+#                       The FORMULA refuses, from the figures themselves — a
+#                       negative denominator, a base too small to compound
+#                       from, a window that does not align. Stated here so a
+#                       reader can find out why a measure reads absent;
+#                       enforced in engine/compute.py, where the arithmetic
+#                       that can see it is.
+#
+#                   undetected: <prose>   (plus `needs`)
+#                       NOBODY refuses. The condition is real and nothing here
+#                       can tell whether it holds. One case exists — a
+#                       consolidated captive finance arm, whose filer is an
+#                       automaker or an equipment maker and therefore sits
+#                       nowhere near the codes this host can read. `needs`
+#                       says what it would take to settle it, so the gap is a
+#                       standing request rather than a shrug, and the screen
+#                       tells the reader in as many words that this one is
+#                       theirs to check.
+#
+#                 Every item carries `because`: plain language saying why the
+#                 measure means nothing there. A refusal a reader cannot
+#                 understand teaches them the tool is broken.
+#
+#                 These conditions sat here as prose for as long as this file
+#                 existed, flagged untestable, and nothing ever read them: a
+#                 lender's debt-to-equity read 1.4x while its assets were
+#                 seven times its equity, because deposits are not debt, and
+#                 it passed every test put to it. Prose nothing reads is a
+#                 note about a condition, not a condition. So the industry
+#                 form is a key, `data` prose naming a kind of company is
+#                 refused at load, and an entry built on a gated entry must be
+#                 gated at least as widely — the distance between a number and
+#                 a meaningless one is meaningless.
+#
+#                 What does NOT belong here: a threshold that reads
+#                 differently for this kind of company. That is a judgement,
+#                 it belongs to a strategy, and a number that is arithmetically
+#                 right and merely read differently is a caution for the
+#                 reader — `explanation.misfires` — not a refusal.
 #
 # =============================================================================
 
@@ -131,10 +179,24 @@ entries:
         tangible assets, which is stricter than this (it strips goodwill).
         This version is the common approximation.
     not_meaningful_when:
-      - test: the company is a bank or an insurer
+      - industry: [depository-lending, insurance]
         because: |
-          Banks and insurers have no meaningful invested capital in this sense.
-      - test: invested capital (the denominator) is under 10% of revenue
+          Return on invested capital divides profit by the money tied up in
+          the business — borrowing plus equity, less cash. For a lender that
+          sum is the funding it exists to lend out rather than capital tied
+          up, and the deposits which are most of it are not counted as
+          borrowing at all, so the divisor is a small fraction of the real one
+          and the return comes out high. An insurer's investment portfolio is
+          held against claims not yet made, so a return measured against it is
+          measuring money that belongs to policyholders.
+      - industry: [real-estate]
+        because: |
+          The profit on top is struck after depreciation on buildings, which
+          is an accounting convention rather than a cost being incurred, so it
+          understates by design — and the capital underneath is buildings at
+          what they cost decades ago rather than what they are worth. Both
+          ends are wrong and they do not cancel.
+      - data: invested capital (the denominator) is under 10% of revenue
         because: |
           Asset-light companies can have near-zero or negative invested
           capital, which makes the ratio explode or invert into nonsense.
@@ -171,10 +233,19 @@ entries:
         Buffett. His most-cited single figure through the 1970s and 1980s
         letters.
     not_meaningful_when:
-      - test: total shareholders' equity is zero or negative
+      - industry: [real-estate]
         because: |
-          Companies that have bought back so much stock that equity is negative
-          produce a negative or absurd denominator.
+          Both halves break, in opposite directions. The profit on top is
+          after depreciation on buildings that mostly are not wearing out, so
+          it is understated. The shareholder money underneath is those
+          buildings at historic cost less all the depreciation ever charged,
+          so it is understated too — and by more, because a property company
+          also pays out most of its earnings by law, which leaves the
+          accumulated-profit line negative rather than merely small.
+      - data: total shareholders' equity is zero or negative
+        because: |
+          Companies that have bought back so much stock that equity is
+          negative produce a negative or absurd denominator.
 
   - id: roe_minus_roic_gap_5y
     kind: computed
@@ -223,7 +294,14 @@ entries:
         levers up to defend a falling return keeps that measure looking well
         right through the deterioration.
     not_meaningful_when:
-      - test: either side is not meaningful for this company
+      - industry: [depository-lending, insurance, real-estate]
+        because: |
+          This measures the distance between two returns, and for these
+          companies at least one of them does not mean anything — so neither
+          does the distance. The gap is meant to say how much of a return
+          comes from borrowing; here it would be saying how much comes from a
+          number that was never describing this business.
+      - data: either side is not meaningful for this company
         because: |
           The distance between a number and a meaningless one is meaningless.
           Where return on equity or return on invested capital cannot be
@@ -266,12 +344,28 @@ entries:
         Buffett's stated preference is a business that could pay off its debt
         out of a couple of years of earnings.
     not_meaningful_when:
-      - test: the company has a captive finance arm
+      - industry: [depository-lending]
         because: |
-          Companies with a captive finance arm carry debt that funds a loan
-          book, not operations. The consolidated number is meaningless without
-          splitting industrial from financial, which XBRL tagging won't
-          reliably let you do.
+          The borrowing on top is the wrong quantity, and not by a little.
+          Deposits are most of what a bank owes and the whole of what it lends
+          out, and no filer tags them as debt — so this counts the wholesale
+          funding and misses the rest. Years-to-repay against a fraction of
+          what a company owes is not a cautious reading of its leverage; it is
+          a confident reading of a different company's.
+      - undetected: the company has a captive finance arm
+        because: |
+          A company that lends to its own customers — a car maker with a
+          finance arm, an equipment maker with a leasing book — carries
+          borrowing that funds that loan book rather than the factory. The
+          consolidated figure adds the two together and reads as though the
+          industrial business were far more indebted than it is.
+        needs: |
+          A figure for the finance subsidiary's receivables and its own
+          borrowing. Those sit in segment disclosures tagged against a
+          dimension, and this program reads only undimensioned facts — so
+          nothing it holds can separate the two businesses. Until it can,
+          check the filing yourself where a company you are looking at lends
+          to its own customers.
 
   - id: total_debt_to_avg_fcf_5y
     kind: computed
@@ -325,15 +419,37 @@ entries:
         written repeatedly that depreciation is a real expense and that any
         measure ignoring it flatters the capital-hungry.
     not_meaningful_when:
-      - test: average free cash flow over the five years is zero or negative
+      - industry: [depository-lending, insurance]
+        because: |
+          Free cash flow starts from cash from operations, and for a lender
+          that figure moves with the period's change in loans and deposits
+          rather than with the business. A bank that is shrinking its loan
+          book generates the most of it — so this does not come back small for
+          a lender in trouble, it comes back large. An insurer's is inflated
+          the same way by float: premiums arrive before claims are paid, which
+          looks like cash the business made and is really cash it is holding
+          for somebody else.
+
+          Dividing borrowing by that inflated figure says the debt could be
+          repaid in a fraction of the years it really would take, and the more
+          trouble the lender is in the better it reads.
+      - data: average free cash flow over the five years is zero or negative
         because: |
           There is no number of years of a negative figure that repays a debt.
           The company is consuming cash rather than producing it, which is a
           more serious statement than any ratio, and a ratio would hide it.
-      - test: the company has a captive finance arm
+      - undetected: the company has a captive finance arm
         because: |
-          As with debt against EBITDA: the consolidated borrowing funds a loan
-          book rather than operations.
+          As with debt against operating earnings: the consolidated borrowing
+          funds a loan book rather than operations, and the two cannot be told
+          apart from what this program reads.
+        needs: |
+          A figure for the finance subsidiary's receivables and its own
+          borrowing. Those sit in segment disclosures tagged against a
+          dimension, and this program reads only undimensioned facts — so
+          nothing it holds can separate the two businesses. Until it can,
+          check the filing yourself where a company you are looking at lends
+          to its own customers.
 
   - id: net_debt_to_ebitda
     kind: computed
@@ -369,10 +485,25 @@ entries:
         Standard credit analysis. Used here as the net counterpart to
         [total_debt_to_ebitda].
     not_meaningful_when:
-      - test: the company has a captive finance arm
+      - industry: [depository-lending]
+        because: |
+          The same break as the gross measure, and one more on top.
+          Subtracting cash from a borrowing figure that already leaves out
+          deposits gives a lender a large negative net debt — as though it
+          were sitting on spare money — when the cash is reserves it is
+          required to hold at the central bank and cannot lend or spend.
+      - undetected: the company has a captive finance arm
         because: |
           Same reason as the gross measure: consolidated debt funds a loan
-          book, not operations.
+          book rather than operations, and the cash held against those
+          obligations is netted off as though it were spare.
+        needs: |
+          A figure for the finance subsidiary's receivables and its own
+          borrowing. Those sit in segment disclosures tagged against a
+          dimension, and this program reads only undimensioned facts — so
+          nothing it holds can separate the two businesses. Until it can,
+          check the filing yourself where a company you are looking at lends
+          to its own customers.
 
   - id: debt_to_equity
     kind: computed
@@ -403,7 +534,16 @@ entries:
       attribution: |
         Graham's balance-sheet tests and Lynch's, both. Standard.
     not_meaningful_when:
-      - test: total shareholders' equity is zero or negative
+      - industry: [depository-lending, insurance]
+        because: |
+          This claims to say how much of the company is financed by lenders
+          rather than by its owners, and for a bank it does not: deposits are
+          money the owners did not put in and the figure on top excludes them
+          entirely. A deposit-funded lender whose assets are seven times its
+          equity can read a comfortable 1.4 here. An insurer's is the same
+          shape — what it owes is claims not yet made, which are not tagged as
+          borrowing either.
+      - data: total shareholders' equity is zero or negative
         because: |
           The ratio has no interpretation with a zero or negative denominator.
 
@@ -433,10 +573,21 @@ entries:
       misfires: |
         Companies capitalising interest into construction projects understate
         the expense, which flatters the ratio.
+
+        For a lender, interest is closer to a cost of goods than to a
+        financing choice, so a figure that would look alarming for a
+        manufacturer can be ordinary here. Read it against what lenders earn
+        rather than against a bond-safety standard written for industrials.
+        This is a caution and not a refusal, and the reason is worth stating:
+        most lenders strike no operating-profit subtotal at all, so the
+        measure is simply absent for them; where one does strike it, whether
+        it sits before or after funding interest is that filer's own
+        presentation, and two lenders under one industry code present it both
+        ways. A code that cannot separate them is not the predicate for this.
       attribution: |
         Graham's bond-safety standard, in its original form.
     not_meaningful_when:
-      - test: interest expense is zero or near zero
+      - data: interest expense is zero or near zero
         because: |
           Debt-free companies have interest expense near zero, which makes the
           ratio infinite or undefined.
@@ -472,7 +623,15 @@ entries:
         Graham's own test, stated in exactly this form. Stricter and more
         literal than debt-to-equity.
     not_meaningful_when:
-      - test: working capital (current assets − current liabilities) is zero or negative
+      - industry: [depository-lending, insurance, real-estate]
+        because: |
+          Banks, insurers and property companies do not divide the balance
+          sheet into what falls due within the year and what does not, so
+          there is no working capital to read and no current ratio to strike.
+          This is not a filing that is missing something: the division does
+          not exist for these businesses, and it never will.
+      - data: working capital (current assets − current liabilities) is zero
+          or negative
         because: |
           Negative working capital makes the ratio undefined.
 
@@ -511,6 +670,14 @@ entries:
       attribution: |
         Graham, as a solvency test. Buffett has repeatedly praised negative
         working capital as a feature.
+    not_meaningful_when:
+      - industry: [depository-lending, insurance, real-estate]
+        because: |
+          Banks, insurers and property companies do not divide the balance
+          sheet into what falls due within the year and what does not, so
+          there is no working capital to read and no current ratio to strike.
+          This is not a filing that is missing something: the division does
+          not exist for these businesses, and it never will.
 
   - id: altman_z_score
     kind: computed
@@ -555,9 +722,25 @@ entries:
         balance sheet tests were reaching for, with fifty years of
         out-of-sample validation behind it.
     not_meaningful_when:
-      - test: the company is a financial company
+      - industry: [depository-lending, insurance]
         because: |
-          Altman himself excluded financial companies; the ratios don't map.
+          Altman built this from manufacturers and excluded financial
+          companies himself, and the reason is visible in the terms: working
+          capital over assets needs a balance sheet split into what falls due
+          within the year and what does not, which a bank does not publish,
+          and sales over assets compares a loan book against interest income.
+          The score would be a confident number produced from ratios that were
+          never fitted to these accounts.
+      - industry: [real-estate]
+        because: |
+          The first of the five terms is working capital over assets, and a
+          property company does not divide its balance sheet into what falls
+          due within the year and what does not — so there is nothing to read
+          and never will be, whatever gets filed next. The score cannot be
+          struck at all. What would be left if it could is a fit made on
+          manufacturers reading a company whose accumulated profit is at or
+          below zero because the law requires nearly all earnings to be paid
+          out, which is the form of the company rather than distress.
 
   - id: altman_z_double_prime
     kind: computed
@@ -616,13 +799,23 @@ entries:
         non-manufacturers and for companies outside the US market the original
         was fitted on.
     not_meaningful_when:
-      - test: the company is a financial company
+      - industry: [depository-lending, insurance]
         because: |
-          Altman excluded financial companies from the original study and the
+          Altman excluded financial companies from the original study and this
           variant does not change that. A bank's balance sheet is not divided
           into current and non-current at all, so the working capital term has
           nothing to read.
-      - test: total liabilities are zero
+      - industry: [real-estate]
+        because: |
+          The variant was made for companies that are not manufacturers, so it
+          is the one a reader might expect to work here, and it does not: it
+          still opens with working capital over assets, and a property company
+          publishes no split between what falls due within the year and what
+          does not. It also leans much harder on accumulated profit than the
+          original — which for a property company is at or below zero because
+          the law requires nearly all earnings to be paid out, so the change
+          that makes the variant fairer elsewhere makes it harsher here.
+      - data: total liabilities are zero
         because: |
           A company that owes nothing has no denominator for the equity term —
           and no solvency question either.
@@ -664,10 +857,19 @@ entries:
       attribution: |
         Standard. Defined here because several measures below are built on it.
     not_meaningful_when:
-      - test: the company does not report cost of revenue separately
+      - industry: [depository-lending, insurance]
         because: |
-          Some financials and some conglomerates do not break it out, so gross
-          margin cannot be computed at all.
+          A gross margin is what is left of a sale after what the sold thing
+          cost, and neither business has that line. What a loan costs a bank
+          is the interest it pays on deposits, which is not a cost of revenue
+          and is not tagged as one; what a policy costs an insurer is claims
+          that have not happened yet. Where such a filer does tag a cost line,
+          it is something else entirely and the margin computed from it
+          describes nothing.
+      - data: the company does not report cost of revenue separately
+        because: |
+          Some conglomerates do not break it out, so gross margin cannot be
+          computed at all.
 
   - id: gross_margin_range_5y
     kind: computed
@@ -706,7 +908,16 @@ entries:
         Buffett's pricing-power thinking, expressed as stability rather than
         level.
     not_meaningful_when:
-      - test: the company does not report cost of revenue separately
+      - industry: [depository-lending, insurance]
+        because: |
+          The margin this measures the swing of does not exist for a lender
+          or an insurer, so neither does its steadiness. What a loan costs a
+          bank is the interest it pays on deposits, which is not a cost of
+          revenue and is not tagged as one; what a policy costs an insurer is
+          claims that have not happened yet. Where such a filer does tag a
+          cost line it is something else entirely, and five years of a margin
+          computed from it is five years of describing nothing.
+      - data: the company does not report cost of revenue separately
         because: |
           Gross margin cannot be computed, so its range cannot be either.
 
@@ -766,11 +977,19 @@ entries:
         percentage points do not travel across businesses of different margin,
         and the same objection applies to any threshold stated in points.
     not_meaningful_when:
-      - test: the company does not report cost of revenue separately
+      - industry: [depository-lending, insurance]
+        because: |
+          The margin this measures the swing of does not exist for a lender
+          or an insurer, so neither does the swing, and scaling one that was
+          never there against a middle year that was never there does not
+          recover it. Interest paid on deposits is not a cost of revenue and
+          is not tagged as one; claims not yet made are not yet a cost of
+          anything.
+      - data: the company does not report cost of revenue separately
         because: |
           Gross margin cannot be computed, so neither its range nor the
           relative version can be.
-      - test: the middle annual gross margin is zero or negative
+      - data: the middle annual gross margin is zero or negative
         because: |
           A swing measured against nothing has no scale, and measured against
           a negative it changes sign for a reason that is arithmetic rather
@@ -807,7 +1026,14 @@ entries:
       attribution: |
         Lynch. An early-warning check on the quality of growth.
     not_meaningful_when:
-      - test: the company does not report cost of revenue separately
+      - industry: [depository-lending, insurance]
+        because: |
+          The margin whose direction this reports does not exist for a
+          lender or an insurer. A bank's cost of lending is the interest it
+          pays on deposits, which no filer tags as a cost of revenue, so there
+          is no margin to have moved and nothing for three years of it to say
+          about pricing power.
+      - data: the company does not report cost of revenue separately
         because: |
           Gross margin cannot be computed, so its change cannot be either.
 
@@ -846,7 +1072,15 @@ entries:
       attribution: |
         The report's own construction, in Graham's discount-closure tradition.
     not_meaningful_when:
-      - test: the company does not report cost of revenue separately
+      - industry: [depository-lending, insurance]
+        because: |
+          The margin this compares against its own recent history does not
+          exist for a lender or an insurer, so there is no history to compare
+          it with. What such a filer pays for its product is interest on
+          deposits or claims not yet made, and neither is tagged as a cost of
+          revenue — so the reading and the median it is measured against would
+          both be describing nothing.
+      - data: the company does not report cost of revenue separately
         because: |
           Gross margin cannot be computed, so the comparison cannot be either.
 
@@ -880,6 +1114,17 @@ entries:
         negative free cash flow as a choice, not a failure.
       attribution: |
         Standard. The cash counterpart to reported profit.
+    not_meaningful_when:
+      - industry: [depository-lending, insurance]
+        because: |
+          Free cash flow starts from cash from operations, and for a lender
+          that figure moves with the period's change in loans and deposits
+          rather than with the business. A bank that is shrinking its loan
+          book generates the most of it — so this does not come back small for
+          a lender in trouble, it comes back large. An insurer's is inflated
+          the same way by float: premiums arrive before claims are paid, which
+          looks like cash the business made and is really cash it is holding
+          for somebody else.
 
   - id: fcf_margin_ttm
     kind: computed
@@ -912,6 +1157,21 @@ entries:
       attribution: |
         Standard. The current-period counterpart to
         [fcf_margin_median_5y].
+    not_meaningful_when:
+      - industry: [depository-lending, insurance]
+        because: |
+          Free cash flow starts from cash from operations, and for a lender
+          that figure moves with the period's change in loans and deposits
+          rather than with the business. A bank that is shrinking its loan
+          book generates the most of it — so this does not come back small for
+          a lender in trouble, it comes back large. An insurer's is inflated
+          the same way by float: premiums arrive before claims are paid, which
+          looks like cash the business made and is really cash it is holding
+          for somebody else.
+
+          The revenue underneath is the second break rather than a saving one:
+          a lender's top line is interest it charged, which moves with the
+          policy rate more than with the business.
 
   - id: fcf_margin_median_5y
     kind: computed
@@ -950,6 +1210,21 @@ entries:
         disguise.
       attribution: |
         Buffett's owner-earnings thinking applied to the income statement.
+    not_meaningful_when:
+      - industry: [depository-lending, insurance]
+        because: |
+          Free cash flow starts from cash from operations, and for a lender
+          that figure moves with the period's change in loans and deposits
+          rather than with the business. A bank that is shrinking its loan
+          book generates the most of it — so this does not come back small for
+          a lender in trouble, it comes back large. An insurer's is inflated
+          the same way by float: premiums arrive before claims are paid, which
+          looks like cash the business made and is really cash it is holding
+          for somebody else.
+
+          Taking the middle of five years does not help — a lender growing
+          steadily reports steadily suppressed cash, and one shrinking
+          steadily reports steadily enormous cash.
 
   - id: fcf_yield_on_ev
     kind: computed
@@ -986,7 +1261,22 @@ entries:
         Standard value-investing construction; the cash analogue of
         [ev_to_ebit].
     not_meaningful_when:
-      - test: enterprise value is zero or negative
+      - industry: [depository-lending, insurance]
+        because: |
+          Free cash flow starts from cash from operations, and for a lender
+          that figure moves with the period's change in loans and deposits
+          rather than with the business. A bank that is shrinking its loan
+          book generates the most of it — so this does not come back small for
+          a lender in trouble, it comes back large. An insurer's is inflated
+          the same way by float: premiums arrive before claims are paid, which
+          looks like cash the business made and is really cash it is holding
+          for somebody else.
+
+          The price underneath is wrong in the same direction, because it adds
+          on borrowing that excludes deposits and then subtracts cash the
+          lender is required to hold. A high yield here is the arithmetic, not
+          a bargain.
+      - data: enterprise value is zero or negative
         because: |
           A negative denominator inverts the yield into nonsense.
 
@@ -1030,6 +1320,33 @@ entries:
       attribution: |
         Buffett's owner-earnings thinking, formalised. Also standard in forensic
         accounting (Schilit).
+    not_meaningful_when:
+      - industry: [depository-lending, insurance]
+        because: |
+          Free cash flow starts from cash from operations, and for a lender
+          that figure moves with the period's change in loans and deposits
+          rather than with the business. A bank that is shrinking its loan
+          book generates the most of it — so this does not come back small for
+          a lender in trouble, it comes back large. An insurer's is inflated
+          the same way by float: premiums arrive before claims are paid, which
+          looks like cash the business made and is really cash it is holding
+          for somebody else.
+
+          Dividing that by an ordinary-sized profit says the business turns
+          far more of its earnings into cash than any company could.
+      - industry: [real-estate]
+        because: |
+          The accounts charge depreciation against buildings every year as
+          though they were wearing out, and well-kept property mostly does
+          not. Reported profit is therefore lower than what the business
+          actually earns, by a lot, and every measure built on profit inherits
+          it. The industry uses a different figure entirely — funds from
+          operations, which adds the depreciation back — and this program does
+          not compute it.
+
+          This divides cash by profit, so a suppressed profit underneath makes
+          the conversion read spectacularly well for a reason that is the
+          depreciation schedule and nothing else.
 
   - id: accruals_ratio
     kind: computed
@@ -1060,6 +1377,17 @@ entries:
       attribution: |
         Sloan (1996). Not Graham, but a check that reported numbers are real,
         which is doing Graham's job with better tools.
+    not_meaningful_when:
+      - industry: [depository-lending, insurance]
+        because: |
+          Both halves break. The profit-minus-cash figure on top is meant to
+          catch earnings that are bookkeeping rather than money, and for a
+          lender the cash side of it is the change in the loan book, so the
+          subtraction is measuring lending rather than accruals. Underneath,
+          the assets are the loan book itself — enormous next to any year's
+          earnings — so whatever the top says is divided down to near zero.
+          The result is a confident figure close to nothing, every time, which
+          reads as a clean bill of health on a measure where low is good.
 
   - id: effective_tax_rate_median_5y
     kind: computed
@@ -1099,6 +1427,15 @@ entries:
         REITs pay essentially no corporate tax by design.
       attribution: |
         Not Buffett. Forensic accounting practice. He'd recognise the concern.
+    not_meaningful_when:
+      - industry: [real-estate]
+        because: |
+          A real estate investment trust pays essentially no corporate tax, by
+          statute, in exchange for paying out nearly all of its income. A rate
+          near zero here is the form of the company working exactly as
+          intended — it is not a tax position anybody chose, and it says
+          nothing about whether the earnings are real, which is what this
+          measure is for.
 
   - id: payout_to_fcf_median_5y
     kind: computed
@@ -1141,6 +1478,27 @@ entries:
       attribution: |
         Standard capital-allocation check, in Buffett's owner-earnings
         tradition.
+    not_meaningful_when:
+      - industry: [depository-lending, insurance]
+        because: |
+          Free cash flow starts from cash from operations, and for a lender
+          that figure moves with the period's change in loans and deposits
+          rather than with the business. A bank that is shrinking its loan
+          book generates the most of it — so this does not come back small for
+          a lender in trouble, it comes back large. An insurer's is inflated
+          the same way by float: premiums arrive before claims are paid, which
+          looks like cash the business made and is really cash it is holding
+          for somebody else.
+
+          Dividing dividends and buybacks by that inflated figure says the
+          payout is comfortably covered whatever it is.
+      - industry: [real-estate]
+        because: |
+          A real estate investment trust must pay out nearly all of its
+          taxable income to keep its tax status, so a high payout is the form
+          of the company rather than a warning about it — and the cash
+          underneath is struck after building spending this program cannot
+          separate from acquisitions.
 
   - id: operating_income_ttm
     kind: computed
@@ -1167,6 +1525,14 @@ entries:
         A single large one-off charge — an impairment, a legal settlement, a
         restructuring — can push a structurally profitable company negative for
         one period.
+
+        A lender or an insurer that strikes this subtotal at all may strike it
+        after the interest it pays to fund itself, or after investment returns
+        on money held against claims not yet made — and which of those a filer
+        does is its own presentation rather than anything its industry code
+        says. Most publish no such subtotal, and this reads absent for them.
+        Where one does, read it knowing that "before interest and tax" may not
+        mean here what it means elsewhere.
       attribution: |
         Standard. Used as a precondition for any measure that puts earnings in
         a denominator.
@@ -1286,6 +1652,15 @@ entries:
         inconsistently tagged.
       attribution: |
         Standard. Defined here because three measures below are built on it.
+    not_meaningful_when:
+      - industry: [depository-lending, insurance]
+        because: |
+          This is meant to be what it would cost to buy the whole company: its
+          price, plus the debts you take on, less the cash you get. For a
+          lender the debts are mostly deposits, which are not counted here,
+          and the cash is reserves it is required to hold, which are
+          subtracted as though they came free. The figure is confidently too
+          small, and every multiple built on it is confidently too cheap.
 
   - id: pe_ttm
     kind: computed
@@ -1316,7 +1691,20 @@ entries:
       attribution: |
         Standard. The trailing counterpart to [pe_3y_avg_eps].
     not_meaningful_when:
-      - test: diluted earnings per share (TTM) is zero or negative
+      - industry: [real-estate]
+        because: |
+          The accounts charge depreciation against buildings every year as
+          though they were wearing out, and well-kept property mostly does
+          not. Reported profit is therefore lower than what the business
+          actually earns, by a lot, and every measure built on profit inherits
+          it. The industry uses a different figure entirely — funds from
+          operations, which adds the depreciation back — and this program does
+          not compute it.
+
+          The earnings underneath are after that charge, so a property company
+          reads as expensive on this for a reason that is the accounting
+          rather than the price.
+      - data: diluted earnings per share (TTM) is zero or negative
         because: |
           A negative denominator makes the ratio meaningless rather than
           negative.
@@ -1353,7 +1741,19 @@ entries:
         Graham, *The Intelligent Investor*, chapter 14. The three-year averaging
         is his method.
     not_meaningful_when:
-      - test: the three-year average diluted EPS is zero or negative
+      - industry: [real-estate]
+        because: |
+          The accounts charge depreciation against buildings every year as
+          though they were wearing out, and well-kept property mostly does
+          not. Reported profit is therefore lower than what the business
+          actually earns, by a lot, and every measure built on profit inherits
+          it. The industry uses a different figure entirely — funds from
+          operations, which adds the depreciation back — and this program does
+          not compute it.
+
+          Averaging three years of those earnings smooths them without fixing
+          them.
+      - data: the three-year average diluted EPS is zero or negative
         because: |
           Negative average EPS makes the ratio meaningless.
 
@@ -1389,7 +1789,15 @@ entries:
       attribution: |
         Graham.
     not_meaningful_when:
-      - test: total shareholders' equity is zero or negative
+      - industry: [real-estate]
+        because: |
+          Book value for a property company is buildings at what they cost,
+          less every year of depreciation charged since — which for well-kept
+          property is a long way below what they are worth. The company also
+          pays out nearly all its income by law, so the accumulated-profit
+          line is negative rather than small. A property company can read as
+          expensive here while trading below the value of what it owns.
+      - data: total shareholders' equity is zero or negative
         because: |
           Companies with buyback-driven negative equity produce a meaningless
           ratio.
@@ -1426,7 +1834,13 @@ entries:
       attribution: |
         Graham. The stricter form of price to book.
     not_meaningful_when:
-      - test: net tangible assets (equity − goodwill − intangibles) is zero or negative
+      - industry: [real-estate]
+        because: |
+          The same understated book value as the plain version, and stripping
+          goodwill does nothing to fix it: what is understated here is the
+          buildings, which are as tangible as an asset gets.
+      - data: net tangible assets (equity − goodwill − intangibles) is zero or
+          negative
         because: |
           Companies with negative tangible book, common after large
           acquisitions, produce a meaningless ratio.
@@ -1463,7 +1877,13 @@ entries:
         Graham. Often called the Graham Number in his honour. The product form
         is exactly how he derived it.
     not_meaningful_when:
-      - test: either component is not meaningful
+      - industry: [real-estate]
+        because: |
+          Both factors are already wrong for a property company — earnings
+          suppressed by building depreciation, book value held at what the
+          buildings cost decades ago — and multiplying them together compounds
+          it rather than cancelling it.
+      - data: either component is not meaningful
         because: |
           The product of a meaningless factor is meaningless.
 
@@ -1507,6 +1927,30 @@ entries:
         Buffett, from the 1986 shareholder letter appendix. He would recognise
         owner earnings; he'd quibble that the maintenance capex proxy is crude,
         and he'd be right.
+    not_meaningful_when:
+      - industry: [depository-lending, insurance]
+        because: |
+          Free cash flow starts from cash from operations, and for a lender
+          that figure moves with the period's change in loans and deposits
+          rather than with the business. A bank that is shrinking its loan
+          book generates the most of it — so this does not come back small for
+          a lender in trouble, it comes back large. An insurer's is inflated
+          the same way by float: premiums arrive before claims are paid, which
+          looks like cash the business made and is really cash it is holding
+          for somebody else.
+
+          Owner earnings start from that figure, so what this reports as the
+          cash a lender throws off for its owners is the loan book moving. A
+          growing lender reads poor and a shrinking one reads superb, which is
+          the wrong way round on the measure a purchase can turn on.
+      - industry: [real-estate]
+        because: |
+          Owner earnings take cash from operations and subtract the smaller of
+          capital spending and depreciation, as a stand-in for what it costs
+          to keep the assets going. For a property company that subtraction is
+          wrong twice: the depreciation is a convention rather than a cost,
+          and what it actually spends on buildings sits under captions this
+          program deliberately refuses to guess at.
 
   - id: owner_earnings_yield_on_ev
     kind: computed
@@ -1573,6 +2017,27 @@ entries:
         against enterprise value is standard practice, and taking acquired
         intangible amortization out of the proxy answers a specific objection
         about serial acquirers rather than anything he wrote.
+    not_meaningful_when:
+      - industry: [depository-lending, insurance]
+        because: |
+          Free cash flow starts from cash from operations, and for a lender
+          that figure moves with the period's change in loans and deposits
+          rather than with the business. A bank that is shrinking its loan
+          book generates the most of it — so this does not come back small for
+          a lender in trouble, it comes back large. An insurer's is inflated
+          the same way by float: premiums arrive before claims are paid, which
+          looks like cash the business made and is really cash it is holding
+          for somebody else.
+
+          And the price underneath leaves out the deposits and reserves that
+          are most of what these companies owe. Both halves point the same
+          way, so the yield comes out several times what any real reading
+          would be.
+      - industry: [real-estate]
+        because: |
+          The same two faults as the version measured against market value,
+          plus a price that treats a property company's mortgages as though
+          they were an ordinary company's borrowing.
 
   - id: ev_to_ebit
     kind: computed
@@ -1609,10 +2074,26 @@ entries:
         whatever the absolute number happens to be that year — so he would not
         endorse any fixed level of this measure.
     not_meaningful_when:
-      - test: EBIT (TTM) is zero or negative
+      - industry: [depository-lending, insurance]
         because: |
-          With negative earnings in the denominator the multiple has no
-          interpretation.
+          The price on top is already the wrong quantity for these companies:
+          enterprise value adds on the debts a buyer would take on, and for a
+          lender those are deposits and for an insurer they are claims not yet
+          made — neither of which any filer tags as borrowing. The multiple
+          therefore reads as though the whole company could be had for its
+          market value plus a rounding error, whatever it earns.
+      - industry: [real-estate]
+        because: |
+          The accounts charge depreciation against buildings every year as
+          though they were wearing out, and well-kept property mostly does
+          not. Reported profit is therefore lower than what the business
+          actually earns, by a lot, and every measure built on profit inherits
+          it. The industry uses a different figure entirely — funds from
+          operations, which adds the depreciation back — and this program does
+          not compute it.
+
+          The profit underneath is after that charge, so a property company
+          reads as expensive on this whatever it is worth.
 
   - id: ev_ebit_to_own_5y_median
     kind: computed
@@ -1652,11 +2133,17 @@ entries:
         Graham's discount-closure logic, measured against the company's own
         history rather than a universal standard.
     not_meaningful_when:
-      - test: fewer than 20 trailing quarters of EV/EBIT are available
+      - industry: [depository-lending, insurance, real-estate]
         because: |
-          Five years of data is the minimum; anything shorter and the median is
-          noise.
-      - test: EV/EBIT is not meaningful in the current period
+          This compares today's multiple against that same company's own
+          recent history, and the multiple it compares is one that does not
+          describe these companies at any date. A discount against a
+          meaningless median is meaningless twice over.
+      - data: fewer than 20 trailing quarters of EV/EBIT are available
+        because: |
+          Five years of data is the minimum; anything shorter and the median
+          is noise.
+      - data: EV/EBIT is not meaningful in the current period
         because: |
           A ratio against a median needs a current value to compare.
 
@@ -1693,10 +2180,16 @@ entries:
       attribution: |
         Lynch, applied to a company's own history.
     not_meaningful_when:
-      - test: fewer than 20 trailing quarters of P/E are available
+      - industry: [real-estate]
+        because: |
+          This compares today's price against what the same company usually
+          trades at, and the earnings both readings rest on are suppressed by
+          building depreciation at every date. A discount against a distorted
+          median is not a discount.
+      - data: fewer than 20 trailing quarters of P/E are available
         because: |
           A five-year median needs five years.
-      - test: P/E (TTM) is not meaningful in the current period
+      - data: P/E (TTM) is not meaningful in the current period
         because: |
           A ratio against a median needs a current value to compare.
 
@@ -1739,11 +2232,17 @@ entries:
         Lynch, with the forward-looking growth input substituted for a trailing
         one.
     not_meaningful_when:
-      - test: the five-year EPS CAGR is not meaningful
+      - industry: [real-estate]
+        because: |
+          Both halves rest on earnings that building depreciation suppresses:
+          the price against them on top, and their growth rate underneath. The
+          industry uses funds from operations for exactly this reason, and
+          this program does not compute it.
+      - data: the five-year EPS CAGR is not meaningful
         because: |
           A near-zero or negative base year makes the growth rate meaningless,
           and the ratio built on it with it.
-      - test: P/E (TTM) is not meaningful
+      - data: P/E (TTM) is not meaningful
         because: |
           A negative or absent numerator has no interpretation here.
 
@@ -1781,10 +2280,17 @@ entries:
         Lynch, used explicitly for stalwarts and slow growers, where the plain
         PEG is useless.
     not_meaningful_when:
-      - test: the five-year EPS CAGR is not meaningful
+      - industry: [real-estate]
+        because: |
+          The price-to-earnings half is suppressed by building depreciation,
+          and the dividend added underneath is one a property company pays
+          because the law requires it rather than because the business is
+          generous. Both faults push the same way, which makes every REIT look
+          like a bargain.
+      - data: the five-year EPS CAGR is not meaningful
         because: |
           The denominator inherits it.
-      - test: P/E (TTM) is not meaningful
+      - data: P/E (TTM) is not meaningful
         because: |
           A negative or absent numerator has no interpretation here.
 
@@ -1854,6 +2360,17 @@ entries:
         that would not actually happen.
       attribution: |
         Graham. The net-net construction.
+    not_meaningful_when:
+      - industry: [depository-lending, insurance, real-estate]
+        because: |
+          Banks, insurers and property companies do not divide the balance
+          sheet into what falls due within the year and what does not, so
+          there is no working capital to read and no current ratio to strike.
+          This is not a filing that is missing something: the division does
+          not exist for these businesses, and it never will.
+
+          Net current asset value is current assets less every liability, so
+          without that division there is nothing to compute it from.
 
   - id: net_cash_to_market_cap
     kind: computed
@@ -1888,6 +2405,15 @@ entries:
         show debt that funds a loan book.
       attribution: |
         Lynch. He liked knowing how much of the price was already money.
+    not_meaningful_when:
+      - industry: [depository-lending, insurance]
+        because: |
+          Net cash is what is left after paying off the debts, and for these
+          companies the figure it subtracts is not the debts. Deposits and
+          claims not yet made are missing from it, while the cash on top is
+          reserves a lender is required to hold. A bank can read as though a
+          large part of its market value were spare cash sitting in the
+          building.
 
   # ===========================================================================
   # Growth
@@ -1965,17 +2491,24 @@ entries:
         least a dollar of market value, which is the same question asked of
         the market rather than of the filings.
     not_meaningful_when:
-      - test: invested capital did not grow across the window
+      - industry: [depository-lending, insurance, real-estate]
+        because: |
+          This asks what the profit added over five years was worth against
+          the capital added to produce it, and for these companies both
+          figures are the wrong quantity — the same faults that make return on
+          invested capital unreadable here, measured as a change instead of a
+          level.
+      - data: invested capital did not grow across the window
         because: |
           No capital was retained for this to be the return on. A company that
           grew while keeping nothing is a real and interesting case, and it is
           one this ratio has no way to express: dividing by zero or by a
           negative would print a figure that reads like an answer.
-      - test: pre-tax income in any year of the window is zero or negative
+      - data: pre-tax income in any year of the window is zero or negative
         because: |
           The effective tax rate for that year has no meaning, so after-tax
           operating profit cannot be built for the window.
-      - test: fewer than eight fiscal years are available on one accounting
+      - data: fewer than eight fiscal years are available on one accounting
           basis
         because: |
           The window cannot be constructed, and there is deliberately no
@@ -2024,11 +2557,11 @@ entries:
         wouldn't lead with it; he's held slow growers happily when the returns
         on capital were high enough.
     not_meaningful_when:
-      - test: mean revenue over the three base years is zero or negative
+      - data: mean revenue over the three base years is zero or negative
         because: |
-          The compound growth rate has no interpretation from a zero or negative
-          base.
-      - test: fewer than eight fiscal years of revenue are available on one
+          The compound growth rate has no interpretation from a zero or
+          negative base.
+      - data: fewer than eight fiscal years of revenue are available on one
           accounting basis
         because: |
           The window cannot be constructed. There is deliberately no
@@ -2075,11 +2608,11 @@ entries:
       attribution: |
         Lynch. Recency over smoothness.
     not_meaningful_when:
-      - test: mean revenue over the three base years is zero or negative
+      - data: mean revenue over the three base years is zero or negative
         because: |
-          The compound growth rate has no interpretation from a zero or negative
-          base.
-      - test: fewer than six fiscal years of revenue are available on one
+          The compound growth rate has no interpretation from a zero or
+          negative base.
+      - data: fewer than six fiscal years of revenue are available on one
           accounting basis
         because: |
           The window cannot be constructed.
@@ -2158,18 +2691,31 @@ entries:
         Standard. Defined here as an input to
         [ni_minus_revenue_cagr_spread_5y].
     not_meaningful_when:
-      - test: mean net income over the three base years is zero or negative
+      - industry: [real-estate]
         because: |
-          The compound growth rate has no interpretation from a zero or negative
-          base.
-      - test: mean net income over the three base years is at most a tenth
-          of the mean over the three end years, AND the base years' net
-          margin is under half the end years'
+          The accounts charge depreciation against buildings every year as
+          though they were wearing out, and well-kept property mostly does
+          not. Reported profit is therefore lower than what the business
+          actually earns, by a lot, and every measure built on profit inherits
+          it. The industry uses a different figure entirely — funds from
+          operations, which adds the depreciation back — and this program does
+          not compute it.
+
+          A growth rate in a figure suppressed by that charge tracks the
+          depreciation schedule and the timing of building sales as much as
+          the business, and both are lumpy.
+      - data: mean net income over the three base years is zero or negative
+        because: |
+          The compound growth rate has no interpretation from a zero or
+          negative base.
+      - data: mean net income over the three base years is at most a tenth of
+          the mean over the three end years, AND the base years' net margin is
+          under half the end years'
         because: |
           Both together say the earnings did not grow, they appeared — a
-          margin recovery or a turnaround rather than a business selling
-          more. A compound rate then measures the recovery, which has a
-          ceiling that selling more does not.
+          margin recovery or a turnaround rather than a business selling more.
+          A compound rate then measures the recovery, which has a ceiling that
+          selling more does not.
 
           Neither half is enough alone, and that is measured rather than
           assumed. The margin half on its own is algebraically a
@@ -2178,8 +2724,8 @@ entries:
           filers it fires on companies whose base-period earnings were
           substantial. The multiple half on its own fires on a company whose
           revenue multiplied about as fast as its earnings, which is growth.
-      - test: fewer than eight fiscal years of net income are available on
-          one accounting basis
+      - data: fewer than eight fiscal years of net income are available on one
+          accounting basis
         because: |
           The window cannot be constructed.
 
@@ -2219,17 +2765,29 @@ entries:
       attribution: |
         Lynch. The growth input to his PEG.
     not_meaningful_when:
-      - test: mean diluted EPS over the three base years is zero or negative
+      - industry: [real-estate]
+        because: |
+          The accounts charge depreciation against buildings every year as
+          though they were wearing out, and well-kept property mostly does
+          not. Reported profit is therefore lower than what the business
+          actually earns, by a lot, and every measure built on profit inherits
+          it. The industry uses a different figure entirely — funds from
+          operations, which adds the depreciation back — and this program does
+          not compute it.
+
+          Earnings per share carry that charge like any other earnings figure,
+          and its growth rate carries it compounded.
+      - data: mean diluted EPS over the three base years is zero or negative
         because: |
           A zero or negative base mean breaks the compound rate entirely.
-      - test: mean net income over the three base years is at most a tenth
-          of the mean over the three end years, AND the base years' net
-          margin is under half the end years'
+      - data: mean net income over the three base years is at most a tenth of
+          the mean over the three end years, AND the base years' net margin is
+          under half the end years'
         because: |
           Both together say the earnings did not grow, they appeared — a
-          margin recovery or a turnaround rather than a business selling
-          more. A compound rate then measures the recovery, which has a
-          ceiling that selling more does not.
+          margin recovery or a turnaround rather than a business selling more.
+          A compound rate then measures the recovery, which has a ceiling that
+          selling more does not.
 
           Neither half is enough alone, and that is measured rather than
           assumed. The margin half on its own is algebraically a
@@ -2238,7 +2796,7 @@ entries:
           filers it fires on companies whose base-period earnings were
           substantial. The multiple half on its own fires on a company whose
           revenue multiplied about as fast as its earnings, which is growth.
-      - test: fewer than eight fiscal years of diluted EPS are available on
+      - data: fewer than eight fiscal years of diluted EPS are available on
           one accounting basis
         because: |
           The window cannot be constructed.
@@ -2274,20 +2832,32 @@ entries:
         Graham. Both the ten-year span and the three-year averaging are his
         method.
     not_meaningful_when:
-      - test: the earlier three-year mean EPS is zero or negative
+      - industry: [real-estate]
+        because: |
+          The accounts charge depreciation against buildings every year as
+          though they were wearing out, and well-kept property mostly does
+          not. Reported profit is therefore lower than what the business
+          actually earns, by a lot, and every measure built on profit inherits
+          it. The industry uses a different figure entirely — funds from
+          operations, which adds the depreciation back — and this program does
+          not compute it.
+
+          Over ten years the distortion accumulates rather than averaging out,
+          because the depreciation charged rises with every building bought.
+      - data: the earlier three-year mean EPS is zero or negative
         because: |
           The growth ratio has no interpretation from a zero or negative base.
-      - test: fewer than ten fiscal years of EPS are available
+      - data: fewer than ten fiscal years of EPS are available
         because: |
           The window cannot be constructed.
-      - test: mean net income over the three base years is at most a tenth
-          of the mean over the three end years, AND the base years' net
-          margin is under half the end years'
+      - data: mean net income over the three base years is at most a tenth of
+          the mean over the three end years, AND the base years' net margin is
+          under half the end years'
         because: |
           Both together say the earnings did not grow, they appeared — a
-          margin recovery or a turnaround rather than a business selling
-          more. A compound rate then measures the recovery, which has a
-          ceiling that selling more does not.
+          margin recovery or a turnaround rather than a business selling more.
+          A compound rate then measures the recovery, which has a ceiling that
+          selling more does not.
 
           Neither half is enough alone, and that is measured rather than
           assumed. The margin half on its own is algebraically a
@@ -2334,7 +2904,14 @@ entries:
       attribution: |
         Buffett's margin-discipline thinking, expressed as a spread.
     not_meaningful_when:
-      - test: either component CAGR is not meaningful
+      - industry: [real-estate]
+        because: |
+          This reads the distance between profit growth and revenue growth as
+          a statement about margins. For a property company the profit leg is
+          suppressed by building depreciation and punctuated by gains on
+          buildings sold, while the revenue leg is clean — so the spread
+          reports the depreciation schedule and calls it a margin trend.
+      - data: either component CAGR is not meaningful
         because: |
           The difference of a meaningless number is meaningless.
 
@@ -2375,7 +2952,13 @@ entries:
       attribution: |
         Lynch. The check on where growth in earnings per share is coming from.
     not_meaningful_when:
-      - test: either component CAGR is not meaningful
+      - industry: [real-estate]
+        because: |
+          The same fault as the version built on net income: earnings per
+          share carry the building depreciation and the gains on buildings
+          sold, rent does not, and the distance between them is reported as
+          operating leverage.
+      - data: either component CAGR is not meaningful
         because: |
           The difference of a meaningless number is meaningless.
 
@@ -2414,7 +2997,7 @@ entries:
         stores and checking whether inventory was moving; this is the
         filing-level version of the same instinct.
     not_meaningful_when:
-      - test: the company reports no inventory
+      - data: the company reports no inventory
         because: |
           Software, services and most financials carry no inventory, so the
           comparison has nothing to measure.
@@ -2451,7 +3034,14 @@ entries:
       attribution: |
         Lynch. The receivables counterpart to the inventory check.
     not_meaningful_when:
-      - test: the company reports no accounts receivable
+      - industry: [depository-lending]
+        because: |
+          This asks whether sales are being booked and not collected. A
+          lender's receivable is not an uncollected sale — it is the loan,
+          which is the asset the business exists to create. Growing it faster
+          than income is what lending is, and this would report it as a
+          warning.
+      - data: the company reports no accounts receivable
         because: |
           The comparison has nothing to measure.
 
@@ -2490,7 +3080,20 @@ entries:
       attribution: |
         Graham. Stability of earnings, counted rather than averaged.
     not_meaningful_when:
-      - test: fewer than ten fiscal years of filings are available
+      - industry: [real-estate]
+        because: |
+          The accounts charge depreciation against buildings every year as
+          though they were wearing out, and well-kept property mostly does
+          not. Reported profit is therefore lower than what the business
+          actually earns, by a lot, and every measure built on profit inherits
+          it. The industry uses a different figure entirely — funds from
+          operations, which adds the depreciation back — and this program does
+          not compute it.
+
+          A count of profitable years is built on nothing but that figure, so
+          a property company earning cash every year can print a loss in
+          several of them and read as a business that keeps failing.
+      - data: fewer than ten fiscal years of filings are available
         because: |
           A count out of ten cannot be made from a shorter history.
 
@@ -2523,6 +3126,21 @@ entries:
         operations never stopped generating cash.
       attribution: |
         Graham. The streak form of his earnings-stability test.
+    not_meaningful_when:
+      - industry: [real-estate]
+        because: |
+          The accounts charge depreciation against buildings every year as
+          though they were wearing out, and well-kept property mostly does
+          not. Reported profit is therefore lower than what the business
+          actually earns, by a lot, and every measure built on profit inherits
+          it. The industry uses a different figure entirely — funds from
+          operations, which adds the depreciation back — and this program does
+          not compute it.
+
+          A run of reported losses is the thing this counts, and for a
+          property company those losses can be the depreciation schedule
+          rather than the business — which on a measure where a run is bad
+          reads as a company in trouble.
 
   - id: consecutive_dividend_years
     kind: computed
@@ -2608,7 +3226,7 @@ entries:
         dividend-only count now excludes companies returning capital
         consistently by a route he had no reason to anticipate.
     not_meaningful_when:
-      - test: a year in the run paid no dividend and has no resolvable
+      - data: a year in the run paid no dividend and has no resolvable
           repurchase figure
         because: |
           Whether capital was returned that year is unknown, and a streak
@@ -2744,6 +3362,15 @@ entries:
       attribution: |
         Buffett's preference for return on unleveraged net *tangible* assets,
         expressed as a balance-sheet composition.
+    not_meaningful_when:
+      - industry: [depository-lending, insurance]
+        because: |
+          This asks how much of the company was bought rather than built, by
+          weighing goodwill against everything the company owns. For a lender
+          what it owns is the loan book — hundreds of billions of it — so a
+          bank assembled entirely out of acquisitions reads at two or three
+          per cent, the same as one that has never bought anything. The number
+          is not answering the question it states.
 
   - id: goodwill_impairment_to_equity_5y
     kind: computed
@@ -2805,10 +3432,10 @@ entries:
         how much goodwill sits on its balance sheet, and no argument at all
         against judging it by how much it has had to write back off.
     not_meaningful_when:
-      - test: shareholders' equity before the window is zero or negative
+      - data: shareholders' equity before the window is zero or negative
         because: |
           There is no base to measure the write-offs against.
-      - test: any year in the window has no resolvable impairment figure
+      - data: any year in the window has no resolvable impairment figure
         because: |
           A missing caption is not evidence of no write-off. A filer reporting
           one combined goodwill-and-intangibles line, and nothing this map
@@ -2855,7 +3482,7 @@ entries:
         Lynch. It is also the only measure available here that updates in days
         rather than quarters.
     not_meaningful_when:
-      - test: no Form 4 filings exist for the issuer in the window
+      - data: no Form 4 filings exist for the issuer in the window
         because: |
           Silence is not the same as an absence of buying; there is nothing to
           report either way.
@@ -2895,7 +3522,7 @@ entries:
         fund has no marginal buyer left, and the best opportunities are in
         companies Wall Street hasn't covered yet.
     not_meaningful_when:
-      - test: 13F holdings have not been aggregated for the ticker
+      - data: 13F holdings have not been aggregated for the ticker
         because: |
           A partial sum understates ownership without saying by how much.
 
