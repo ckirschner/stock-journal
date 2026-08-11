@@ -392,6 +392,28 @@ def applicability(name: str = "metric-bank") -> dict:
     return out
 
 
+def data_conditions(name: str = "metric-bank") -> dict:
+    """{entry id: [condition, ...]} — the conditions the FORMULA refuses on.
+
+    The mirror of `applicability` above, and handed over for the opposite
+    reason. Those are the host's to evaluate and are exported so it can. These
+    are not — a reading of the figures can only be refused where the
+    arithmetic is — and they are exported so the formula performing one can
+    say the sentence in the bank's words rather than a copy of them, and so
+    that naming a condition this file does not state can be refused. See
+    compute.not_meaningful.
+    """
+    doc = load_bank(name)
+    out = {}
+    for e in (doc.get("entries") or []):
+        stated = [" ".join(str(item["data"]).split())
+                  for item in (e.get("not_meaningful_when") or [])
+                  if isinstance(item, dict) and item.get("data")]
+        if stated:
+            out[str(e.get("id"))] = stated
+    return out
+
+
 def meta(name: str = "metric-bank") -> dict:
     """Per measure, what a screen needs to render it: label, unit, format,
     kind, favourable direction, and the plain-language explanation. The

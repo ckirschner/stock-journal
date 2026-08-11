@@ -146,17 +146,38 @@ class TestDebtAggregateGuards:
         assert r["value"] == 3000
         assert any("debit-balance" in c for c in r["cautions"])
 
-    def test_long_term_debt_fallback_serves_instead_of_zero(self):
-        """A filer whose only noncurrent debt line is us-gaap:LongTermDebt
-        must get that figure (cautioned), never a completeness zero."""
+    def test_long_term_debt_reads_absent_rather_than_a_wider_figure(self):
+        """A filer whose only debt line is us-gaap:LongTermDebt has no
+        noncurrent figure this host can read.
+
+        That element usually INCLUDES the current portion, so serving it as
+        the noncurrent split is a number overstated by an unknown amount. It
+        used to be served with a caution saying so, called conservative
+        because overstating debt can only make a limit harder to meet — true
+        of an entry test, where a false fail declines a purchase and nothing
+        happens, and false of Graham's exit, where the same false fail sells
+        the holding. Absent is the honest answer, and it is `unknown` rather
+        than `fail` everywhere the measure is cited.
+        """
         d = "2023-12-31"
         fi = cm.FilingIndex(filing("R9", "10-K", "2024-02-01", d, balance_face(d, extra=[
             inst("us-gaap:LongTermDebt", d, 5000, label="Long-term debt"),
         ])))
-        r = cm.resolve_instant(fi, "long_term_debt", d)
-        assert r is not None
-        assert r["value"] == 5000
-        assert r["matched"] == "fallback_total"
+        assert cm.resolve_instant(fi, "long_term_debt", d) is None
+        # And the figure is not lost: it is a component of total debt, which
+        # is where an unclassified filer's borrowing is meant to land. That
+        # is what stops the split claiming a completeness zero here.
+        assert cm.resolve_instant(fi, "total_debt", d)["value"] == 5000
+
+    def test_no_spec_can_serve_a_figure_that_needs_a_caution_to_explain_it(self):
+        """The mechanism went with its one user. A concept that answers the
+        same quantity belongs in `total_candidates`; anything needing a
+        sentence about how it differs is a number that cannot be right, and
+        principle 4 says that is absent rather than cautioned."""
+        assert "fallback_total" not in cm.load_map()["inputs"].get(
+            "long_term_debt", {})
+        assert not any("fallback_total" in (spec or {})
+                       for spec in cm.load_map()["inputs"].values())
 
     def test_split_aggregate_never_claims_zero_beside_unclassified_debt(self):
         """An extension debt line the split can't classify blocks the

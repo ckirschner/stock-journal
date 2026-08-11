@@ -303,6 +303,58 @@ def _applicability() -> dict:
     return _APPLICABILITY["rules"]
 
 
+def not_meaningful(entry_id: str, condition: str, detail: str = "") -> dict:
+    """This entry's own declared refusal, in the bank's words.
+
+    The `data` form of an applicability condition is the one the HOST cannot
+    evaluate: it is a reading of the figures, so the formula is the only
+    thing that can refuse on it. That left the declaration and the
+    enforcement in two files with nothing joining them, and the join failed
+    in both directions. A condition was declared and the arithmetic never
+    performed it — that is what let a payout ratio the bank calls
+    uninterpretable be served with a warning beside it, and a cash
+    conversion divide through a loss. And a refusal was performed citing
+    "the bank's own test" for a test the entry does not declare, so a reader
+    following the sentence to the Metrics page found nothing there.
+
+    So a refusal names the condition it is performing, and the sentence a
+    reader gets is the bank's own — one copy, in the file where every other
+    word about a measure lives. Naming one the entry does not declare raises,
+    which is the second direction; tests/test_applicability.py walks this
+    file for these calls and checks the first, so a condition nobody
+    performs cannot sit in the bank looking enforced.
+
+    `detail` is what this reading was, which the bank cannot know — which
+    year, which figures. It never restates the condition.
+    """
+    declared = _data_conditions().get(entry_id) or []
+    if condition not in declared:
+        raise ValueError(
+            f'{entry_id} refuses on "{condition}", which is not one of the '
+            "`data` conditions its metric-bank entry declares "
+            + (f"({_or_list(list(declared))})." if declared
+               else "— it declares none.")
+            + " A refusal a reader cannot look up teaches them the tool is "
+              "broken. Declare the condition under `not_meaningful_when`.")
+    return _absent_result(absent(
+        f"Not meaningful here: {condition} (the bank's own test)"
+        + (f" — {detail}" if detail else "")))
+
+
+_DATA_CONDITIONS: dict = {}
+
+
+def _data_conditions() -> dict:
+    """{entry id: [condition, ...]} — every `data` condition the bank states,
+    cached on the file's own mtime exactly as the industry rules are."""
+    doc_mtime = bank_mod.bank_path("metric-bank").stat().st_mtime
+    if _DATA_CONDITIONS.get("mtime") != doc_mtime:
+        _DATA_CONDITIONS.clear()
+        _DATA_CONDITIONS["mtime"] = doc_mtime
+        _DATA_CONDITIONS["rules"] = bank_mod.data_conditions()
+    return _DATA_CONDITIONS["rules"]
+
+
 def _cautions_of(*things) -> list:
     out = []
     for t in things:
@@ -798,7 +850,30 @@ def roic_median_5y(ctx):
             return _absent_result(absent(
                 f"{what} balance-sheet dates do not line up with the fiscal "
                 "years of EBIT; the window cannot be aligned"))
+    # Revenue is not in the formula; it is what the bank's own test judges
+    # the denominator small AGAINST, so it is required for the same reason
+    # every other input is. It used to be read and then used only `if not
+    # is_absent(rev)`, which turned the declared refusal off for exactly the
+    # filers most likely to be missing a revenue total — the concept map says
+    # in as many words that some of them tag none. A gate that cannot be
+    # evaluated has not been passed.
     rev = _window(ctx, "revenue", 5)
+    if is_absent(rev):
+        return _absent_result(absent(
+            "revenue over the same five fiscal years: " + rev["reason"]
+            + " — and the bank's test for whether invested capital is too "
+              "small to divide by is measured against revenue, so it cannot "
+              "be settled either way"))
+    # Aligned on the period ends like every other window here, and for the
+    # same reason: each input resolves its own newest five fiscal years, so
+    # two that answer for different years line up by position while
+    # describing different periods. Unaligned, the year's invested capital
+    # was tested against another year's revenue.
+    if [p["end"] for p in rev["points"]] != years:
+        return _absent_result(absent(
+            "revenue resolves over different fiscal years from EBIT, so the "
+            "test of whether invested capital is too small to divide by "
+            "would compare one year against another"))
     roics = []
     for i, y in enumerate(years):
         if pretax["values"][i] <= 0:
@@ -808,11 +883,12 @@ def roic_median_5y(ctx):
                 "cannot be computed for the window"))
         rate = tax["values"][i] / pretax["values"][i]
         invested = debt["values"][i] + eq["values"][i] - cash["values"][i]
-        if not is_absent(rev) and invested < 0.10 * rev["values"][i]:
-            return _absent_result(absent(
-                f"Not meaningful here: invested capital at FY ending {y} is "
-                "under 10% of revenue (the bank's own test) — asset-light "
-                "denominators make this ratio explode"))
+        if invested < 0.10 * rev["values"][i]:
+            return not_meaningful(
+                "roic_median_5y",
+                "invested capital (the denominator) is under 10% of revenue",
+                f"invested capital at FY ending {y} is {invested:,.0f} "
+                f"against revenue of {rev['values'][i]:,.0f}")
         if invested == 0:
             return _absent_result(absent(
                 f"invested capital at FY ending {y} is zero"))
@@ -842,9 +918,10 @@ def roe_median_5y(ctx):
     for i, y in enumerate(years):
         avg_eq = (eq["values"][i] + eq["values"][i + 1]) / 2.0
         if avg_eq <= 0:
-            return _absent_result(absent(
-                f"Not meaningful here: average shareholders' equity for FY "
-                f"ending {y} is zero or negative (the bank's own test)"))
+            return not_meaningful(
+                "roe_median_5y",
+                "total shareholders' equity is zero or negative",
+                f"the average for FY ending {y} is {avg_eq:,.0f}")
         roes.append(ni["values"][i] / avg_eq * 100.0)
     value, outs = _median_of(roes, years)
     return computed(value,
@@ -896,9 +973,10 @@ def debt_to_equity(ctx):
     if is_absent(eq):
         return _absent_result(eq)
     if eq["value"] <= 0:
-        return _absent_result(absent(
-            "Not meaningful here: total shareholders' equity is zero or "
-            "negative (the bank's own test)"))
+        return not_meaningful(
+            "debt_to_equity",
+            "total shareholders' equity is zero or negative",
+            f"equity is {eq['value']:,.0f}")
     return computed(debt["value"] / eq["value"],
                     [_prov_point(debt), _prov_point(eq)],
                     _cautions_of(debt, eq))
@@ -912,12 +990,12 @@ def interest_coverage(ctx):
     if is_absent(interest):
         return _absent_result(absent(
             "interest expense could not be resolved — debt-free companies "
-            "often tag none, and the bank marks this ratio not meaningful "
-            "when interest is near zero: " + interest["reason"]))
+            "often tag none, and this ratio has nothing to divide by without "
+            "it: " + interest["reason"]))
     if interest["value"] <= 0:
-        return _absent_result(absent(
-            "Not meaningful here: interest expense is zero or negative "
-            "(the bank's own test — the ratio would be infinite)"))
+        return not_meaningful(
+            "interest_coverage", "interest expense is zero or negative",
+            f"interest expense is {interest['value']:,.0f}")
     return computed(ebit["value"] / interest["value"],
                     [_prov_point(ebit), _prov_point(interest)],
                     _cautions_of(ebit, interest))
@@ -935,9 +1013,11 @@ def ltd_to_working_capital(ctx):
         return _absent_result(cl)
     wc = ca["value"] - cl["value"]
     if wc <= 0:
-        return _absent_result(absent(
-            "Not meaningful here: working capital is zero or negative "
-            "(the bank's own test)"))
+        return not_meaningful(
+            "ltd_to_working_capital",
+            "working capital (current assets − current liabilities) is zero "
+            "or negative",
+            f"working capital is {wc:,.0f}")
     return computed(ltd["value"] / wc,
                     [_prov_point(ltd), _prov_point(ca), _prov_point(cl)],
                     _cautions_of(ltd, ca, cl))
@@ -1047,12 +1127,15 @@ def fcf_ttm(ctx):
         return _absent_result(absent(
             "capital expenditure could not be resolved (" + capex["reason"]
             + ") — free cash flow is not computed with a guessed capex"))
-    cautions = _cautions_of(cfo, capex)
-    if capex["value"] < 0:
-        cautions.append("capex resolved negative, which is unusual for a "
-                        "payments element; check the filing")
+    # There was a branch here cautioning that capex had resolved negative and
+    # computing anyway. `cfo - capex` then ADDED the capital spending, so free
+    # cash flow came back overstated by twice it — a wrong number with a
+    # warning beside it, which is still a wrong verdict once fcf_margin_ttm
+    # carries it onto an exit. The concept map declares that line's sign and
+    # now enforces it, so a wrong-signed capex never arrives here at all.
     return computed(cfo["value"] - capex["value"],
-                    [_prov_point(cfo), _prov_point(capex)], cautions)
+                    [_prov_point(cfo), _prov_point(capex)],
+                    _cautions_of(cfo, capex))
 
 
 def fcf_margin_ttm(ctx):
@@ -1097,9 +1180,9 @@ def fcf_yield_on_ev(ctx):
     if ev["status"] != "computed":
         return ev
     if ev["value"] <= 0:
-        return _absent_result(absent(
-            "Not meaningful here: enterprise value is zero or negative "
-            "(the bank's own test)"))
+        return not_meaningful(
+            "fcf_yield_on_ev", "enterprise value is zero or negative",
+            f"enterprise value is {ev['value']:,.0f}")
     return computed(f["value"] / ev["value"] * 100.0,
                     f["provenance"] + ["enterprise value from the "
                                        "enterprise_value entry"],
@@ -1118,10 +1201,16 @@ def cash_conversion_median_5y(ctx):
                                      "over different fiscal years"))
     vals = []
     for f, n, y in zip(fcf["values"], ni["values"], fcf["years"]):
-        if n == 0:
-            return _absent_result(absent(
-                f"net income for FY ending {y} is zero; conversion against "
-                "it has no meaning"))
+        # Negative and not merely zero. A loss inverts the ratio rather than
+        # undefining it: a company that lost money and burned cash divides
+        # one negative by another and reads as a perfect converter, which is
+        # the flattering answer to the facts this measure exists to catch.
+        # It used to guard `n == 0` alone.
+        if n <= 0:
+            return not_meaningful(
+                "cash_conversion_median_5y",
+                "net income in any year of the window is zero or negative",
+                f"net income for FY ending {y} is {n:,.0f}")
         vals.append(f / n)
     value, outs = _median_of(vals, fcf["years"])
     return computed(value,
@@ -1180,17 +1269,23 @@ def payout_to_fcf_median_5y(ctx):
                                      "resolve over different fiscal years"))
     vals = []
     for i, y in enumerate(fcf["years"]):
-        if fcf["values"][i] == 0:
-            return _absent_result(absent(
-                f"free cash flow for FY ending {y} is zero; payout against "
-                "it has no meaning"))
+        # Negative as well as zero, and a refusal rather than the caution
+        # that stood here. A payout over negative free cash flow comes back
+        # NEGATIVE, so a company borrowing to fund its dividend reads as
+        # paying out less than it earns — the flattering answer to the one
+        # set of facts this measure exists to catch. The caution said as much
+        # and the median was taken regardless, which is the arithmetic
+        # ignoring a sentence written for a person.
+        if fcf["values"][i] <= 0:
+            return not_meaningful(
+                "payout_to_fcf_median_5y",
+                "free cash flow in any year of the window is zero or "
+                "negative",
+                f"free cash flow for FY ending {y} is "
+                f"{fcf['values'][i]:,.0f}")
         vals.append((div["values"][i] + buy["values"][i] - iss["values"][i])
                     / fcf["values"][i] * 100.0)
     cautions = sorted(set(fcf["cautions"] + _cautions_of(div, buy, iss)))
-    if any(f < 0 for f in fcf["values"]):
-        cautions.append("free cash flow is negative in at least one window "
-                        "year; the bank notes those years' ratios are "
-                        "uninterpretable before the median is taken")
     value, outs = _median_of(vals, fcf["years"])
     return computed(value,
                     [f"(dividends + buybacks − issuance) ÷ FCF, FY "
@@ -1252,9 +1347,9 @@ def pe_ttm(ctx):
     if is_absent(eps):
         return _absent_result(eps)
     if eps["value"] <= 0:
-        return _absent_result(absent(
-            "Not meaningful here: diluted EPS (TTM) is zero or negative "
-            "(the bank's own test)"))
+        return not_meaningful(
+            "pe_ttm", "diluted earnings per share (TTM) is zero or negative",
+            f"diluted EPS is {eps['value']:,.2f}")
     return computed(p["close"] / eps["value"],
                     [f"{p['ticker']} close {p['close']:,.2f} on {p['date']}",
                      _prov_point(eps)], _cautions_of(eps))
@@ -1269,9 +1364,10 @@ def pe_3y_avg_eps(ctx):
         return _absent_result(eps)
     avg = sum(eps["values"]) / 3.0
     if avg <= 0:
-        return _absent_result(absent(
-            "Not meaningful here: the three-year average diluted EPS is zero "
-            "or negative (the bank's own test)"))
+        return not_meaningful(
+            "pe_3y_avg_eps",
+            "the three-year average diluted EPS is zero or negative",
+            f"the average is {avg:,.2f}")
     years = [pt["end"] for pt in eps["points"]]
     return computed(p["close"] / avg,
                     [f"{p['ticker']} close {p['close']:,.2f} on {p['date']}",
@@ -1287,9 +1383,10 @@ def price_to_book(ctx):
     if is_absent(eq):
         return _absent_result(eq)
     if eq["value"] <= 0:
-        return _absent_result(absent(
-            "Not meaningful here: total shareholders' equity is zero or "
-            "negative (the bank's own test)"))
+        return not_meaningful(
+            "price_to_book",
+            "total shareholders' equity is zero or negative",
+            f"equity is {eq['value']:,.0f}")
     return computed(mc["value"] / eq["value"],
                     mc["provenance"] + [_prov_point(eq)],
                     sorted(set(mc["cautions"] + _cautions_of(eq))))
@@ -1310,9 +1407,11 @@ def price_to_net_tangible_assets(ctx):
         return _absent_result(intang)
     nta = eq["value"] - gw["value"] - intang["value"]
     if nta <= 0:
-        return _absent_result(absent(
-            "Not meaningful here: net tangible assets are zero or negative "
-            "(the bank's own test)"))
+        return not_meaningful(
+            "price_to_net_tangible_assets",
+            "net tangible assets (equity − goodwill − intangibles) is zero "
+            "or negative",
+            f"net tangible assets are {nta:,.0f}")
     return computed(mc["value"] / nta,
                     mc["provenance"] + [_prov_point(eq), _prov_point(gw),
                                         _prov_point(intang)],
@@ -1322,10 +1421,11 @@ def price_to_net_tangible_assets(ctx):
 def graham_combined_multiple(ctx):
     pe = ctx.entry("pe_3y_avg_eps")
     if pe["status"] != "computed":
-        return _absent_result(absent(
+        return not_meaningful(
+            "graham_combined_multiple", "either component is not meaningful",
             "P/E on three-year average EPS is not available ("
             + pe.get("reason", "") + "), and the product of a meaningless "
-            "factor is meaningless — the bank's own test"))
+            "factor is meaningless")
     pb = ctx.entry("price_to_book")
     if pb["status"] != "computed":
         return _absent_result(absent(
@@ -1371,9 +1471,9 @@ def ev_to_ebit(ctx):
     if is_absent(ebit):
         return _absent_result(ebit)
     if ebit["value"] <= 0:
-        return _absent_result(absent(
-            "Not meaningful here: EBIT (TTM) is zero or negative (the "
-            "bank's own test)"))
+        return not_meaningful(
+            "ev_to_ebit", "EBIT (TTM) is zero or negative",
+            f"EBIT is {ebit['value']:,.0f}")
     return computed(ev["value"] / ebit["value"],
                     ev["provenance"] + [_prov_point(ebit)],
                     sorted(set(ev["cautions"] + _cautions_of(ebit))))
@@ -1445,10 +1545,11 @@ def _quarterly_ratio_series(ctx, kind):
 def ev_ebit_to_own_5y_median(ctx):
     cur = ctx.entry("ev_to_ebit")
     if cur["status"] != "computed":
-        return _absent_result(absent(
-            "EV/EBIT is not meaningful in the current period ("
-            + cur.get("reason", "") + "), and a ratio against a median needs "
-            "a current value — the bank's own test"))
+        return not_meaningful(
+            "ev_ebit_to_own_5y_median",
+            "EV/EBIT is not meaningful in the current period",
+            cur.get("reason", "") + ", and a ratio against a median needs a "
+            "current value")
     hist = _quarterly_ratio_series(ctx, "ev_ebit")
     if is_absent(hist):
         return _absent_result(hist)
@@ -1464,10 +1565,11 @@ def ev_ebit_to_own_5y_median(ctx):
 def pe_to_own_5y_median_pe(ctx):
     cur = ctx.entry("pe_ttm")
     if cur["status"] != "computed":
-        return _absent_result(absent(
-            "P/E (TTM) is not meaningful in the current period ("
-            + cur.get("reason", "") + "), and a ratio against a median needs "
-            "a current value — the bank's own test"))
+        return not_meaningful(
+            "pe_to_own_5y_median_pe",
+            "P/E (TTM) is not meaningful in the current period",
+            cur.get("reason", "") + ", and a ratio against a median needs a "
+            "current value")
     cur_value, cur_note = cur["value"], "current P/E"
     fi = ctx.sb.latest_fi()
     shares = cm.resolve_cover_shares(fi) if fi else None
@@ -1503,10 +1605,10 @@ def peg_trailing(ctx):
                                      + pe.get("reason", "") + ")"))
     growth = ctx.entry("eps_cagr_5y")
     if growth["status"] != "computed":
-        return _absent_result(absent(
-            "the five-year EPS CAGR is not meaningful ("
-            + growth.get("reason", "") + "), and the ratio built on it goes "
-            "with it — the bank's own test"))
+        return not_meaningful(
+            "peg_trailing", "the five-year EPS CAGR is not meaningful",
+            growth.get("reason", "") + ", and the ratio built on it goes "
+            "with it")
     if growth["value"] <= 0:
         return _absent_result(absent(
             "the five-year EPS CAGR is zero or negative; a PEG against "
@@ -1636,11 +1738,33 @@ def _appeared_rather_than_grew(ctx, years, base_ends=GROWTH_ENDS):
     `years` are the measure's own fiscal years, so net income and revenue are
     read over exactly the window whose rate is in question rather than over
     whatever eight years those two inputs happen to reach on their own.
+
+    Where the earnings behind the window cannot be read over those years, the
+    rate is refused rather than served ungated. This is a gate, and a gate
+    that cannot be evaluated has not been passed — the same reading the
+    revenue half below has always taken. It mattered because the two measures
+    that most need it do not read net income themselves: eps_cagr_5y and
+    eps_growth_10y run on diluted EPS, so the earnings window is a separate
+    input that can thin out or land on different years on its own, and the
+    turnaround this exists to catch would then have come back as a compound
+    growth rate.
     """
     n = len(years)
     ni = _window(ctx, "net_income", n)
-    if is_absent(ni) or [p["end"] for p in ni["points"]] != years:
-        return None
+    if is_absent(ni):
+        return absent(
+            "The record does not establish a grower here: net income over FY "
+            f"{years[0]}..{years[-1]} could not be read ({ni['reason']}), so "
+            "whether the earnings at the base of this window grew or "
+            "appeared cannot be told apart — and a compound rate off that "
+            "base would answer as though it could")
+    if [p["end"] for p in ni["points"]] != years:
+        return absent(
+            "The record does not establish a grower here: net income "
+            "resolves over different fiscal years from the window whose rate "
+            "is in question, so the base years cannot be read — and a "
+            "compound rate off a base nobody could check would answer as "
+            "though they had been")
     base_ni = sum(ni["values"][:base_ends])
     end_ni = sum(ni["values"][-base_ends:])
     if end_ni <= 0 or base_ni <= 0 or base_ni >= APPEARED_MULTIPLE * end_ni:
@@ -1842,9 +1966,10 @@ def eps_growth_10y(ctx):
     ends = [p["end"] for p in w["points"]]
     early, late, outs = _averaged_ends(w["values"], ends)
     if early <= 0:
-        return _absent_result(absent(
-            "Not meaningful here: the earlier three-year mean EPS is zero "
-            "or negative (the bank's own test)"))
+        return not_meaningful(
+            "eps_growth_10y",
+            "the earlier three-year mean EPS is zero or negative",
+            f"the earlier mean is {early:,.2f}")
     appeared = _appeared_rather_than_grew(ctx, ends)
     if appeared is not None:
         return _absent_result(appeared)
@@ -1875,10 +2000,11 @@ def ni_minus_revenue_cagr_spread_5y(ctx):
     b = ctx.entry("revenue_cagr_5y")
     for c in (a, b):
         if c["status"] != "computed":
-            return _absent_result(absent(
-                "a component CAGR is not meaningful ("
-                + c.get("reason", "") + "), and the difference of a "
-                "meaningless number is meaningless — the bank's own test"))
+            return not_meaningful(
+                "ni_minus_revenue_cagr_spread_5y",
+                "either component CAGR is not meaningful",
+                c.get("reason", "") + ", and the difference of a meaningless "
+                "number is meaningless")
     return computed(a["value"] - b["value"],
                     ["net income CAGR minus revenue CAGR, both computed "
                      "above"], sorted(set(a["cautions"] + b["cautions"])),
@@ -1916,14 +2042,14 @@ def _same_filing_revenue_yoy(ctx, fi):
             "cautions": _cautions_of(cur, prior)}
 
 
-def _balance_growth_spread(ctx, input_id, nmw_text):
+def _balance_growth_spread(ctx, entry_id, input_id, condition):
     fi = ctx.sb.latest_balance_fi()
     if fi is None:
         return _absent_result(absent("no stored filing carries a balance sheet"))
     pair = ctx.sb.instant_pair_yoy(input_id)
     if is_absent(pair):
         if "did not resolve" in pair["reason"]:
-            return _absent_result(absent(nmw_text + " (" + pair["reason"] + ")"))
+            return not_meaningful(entry_id, condition, pair["reason"])
         return _absent_result(pair)
     if pair["ago"]["value"] == 0:
         return _absent_result(absent(
@@ -1943,16 +2069,15 @@ def _balance_growth_spread(ctx, input_id, nmw_text):
 
 def inventory_minus_revenue_growth_yoy(ctx):
     return _balance_growth_spread(
-        ctx, "inventory_net",
-        "Not meaningful here: the company reports no inventory — the bank's "
-        "own test")
+        ctx, "inventory_minus_revenue_growth_yoy", "inventory_net",
+        "the company reports no inventory")
 
 
 def receivables_minus_revenue_growth_yoy(ctx):
     return _balance_growth_spread(
-        ctx, "accounts_receivable_net",
-        "Not meaningful here: the company reports no accounts receivable — "
-        "the bank's own test")
+        ctx, "receivables_minus_revenue_growth_yoy",
+        "accounts_receivable_net",
+        "the company reports no accounts receivable")
 
 
 def profitable_years_10y(ctx):
@@ -2223,10 +2348,11 @@ def total_debt_to_avg_fcf_5y(ctx):
 
     mean_fcf = sum(fcf["values"]) / len(fcf["values"])
     if mean_fcf <= 0:
-        return _absent_result(absent(
-            "Not meaningful here: average free cash flow over the five years "
-            "is zero or negative, so there is no number of years of it that "
-            "repays the debt (the bank's own test)"))
+        return not_meaningful(
+            "total_debt_to_avg_fcf_5y",
+            "average free cash flow over the five years is zero or negative",
+            f"the average is {mean_fcf:,.0f}, so there is no number of "
+            "years of it that repays the debt")
     value, outs = _with_one_out(fcf["values"], fcf["years"], ratio,
                                 lambda rest: sum(rest) / len(rest) > 0)
     return computed(value,
@@ -2333,11 +2459,11 @@ def roe_minus_roic_gap_5y(ctx):
     b = ctx.entry("roic_median_5y")
     for c in (a, b):
         if c["status"] != "computed":
-            return _absent_result(absent(
-                "one side of the gap is not meaningful ("
-                + c.get("reason", "") + "), and the distance between a "
-                "number and a meaningless one is meaningless — the bank's "
-                "own test"))
+            return not_meaningful(
+                "roe_minus_roic_gap_5y",
+                "either side is not meaningful for this company",
+                c.get("reason", "") + ", and the distance between a number "
+                "and a meaningless one is meaningless")
     return computed(a["value"] - b["value"],
                     ["return on equity minus return on invested capital, "
                      "both five-year medians computed above"],
@@ -2362,10 +2488,11 @@ def gross_margin_range_relative_5y(ctx):
         return (max(values) - min(values)) / mid * 100.0
 
     if median(gm["values"]) <= 0:
-        return _absent_result(absent(
-            "Not meaningful here: the middle annual gross margin over the "
-            "window is zero or negative, so a swing measured against it has "
-            "no scale (the bank's own test)"))
+        return not_meaningful(
+            "gross_margin_range_relative_5y",
+            "the middle annual gross margin is zero or negative",
+            f"the middle margin is {median(gm['values']):,.1f}%, so a "
+            "swing measured against it has no scale")
     value, outs = _with_one_out(gm["values"], gm["years"], relative,
                                 lambda rest: median(rest) > 0)
     return computed(value,
@@ -2408,10 +2535,11 @@ def goodwill_impairment_to_equity_5y(ctx):
             "of the impairment window; it cannot be aligned"))
     opening = eq["values"][0]
     if opening <= 0:
-        return _absent_result(absent(
-            f"Not meaningful here: shareholders' equity at {eq['dates'][0]}, "
-            "before the window opened, is zero or negative, so there is no "
-            "base to measure the write-offs against (the bank's own test)"))
+        return not_meaningful(
+            "goodwill_impairment_to_equity_5y",
+            "shareholders' equity before the window is zero or negative",
+            f"equity at {eq['dates'][0]} is {eq['values'][0]:,.0f}, so there "
+            "is no base to measure the write-offs against")
 
     def share(values):
         return sum(values) / opening * 100.0
@@ -2471,10 +2599,11 @@ def owner_earnings_yield_on_ev(ctx):
     if ev["status"] != "computed":
         return ev
     if ev["value"] <= 0:
-        return _absent_result(absent(
-            "Not meaningful here: enterprise value is zero or negative — the "
-            "company holds more cash than the shares and the debt together "
-            "are worth (the bank's own test)"))
+        return not_meaningful(
+            "owner_earnings_yield_on_ev",
+            "enterprise value is zero or negative",
+            "the company holds more cash than the shares and the debt "
+            "together are worth")
     depreciation = dda["value"] - amort["value"]
     if depreciation < 0:
         return _absent_result(absent(
