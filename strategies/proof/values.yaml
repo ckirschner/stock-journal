@@ -1,7 +1,0 @@
-# Shipped defaults for the contract proof's declared values.
-# The declaration of what each value MEANS lives in strategy.py; this file
-# holds only the numbers, so they can be read, compared and changed without
-# touching logic. The version is what makes a change here recordable.
-version: 1
-values:
-  patience: 4

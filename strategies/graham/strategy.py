@@ -452,6 +452,59 @@ DECLINES = [
 ]
 
 
+# What the METHOD asks for or admits to that this program does not do.
+#
+# Separate from DECLINES, which is about a kind of company these tests cannot
+# read. This is about the method, and the first of the two is the one most
+# likely to be experienced as the tool being broken.
+LIMITS = [
+    {"title": "Returning nothing for years is this strategy working",
+     "body": "**Against a realistic set of US companies these tests will "
+             "produce no candidates at all, for years at a time.** That is "
+             "faithful rather than broken, and it is worth understanding "
+             "before you are tempted to loosen anything.\n\n"
+             "Graham's own programme was never a stock-selection rule set "
+             "standing on its own. It sat inside an allocation between "
+             "shares and bonds — never less than a quarter in either, "
+             "rebalanced as prices moved — and he was explicit that in an "
+             "expensive market the criteria would find nothing, and that "
+             "this was the signal to hold more bonds rather than to relax "
+             "the criteria. The empty screen was the output. It was telling "
+             "you where the money should be.\n\n"
+             "**This program does not implement that allocation and cannot "
+             "tell you to hold bonds.** It has no view of your account "
+             "beyond what you tell it and it does not know what else you "
+             "own. So the half of the method that gave an empty screen its "
+             "meaning is missing here, and what is left looks like a tool "
+             "that has stopped working.\n\n"
+             "If you take one thing from this page: when this strategy has "
+             "nothing to buy for a long stretch, the answer the method "
+             "gives is to hold more in something safe and wait. It is not "
+             "to lower a threshold. A level moved during a drought is a "
+             "level moved at the exact moment you had the least reason to "
+             "trust yourself, which is the whole thing a written-down rule "
+             "exists to prevent."},
+
+    {"title": "It is a portfolio method, and this is one security",
+     "body": "This method buys a statistical discount, and statistics is "
+             "the operative word. Graham expected a meaningful share of "
+             "these positions to disappoint and said so plainly; the "
+             "arithmetic works because a diversified set of them works on "
+             "average, not because any one of them was correctly "
+             "picked.\n\n"
+             "**A verdict on this page is about one security, and no method "
+             "here can tell you that one will work.** A buy verdict says "
+             "this security is cheap against its own assets and its own "
+             "typical earnings by the standard you set while you were calm. "
+             "Some of the companies that pass will be cheap because "
+             "something is wrong that no filing shows.\n\n"
+             "It is also why the number of names this strategy holds is a "
+             "setting rather than a suggestion. Twenty positions at five "
+             "percent each is not timidity — it is the mechanism by which "
+             "a method with an expected loser rate is supposed to work."},
+]
+
+
 STRATEGY = {
     "id": "graham",
     "name": "Graham",
@@ -462,6 +515,7 @@ STRATEGY = {
     "version": 8,
     "contract": 5,
     "declines": DECLINES,
+    "limits": LIMITS,
     "changelog": {
         8: "A SECOND EXPERT REVIEW READ THE REPORT THIS STRATEGY WAS BUILT "
            "FROM AND DISPUTED IT. This version is that review's "

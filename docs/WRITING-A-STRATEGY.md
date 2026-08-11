@@ -138,6 +138,7 @@ lookup table produces plausible wrong answers, which is worse than not loading.
 | `values` | numbers it has an opinion about. Optional. |
 | `reference` | file names it ships beside its code. Optional. |
 | `declines` | kinds of company this strategy will not evaluate. Optional. |
+| `limits` | what the method demands or delivers that this program does not. Optional. |
 
 ### What you will not evaluate
 
@@ -202,6 +203,47 @@ You cannot declare a state whose render is `inapplicable`. It says a thing
 will never change, so it has to be traceable to something checkable from
 outside the bundle, and `declines` is that. Where your rules *do* cover the
 company and simply reach no action, that is a `hold`.
+
+### What the method does not promise
+
+`declines` is about a kind of **company** your measures cannot read. `limits`
+is about the **method**: something its own author said was part of it that a
+journal evaluating one security at a time does not do.
+
+```python
+"limits": [
+    {"title": "It is a portfolio method, and this is one security",
+     "body": "Everything here was worked out by somebody running a "
+             "portfolio, and it carries an expected rate of losers the "
+             "good outcomes are meant to pay for…"},
+],
+```
+
+- `title` — the heading, short enough to scan a list of them.
+- `body` — plain language. Markdown-ish, rendered as prose.
+
+**Nothing here does anything.** The host renders it and never reads it: no
+limit gates a verdict, changes a state, or reaches `decide`. A limit that
+altered behaviour would be a rule, and rules belong in your tests and your
+levels where they can be checked. This is for the part of a method that
+cannot be expressed as a rule at all.
+
+Which is exactly the part that otherwise goes unsaid, and why the field
+exists. Every published method these strategies draw on is a portfolio method
+with an expected rate of losers built in, and every one of their authors said
+so. A screen rendering a verdict on one security is quietly offering
+something none of them offered — that this particular one will work — and
+nothing contradicts it unless you say so here. Silence is not neutral.
+
+Two shapes worth writing, and both are in the shipped strategies:
+
+- **What the method never claimed.** The expected loser rate; the fact that
+  the arithmetic works across a set of positions rather than within any one.
+- **The half of the method this program does not implement.** Graham's rules
+  sat inside a bond allocation he was explicit about, and an empty screen
+  meant hold more bonds rather than lower a threshold. Without that said, a
+  strategy that correctly returns nothing for a year reads as broken — and a
+  reader who concludes the tool is broken loosens the tool.
 
 ### States
 
@@ -1100,7 +1142,5 @@ against the SEC's published list in
 - `docs/example-strategy/` — a complete bundle demonstrating the three
   expensive things above. Copy it into `strategies/` to watch it run, and take
   it out again — every number in it is invented, and it is not a strategy.
-- `strategies/proof/` — the smallest possible bundle that still crosses the
-  boundary in both directions.
 - `strategies/graham/` and `strategies/buffett/` — two real ones that
   contradict each other, which is the point.

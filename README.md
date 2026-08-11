@@ -329,10 +329,6 @@ word, and what has been done with spare cash are questions you answer
 yourself, in writing, and an unanswered one blocks a purchase rather than
 being read as agreement.
 
-**`strategies/proof/` is a scaffold, not a strategy.** It proves the boundary
-carries data both ways against real stored filings: it reads one measure,
-always holds, and holds no view about any security.
-
 ### Seeing it work without any of your own data
 
 **Data → Load sample journals** creates one journal of invented companies
@@ -796,7 +792,6 @@ strategies/               one directory per strategy; discovered, not listed
   graham/                 buys a statistical discount: strategy.py, values.yaml
   buffett/                buys a wonderful business, and asks you three
                           questions no filing can answer
-  proof/                  the contract scaffold; holds no view about anything
 data.template/            one demonstration journal per strategy — invented
                           companies, invented figures
 tools/sample_kit.py       the shared machinery every sample is built with
@@ -924,14 +919,31 @@ with Windows 10 and 11, so the build stays around 20 MB rather than the
 
 ## What isn't built yet
 
-- **Three of the four strategies.** Graham ships; Buffett, Lynch and Discount
-  Closure do not. The rulesets in `dev_reference_docs/legacy-profiles/` are
-  the input to writing them.
-- **A fetched risk-free rate.** One Graham test compares the earnings yield
-  against what a government bond pays, and nothing here fetches that number —
-  it is in no filing and it is not price data. The rate is a setting on the
-  strategy, shipped at a starting figure, and it is the one value in the
-  program that goes wrong by sitting still. Changing it is recorded on the
+- **Two of the four strategies.** Graham and Buffett ship; Lynch and Discount
+  Closure do not. `dev_reference_docs/ledger-default-profiles.md` carries a
+  section for each, and each of those sections now opens with a header saying
+  which state it is in and what the review corrected — read it and the
+  addendum beside it before authoring either.
+- **Debt falling due within 24 months, and so the maturity wall built on it.**
+  The characteristic failure of a discount strategy is the value trap, and the
+  mechanism by which a cheap company becomes a zero inside a two-year holding
+  period is a refinancing that has to happen while you own it. The measure
+  would be debt due within 24 months over cash plus twice trailing free cash
+  flow. It is not built, and the reason is coverage rather than effort: the
+  by-year repayment elements are footnote-level and thinly tagged, so the
+  figure would be absent for a large share of filers and quietly wrong for
+  some — and an absent knockout makes a security grey rather than red, which
+  is a lot of greyness bought for a measure that is not reliable. A
+  **12-month** version is computable from what the concept map already
+  resolves; it answers a different question, because the 24 months was chosen
+  to match the period a trap has to survive. Anyone building it on 12 months
+  should say so where the value is declared rather than let it arrive as a
+  substitution.
+- **A fetched bond yield.** Graham's price ceiling is the stricter of a fixed
+  multiple and what high-grade corporate bonds pay, and nothing here fetches
+  that number — it is in no filing and it is not price data. The yield is a
+  setting on the strategy, shipped at a starting figure, and it is the one
+  value in the program that goes wrong by sitting still. Changing it is recorded on the
   journal's rule-change record like any other rule change.
 - **A strategy that stages an entry.** The contract carries staged plans and
   the allocation view renders them; no shipped strategy declares one, because

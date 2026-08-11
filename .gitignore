@@ -6,10 +6,21 @@ ledger-backup-*.json
 pre-import-*.json
 
 # Reference material is local only — it vendors a whole repo and a venv.
-# The retired rulesets are the exception: they are the input to authoring
-# the real strategies, so they have to survive a fresh clone.
+# Three things are the exception, and all three for the same reason: they
+# have to survive a fresh clone or something in the repository stops being
+# checkable.
+#
+#   legacy-profiles/   the retired rulesets, input to authoring the real
+#                      strategies
+#   the profile doc    what the first consultation said, and the record of
+#                      what the two authored strategies were corrected from
+#   the addendum       the review that corrected it. Twelve declared values
+#                      across the two shipped strategies name it as their
+#                      source, and a source nobody can open is not one
 dev_reference_docs/*
 !dev_reference_docs/legacy-profiles/
+!dev_reference_docs/ledger-default-profiles.md
+!dev_reference_docs/ledger-default-profiles-addendum.md
 
 # Agent context — local only.
 claude.md

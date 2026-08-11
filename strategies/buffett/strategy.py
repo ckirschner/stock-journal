@@ -489,6 +489,49 @@ DECLINES = [
 ]
 
 
+# What the METHOD asks for or admits to that this program does not do.
+#
+# Separate from DECLINES, which is about a kind of company these measures
+# cannot read. This is about the method itself, and it is here because the
+# alternative is silence — and silence on this particular point is not
+# neutral, it is a promise nobody made.
+LIMITS = [
+    {"title": "It is a portfolio method, and this is one security",
+     "body": "Everything in this strategy was worked out by somebody running "
+             "a portfolio, and it carries an expected rate of losers that "
+             "the good outcomes are meant to pay for. Buffett has been "
+             "explicit about it: the record includes purchases that went "
+             "nowhere and several he has named as mistakes, and the method "
+             "is sound because the winners were held long enough to "
+             "outweigh them — not because each judgement was right.\n\n"
+             "**A verdict on this page is about one security, and no method "
+             "here can tell you that one will work.** What a buy verdict "
+             "says is that this security meets the standard you set while "
+             "you were calm. It does not say the standard will be met by "
+             "the outcome, and a strategy that passed every test can still "
+             "be the one that costs you money.\n\n"
+             "That is not an argument against the rules — it is what the "
+             "rules are for. It is an argument against reading any one "
+             "verdict as a forecast, and against judging the method by "
+             "whichever position you happen to be looking at."},
+
+    {"title": "Most of what decides this is not in any filing",
+     "body": "Three of the tests here are questions you answer yourself, "
+             "and by the reckoning of the person this strategy is named "
+             "after they decide more than every ratio on the page put "
+             "together. Whether a moat holds for another decade, whether "
+             "management tells the truth when the news is bad, whether "
+             "spare cash went somewhere worth more than paying it out: "
+             "none of it is tagged in a filing and none of it is "
+             "computable.\n\n"
+             "So the numbers here are a filter and not a judgement. They "
+             "are strong enough to rule things out — most companies fail "
+             "them, and that is the intent — and they cannot rule anything "
+             "in on their own. That is why an unanswered question blocks a "
+             "purchase here rather than being read as agreement."},
+]
+
+
 STRATEGY = {
     "id": "buffett",
     "name": "Buffett",
@@ -499,6 +542,7 @@ STRATEGY = {
     "version": 5,
     "contract": 5,
     "declines": DECLINES,
+    "limits": LIMITS,
     "changelog": {
         5: "A SECOND EXPERT REVIEW READ THE REPORT THIS STRATEGY WAS BUILT "
            "FROM AND DISPUTED IT. This version is that review's corrections, "
