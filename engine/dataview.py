@@ -64,9 +64,15 @@ def _bundle(cik: int, tickers: list[str]):
         return held
     filings = facts_store.load_all_filings(cik)
     prices = price_store.load(cik)
-    ctx = compute.Ctx(filings, prices, tickers)
-    held = {"fp": fp, "tickers": tuple(tickers), "ctx": ctx,
-            "filings": filings, "prices": prices, "results": {}}
+    # Read once and shared by every context built from this bundle. What the
+    # SEC calls a filer decides whether several measures mean anything at all,
+    # so a live reading and a reconstruction disagreeing about it would be two
+    # screens disagreeing about whether a number exists.
+    ind = industry.history({"cik": cik})
+    held = {"fp": fp, "tickers": tuple(tickers),
+            "ctx": compute.Ctx(filings, prices, tickers, industry=ind),
+            "filings": filings, "prices": prices, "industry": ind,
+            "results": {}}
     _cache[cik] = held
     return held
 
@@ -115,7 +121,8 @@ def _asof_slot(b: dict, as_of: str) -> dict:
                  if str(f.get("filed") or "")[:10]
                  and str(f.get("filed") or "")[:10] <= as_of]
         ctx = compute.Ctx(dated, b["prices"], list(b["tickers"]),
-                          today=as_of, price_cutoff=as_of)
+                          today=as_of, price_cutoff=as_of,
+                          industry=b["industry"])
         slots[as_of] = {"ctx": ctx, "filings": dated, "results": {}}
     return slots[as_of]
 
@@ -273,7 +280,8 @@ def confirmation_history(cik: int, tickers: list[str],
     if entry_id not in cache:
         try:
             cache[entry_id] = compute.confirmation_history(
-                b["filings"], b["prices"], list(b["tickers"]), entry_id)
+                b["filings"], b["prices"], list(b["tickers"]), entry_id,
+                industry=b["industry"])
         except Exception as e:                          # noqa: BLE001
             cache[entry_id] = {"entry": entry_id, "cadence": None,
                                "readings": [], "boundaries_held": 0,
@@ -336,7 +344,17 @@ def merged_values(security: dict, computed: dict,
         if r.get("status") == "computed":
             values[eid] = qualified(r["value"], "computed",
                                     r.get("cautions"), r.get("provenance"))
+    # A measure the bank says cannot describe this filer is refused here as it
+    # is refused everywhere, and it is refused *before* the overlays, because
+    # this is what a purchase freezes as "every value behind the decision". A
+    # figure typed over a category error would be frozen into an append-only
+    # record that can never be corrected afterwards, wearing the label, unit
+    # and explanation of a measure that does not apply to the company.
+    barred = {eid for eid, r in computed.items()
+              if r.get("status") == "inapplicable"}
     for eid, r in hand_entered.values(security, as_of).items():
+        if eid in barred:
+            continue
         values[eid] = qualified(r["value"], "manual", r["cautions"],
                                 r["provenance"])
     for eid, a in judgements.observations(security, as_of=as_of,
@@ -532,6 +550,11 @@ def coverage(cik: int, tickers: list[str], entry_ids, bank_meta: dict) -> dict:
             "value": r.get("value"),
             "format": meta.get("format"),
             "reason": r.get("reason"),
+            # Which kind of company put a measure out of scope, where one
+            # did. The reason sentence says it in prose; this says it in a
+            # form a screen can group and count on, which is what keeps a
+            # permanent boundary out of the list of things to go and fetch.
+            "industry": r.get("industry"),
             "cautions": r.get("cautions") or [],
             "provenance": r.get("provenance") or [],
         })

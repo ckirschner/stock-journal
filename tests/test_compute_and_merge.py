@@ -1,7 +1,7 @@
 """Computation semantics: absence over guessing, manual over fetched, and the
 public-float cross-check catching a wrong price basis."""
 
-from conftest import dur, entered, filing, inst, balance_face
+from conftest import dur, entered, filing, inst, balance_face, no_filer
 
 from engine import context, crosscheck, dataview, price_store
 from engine.compute import Ctx, compute_all
@@ -26,6 +26,7 @@ def _synthetic_company():
 class TestAbsenceSemantics:
     def test_fcf_computes_and_carries_provenance(self):
         res = compute_all(_synthetic_company(), None, ["SYN"],
+                          industry=no_filer(),
                           entry_ids=["fcf_ttm"])
         r = res["fcf_ttm"]
         assert r["status"] == "computed"
@@ -42,7 +43,8 @@ class TestAbsenceSemantics:
                 end, 200, stmt="CashFlowStatement"),
             dur("us-gaap:Revenues", start, end, 1000),
         ])
-        r = compute_all([f], None, ["SYN"], entry_ids=["fcf_ttm"])["fcf_ttm"]
+        r = compute_all([f], None, ["SYN"], industry=no_filer(),
+                        entry_ids=["fcf_ttm"])["fcf_ttm"]
         assert r["status"] == "absent"
         assert "capital expenditure" in r["reason"]
 
@@ -53,7 +55,7 @@ class TestAbsenceSemantics:
                        inst("us-gaap:LongTermDebtNoncurrent", end, 100),
                        inst("us-gaap:StockholdersEquity", end, -40),
                    ]))
-        r = compute_all([f], None, ["SYN"],
+        r = compute_all([f], None, ["SYN"], industry=no_filer(),
                         entry_ids=["debt_to_equity"])["debt_to_equity"]
         assert r["status"] == "absent"
         assert "Not meaningful" in r["reason"]
@@ -64,6 +66,7 @@ class TestAbsenceSemantics:
             raise RuntimeError("kaput")
         monkeypatch.setitem(compute_mod.REGISTRY, "current_ratio", boom)
         res = compute_all(_synthetic_company(), None, ["SYN"],
+                          industry=no_filer(),
                           entry_ids=["current_ratio", "fcf_ttm"])
         assert res["current_ratio"]["status"] == "absent"
         assert "kaput" in res["current_ratio"]["reason"]

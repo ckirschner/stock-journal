@@ -2590,8 +2590,24 @@ def _observed(value, source, cautions=None, provenance=None) -> dict:
             "provenance": list(provenance or [])}
 
 
-def _unobserved(reason, source) -> dict:
-    return {"status": "absent", "reason": reason, "source": source}
+def _unobserved(reason, source, status="absent") -> dict:
+    """A citation the host could not answer with a figure.
+
+    `status` carries the *kind* of absence across this boundary, and it is
+    here because the boundary was flattening it. A measure the bank says
+    cannot describe this filer arrives as `inapplicable`, and rendering that
+    as `absent` would tell a reader a permanent boundary was a gap in the
+    data — the same substitution RENDER_TYPES refuses one level up, made
+    invisibly one level down. It matters most on a purchase: the snapshot
+    freezes what it was handed, and an append-only record cannot be corrected
+    afterwards.
+
+    What it does NOT change is the outcome. `_outcome` asks whether the
+    status is "known", so an inapplicable figure comes out `unknown` exactly
+    as an absent one does — never a pass, and never a fifth word a strategy
+    written before this existed would fall straight through.
+    """
+    return {"status": status, "reason": reason, "source": source}
 
 
 def _leave_one_out(ctx, entry, item):
@@ -2609,7 +2625,10 @@ def _leave_one_out(ctx, entry, item):
     """
     cur = entry["current"]
     if cur["status"] != "known":
-        return _unobserved(cur["reason"], "measure")
+        # A measure that cannot describe this filer cannot describe it with a
+        # year taken out either, and the row should say which kind of absence
+        # it is rather than reporting a permanent boundary as a missing year.
+        return _unobserved(cur["reason"], "measure", cur["status"])
     outs = cur.get("leave_one_out")
     if not outs:
         return _unobserved(
@@ -2654,7 +2673,7 @@ def _measure_observation(ctx, item):
         if cur["status"] == "known":
             return _observed(cur["value"], "measure", cur.get("cautions"),
                              cur.get("provenance")), None
-        return _unobserved(cur["reason"], "measure"), None
+        return _unobserved(cur["reason"], "measure", cur["status"]), None
 
     points = entry["series"]["points"]
     hit = next((p for p in points if p["period_end"] == item["at"]), None)

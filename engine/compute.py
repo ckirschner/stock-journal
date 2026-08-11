@@ -33,7 +33,9 @@ from __future__ import annotations
 from datetime import date
 from statistics import median
 
+from . import bank as bank_mod
 from . import concept_map as cm
+from . import industry as industry_mod
 from . import price_store
 from .periods import ANNUAL_FORMS, SeriesBuilder, absent, is_absent, label
 
@@ -52,18 +54,58 @@ class Ctx:
     close, and `today` should be pinned to the same day so nothing in the
     context runs on two clocks. Used for per-filing confirmation readings —
     "what was observable when this filing arrived" — never for the live view.
+
+    `industry` is what the SEC says this filer is, as engine/industry.history
+    reads it off the identity record — the whole append-only history rather
+    than one reading of it, so a context pinned to a past day resolves the
+    class that was in force then. Nothing here fetches it: a computation is
+    told what kind of company this is and reaches for nothing, which is the
+    same arrangement every other input arrives under.
+
+    It is required and has no default, which costs every call site a word and
+    is the point. A default would mean a context built two years from now by
+    somebody who has not read this computes every measure ungated and looks
+    exactly like one that was told — the quiet failure this whole arrangement
+    exists to end. Where there genuinely is no filer on record, say so with
+    `industry.NOT_ESTABLISHED()`.
+
+    A filer nobody has established computes exactly as it did before, and that
+    matches how the host already treats a strategy's scope: a published code
+    the host cannot act on is evidence, and no code at all is not. A journal
+    driven entirely by hand has no code, and refusing its measures on the
+    chance that an unnamed company might be a bank would be treating silence
+    as an accusation.
     """
 
     def __init__(self, filings: list[dict], prices_doc: dict | None,
-                 tickers: list[str],
+                 tickers: list[str], *, industry: dict,
                  today: str | None = None, price_cutoff: str | None = None):
         self.sb = SeriesBuilder(filings)
         self.prices = prices_doc or {"series": {}}
         self.tickers = [str(t).upper() for t in tickers if t]
         self.today = today or date.today().isoformat()
         self.price_cutoff = str(price_cutoff)[:10] if price_cutoff else None
+        self.industry = industry
         self.price_dates_served: set = set()
+        self._industry_node = None
         self._memo: dict = {}
+
+    # -- what kind of company this is ---------------------------------------
+    def industry_now(self) -> dict:
+        """The filer's class as it stood on this context's own day.
+
+        Read against `price_cutoff` rather than `today`, because those are two
+        different questions. Every context carries a `today`; only a *pinned*
+        one is a reconstruction, and asking the identity record "what was in
+        force on this day" when the day is simply now would answer a filer
+        whose observations carry no stamp with "nothing on record says what it
+        was then" — a sentence about a reconstruction, printed on the live
+        view.
+        """
+        if self._industry_node is None:
+            self._industry_node = industry_mod.at(
+                self.industry, self.price_cutoff)["industry"]
+        return self._industry_node
 
     # -- prices -------------------------------------------------------------
     def price_now(self):
@@ -119,11 +161,60 @@ class Ctx:
 
     # -- memoised entry access ----------------------------------------------
     def entry(self, entry_id):
+        """One bank entry's answer, applicability settled before arithmetic.
+
+        The order is the whole guarantee. A measure the bank says cannot
+        describe this filer never reaches its formula, so there is no branch
+        an author has to remember at the top of fifty-nine functions and no
+        way to add a sixtieth that quietly skips it. What runs is what the
+        declaration allows to run.
+        """
         if entry_id not in self._memo:
-            fn = REGISTRY.get(entry_id)
-            self._memo[entry_id] = fn(self) if fn else absent(
-                f"{entry_id} has no computation")
+            stop = self._not_meaningful(entry_id)
+            if stop is not None:
+                self._memo[entry_id] = stop
+            else:
+                fn = REGISTRY.get(entry_id)
+                self._memo[entry_id] = fn(self) if fn else absent(
+                    f"{entry_id} has no computation")
         return self._memo[entry_id]
+
+    def _not_meaningful(self, entry_id):
+        """The refusal owed to one entry for this filer, or None.
+
+        Two refusals, and they are not the same fact. A class the measure
+        cannot describe is `inapplicable`: knowable in advance, true for as
+        long as the company is what it is, and nothing anybody can go and fix.
+        A code that was published and cannot be classified is `absent`: the
+        SEC has said something that points where this measure does not go, but
+        the code may be reassigned and this host may learn to read it, so
+        calling it permanent would tell a reader a fixable gap was not.
+        """
+        rules = _applicability().get(entry_id)
+        if not rules:
+            return None
+        node = self.industry_now()
+        if node.get("status") == "known":
+            cls = node.get("class")
+            for classes, because in rules:
+                if cls in classes:
+                    return inapplicable(
+                        f'{because} The SEC classifies this filer as '
+                        f'{node.get("value")}'
+                        + (f' — {node["provenance"][0]}.'
+                           if node.get("provenance") else "."),
+                        industry=cls)
+            return None
+        if node.get("unclassifiable"):
+            nouns = sorted({industry_mod.noun_of(c)
+                            for classes, _ in rules for c in classes})
+            return _absent_result(absent(
+                "this measure does not describe " + _or_list(nouns)
+                + ", and what kind of company this filer is cannot be "
+                  "settled: " + str(node.get("reason") or "")))
+        # No code at all. Silence is not an accusation — see the class
+        # docstring.
+        return None
 
 
 def _prov_point(p: dict) -> str:
@@ -160,6 +251,56 @@ def computed(value, provenance=None, cautions=None, leave_one_out=None) -> dict:
 def _absent_result(a) -> dict:
     return {"status": "absent", "reason": a["reason"] if isinstance(a, dict)
             else str(a)}
+
+
+def inapplicable(reason: str, **extra) -> dict:
+    """A measure that cannot describe this filer, whatever its figures say.
+
+    A third status and not a flag on `absent`, for the reason the host already
+    keeps `inapplicable` apart from `unknown` one level up: the two look alike
+    and behave oppositely. Absent asks for attention — a figure is missing and
+    may not be next quarter, and the coverage screen lists it as something to
+    go and do. This will never resolve and there is nothing to do, so a screen
+    counting it among the gaps would put a permanent item on a to-do list,
+    which is how that list stops being read.
+
+    Every reader of a result already asks whether the status is "computed", so
+    this can never be mistaken for a value. What it changes is only what a
+    reader is told, which is the part a flag could not carry.
+    """
+    node = {"status": "inapplicable", "reason": reason}
+    node.update(extra)
+    return node
+
+
+def _or_list(words: list) -> str:
+    """Alternatives in a sentence, separated by commas even at two.
+
+    Commas rather than a bare "and", because the things being listed are
+    themselves phrases containing one: "banks and lenders and insurers" reads
+    as three things or as one, and the reader has to go back.
+    """
+    return words[0] if len(words) < 2 else ", ".join(words[:-1]) \
+        + ", or " + words[-1]
+
+
+_APPLICABILITY: dict = {}
+
+
+def _applicability() -> dict:
+    """{entry id: [(classes, because)]} — the bank's declaration, cached.
+
+    Read through `bank`, which is the only reader of that file, and re-read
+    whenever it changes: the bank caches on the file's own mtime, so an edit
+    to a condition takes effect on the next read exactly as an edit to a
+    formula does.
+    """
+    doc_mtime = bank_mod.bank_path("metric-bank").stat().st_mtime
+    if _APPLICABILITY.get("mtime") != doc_mtime:
+        _APPLICABILITY.clear()
+        _APPLICABILITY["mtime"] = doc_mtime
+        _APPLICABILITY["rules"] = bank_mod.applicability()
+    return _APPLICABILITY["rules"]
 
 
 def _cautions_of(*things) -> list:
@@ -2493,7 +2634,7 @@ REGISTRY = {fn.__name__: fn for fn in (
 
 
 def compute_all(filings: list[dict], prices_doc: dict | None,
-                tickers: list[str], entry_ids=None,
+                tickers: list[str], *, industry: dict, entry_ids=None,
                 today: str | None = None) -> dict:
     """Every requested bank entry for one company.
 
@@ -2501,7 +2642,7 @@ def compute_all(filings: list[dict], prices_doc: dict | None,
     absent reason rather than taking the others down — a wrong number is
     the enemy, but so is one bad entry hiding fifty good ones.
     """
-    ctx = Ctx(filings, prices_doc, tickers, today=today)
+    ctx = Ctx(filings, prices_doc, tickers, today=today, industry=industry)
     out = {}
     for entry_id in (entry_ids or REGISTRY.keys()):
         fn = REGISTRY.get(entry_id)
@@ -2626,8 +2767,9 @@ def confirmation_boundaries(filings: list[dict], cadence: str) -> list[dict]:
 
 
 def confirmation_history(filings: list[dict], prices_doc: dict | None,
-                         tickers: list[str], entry_id: str,
-                         max_boundaries: int = CONFIRMATION_BOUNDARY_CAP) -> dict:
+                         tickers: list[str], entry_id: str, *, industry: dict,
+                         max_boundaries: int = CONFIRMATION_BOUNDARY_CAP
+                         ) -> dict:
     """Per-filing readings of one bank entry, newest first, for
     sell-confirmation.
 
@@ -2667,7 +2809,8 @@ def confirmation_history(filings: list[dict], prices_doc: dict | None,
         priced = None
         try:
             ctx = Ctx(prefix, prices_doc, tickers,
-                      today=b["filed"], price_cutoff=b["filed"])
+                      today=b["filed"], price_cutoff=b["filed"],
+                      industry=industry)
             r = ctx.entry(entry_id)
             priced = max(ctx.price_dates_served) if ctx.price_dates_served \
                 else None

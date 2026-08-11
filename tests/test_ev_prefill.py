@@ -9,7 +9,8 @@ assumption is the failure this whole surface exists to remove.
 """
 
 import pytest
-from conftest import balance_face, dur, entered, filing, inst, journal_for
+from conftest import (balance_face, dur, entered, filing, inst,
+                      journal_for, no_filer)
 
 from engine import facts_store, journals, price_store
 from engine.compute import Ctx, shares_outstanding_result, ttm_flow_result
@@ -45,7 +46,8 @@ def _one_filing():
 
 class TestComputeHelpers:
     def test_shares_outstanding_from_the_cover_with_its_stated_date(self):
-        r = shares_outstanding_result(Ctx([_one_filing()], None, ["SYN"]))
+        r = shares_outstanding_result(
+            Ctx([_one_filing()], None, ["SYN"], industry=no_filer()))
         assert r["status"] == "computed"
         assert r["value"] == 1.0e9
         # the date the cover fact itself states, not the later filing date
@@ -55,12 +57,13 @@ class TestComputeHelpers:
     def test_no_cover_fact_is_absent_with_the_reason(self):
         f = filing("E-2", "10-K", "2024-02-20", "2023-12-31",
                    balance_face("2023-12-31", assets=800e6))
-        r = shares_outstanding_result(Ctx([f], None, ["SYN"]))
+        r = shares_outstanding_result(
+            Ctx([f], None, ["SYN"], industry=no_filer()))
         assert r["status"] == "absent"
         assert "cover" in r["reason"]
 
     def test_ttm_flow_carries_value_and_provenance(self):
-        ctx = Ctx([_one_filing()], None, ["SYN"])
+        ctx = Ctx([_one_filing()], None, ["SYN"], industry=no_filer())
         r = ttm_flow_result(ctx, "net_income")
         assert r["status"] == "computed"
         assert r["value"] == 120e6
@@ -68,7 +71,8 @@ class TestComputeHelpers:
         assert r["asof"] == "2023-12-31"
 
     def test_ttm_flow_without_an_annual_report_is_absent(self):
-        r = ttm_flow_result(Ctx([], None, ["SYN"]), "net_income")
+        r = ttm_flow_result(Ctx([], None, ["SYN"], industry=no_filer()),
+                            "net_income")
         assert r["status"] == "absent"
 
 

@@ -1,7 +1,7 @@
 """Regressions from the adversarial review — each of these shipped a
 plausible wrong number before it was caught, and each stays pinned here."""
 
-from conftest import annual_filing, dur, filing, inst, balance_face
+from conftest import annual_filing, dur, filing, inst, balance_face, no_filer
 
 from engine import concept_map as cm
 from engine.compute import Ctx, compute_all
@@ -103,8 +103,8 @@ class TestDividendCessation:
             return filing(f"R5-{n}", "10-K", f"{y + 1}-02-15", end, facts)
         filings = [year(i, y, d) for i, (y, d) in enumerate(
             [(2019, 10), (2020, 11), (2021, 12), (2022, 0), (2023, 0)])]
-        ctx = Ctx(filings, None, ["SYN"])
-        r = compute_all(filings, None, ["SYN"],
+        ctx = Ctx(filings, None, ["SYN"], industry=no_filer())
+        r = compute_all(filings, None, ["SYN"], industry=no_filer(),
                         entry_ids=["consecutive_dividend_years"])
         assert r["consecutive_dividend_years"]["status"] == "computed"
         assert r["consecutive_dividend_years"]["value"] == 0
@@ -216,7 +216,7 @@ class TestNegativeEndpointCagr:
                 dur("us-gaap:NetIncomeLoss", start, end, ni),
                 dur("us-gaap:Revenues", start, end, 500 + y - 2021),
             ]))
-        res = compute_all(filings, None, ["SYN"],
+        res = compute_all(filings, None, ["SYN"], industry=no_filer(),
                           entry_ids=["net_income_cagr_5y",
                                      "ni_minus_revenue_cagr_spread_5y"])
         r = res["net_income_cagr_5y"]

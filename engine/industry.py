@@ -254,6 +254,16 @@ def classify(sic) -> tuple:
     return None, None
 
 
+def noun_of(cls: str) -> str:
+    """What to call a kind of company in a sentence — "banks and lenders".
+
+    Read off the host's own table rather than spelled out at each call site,
+    so a class the host renames is renamed everywhere it is spoken about.
+    """
+    spec = contract.INDUSTRY_CLASSES.get(cls)
+    return spec["noun"] if spec else str(cls)
+
+
 def title_of(sic) -> str | None:
     """The SEC's own title for a code, where this table holds one. Used only
     where the filer record carries no description of its own."""
@@ -341,9 +351,54 @@ def _moved(seen: list, chosen: tuple) -> list:
     return out
 
 
-def report(security: dict, as_of: str | None = None) -> dict:
-    """{"sic": node, "industry": node} — the published code, and what the host
-    makes of it.
+def NOT_ESTABLISHED() -> dict:
+    """A history for a filer nobody has established — no code, no problem.
+
+    Spelled out rather than defaulted. Everything that computes a measure has
+    to say what kind of company it is computing for, and the honest answer is
+    sometimes "nothing on record": synthetic filings in a test, a security
+    driven entirely by hand. Naming it costs one argument and buys the thing a
+    default cannot — a computation site that forgets is refused rather than
+    quietly ungated, which is the whole difference between a boundary and a
+    habit.
+    """
+    return {"seen": [], "problem": None}
+
+
+def history(security: dict) -> dict:
+    """Everything one filer's identity record says about its industry, read
+    once: {"seen": [...observations, oldest first...], "problem": node|None}.
+
+    Split out from `report` because a per-filing series asks the same
+    question at a dozen dates, and reading the record a dozen times would
+    both cost a dozen file reads and let two of them disagree — the record
+    can be rewritten by a fetch between two of the reads, and a series whose
+    2019 point saw one identity and whose 2024 point saw another would be a
+    history nobody could reconcile. Read once, resolved many times.
+
+    Plain data, so it can cross into `compute` without dragging the store
+    behind it: a computation is told what kind of company this is and reaches
+    for nothing.
+    """
+    cik = security.get("cik")
+    if not cik:
+        return {"seen": [], "problem": _absent(
+            "this security has not been tied to a company on EDGAR yet, so "
+            "the SEC's industry code for it is not on record — fetch its "
+            "data")}
+    try:
+        doc = facts_store.load_company(int(cik))
+    except Exception as e:  # noqa: BLE001 — an unreadable file is a fact
+        return {"seen": [], "problem": _absent(
+            "the stored company record could not be read "
+            f"({type(e).__name__}: {e}), so the SEC's industry code for this "
+            "filer cannot be reported")}
+    return {"seen": _observations(doc), "problem": None}
+
+
+def at(hist: dict, as_of: str | None = None) -> dict:
+    """{"sic": node, "industry": node} for one day, from a history already
+    read.
 
     Both from one reading of the record, because they are two views of one
     fact and two readers of it could disagree about which observation was in
@@ -352,21 +407,11 @@ def report(security: dict, as_of: str | None = None) -> dict:
     absent classification should be able to see the thing that could not be
     classified rather than being told only that something failed.
     """
-    cik = security.get("cik")
-    if not cik:
-        gone = _absent(
-            "this security has not been tied to a company on EDGAR yet, so "
-            "the SEC's industry code for it is not on record — fetch its data")
-        return {"sic": gone, "industry": dict(gone)}
-    try:
-        doc = facts_store.load_company(int(cik))
-    except Exception as e:  # noqa: BLE001 — an unreadable file is a fact
-        gone = _absent("the stored company record could not be read "
-                       f"({type(e).__name__}: {e}), so the SEC's industry "
-                       "code for this filer cannot be reported")
-        return {"sic": gone, "industry": dict(gone)}
+    problem = (hist or {}).get("problem")
+    if problem is not None:
+        return {"sic": problem, "industry": dict(problem)}
 
-    seen = _observations(doc)
+    seen = list((hist or {}).get("seen") or [])
     chosen, before_first = _in_force(seen, as_of)
     if chosen is None or not chosen[1]:
         gone = _absent(
@@ -404,6 +449,11 @@ def report(security: dict, as_of: str | None = None) -> dict:
     return {"sic": published,
             "industry": _known(label, cautions, [where],
                                **{"class": cls, "sic": code, "title": title})}
+
+
+def report(security: dict, as_of: str | None = None) -> dict:
+    """{"sic": node, "industry": node} for one security on one day."""
+    return at(history(security), as_of)
 
 
 def observation(security: dict, as_of: str | None = None) -> dict:

@@ -155,6 +155,18 @@ def industry_node(cls=None, sic="3559",
             "class": cls, "sic": sic, "title": title}
 
 
+def no_filer():
+    """"Nothing on record about what kind of company this is."
+
+    Every computation context has to say which kind of filer it is computing
+    for, because a default would let a call site forget and be silently
+    ungated. Synthetic filings belong to no filer at all, and this is that
+    said out loud.
+    """
+    from engine import industry
+    return industry.NOT_ESTABLISHED()
+
+
 def filer(cik, name, sic, description=None, observed=None):
     """Give a stored company the SEC identity a fetch would have written.
 

@@ -20,7 +20,8 @@ The shape, in full::
       "measures": {bank id: {
           "current": {"status": "known", "value", "source", "cautions",
                       "provenance"}
-                   | {"status": "absent", "reason"},
+                   | {"status": "absent", "reason"}
+                   | {"status": "inapplicable", "reason", "industry"},
           "series": {"cadence", "points": [{"period_end", "filed", "form",
                                             "accession", "value", "reason",
                                             "cautions", "provenance"}],
@@ -65,6 +66,23 @@ Reading rules a strategy can rely on:
   the host cannot honestly serve a number, status is "absent" with a reason,
   and a series point that could not be read carries value None with its
   reason. Nothing is zero-filled, carried forward, or interpolated.
+- **A measure that cannot describe this filer says so, and says it
+  differently.** The bank declares, per measure, the kinds of company it was
+  never built for — a lender's accounts have no invested capital in the sense
+  return on it means, and no amount of data changes that. Such a measure is
+  `inapplicable`, settled from the industry code the SEC publishes before any
+  arithmetic runs, and it is a different fact from `absent`: absent is a gap
+  that a fetch or a filing may close, this is a boundary that will not move
+  while the company is what it is. A strategy need not know the word — every
+  reader asks whether the status is "known", so an inapplicable measure can
+  never be tested as a pass, exactly as an absent one cannot. What the word
+  buys is that a reader is told which of the two they are looking at, and
+  that a screen listing what to go and fetch does not list it forever.
+
+  A hand-entered figure does not override it. Whatever was typed is a
+  different quantity wearing this measure's name and unit, and it would feed
+  a verdict — so the entry stays on the dated record and is not served while
+  the classification holds.
 - **A qualified number says so wherever it appears.** Where a figure rests on
   an approximation, a borrowed price or a line the concept map matched
   loosely, its `cautions` say so — on `current` and on every `series` point
@@ -266,6 +284,26 @@ def _absent(reason: str) -> dict:
     return {"status": "absent", "reason": reason}
 
 
+def _inapplicable(reason: str, cls: str | None = None) -> dict:
+    """A measure that will never describe this filer.
+
+    The third status a measure can reach, and the one that must not read as
+    the second. `absent` is a gap: something is missing and a fetch, a filing
+    or an answer may close it, so it belongs among the things to go and do.
+    This is a boundary: it was knowable before anything was computed, and it
+    holds for as long as the company is the kind of company it is.
+
+    Nothing that consumes a measure has to learn the word. Every reader asks
+    whether the status is "known", so this can never be mistaken for a value
+    and can never come out of a test as a pass. What the word buys is that a
+    reader is told which of the two they are looking at.
+    """
+    node = {"status": "inapplicable", "reason": reason}
+    if cls:
+        node["industry"] = cls
+    return node
+
+
 # -- measures ----------------------------------------------------------------
 
 def _current_values(security, cik, tickers, registry_ids, as_of):
@@ -301,10 +339,22 @@ def _current_values(security, cik, tickers, registry_ids, as_of):
                 out[eid] = _known(r["value"], "computed",
                                   r.get("cautions"), r.get("provenance"),
                                   r.get("leave_one_out"))
+            elif r.get("status") == "inapplicable":
+                out[eid] = _inapplicable(r["reason"], r.get("industry"))
             else:
                 out[eid] = _absent(r.get("reason")
                                    or "the value could not be computed")
     for eid in hand_entered.ids(security):
+        # A measure that cannot describe this filer is not made applicable by
+        # somebody typing a number into it. Whatever they typed is a different
+        # quantity wearing this measure's name, unit and explanation, and it
+        # would feed a verdict — which is the one place principle 4 says a
+        # qualification is read by a person and ignored by the arithmetic. The
+        # figure stays on the record, dated, and becomes readable again if the
+        # SEC ever reclassifies the filer; it is the serving that is refused,
+        # not the recording.
+        if (out.get(eid) or {}).get("status") == "inapplicable":
+            continue
         r = hand_entered.reading(security, eid, as_of)
         if r["status"] == "known":
             out[eid] = _known(r["value"], "manual", r["cautions"],
@@ -314,10 +364,16 @@ def _current_values(security, cik, tickers, registry_ids, as_of):
     return out
 
 
-def _series_for(filings, prices, tickers, today):
+def _series_for(filings, prices, tickers, today, ind=None):
     """{entry id: series dict} for every entry with a filing cadence, all
     entries of a cadence sharing one pinned context per boundary so the
-    series is cheap to assemble and every reading obeys the same clock."""
+    series is cheap to assemble and every reading obeys the same clock.
+
+    The identity history goes to every boundary context, so a point read at a
+    2019 filing is judged against what the SEC called this filer then. A
+    company that reclassified part way through a holding is the case this
+    exists for: without it, one measure would read inapplicable across a
+    history in which it meant something."""
     dated = [f for f in filings
              if str(f.get("filed") or "")[:10]
              and str(f.get("filed") or "")[:10] <= today]
@@ -333,7 +389,8 @@ def _series_for(filings, prices, tickers, today):
                       if str(f.get("filed") or "")[:10] <= b["filed"]]
             contexts.append((b, compute.Ctx(prefix, prices, tickers,
                                             today=b["filed"],
-                                            price_cutoff=b["filed"])))
+                                            price_cutoff=b["filed"],
+                                            industry=ind)))
         for eid in eids:
             points = []
             for b, bctx in contexts:
@@ -396,7 +453,8 @@ def _measures(security, cik, tickers, as_of, today) -> dict:
     if cik:
         filings = facts_store.load_all_filings(cik)
         prices = price_store.load(cik)
-        series = _series_for(filings, prices, tickers, today)
+        series = _series_for(filings, prices, tickers, today,
+                             industry_mod.history(security))
     else:
         series = {}
 

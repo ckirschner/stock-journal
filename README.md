@@ -682,6 +682,25 @@ read across a window is asked instead whether its failure survives dropping
 the single year that most favours the company. The metric bank states how each
 measure is read, so an author of a new one cannot get it wrong.
 
+**A measure that was never built to describe this kind of company says so
+instead of computing.** Nearly everything here was written for a business that
+sells something: revenue at the top, costs beneath it, a balance sheet split
+into what falls due within the year and what does not. A bank fits none of
+that, and the failure is not a gap — it is a confident number. Debt against
+equity leaves out deposits, so a lender funded eighty-five per cent by
+depositors reads a comfortable 1.4x. Cash from operations moves with the loan
+book, so a *shrinking* bank throws off the most free cash flow of all. So the
+bank states, per measure, which kinds of company it cannot describe; the host
+settles that from the industry code the SEC publishes, before anything is
+computed; and the measure reads **not applicable** rather than a figure.
+
+That is deliberately a different word from *absent*. Absent means go and look
+— fetch, wait a quarter, answer the question. Not applicable means these
+accounts were never what the measure describes, and no amount of looking
+changes it, so it is counted apart from the gaps rather than sitting in the
+list of things to do forever. A figure typed in by hand does not override one:
+whatever it is, it is a different quantity wearing this measure's name.
+
 Fetching happens only when you press the button. The SEC requires every
 automated tool to identify itself (name + monitored email — set it on the
 Data tab); prices need your own free Tiingo key. Each 10-K's price × shares
