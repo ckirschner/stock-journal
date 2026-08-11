@@ -13,7 +13,7 @@ import json
 from pathlib import Path
 
 import pytest
-from conftest import no_filer
+from conftest import no_filer, symbols
 
 from engine import concept_map as cm
 from engine.periods import SeriesBuilder, is_absent
@@ -314,8 +314,8 @@ class TestMulticlassMarketCap:
         doc = {"schema": price_store.SCHEMA, "cik": 1652044, "series": {}}
         for sym, date, close in rows:
             price_store.merge_series(doc, sym, "test", [[date, close, 100]], [])
-        return compute.Ctx([], doc, ["GOOG", "GOOGL"], today="2026-08-10",
-                           industry=no_filer())
+        return compute.Ctx([], doc, symbols("GOOG", "GOOGL"),
+                           today="2026-08-10", industry=no_filer())
 
     def _classes(self):
         r = cm.resolve_cover_shares(fi(1652044, "0001652044-25-000014"))

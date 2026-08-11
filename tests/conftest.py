@@ -167,6 +167,20 @@ def no_filer():
     return industry.NOT_ESTABLISHED()
 
 
+def symbols(*tickers, filings=None):
+    """The company-symbol resolution a computation context requires.
+
+    A context takes the resolution and not a ticker list, because a list is
+    what let a whole-company share count be multiplied by whichever of the
+    company's symbols had closed most recently — a warrant, a listed note, a
+    preferred series. Synthetic companies file no cover page, so a single
+    symbol resolves to itself with nothing to choose from, and a synthetic
+    company given two symbols and no cover page refuses, which is the point.
+    """
+    from engine import instruments
+    return instruments.company_symbols(filings or [], list(tickers))
+
+
 def filer(cik, name, sic, description=None, observed=None):
     """Give a stored company the SEC identity a fetch would have written.
 

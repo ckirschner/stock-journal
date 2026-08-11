@@ -226,7 +226,7 @@ from datetime import date
 from . import bank as bank_mod
 from . import compute, contract, dataview, facts_store, hand_entered
 from . import industry as industry_mod
-from . import judgements, portfolio, price_store, tickermap
+from . import instruments, judgements, portfolio, price_store, tickermap
 
 # Series stop at the same number of filing boundaries the sell-confirmation
 # view uses; the truncated flag says when older boundaries exist.
@@ -364,7 +364,7 @@ def _current_values(security, cik, tickers, registry_ids, as_of):
     return out
 
 
-def _series_for(filings, prices, tickers, today, ind=None):
+def _series_for(filings, prices, symbols, today, ind=None):
     """{entry id: series dict} for every entry with a filing cadence, all
     entries of a cadence sharing one pinned context per boundary so the
     series is cheap to assemble and every reading obeys the same clock.
@@ -387,7 +387,7 @@ def _series_for(filings, prices, tickers, today, ind=None):
         for b in take:
             prefix = [f for f in dated
                       if str(f.get("filed") or "")[:10] <= b["filed"]]
-            contexts.append((b, compute.Ctx(prefix, prices, tickers,
+            contexts.append((b, compute.Ctx(prefix, prices, symbols,
                                             today=b["filed"],
                                             price_cutoff=b["filed"],
                                             industry=ind)))
@@ -453,8 +453,14 @@ def _measures(security, cik, tickers, as_of, today) -> dict:
     if cik:
         filings = facts_store.load_all_filings(cik)
         prices = price_store.load(cik)
-        series = _series_for(filings, prices, tickers, today,
-                             industry_mod.history(security))
+        # Which symbol is the common stock, resolved off the whole filing set
+        # rather than per boundary. A boundary in 2017 predates the cover-page
+        # tagging that answers the question, and refusing a 2017 reading
+        # because a preferred series first listed in 2024 shares the CIK would
+        # be a sentence about the wrong year. See engine/instruments.py.
+        series = _series_for(filings, prices,
+                             instruments.company_symbols(filings, tickers),
+                             today, industry_mod.history(security))
     else:
         series = {}
 

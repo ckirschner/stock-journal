@@ -14,12 +14,11 @@ contract, not here. The host's job is that the readings themselves are
 right, in the right order, and honest about what could not be read.
 """
 
-from conftest import balance_face, filing, inst, no_filer
+from conftest import balance_face, filing, inst, no_filer, symbols
 
 from engine import price_store
 from engine.compute import (CADENCE, REGISTRY, Ctx, confirmation_boundaries,
                             confirmation_history)
-from engine.periods import is_absent
 
 
 def rd(period_end, filed, value, reason=None, form="10-K", accession="A-1",
@@ -99,7 +98,7 @@ class TestHistoryReadings:
         fs = [_quarter("Q1", "2025-05-10", "2025-03-31", 200.0),
               _quarter("Q2", "2025-08-09", "2025-06-30", 150.0),
               _quarter("Q3", "2025-11-08", "2025-09-30", 110.0)]
-        h = confirmation_history(fs, None, ["SYN"], "current_ratio",
+        h = confirmation_history(fs, None, symbols("SYN"), "current_ratio",
                                  industry=no_filer())
         assert h["cadence"] == "quarterly"
         vals = [(r["period_end"], r["value"]) for r in h["readings"]]
@@ -113,7 +112,7 @@ class TestHistoryReadings:
               _quarter("Q2", "2025-08-09", "2025-06-30", 150.0),
               {**_quarter("Q1A", "2025-09-01", "2025-03-31", 50.0),
                "form": "10-Q/A"}]
-        h = confirmation_history(fs, None, ["SYN"], "current_ratio",
+        h = confirmation_history(fs, None, symbols("SYN"), "current_ratio",
                                  industry=no_filer())
         by_period = {r["period_end"]: r for r in h["readings"]}
         assert by_period["2025-03-31"]["value"] == 2.0
@@ -123,14 +122,14 @@ class TestHistoryReadings:
         fs = [_quarter("Q1", "2025-05-10", "2025-03-31", 200.0),
               _quarter("Q2", "2025-08-09", "2025-06-30", 150.0, cl=None),
               _quarter("Q3", "2025-11-08", "2025-09-30", 110.0)]
-        h = confirmation_history(fs, None, ["SYN"], "current_ratio",
+        h = confirmation_history(fs, None, symbols("SYN"), "current_ratio",
                                  industry=no_filer())
         bad = [r for r in h["readings"] if r["period_end"] == "2025-06-30"][0]
         assert bad["value"] is None
         assert bad["reason"]
 
     def test_no_filings_says_so(self):
-        h = confirmation_history([], None, ["SYN"], "current_ratio",
+        h = confirmation_history([], None, symbols("SYN"), "current_ratio",
                                  industry=no_filer())
         assert h["readings"] == []
         assert "no filings are stored" in h["note"]
@@ -141,7 +140,7 @@ class TestHistoryReadings:
         every prefix reading would silently reflect it."""
         undated = _quarter("X", None, "2025-06-30", 50.0)
         fs = [_quarter("Q1", "2025-05-10", "2025-03-31", 200.0), undated]
-        h = confirmation_history(fs, None, ["SYN"], "current_ratio",
+        h = confirmation_history(fs, None, symbols("SYN"), "current_ratio",
                                  industry=no_filer())
         assert len(h["readings"]) == 1
         assert h["readings"][0]["accession"] == "Q1"
@@ -150,26 +149,32 @@ class TestHistoryReadings:
     def test_no_price_lookup_in_compute_bypasses_the_context(self):
         """Under a price_cutoff every close must come through Ctx, or an
         as-of reading silently prices at today (the multi-class market-cap
-        path did exactly that). The two allowed calls live inside Ctx."""
+        path did exactly that). The one allowed call lives inside Ctx.
+
+        It was two. The second belonged to a reader that took every symbol
+        mapped to the company and kept the newest close, which is gone —
+        there is no longer any way to ask this module for "the company's
+        price" without naming one instrument.
+        """
         from pathlib import Path
 
         import engine.compute as compute_mod
         src = Path(compute_mod.__file__).read_text(encoding="utf-8")
-        assert src.count("price_store.latest_close(") == 2
+        assert src.count("price_store.latest_close(") == 1
 
     def test_price_cutoff_reaches_per_class_prices(self):
         doc = price_store.load(3)
         price_store.merge_series(doc, "SYNB", "tiingo",
                                  [["2025-01-02", 10.0, 0],
                                   ["2025-06-30", 99.0, 0]], [])
-        ctx = Ctx([], doc, ["SYN"], price_cutoff="2025-01-05",
+        ctx = Ctx([], doc, symbols("SYN"), price_cutoff="2025-01-05",
                   industry=no_filer())
         got = ctx.price_for("SYNB")
         assert got == ("2025-01-02", 10.0, 3)
         assert "2025-01-02" in ctx.price_dates_served
 
     def test_an_unknown_entry_says_so(self):
-        h = confirmation_history([], None, ["SYN"], "no_such_entry",
+        h = confirmation_history([], None, symbols("SYN"), "no_such_entry",
                                  industry=no_filer())
         assert h["readings"] == []
         assert "no computation" in h["note"]
@@ -184,24 +189,24 @@ class TestPricePinning:
         return doc
 
     def test_price_cutoff_serves_the_close_of_that_day_not_the_newest(self):
-        ctx = Ctx([], self._prices(), ["SYN"], price_cutoff="2025-01-05",
+        ctx = Ctx([], self._prices(), symbols("SYN"), price_cutoff="2025-01-05",
                   industry=no_filer())
-        p = ctx.price_now()
-        assert p["close"] == 10.0 and p["date"] == "2025-01-02"
+        got = ctx.price_for("SYN")
+        assert got[1] == 10.0 and got[0] == "2025-01-02"
         assert "2025-01-02" in ctx.price_dates_served
 
     def test_without_a_cutoff_the_newest_close_serves(self):
-        ctx = Ctx([], self._prices(), ["SYN"], industry=no_filer())
-        assert ctx.price_now()["close"] == 20.0
+        ctx = Ctx([], self._prices(), symbols("SYN"), industry=no_filer())
+        assert ctx.price_for("SYN")[1] == 20.0
 
     def test_a_cutoff_before_the_whole_series_is_absent_not_borrowed(self):
         """Never reach forward. A close after the day being rebuilt for is a
         price from a world that day had not seen, and it is the one direction
         that is always wrong — unlike reaching back, which is how far the
         answer is, not whether there is one."""
-        ctx = Ctx([], self._prices(), ["SYN"], price_cutoff="2024-01-01",
+        ctx = Ctx([], self._prices(), symbols("SYN"), price_cutoff="2024-01-01",
                   industry=no_filer())
-        assert is_absent(ctx.price_now())
+        assert ctx.price_for("SYN") is None
 
 
 # -- cadence ----------------------------------------------------------------
@@ -278,7 +283,7 @@ class TestCadence:
         fs = _rich_company()
         untested = []
         for eid, fn in sorted(REGISTRY.items()):
-            ctx = Ctx(fs, doc, ["SYN"], industry=no_filer())
+            ctx = Ctx(fs, doc, symbols("SYN"), industry=no_filer())
             rec = _RecordingSB(ctx.sb)
             ctx.sb = rec
             try:
@@ -325,5 +330,5 @@ class TestDataviewProvider:
         # And no computation is waiting on a figure nobody supplies: the
         # channel is gone, so a new one cannot be quietly added to it.
         assert not hasattr(
-            compute.Ctx([], None, ["SYN"], industry=no_filer()), "params")
+            compute.Ctx([], None, symbols("SYN"), industry=no_filer()), "params")
         assert not hasattr(compute, "compute_entry_with_params")

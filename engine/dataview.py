@@ -31,7 +31,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from . import compute, concept_map, crosscheck, facts_store
-from . import hand_entered, industry, judgements, price_store
+from . import hand_entered, industry, instruments, judgements, price_store
 
 _cache: dict = {}
 
@@ -69,8 +69,14 @@ def _bundle(cik: int, tickers: list[str]):
     # so a live reading and a reconstruction disagreeing about it would be two
     # screens disagreeing about whether a number exists.
     ind = industry.history({"cik": cik})
-    held = {"fp": fp, "tickers": tuple(tickers),
-            "ctx": compute.Ctx(filings, prices, tickers, industry=ind),
+    # Which of the company's symbols is its common stock, read once off the
+    # newest cover page on record and shared by every context built from this
+    # bundle — the live one and every reconstruction. What a symbol denotes is
+    # identity rather than measurement, so it does not move with the day being
+    # evaluated; see engine/instruments.py.
+    syms = instruments.company_symbols(filings, tickers)
+    held = {"fp": fp, "tickers": tuple(tickers), "symbols": syms,
+            "ctx": compute.Ctx(filings, prices, syms, industry=ind),
             "filings": filings, "prices": prices, "industry": ind,
             "results": {}}
     _cache[cik] = held
@@ -120,7 +126,7 @@ def _asof_slot(b: dict, as_of: str) -> dict:
         dated = [f for f in b["filings"]
                  if str(f.get("filed") or "")[:10]
                  and str(f.get("filed") or "")[:10] <= as_of]
-        ctx = compute.Ctx(dated, b["prices"], list(b["tickers"]),
+        ctx = compute.Ctx(dated, b["prices"], b["symbols"],
                           today=as_of, price_cutoff=as_of,
                           industry=b["industry"])
         slots[as_of] = {"ctx": ctx, "filings": dated, "results": {}}
@@ -280,7 +286,7 @@ def confirmation_history(cik: int, tickers: list[str],
     if entry_id not in cache:
         try:
             cache[entry_id] = compute.confirmation_history(
-                b["filings"], b["prices"], list(b["tickers"]), entry_id,
+                b["filings"], b["prices"], b["symbols"], entry_id,
                 industry=b["industry"])
         except Exception as e:                          # noqa: BLE001
             cache[entry_id] = {"entry": entry_id, "cadence": None,
@@ -558,6 +564,6 @@ def coverage(cik: int, tickers: list[str], entry_ids, bank_meta: dict) -> dict:
             "cautions": r.get("cautions") or [],
             "provenance": r.get("provenance") or [],
         })
-    check = crosscheck.run(b["filings"], b["prices"], tickers)
+    check = crosscheck.run(b["filings"], b["prices"], b["symbols"])
     return {"entries": rows, "crosscheck": check,
             "status": data_status(cik)}

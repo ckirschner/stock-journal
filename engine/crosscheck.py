@@ -38,11 +38,19 @@ WARN_LOW = 0.9      # below float at all is already suspicious; small band
 WARN_HIGH = 25.0    # float under 4% of mcap: closely held, or a scale error
 
 
-def run(filings: list[dict], prices_doc: dict, tickers: list[str]) -> dict:
+def run(filings: list[dict], prices_doc: dict, symbols) -> dict:
     """Cross-check every stored annual filing that carries a public float.
 
     Returns {"checks": [...], "summary": {...}} with one row per 10-K,
     including the rows that could not run and why.
+
+    `symbols` is an instruments.CompanySymbols, not a ticker list. This check
+    exists to catch a wrong price basis, and it used to be able to *have* one:
+    where the cover stated a single share count it priced it at the first of
+    the company's symbols with a close near the date, in alphabetical order.
+    A check that can price a share count at a warrant reports a pass on the
+    wrong basis or a fail on the right one, and either way it is answering a
+    different question from the one it prints.
     """
     checks = []
     for f in filings:
@@ -73,11 +81,11 @@ def run(filings: list[dict], prices_doc: dict, tickers: list[str]) -> dict:
             checks.append(row)
             continue
         when = pf.get("measured") or f.get("period_of_report")
-        mcap, prices_used, missing = _market_cap_at(
-            prices_doc, tickers, shares, when)
+        mcap, prices_used, missing, why = _market_cap_at(
+            prices_doc, symbols, shares, when)
         if mcap is None:
             row.update(status="skipped",
-                       note=f"no stored price near {when} for "
+                       note=why or f"no stored price near {when} for "
                             f"{', '.join(missing) or 'any ticker'} — fetch "
                             "deeper price history to run this check")
             checks.append(row)
@@ -130,40 +138,55 @@ def run(filings: list[dict], prices_doc: dict, tickers: list[str]) -> dict:
 _REACH = 10
 
 
-def _market_cap_at(prices_doc, tickers, shares, when):
-    """Market cap near a date from as-traded closes; per class where classes
-    exist. Returns (mcap|None, [price descriptions], [tickers missing])."""
+def _market_cap_at(prices_doc, symbols, shares, when):
+    """Market cap near a date from as-traded closes, per class.
+
+    Returns (mcap|None, [price descriptions], [symbols missing], why|None).
+
+    One class list either way, exactly as engine/compute builds it: the cover's
+    own per-class counts where it states them, and otherwise the single total
+    denominated in the symbol the filer registers as its common stock. Where
+    that symbol is not established there is no comparison to run and the row
+    says so — a skipped check is a check; a check run on the wrong instrument
+    is a verdict about nothing.
+    """
     used, missing = [], []
     if shares.get("classes"):
-        total = 0.0
-        fallback = None
-        for cl in shares["classes"]:
-            sym = cl.get("symbol")
-            got = price_store.close_on(prices_doc, sym, when,
-                                       reach_days=_REACH) if sym else None
-            if got is None:
-                if fallback is None:
-                    for c2 in shares["classes"]:
-                        if c2.get("symbol"):
-                            fallback = price_store.close_on(
-                                prices_doc, c2["symbol"], when,
-                                reach_days=_REACH)
-                            if fallback:
-                                break
-                if fallback is None:
-                    missing.append(sym or cl["member"])
-                    return None, used, missing
-                got = fallback
-                used.append(f"{cl['member']}: valued at a listed sibling "
-                            f"class's close {got[1]:,.2f} ({got[0]})")
-            else:
-                used.append(f"{sym}: close {got[1]:,.2f} on {got[0]}")
-            total += cl["value"] * got[1]
-        return total, used, missing
-    for t in tickers:
-        got = price_store.close_on(prices_doc, t, when, reach_days=_REACH)
-        if got is not None:
-            used.append(f"{t}: close {got[1]:,.2f} on {got[0]}")
-            return shares["total"] * got[1], used, missing
-        missing.append(t)
-    return None, used, missing
+        classes = shares["classes"]
+    else:
+        got = symbols.common_or_absent()
+        if got.get("absent"):
+            return None, used, missing, got["reason"] + \
+                ", so the share count cannot be priced for this comparison"
+        classes = [{"member": "common stock", "value": shares["total"],
+                    "symbol": got["symbol"]}]
+
+    total = 0.0
+    fallback = None
+    for cl in classes:
+        sym = cl.get("symbol")
+        got = price_store.close_on(prices_doc, sym, when,
+                                   reach_days=_REACH) if sym else None
+        if got is None:
+            # The largest priced class, matching the rule the live blend
+            # anchors on. It used to be the first class with a price, so the
+            # check borrowed one way and the figure it checks borrowed
+            # another.
+            if fallback is None:
+                for c2 in sorted(classes, key=lambda c: -c["value"]):
+                    if c2.get("symbol"):
+                        fallback = price_store.close_on(
+                            prices_doc, c2["symbol"], when,
+                            reach_days=_REACH)
+                        if fallback:
+                            break
+            if fallback is None:
+                missing.append(sym or cl["member"])
+                return None, used, missing, None
+            got = fallback
+            used.append(f"{cl['member']}: valued at the largest priced "
+                        f"class's close {got[1]:,.2f} ({got[0]})")
+        else:
+            used.append(f"{sym}: close {got[1]:,.2f} on {got[0]}")
+        total += cl["value"] * got[1]
+    return total, used, missing, None

@@ -28,7 +28,7 @@ tests/fixtures/groundtruth.
 """
 
 import pytest
-from conftest import dur, filing, no_filer
+from conftest import dur, filing, no_filer, symbols
 
 from engine import bank, compute, contract
 from engine.compute import compute_all
@@ -62,7 +62,7 @@ def with_income(revenue, net_income):
 
 
 def one(filings, entry_id):
-    return compute_all(filings, None, ["SYN"], industry=no_filer(),
+    return compute_all(filings, None, symbols("SYN"), industry=no_filer(),
                        entry_ids=[entry_id])[entry_id]
 
 
@@ -189,7 +189,7 @@ class TestTheSpreadsInheritIt:
         ni = {y: 100.0 * (1.09 ** (y - 2019)) for y in range(2019, 2027)}
         filings = with_income(rev, ni)
         spread = one(filings, "ni_minus_revenue_cagr_spread_5y")
-        a = compute_all(filings, None, ["SYN"], industry=no_filer(),
+        a = compute_all(filings, None, symbols("SYN"), industry=no_filer(),
                         entry_ids=["net_income_cagr_5y", "revenue_cagr_5y"])
         left = {o["dropped"]: o["value"]
                 for o in a["net_income_cagr_5y"]["leave_one_out"]}
@@ -345,7 +345,7 @@ class TestTheBankDeclaresHowEveryMeasureIsRead:
                 if (contract.estimator_of(str(e["id"])) or {})
                 .get("robustness") == "always"]
         assert want, "no measure asks for a dropped year, which cannot be right"
-        got = compute_all(filings, None, ["SYN"], industry=no_filer(),
+        got = compute_all(filings, None, symbols("SYN"), industry=no_filer(),
                           entry_ids=want)
         formed = [eid for eid, r in got.items()
                   if r.get("status") == "computed"]

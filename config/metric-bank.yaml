@@ -1619,22 +1619,39 @@ entries:
       concentrate; large companies file more reliably and trade more liquidly.
     derivation:
       formula: |
-        shares outstanding × current price
+        shares outstanding × the price of the common stock
       window: current
     inputs:
       filings:
         - common shares outstanding
       prices:
-        - current price
+        - the common stock's current price
       entries: []
     explanation:
       plain: |
         What the stock market says the whole company's equity is worth today:
         every share multiplied by the price of one share.
+
+        The price is the company's common stock and only that. Many companies
+        have more than one security trading under their name — warrants, units,
+        listed bonds, preferred series — and those are worth different amounts
+        per unit, so which one is used decides the answer. Which security is
+        the common stock is read from the company's own filing cover, where it
+        lists what it has registered.
       misfires: |
         Uses shares outstanding at the last filing date, so it lags any
-        buyback or issuance since. Companies with multiple share classes are
-        understated if only one class is tagged.
+        buyback or issuance since.
+
+        Where a company has several classes of common stock, each is valued at
+        its own price and a class that does not trade is valued at the largest
+        class that does — the caution beside the figure says how much of the
+        company that assumption covered.
+
+        Where the filing states one share count for the whole company and its
+        cover does not say which security is the common stock, there is no
+        figure: valuing the count at the wrong security would give a confident
+        number that is wrong by whatever the two securities differ by, and
+        every ratio built on it would be wrong the same way.
       attribution: |
         Standard. Used both as a size test and as an input to several ratios
         below.
@@ -1737,22 +1754,35 @@ entries:
     polarity: lower_is_better
     derivation:
       formula: |
-        current price ÷ diluted earnings per share (TTM)
+        market capitalization ÷ shares outstanding ÷ diluted earnings per
+        share (TTM)
       window: trailing twelve months
     inputs:
       filings:
         - diluted earnings per share
+        - common shares outstanding
       prices:
-        - current price
-      entries: []
+        - the common stock's current price
+      entries:
+        - market_cap
     explanation:
       plain: |
         What you're paying for a dollar of the last year's earnings. At 20x you
         are paying twenty dollars for each dollar the company earned last year.
+
+        The price per share comes from market capitalization divided by the
+        share count rather than straight off a quote. For almost every company
+        that is the quoted price to the cent. For a company with two classes of
+        common stock it is what the market pays for an average share, which is
+        the right partner for an earnings figure that is spread over every
+        share there is.
       misfires: |
         A single year's earnings can be unrepresentative in either direction —
         a one-off charge makes the stock look expensive, a one-off gain makes it
         look cheap. Cyclicals look cheapest at the top of the cycle.
+
+        Needs a share count as well as a price, so it is unavailable wherever
+        market capitalization is.
       attribution: |
         Standard. The trailing counterpart to [pe_3y_avg_eps].
     not_meaningful_when:
@@ -1784,24 +1814,34 @@ entries:
     polarity: lower_is_better
     derivation:
       formula: |
-        current price ÷ mean(diluted EPS, last 3 fiscal years)
+        market capitalization ÷ shares outstanding ÷ mean(diluted EPS, last 3
+        fiscal years)
       window: three fiscal years, annual observations, mean
     inputs:
       filings:
         - diluted earnings per share
+        - common shares outstanding
       prices:
-        - current price
-      entries: []
+        - the common stock's current price
+      entries:
+        - market_cap
     explanation:
       plain: |
         What you're paying for a dollar of typical earnings. Averaging three
         years is the point: it stops you paying a low multiple on a fluke good
         year.
+
+        The price per share is read the same way as for the trailing measure —
+        market capitalization over the share count, so both are paying for the
+        same thing. See [pe_ttm].
       misfires: |
         Cyclicals at the trough have collapsed earnings, so this explodes and
         they look expensive at the exact moment they're cheapest. Any large
         one-off charge inside the three-year window drags the average down and
         makes the stock look dearer than it is.
+
+        Needs a share count as well as a price, so it is unavailable wherever
+        market capitalization is.
       attribution: |
         Graham, *The Intelligent Investor*, chapter 14. The three-year averaging
         is his method.
