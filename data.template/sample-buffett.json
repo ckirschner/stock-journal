@@ -1,5 +1,5 @@
 {
- "built": "2026-08-10T21:37:36+00:00",
+ "built": "2026-08-11T03:20:15+00:00",
  "as_of": "2026-08-09",
  "free_cash": 40000.0,
  "strategy": "buffett",
@@ -41,7 +41,7 @@
        },
        "reason": {
         "rule": "worth-owning",
-        "summary": "Every test this strategy will not bend passed, 9 of 9 core tests did against a bar of 7, and you have answered all three questions yes. The size is 10% of the account, set by an equal share of your places.",
+        "summary": "Every test this strategy will not bend passed, all six questions about the business are answered — 10 of the 10 tests behind them passed — and you have answered all three questions only you can. The size is 10% of the account, set by an equal share of your places.",
         "evidence": [
          {
           "subject": {
@@ -78,14 +78,14 @@
          {
           "subject": {
            "kind": "measure",
-           "id": "total_debt_to_ebitda",
-           "label": "Total debt to EBITDA",
+           "id": "total_debt_to_avg_fcf_5y",
+           "label": "Total debt to average free cash flow, 5-year",
            "unit": "times",
            "explain": null
           },
           "observed": {
            "status": "known",
-           "value": 1.2,
+           "value": 1.6,
            "source": "measure",
            "cautions": [],
            "provenance": [
@@ -95,11 +95,11 @@
           "test": {
            "comparator": "at_most",
            "phrase": "at most",
-           "threshold": 2.5,
+           "threshold": 3.0,
            "threshold_from": {
             "kind": "value",
-            "id": "max-debt-to-ebitda",
-            "label": "Highest debt against earnings",
+            "id": "max-debt-to-fcf",
+            "label": "Highest debt against the cash it generates",
             "unit": "times"
            },
            "absent": null
@@ -110,8 +110,8 @@
          {
           "subject": {
            "kind": "measure",
-           "id": "owner_earnings_yield",
-           "label": "Owner earnings yield",
+           "id": "owner_earnings_yield_on_ev",
+           "label": "Owner earnings yield on enterprise value",
            "unit": "percent",
            "explain": null
           },
@@ -138,6 +138,38 @@
           },
           "outcome": "pass",
           "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "incremental_roic_5y",
+           "label": "Incremental return on invested capital, 5-year",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 22.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2021-03-08"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 15,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-incremental-roic",
+            "label": "Lowest return on the money it keeps",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "returns"
          },
          {
           "subject": {
@@ -169,19 +201,19 @@
            "absent": null
           },
           "outcome": "pass",
-          "group": "core"
+          "group": "leverage"
          },
          {
           "subject": {
            "kind": "measure",
-           "id": "gross_margin_range_5y",
-           "label": "Gross margin range, 5-year",
+           "id": "roe_minus_roic_gap_5y",
+           "label": "Return on equity above return on invested capital, 5-year",
            "unit": "percentage_points",
            "explain": null
           },
           "observed": {
            "status": "known",
-           "value": 2.8,
+           "value": 4.0,
            "source": "measure",
            "cautions": [],
            "provenance": [
@@ -191,17 +223,17 @@
           "test": {
            "comparator": "at_most",
            "phrase": "at most",
-           "threshold": 6,
+           "threshold": 10,
            "threshold_from": {
             "kind": "value",
-            "id": "max-gross-margin-range",
-            "label": "Widest the gross margin may swing",
+            "id": "max-roe-roic-gap",
+            "label": "Most of the return that may be borrowed",
             "unit": "percentage_points"
            },
            "absent": null
           },
           "outcome": "pass",
-          "group": "core"
+          "group": "leverage"
          },
          {
           "subject": {
@@ -233,7 +265,7 @@
            "absent": null
           },
           "outcome": "pass",
-          "group": "core"
+          "group": "cash"
          },
          {
           "subject": {
@@ -265,71 +297,7 @@
            "absent": null
           },
           "outcome": "pass",
-          "group": "core"
-         },
-         {
-          "subject": {
-           "kind": "measure",
-           "id": "diluted_share_count_change_5y",
-           "label": "Diluted share count change, 5-year",
-           "unit": "percent",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": -5.0,
-           "source": "measure",
-           "cautions": [],
-           "provenance": [
-            "entered by hand on 2021-03-08"
-           ]
-          },
-          "test": {
-           "comparator": "at_most",
-           "phrase": "at most",
-           "threshold": 0,
-           "threshold_from": {
-            "kind": "value",
-            "id": "max-share-count-change",
-            "label": "Most the share count may grow",
-            "unit": "percent"
-           },
-           "absent": null
-          },
-          "outcome": "pass",
-          "group": "core"
-         },
-         {
-          "subject": {
-           "kind": "measure",
-           "id": "roe_median_5y",
-           "label": "Return on equity, 5-year median",
-           "unit": "percent",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": 25.0,
-           "source": "measure",
-           "cautions": [],
-           "provenance": [
-            "entered by hand on 2021-03-08"
-           ]
-          },
-          "test": {
-           "comparator": "at_least",
-           "phrase": "at least",
-           "threshold": 15,
-           "threshold_from": {
-            "kind": "value",
-            "id": "min-roe",
-            "label": "Lowest return on equity",
-            "unit": "percent"
-           },
-           "absent": null
-          },
-          "outcome": "pass",
-          "group": "core"
+          "group": "cash"
          },
          {
           "subject": {
@@ -361,7 +329,7 @@
            "absent": null
           },
           "outcome": "pass",
-          "group": "core"
+          "group": "growth"
          },
          {
           "subject": {
@@ -393,19 +361,19 @@
            "absent": null
           },
           "outcome": "pass",
-          "group": "core"
+          "group": "growth"
          },
          {
           "subject": {
            "kind": "measure",
-           "id": "goodwill_intangibles_to_assets",
-           "label": "Goodwill plus intangibles over total assets",
+           "id": "gross_margin_range_relative_5y",
+           "label": "Gross margin range as a share of the margin, 5-year",
            "unit": "percent",
            "explain": null
           },
           "observed": {
            "status": "known",
-           "value": 9.0,
+           "value": 5.2,
            "source": "measure",
            "cautions": [],
            "provenance": [
@@ -415,17 +383,113 @@
           "test": {
            "comparator": "at_most",
            "phrase": "at most",
-           "threshold": 40,
+           "threshold": 15,
            "threshold_from": {
             "kind": "value",
-            "id": "max-goodwill-to-assets",
-            "label": "Most of the company that may be goodwill",
+            "id": "max-gross-margin-swing",
+            "label": "Widest the gross margin may swing, against its own size",
             "unit": "percent"
            },
            "absent": null
           },
           "outcome": "pass",
-          "group": "core"
+          "group": "pricing"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "diluted_share_count_change_5y",
+           "label": "Diluted share count change, 5-year",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": -5.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2021-03-08"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 0,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-share-count-change",
+            "label": "Most the share count may grow",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "allocation"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "goodwill_impairment_to_equity_5y",
+           "label": "Goodwill written off over five years, against opening equity",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 0.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2021-03-08"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 5,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-goodwill-written-off",
+            "label": "Most of the owners' money that may have been written off",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "allocation"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "total_debt_to_ebitda",
+           "label": "Total debt to EBITDA",
+           "unit": "times",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 1.2,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2021-03-08"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 2.5,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-debt-to-ebitda",
+            "label": "Highest debt against earnings before depreciation",
+            "unit": "times"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "bonus"
          },
          {
           "subject": {
@@ -447,7 +511,7 @@
           "test": {
            "comparator": "at_least",
            "phrase": "at least",
-           "threshold": 10,
+           "threshold": 12,
            "threshold_from": {
             "kind": "value",
             "id": "min-effective-tax-rate",
@@ -479,7 +543,7 @@
           "test": {
            "comparator": "at_most",
            "phrase": "at most",
-           "threshold": 35,
+           "threshold": 28,
            "threshold_from": {
             "kind": "value",
             "id": "max-effective-tax-rate",
@@ -741,24 +805,95 @@
           "outcome": "pass"
          },
          {
-          "id": "core",
-          "name": "Core tests",
+          "id": "returns",
+          "name": "What the money it keeps earns",
+          "requires": "all",
+          "test": null,
+          "members": 1,
+          "tested": 1,
+          "passed": 1,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "leverage",
+          "name": "What it owes, and what its returns rest on",
+          "requires": "all",
+          "test": null,
+          "members": 2,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "cash",
+          "name": "Whether the profits are cash",
           "requires": "at_least",
           "test": {
            "comparator": "at_least",
            "phrase": "at least",
-           "threshold": 7,
+           "threshold": 1,
            "threshold_from": {
             "kind": "value",
-            "id": "core-tests-required",
-            "label": "Core tests that must pass",
+            "id": "cash-tests-required",
+            "label": "Cash tests that must pass, of two",
             "unit": "count"
            },
            "absent": null
           },
-          "members": 9,
-          "tested": 9,
-          "passed": 9,
+          "members": 2,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "growth",
+          "name": "Whether it is still growing",
+          "requires": "at_least",
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 1,
+           "threshold_from": {
+            "kind": "value",
+            "id": "growth-tests-required",
+            "label": "Growth tests that must pass, of two",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "members": 2,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "pricing",
+          "name": "Whether it sets its own prices",
+          "requires": "all",
+          "test": null,
+          "members": 1,
+          "tested": 1,
+          "passed": 1,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "allocation",
+          "name": "What management does with the money",
+          "requires": "all",
+          "test": null,
+          "members": 2,
+          "tested": 2,
+          "passed": 2,
           "failed": 0,
           "unknown": 0,
           "outcome": "pass"
@@ -768,9 +903,9 @@
           "name": "Reported, never blocking",
           "requires": "noted",
           "test": null,
-          "members": 4,
-          "tested": 4,
-          "passed": 4,
+          "members": 5,
+          "tested": 5,
+          "passed": 5,
           "failed": 0,
           "unknown": 0,
           "outcome": "noted"
@@ -806,16 +941,16 @@
        "strategy": {
         "id": "buffett",
         "name": "Buffett",
-        "version": 3,
-        "values_version": 1,
+        "version": 5,
+        "values_version": 3,
         "contract": 5
        }
       },
       "strategy": {
        "id": "buffett",
        "name": "Buffett",
-       "version": 3,
-       "values_version": 1,
+       "version": 5,
+       "values_version": 3,
        "contract": 5
       },
       "metrics": {
@@ -827,16 +962,24 @@
          "entered by hand on 2021-03-08"
         ]
        },
-       "total_debt_to_ebitda": {
-        "value": 1.2,
+       "total_debt_to_avg_fcf_5y": {
+        "value": 1.6,
         "source": "manual",
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-03-08"
         ]
        },
-       "owner_earnings_yield": {
+       "owner_earnings_yield_on_ev": {
         "value": 6.8,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2021-03-08"
+        ]
+       },
+       "incremental_roic_5y": {
+        "value": 22.0,
         "source": "manual",
         "cautions": [],
         "provenance": [
@@ -851,8 +994,8 @@
          "entered by hand on 2021-03-08"
         ]
        },
-       "gross_margin_range_5y": {
-        "value": 2.8,
+       "roe_minus_roic_gap_5y": {
+        "value": 4.0,
         "source": "manual",
         "cautions": [],
         "provenance": [
@@ -875,22 +1018,6 @@
          "entered by hand on 2021-03-08"
         ]
        },
-       "diluted_share_count_change_5y": {
-        "value": -5.0,
-        "source": "manual",
-        "cautions": [],
-        "provenance": [
-         "entered by hand on 2021-03-08"
-        ]
-       },
-       "roe_median_5y": {
-        "value": 25.0,
-        "source": "manual",
-        "cautions": [],
-        "provenance": [
-         "entered by hand on 2021-03-08"
-        ]
-       },
        "revenue_cagr_5y": {
         "value": 6.5,
         "source": "manual",
@@ -907,8 +1034,32 @@
          "entered by hand on 2021-03-08"
         ]
        },
-       "goodwill_intangibles_to_assets": {
-        "value": 9.0,
+       "gross_margin_range_relative_5y": {
+        "value": 5.2,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2021-03-08"
+        ]
+       },
+       "diluted_share_count_change_5y": {
+        "value": -5.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2021-03-08"
+        ]
+       },
+       "goodwill_impairment_to_equity_5y": {
+        "value": 0.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2021-03-08"
+        ]
+       },
+       "total_debt_to_ebitda": {
+        "value": 1.2,
         "source": "manual",
         "cautions": [],
         "provenance": [
@@ -1001,19 +1152,21 @@
         "effective_tax_rate_median_5y",
         "fcf_margin_median_5y",
         "fcf_margin_ttm",
-        "goodwill_intangibles_to_assets",
-        "gross_margin_range_5y",
+        "goodwill_impairment_to_equity_5y",
+        "gross_margin_range_relative_5y",
+        "incremental_roic_5y",
         "interest_coverage",
         "ni_minus_revenue_cagr_spread_5y",
-        "owner_earnings_yield",
+        "owner_earnings_yield_on_ev",
         "payout_to_fcf_median_5y",
         "revenue_cagr_5y",
-        "roe_median_5y",
+        "roe_minus_roic_gap_5y",
         "roic_median_5y",
+        "total_debt_to_avg_fcf_5y",
         "total_debt_to_ebitda"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2021-03-15 could be consulted; 17 hand-entered values on record by 2021-03-15; judged by Buffett v3 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; this journal was created on 2024-01-02, so it held no answers on 2021-03-15 — free cash, and every figure measured against the account, are absent rather than taken from what you have told it since"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2021-03-15 could be consulted; 19 hand-entered values on record by 2021-03-15; judged by Buffett v5 as it stands today (values v3) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; this journal was created on 2024-01-02, so it held no answers on 2021-03-15 — free cash, and every figure measured against the account, are absent rather than taken from what you have told it since"
       },
       "thesis": null,
       "valuation": null,
@@ -1053,144 +1206,156 @@
     },
     {
      "seq": 2,
-     "id": "total_debt_to_ebitda",
-     "value": 1.2,
+     "id": "total_debt_to_avg_fcf_5y",
+     "value": 1.6,
      "recorded": "2021-03-08T12:00:00-05:00"
     },
     {
      "seq": 3,
-     "id": "owner_earnings_yield",
+     "id": "owner_earnings_yield_on_ev",
      "value": 6.8,
      "recorded": "2021-03-08T12:00:00-05:00"
     },
     {
      "seq": 4,
+     "id": "incremental_roic_5y",
+     "value": 22.0,
+     "recorded": "2021-03-08T12:00:00-05:00"
+    },
+    {
+     "seq": 5,
      "id": "interest_coverage",
      "value": 15.0,
      "recorded": "2021-03-08T12:00:00-05:00"
     },
     {
-     "seq": 5,
-     "id": "gross_margin_range_5y",
-     "value": 2.8,
+     "seq": 6,
+     "id": "roe_minus_roic_gap_5y",
+     "value": 4.0,
      "recorded": "2021-03-08T12:00:00-05:00"
     },
     {
-     "seq": 6,
+     "seq": 7,
      "id": "fcf_margin_median_5y",
      "value": 18.0,
      "recorded": "2021-03-08T12:00:00-05:00"
     },
     {
-     "seq": 7,
+     "seq": 8,
      "id": "cash_conversion_median_5y",
      "value": 1.02,
      "recorded": "2021-03-08T12:00:00-05:00"
     },
     {
-     "seq": 8,
-     "id": "diluted_share_count_change_5y",
-     "value": -5.0,
-     "recorded": "2021-03-08T12:00:00-05:00"
-    },
-    {
      "seq": 9,
-     "id": "roe_median_5y",
-     "value": 25.0,
-     "recorded": "2021-03-08T12:00:00-05:00"
-    },
-    {
-     "seq": 10,
      "id": "revenue_cagr_5y",
      "value": 6.5,
      "recorded": "2021-03-08T12:00:00-05:00"
     },
     {
-     "seq": 11,
+     "seq": 10,
      "id": "ni_minus_revenue_cagr_spread_5y",
      "value": 1.5,
      "recorded": "2021-03-08T12:00:00-05:00"
     },
     {
+     "seq": 11,
+     "id": "gross_margin_range_relative_5y",
+     "value": 5.2,
+     "recorded": "2021-03-08T12:00:00-05:00"
+    },
+    {
      "seq": 12,
-     "id": "goodwill_intangibles_to_assets",
-     "value": 9.0,
+     "id": "diluted_share_count_change_5y",
+     "value": -5.0,
      "recorded": "2021-03-08T12:00:00-05:00"
     },
     {
      "seq": 13,
+     "id": "goodwill_impairment_to_equity_5y",
+     "value": 0.0,
+     "recorded": "2021-03-08T12:00:00-05:00"
+    },
+    {
+     "seq": 14,
+     "id": "total_debt_to_ebitda",
+     "value": 1.2,
+     "recorded": "2021-03-08T12:00:00-05:00"
+    },
+    {
+     "seq": 15,
      "id": "effective_tax_rate_median_5y",
      "value": 22.0,
      "recorded": "2021-03-08T12:00:00-05:00"
     },
     {
-     "seq": 14,
+     "seq": 16,
      "id": "current_ratio",
      "value": 1.1,
      "recorded": "2021-03-08T12:00:00-05:00"
     },
     {
-     "seq": 15,
+     "seq": 17,
      "id": "payout_to_fcf_median_5y",
      "value": 58.0,
      "recorded": "2021-03-08T12:00:00-05:00"
     },
     {
-     "seq": 16,
+     "seq": 18,
      "id": "fcf_margin_ttm",
      "value": 17.0,
      "recorded": "2021-03-08T12:00:00-05:00"
     },
     {
-     "seq": 17,
+     "seq": 19,
      "id": "diluted_share_count_change_3y",
      "value": -3.0,
      "recorded": "2021-03-08T12:00:00-05:00"
     },
     {
-     "seq": 18,
+     "seq": 20,
      "id": "roic_median_5y",
      "value": 23.8,
      "recorded": "2026-07-30T12:00:00-04:00"
     },
     {
-     "seq": 19,
-     "id": "owner_earnings_yield",
+     "seq": 21,
+     "id": "owner_earnings_yield_on_ev",
      "value": 4.2,
      "recorded": "2026-07-30T12:00:00-04:00"
     },
     {
-     "seq": 20,
+     "seq": 22,
+     "id": "roe_minus_roic_gap_5y",
+     "value": 5.2,
+     "recorded": "2026-07-30T12:00:00-04:00"
+    },
+    {
+     "seq": 23,
      "id": "fcf_margin_median_5y",
      "value": 21.0,
      "recorded": "2026-07-30T12:00:00-04:00"
     },
     {
-     "seq": 21,
-     "id": "diluted_share_count_change_5y",
-     "value": -8.0,
-     "recorded": "2026-07-30T12:00:00-04:00"
-    },
-    {
-     "seq": 22,
-     "id": "roe_median_5y",
-     "value": 29.0,
-     "recorded": "2026-07-30T12:00:00-04:00"
-    },
-    {
-     "seq": 23,
+     "seq": 24,
      "id": "revenue_cagr_5y",
      "value": 8.1,
      "recorded": "2026-07-30T12:00:00-04:00"
     },
     {
-     "seq": 24,
+     "seq": 25,
+     "id": "diluted_share_count_change_5y",
+     "value": -8.0,
+     "recorded": "2026-07-30T12:00:00-04:00"
+    },
+    {
+     "seq": 26,
      "id": "fcf_margin_ttm",
      "value": 20.4,
      "recorded": "2026-07-30T12:00:00-04:00"
     },
     {
-     "seq": 25,
+     "seq": 27,
      "id": "diluted_share_count_change_3y",
      "value": -4.5,
      "recorded": "2026-07-30T12:00:00-04:00"
@@ -1259,7 +1424,7 @@
        },
        "reason": {
         "rule": "worth-owning",
-        "summary": "Every test this strategy will not bend passed, 9 of 9 core tests did against a bar of 7, and you have answered all three questions yes. The size is 10% of the account, set by an equal share of your places.",
+        "summary": "Every test this strategy will not bend passed, all six questions about the business are answered — 10 of the 10 tests behind them passed — and you have answered all three questions only you can. The size is 10% of the account, set by an equal share of your places.",
         "evidence": [
          {
           "subject": {
@@ -1296,14 +1461,14 @@
          {
           "subject": {
            "kind": "measure",
-           "id": "total_debt_to_ebitda",
-           "label": "Total debt to EBITDA",
+           "id": "total_debt_to_avg_fcf_5y",
+           "label": "Total debt to average free cash flow, 5-year",
            "unit": "times",
            "explain": null
           },
           "observed": {
            "status": "known",
-           "value": 1.2,
+           "value": 1.6,
            "source": "measure",
            "cautions": [],
            "provenance": [
@@ -1313,11 +1478,11 @@
           "test": {
            "comparator": "at_most",
            "phrase": "at most",
-           "threshold": 2.5,
+           "threshold": 3.0,
            "threshold_from": {
             "kind": "value",
-            "id": "max-debt-to-ebitda",
-            "label": "Highest debt against earnings",
+            "id": "max-debt-to-fcf",
+            "label": "Highest debt against the cash it generates",
             "unit": "times"
            },
            "absent": null
@@ -1328,8 +1493,8 @@
          {
           "subject": {
            "kind": "measure",
-           "id": "owner_earnings_yield",
-           "label": "Owner earnings yield",
+           "id": "owner_earnings_yield_on_ev",
+           "label": "Owner earnings yield on enterprise value",
            "unit": "percent",
            "explain": null
           },
@@ -1356,6 +1521,38 @@
           },
           "outcome": "pass",
           "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "incremental_roic_5y",
+           "label": "Incremental return on invested capital, 5-year",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 22.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2023-09-05"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 15,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-incremental-roic",
+            "label": "Lowest return on the money it keeps",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "returns"
          },
          {
           "subject": {
@@ -1387,19 +1584,19 @@
            "absent": null
           },
           "outcome": "pass",
-          "group": "core"
+          "group": "leverage"
          },
          {
           "subject": {
            "kind": "measure",
-           "id": "gross_margin_range_5y",
-           "label": "Gross margin range, 5-year",
+           "id": "roe_minus_roic_gap_5y",
+           "label": "Return on equity above return on invested capital, 5-year",
            "unit": "percentage_points",
            "explain": null
           },
           "observed": {
            "status": "known",
-           "value": 2.8,
+           "value": 4.6,
            "source": "measure",
            "cautions": [],
            "provenance": [
@@ -1409,17 +1606,17 @@
           "test": {
            "comparator": "at_most",
            "phrase": "at most",
-           "threshold": 6,
+           "threshold": 10,
            "threshold_from": {
             "kind": "value",
-            "id": "max-gross-margin-range",
-            "label": "Widest the gross margin may swing",
+            "id": "max-roe-roic-gap",
+            "label": "Most of the return that may be borrowed",
             "unit": "percentage_points"
            },
            "absent": null
           },
           "outcome": "pass",
-          "group": "core"
+          "group": "leverage"
          },
          {
           "subject": {
@@ -1451,7 +1648,7 @@
            "absent": null
           },
           "outcome": "pass",
-          "group": "core"
+          "group": "cash"
          },
          {
           "subject": {
@@ -1483,71 +1680,7 @@
            "absent": null
           },
           "outcome": "pass",
-          "group": "core"
-         },
-         {
-          "subject": {
-           "kind": "measure",
-           "id": "diluted_share_count_change_5y",
-           "label": "Diluted share count change, 5-year",
-           "unit": "percent",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": -5.0,
-           "source": "measure",
-           "cautions": [],
-           "provenance": [
-            "entered by hand on 2023-09-05"
-           ]
-          },
-          "test": {
-           "comparator": "at_most",
-           "phrase": "at most",
-           "threshold": 0,
-           "threshold_from": {
-            "kind": "value",
-            "id": "max-share-count-change",
-            "label": "Most the share count may grow",
-            "unit": "percent"
-           },
-           "absent": null
-          },
-          "outcome": "pass",
-          "group": "core"
-         },
-         {
-          "subject": {
-           "kind": "measure",
-           "id": "roe_median_5y",
-           "label": "Return on equity, 5-year median",
-           "unit": "percent",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": 24.0,
-           "source": "measure",
-           "cautions": [],
-           "provenance": [
-            "entered by hand on 2023-09-05"
-           ]
-          },
-          "test": {
-           "comparator": "at_least",
-           "phrase": "at least",
-           "threshold": 15,
-           "threshold_from": {
-            "kind": "value",
-            "id": "min-roe",
-            "label": "Lowest return on equity",
-            "unit": "percent"
-           },
-           "absent": null
-          },
-          "outcome": "pass",
-          "group": "core"
+          "group": "cash"
          },
          {
           "subject": {
@@ -1579,7 +1712,7 @@
            "absent": null
           },
           "outcome": "pass",
-          "group": "core"
+          "group": "growth"
          },
          {
           "subject": {
@@ -1611,19 +1744,19 @@
            "absent": null
           },
           "outcome": "pass",
-          "group": "core"
+          "group": "growth"
          },
          {
           "subject": {
            "kind": "measure",
-           "id": "goodwill_intangibles_to_assets",
-           "label": "Goodwill plus intangibles over total assets",
+           "id": "gross_margin_range_relative_5y",
+           "label": "Gross margin range as a share of the margin, 5-year",
            "unit": "percent",
            "explain": null
           },
           "observed": {
            "status": "known",
-           "value": 9.0,
+           "value": 5.2,
            "source": "measure",
            "cautions": [],
            "provenance": [
@@ -1633,17 +1766,113 @@
           "test": {
            "comparator": "at_most",
            "phrase": "at most",
-           "threshold": 40,
+           "threshold": 15,
            "threshold_from": {
             "kind": "value",
-            "id": "max-goodwill-to-assets",
-            "label": "Most of the company that may be goodwill",
+            "id": "max-gross-margin-swing",
+            "label": "Widest the gross margin may swing, against its own size",
             "unit": "percent"
            },
            "absent": null
           },
           "outcome": "pass",
-          "group": "core"
+          "group": "pricing"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "diluted_share_count_change_5y",
+           "label": "Diluted share count change, 5-year",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": -5.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2023-09-05"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 0,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-share-count-change",
+            "label": "Most the share count may grow",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "allocation"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "goodwill_impairment_to_equity_5y",
+           "label": "Goodwill written off over five years, against opening equity",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 0.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2023-09-05"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 5,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-goodwill-written-off",
+            "label": "Most of the owners' money that may have been written off",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "allocation"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "total_debt_to_ebitda",
+           "label": "Total debt to EBITDA",
+           "unit": "times",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 1.2,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2023-09-05"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 2.5,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-debt-to-ebitda",
+            "label": "Highest debt against earnings before depreciation",
+            "unit": "times"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "bonus"
          },
          {
           "subject": {
@@ -1665,7 +1894,7 @@
           "test": {
            "comparator": "at_least",
            "phrase": "at least",
-           "threshold": 10,
+           "threshold": 12,
            "threshold_from": {
             "kind": "value",
             "id": "min-effective-tax-rate",
@@ -1697,7 +1926,7 @@
           "test": {
            "comparator": "at_most",
            "phrase": "at most",
-           "threshold": 35,
+           "threshold": 28,
            "threshold_from": {
             "kind": "value",
             "id": "max-effective-tax-rate",
@@ -1959,24 +2188,95 @@
           "outcome": "pass"
          },
          {
-          "id": "core",
-          "name": "Core tests",
+          "id": "returns",
+          "name": "What the money it keeps earns",
+          "requires": "all",
+          "test": null,
+          "members": 1,
+          "tested": 1,
+          "passed": 1,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "leverage",
+          "name": "What it owes, and what its returns rest on",
+          "requires": "all",
+          "test": null,
+          "members": 2,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "cash",
+          "name": "Whether the profits are cash",
           "requires": "at_least",
           "test": {
            "comparator": "at_least",
            "phrase": "at least",
-           "threshold": 7,
+           "threshold": 1,
            "threshold_from": {
             "kind": "value",
-            "id": "core-tests-required",
-            "label": "Core tests that must pass",
+            "id": "cash-tests-required",
+            "label": "Cash tests that must pass, of two",
             "unit": "count"
            },
            "absent": null
           },
-          "members": 9,
-          "tested": 9,
-          "passed": 9,
+          "members": 2,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "growth",
+          "name": "Whether it is still growing",
+          "requires": "at_least",
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 1,
+           "threshold_from": {
+            "kind": "value",
+            "id": "growth-tests-required",
+            "label": "Growth tests that must pass, of two",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "members": 2,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "pricing",
+          "name": "Whether it sets its own prices",
+          "requires": "all",
+          "test": null,
+          "members": 1,
+          "tested": 1,
+          "passed": 1,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "allocation",
+          "name": "What management does with the money",
+          "requires": "all",
+          "test": null,
+          "members": 2,
+          "tested": 2,
+          "passed": 2,
           "failed": 0,
           "unknown": 0,
           "outcome": "pass"
@@ -1986,9 +2286,9 @@
           "name": "Reported, never blocking",
           "requires": "noted",
           "test": null,
-          "members": 4,
-          "tested": 4,
-          "passed": 4,
+          "members": 5,
+          "tested": 5,
+          "passed": 5,
           "failed": 0,
           "unknown": 0,
           "outcome": "noted"
@@ -2024,16 +2324,16 @@
        "strategy": {
         "id": "buffett",
         "name": "Buffett",
-        "version": 3,
-        "values_version": 1,
+        "version": 5,
+        "values_version": 3,
         "contract": 5
        }
       },
       "strategy": {
        "id": "buffett",
        "name": "Buffett",
-       "version": 3,
-       "values_version": 1,
+       "version": 5,
+       "values_version": 3,
        "contract": 5
       },
       "metrics": {
@@ -2045,16 +2345,24 @@
          "entered by hand on 2023-09-05"
         ]
        },
-       "total_debt_to_ebitda": {
-        "value": 1.2,
+       "total_debt_to_avg_fcf_5y": {
+        "value": 1.6,
         "source": "manual",
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-09-05"
         ]
        },
-       "owner_earnings_yield": {
+       "owner_earnings_yield_on_ev": {
         "value": 7.2,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2023-09-05"
+        ]
+       },
+       "incremental_roic_5y": {
+        "value": 22.0,
         "source": "manual",
         "cautions": [],
         "provenance": [
@@ -2069,8 +2377,8 @@
          "entered by hand on 2023-09-05"
         ]
        },
-       "gross_margin_range_5y": {
-        "value": 2.8,
+       "roe_minus_roic_gap_5y": {
+        "value": 4.6,
         "source": "manual",
         "cautions": [],
         "provenance": [
@@ -2093,22 +2401,6 @@
          "entered by hand on 2023-09-05"
         ]
        },
-       "diluted_share_count_change_5y": {
-        "value": -5.0,
-        "source": "manual",
-        "cautions": [],
-        "provenance": [
-         "entered by hand on 2023-09-05"
-        ]
-       },
-       "roe_median_5y": {
-        "value": 24.0,
-        "source": "manual",
-        "cautions": [],
-        "provenance": [
-         "entered by hand on 2023-09-05"
-        ]
-       },
        "revenue_cagr_5y": {
         "value": 6.5,
         "source": "manual",
@@ -2125,8 +2417,32 @@
          "entered by hand on 2023-09-05"
         ]
        },
-       "goodwill_intangibles_to_assets": {
-        "value": 9.0,
+       "gross_margin_range_relative_5y": {
+        "value": 5.2,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2023-09-05"
+        ]
+       },
+       "diluted_share_count_change_5y": {
+        "value": -5.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2023-09-05"
+        ]
+       },
+       "goodwill_impairment_to_equity_5y": {
+        "value": 0.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2023-09-05"
+        ]
+       },
+       "total_debt_to_ebitda": {
+        "value": 1.2,
         "source": "manual",
         "cautions": [],
         "provenance": [
@@ -2219,19 +2535,21 @@
         "effective_tax_rate_median_5y",
         "fcf_margin_median_5y",
         "fcf_margin_ttm",
-        "goodwill_intangibles_to_assets",
-        "gross_margin_range_5y",
+        "goodwill_impairment_to_equity_5y",
+        "gross_margin_range_relative_5y",
+        "incremental_roic_5y",
         "interest_coverage",
         "ni_minus_revenue_cagr_spread_5y",
-        "owner_earnings_yield",
+        "owner_earnings_yield_on_ev",
         "payout_to_fcf_median_5y",
         "revenue_cagr_5y",
-        "roe_median_5y",
+        "roe_minus_roic_gap_5y",
         "roic_median_5y",
+        "total_debt_to_avg_fcf_5y",
         "total_debt_to_ebitda"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2023-09-12 could be consulted; 17 hand-entered values on record by 2023-09-12; judged by Buffett v3 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; this journal was created on 2024-01-02, so it held no answers on 2023-09-12 — free cash, and every figure measured against the account, are absent rather than taken from what you have told it since"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2023-09-12 could be consulted; 19 hand-entered values on record by 2023-09-12; judged by Buffett v5 as it stands today (values v3) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; this journal was created on 2024-01-02, so it held no answers on 2023-09-12 — free cash, and every figure measured against the account, are absent rather than taken from what you have told it since"
       },
       "thesis": null,
       "valuation": null,
@@ -2271,128 +2589,140 @@
     },
     {
      "seq": 2,
-     "id": "total_debt_to_ebitda",
-     "value": 1.2,
+     "id": "total_debt_to_avg_fcf_5y",
+     "value": 1.6,
      "recorded": "2023-09-05T12:00:00-04:00"
     },
     {
      "seq": 3,
-     "id": "owner_earnings_yield",
+     "id": "owner_earnings_yield_on_ev",
      "value": 7.2,
      "recorded": "2023-09-05T12:00:00-04:00"
     },
     {
      "seq": 4,
+     "id": "incremental_roic_5y",
+     "value": 22.0,
+     "recorded": "2023-09-05T12:00:00-04:00"
+    },
+    {
+     "seq": 5,
      "id": "interest_coverage",
      "value": 15.0,
      "recorded": "2023-09-05T12:00:00-04:00"
     },
     {
-     "seq": 5,
-     "id": "gross_margin_range_5y",
-     "value": 2.8,
+     "seq": 6,
+     "id": "roe_minus_roic_gap_5y",
+     "value": 4.6,
      "recorded": "2023-09-05T12:00:00-04:00"
     },
     {
-     "seq": 6,
+     "seq": 7,
      "id": "fcf_margin_median_5y",
      "value": 18.0,
      "recorded": "2023-09-05T12:00:00-04:00"
     },
     {
-     "seq": 7,
+     "seq": 8,
      "id": "cash_conversion_median_5y",
      "value": 1.02,
      "recorded": "2023-09-05T12:00:00-04:00"
     },
     {
-     "seq": 8,
-     "id": "diluted_share_count_change_5y",
-     "value": -5.0,
-     "recorded": "2023-09-05T12:00:00-04:00"
-    },
-    {
      "seq": 9,
-     "id": "roe_median_5y",
-     "value": 24.0,
-     "recorded": "2023-09-05T12:00:00-04:00"
-    },
-    {
-     "seq": 10,
      "id": "revenue_cagr_5y",
      "value": 6.5,
      "recorded": "2023-09-05T12:00:00-04:00"
     },
     {
-     "seq": 11,
+     "seq": 10,
      "id": "ni_minus_revenue_cagr_spread_5y",
      "value": 1.5,
      "recorded": "2023-09-05T12:00:00-04:00"
     },
     {
+     "seq": 11,
+     "id": "gross_margin_range_relative_5y",
+     "value": 5.2,
+     "recorded": "2023-09-05T12:00:00-04:00"
+    },
+    {
      "seq": 12,
-     "id": "goodwill_intangibles_to_assets",
-     "value": 9.0,
+     "id": "diluted_share_count_change_5y",
+     "value": -5.0,
      "recorded": "2023-09-05T12:00:00-04:00"
     },
     {
      "seq": 13,
+     "id": "goodwill_impairment_to_equity_5y",
+     "value": 0.0,
+     "recorded": "2023-09-05T12:00:00-04:00"
+    },
+    {
+     "seq": 14,
+     "id": "total_debt_to_ebitda",
+     "value": 1.2,
+     "recorded": "2023-09-05T12:00:00-04:00"
+    },
+    {
+     "seq": 15,
      "id": "effective_tax_rate_median_5y",
      "value": 22.0,
      "recorded": "2023-09-05T12:00:00-04:00"
     },
     {
-     "seq": 14,
+     "seq": 16,
      "id": "current_ratio",
      "value": 1.1,
      "recorded": "2023-09-05T12:00:00-04:00"
     },
     {
-     "seq": 15,
+     "seq": 17,
      "id": "payout_to_fcf_median_5y",
      "value": 58.0,
      "recorded": "2023-09-05T12:00:00-04:00"
     },
     {
-     "seq": 16,
+     "seq": 18,
      "id": "fcf_margin_ttm",
      "value": 17.0,
      "recorded": "2023-09-05T12:00:00-04:00"
     },
     {
-     "seq": 17,
+     "seq": 19,
      "id": "diluted_share_count_change_3y",
      "value": -3.0,
      "recorded": "2023-09-05T12:00:00-04:00"
     },
     {
-     "seq": 18,
+     "seq": 20,
      "id": "roic_median_5y",
      "value": 17.6,
      "recorded": "2026-07-28T12:00:00-04:00"
     },
     {
-     "seq": 19,
-     "id": "owner_earnings_yield",
+     "seq": 21,
+     "id": "owner_earnings_yield_on_ev",
      "value": 5.4,
      "recorded": "2026-07-28T12:00:00-04:00"
     },
     {
-     "seq": 20,
-     "id": "gross_margin_range_5y",
-     "value": 3.9,
-     "recorded": "2026-07-28T12:00:00-04:00"
-    },
-    {
-     "seq": 21,
-     "id": "roe_median_5y",
-     "value": 21.0,
-     "recorded": "2026-07-28T12:00:00-04:00"
-    },
-    {
      "seq": 22,
+     "id": "roe_minus_roic_gap_5y",
+     "value": 3.4,
+     "recorded": "2026-07-28T12:00:00-04:00"
+    },
+    {
+     "seq": 23,
      "id": "revenue_cagr_5y",
      "value": 5.2,
+     "recorded": "2026-07-28T12:00:00-04:00"
+    },
+    {
+     "seq": 24,
+     "id": "gross_margin_range_relative_5y",
+     "value": 3.9,
      "recorded": "2026-07-28T12:00:00-04:00"
     }
    ],
@@ -2455,7 +2785,7 @@
        },
        "reason": {
         "rule": "worth-owning",
-        "summary": "Every test this strategy will not bend passed, 9 of 9 core tests did against a bar of 7, and you have answered all three questions yes. The size is 10% of the account, set by an equal share of your places.",
+        "summary": "Every test this strategy will not bend passed, all six questions about the business are answered — 10 of the 10 tests behind them passed — and you have answered all three questions only you can. The size is 10% of the account, set by an equal share of your places.",
         "evidence": [
          {
           "subject": {
@@ -2492,14 +2822,14 @@
          {
           "subject": {
            "kind": "measure",
-           "id": "total_debt_to_ebitda",
-           "label": "Total debt to EBITDA",
+           "id": "total_debt_to_avg_fcf_5y",
+           "label": "Total debt to average free cash flow, 5-year",
            "unit": "times",
            "explain": null
           },
           "observed": {
            "status": "known",
-           "value": 1.2,
+           "value": 1.6,
            "source": "measure",
            "cautions": [],
            "provenance": [
@@ -2509,11 +2839,11 @@
           "test": {
            "comparator": "at_most",
            "phrase": "at most",
-           "threshold": 2.5,
+           "threshold": 3.0,
            "threshold_from": {
             "kind": "value",
-            "id": "max-debt-to-ebitda",
-            "label": "Highest debt against earnings",
+            "id": "max-debt-to-fcf",
+            "label": "Highest debt against the cash it generates",
             "unit": "times"
            },
            "absent": null
@@ -2524,8 +2854,8 @@
          {
           "subject": {
            "kind": "measure",
-           "id": "owner_earnings_yield",
-           "label": "Owner earnings yield",
+           "id": "owner_earnings_yield_on_ev",
+           "label": "Owner earnings yield on enterprise value",
            "unit": "percent",
            "explain": null
           },
@@ -2552,6 +2882,38 @@
           },
           "outcome": "pass",
           "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "incremental_roic_5y",
+           "label": "Incremental return on invested capital, 5-year",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 22.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2021-06-14"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 15,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-incremental-roic",
+            "label": "Lowest return on the money it keeps",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "returns"
          },
          {
           "subject": {
@@ -2583,19 +2945,19 @@
            "absent": null
           },
           "outcome": "pass",
-          "group": "core"
+          "group": "leverage"
          },
          {
           "subject": {
            "kind": "measure",
-           "id": "gross_margin_range_5y",
-           "label": "Gross margin range, 5-year",
+           "id": "roe_minus_roic_gap_5y",
+           "label": "Return on equity above return on invested capital, 5-year",
            "unit": "percentage_points",
            "explain": null
           },
           "observed": {
            "status": "known",
-           "value": 2.8,
+           "value": 4.6,
            "source": "measure",
            "cautions": [],
            "provenance": [
@@ -2605,17 +2967,17 @@
           "test": {
            "comparator": "at_most",
            "phrase": "at most",
-           "threshold": 6,
+           "threshold": 10,
            "threshold_from": {
             "kind": "value",
-            "id": "max-gross-margin-range",
-            "label": "Widest the gross margin may swing",
+            "id": "max-roe-roic-gap",
+            "label": "Most of the return that may be borrowed",
             "unit": "percentage_points"
            },
            "absent": null
           },
           "outcome": "pass",
-          "group": "core"
+          "group": "leverage"
          },
          {
           "subject": {
@@ -2647,7 +3009,7 @@
            "absent": null
           },
           "outcome": "pass",
-          "group": "core"
+          "group": "cash"
          },
          {
           "subject": {
@@ -2679,71 +3041,7 @@
            "absent": null
           },
           "outcome": "pass",
-          "group": "core"
-         },
-         {
-          "subject": {
-           "kind": "measure",
-           "id": "diluted_share_count_change_5y",
-           "label": "Diluted share count change, 5-year",
-           "unit": "percent",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": -5.0,
-           "source": "measure",
-           "cautions": [],
-           "provenance": [
-            "entered by hand on 2021-06-14"
-           ]
-          },
-          "test": {
-           "comparator": "at_most",
-           "phrase": "at most",
-           "threshold": 0,
-           "threshold_from": {
-            "kind": "value",
-            "id": "max-share-count-change",
-            "label": "Most the share count may grow",
-            "unit": "percent"
-           },
-           "absent": null
-          },
-          "outcome": "pass",
-          "group": "core"
-         },
-         {
-          "subject": {
-           "kind": "measure",
-           "id": "roe_median_5y",
-           "label": "Return on equity, 5-year median",
-           "unit": "percent",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": 24.0,
-           "source": "measure",
-           "cautions": [],
-           "provenance": [
-            "entered by hand on 2021-06-14"
-           ]
-          },
-          "test": {
-           "comparator": "at_least",
-           "phrase": "at least",
-           "threshold": 15,
-           "threshold_from": {
-            "kind": "value",
-            "id": "min-roe",
-            "label": "Lowest return on equity",
-            "unit": "percent"
-           },
-           "absent": null
-          },
-          "outcome": "pass",
-          "group": "core"
+          "group": "cash"
          },
          {
           "subject": {
@@ -2775,7 +3073,7 @@
            "absent": null
           },
           "outcome": "pass",
-          "group": "core"
+          "group": "growth"
          },
          {
           "subject": {
@@ -2807,19 +3105,19 @@
            "absent": null
           },
           "outcome": "pass",
-          "group": "core"
+          "group": "growth"
          },
          {
           "subject": {
            "kind": "measure",
-           "id": "goodwill_intangibles_to_assets",
-           "label": "Goodwill plus intangibles over total assets",
+           "id": "gross_margin_range_relative_5y",
+           "label": "Gross margin range as a share of the margin, 5-year",
            "unit": "percent",
            "explain": null
           },
           "observed": {
            "status": "known",
-           "value": 11.0,
+           "value": 5.2,
            "source": "measure",
            "cautions": [],
            "provenance": [
@@ -2829,17 +3127,113 @@
           "test": {
            "comparator": "at_most",
            "phrase": "at most",
-           "threshold": 40,
+           "threshold": 15,
            "threshold_from": {
             "kind": "value",
-            "id": "max-goodwill-to-assets",
-            "label": "Most of the company that may be goodwill",
+            "id": "max-gross-margin-swing",
+            "label": "Widest the gross margin may swing, against its own size",
             "unit": "percent"
            },
            "absent": null
           },
           "outcome": "pass",
-          "group": "core"
+          "group": "pricing"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "diluted_share_count_change_5y",
+           "label": "Diluted share count change, 5-year",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": -5.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2021-06-14"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 0,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-share-count-change",
+            "label": "Most the share count may grow",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "allocation"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "goodwill_impairment_to_equity_5y",
+           "label": "Goodwill written off over five years, against opening equity",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 0.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2021-06-14"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 5,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-goodwill-written-off",
+            "label": "Most of the owners' money that may have been written off",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "allocation"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "total_debt_to_ebitda",
+           "label": "Total debt to EBITDA",
+           "unit": "times",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 1.2,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2021-06-14"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 2.5,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-debt-to-ebitda",
+            "label": "Highest debt against earnings before depreciation",
+            "unit": "times"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "bonus"
          },
          {
           "subject": {
@@ -2861,7 +3255,7 @@
           "test": {
            "comparator": "at_least",
            "phrase": "at least",
-           "threshold": 10,
+           "threshold": 12,
            "threshold_from": {
             "kind": "value",
             "id": "min-effective-tax-rate",
@@ -2893,7 +3287,7 @@
           "test": {
            "comparator": "at_most",
            "phrase": "at most",
-           "threshold": 35,
+           "threshold": 28,
            "threshold_from": {
             "kind": "value",
             "id": "max-effective-tax-rate",
@@ -3155,24 +3549,95 @@
           "outcome": "pass"
          },
          {
-          "id": "core",
-          "name": "Core tests",
+          "id": "returns",
+          "name": "What the money it keeps earns",
+          "requires": "all",
+          "test": null,
+          "members": 1,
+          "tested": 1,
+          "passed": 1,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "leverage",
+          "name": "What it owes, and what its returns rest on",
+          "requires": "all",
+          "test": null,
+          "members": 2,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "cash",
+          "name": "Whether the profits are cash",
           "requires": "at_least",
           "test": {
            "comparator": "at_least",
            "phrase": "at least",
-           "threshold": 7,
+           "threshold": 1,
            "threshold_from": {
             "kind": "value",
-            "id": "core-tests-required",
-            "label": "Core tests that must pass",
+            "id": "cash-tests-required",
+            "label": "Cash tests that must pass, of two",
             "unit": "count"
            },
            "absent": null
           },
-          "members": 9,
-          "tested": 9,
-          "passed": 9,
+          "members": 2,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "growth",
+          "name": "Whether it is still growing",
+          "requires": "at_least",
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 1,
+           "threshold_from": {
+            "kind": "value",
+            "id": "growth-tests-required",
+            "label": "Growth tests that must pass, of two",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "members": 2,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "pricing",
+          "name": "Whether it sets its own prices",
+          "requires": "all",
+          "test": null,
+          "members": 1,
+          "tested": 1,
+          "passed": 1,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "allocation",
+          "name": "What management does with the money",
+          "requires": "all",
+          "test": null,
+          "members": 2,
+          "tested": 2,
+          "passed": 2,
           "failed": 0,
           "unknown": 0,
           "outcome": "pass"
@@ -3182,9 +3647,9 @@
           "name": "Reported, never blocking",
           "requires": "noted",
           "test": null,
-          "members": 4,
-          "tested": 4,
-          "passed": 4,
+          "members": 5,
+          "tested": 5,
+          "passed": 5,
           "failed": 0,
           "unknown": 0,
           "outcome": "noted"
@@ -3220,16 +3685,16 @@
        "strategy": {
         "id": "buffett",
         "name": "Buffett",
-        "version": 3,
-        "values_version": 1,
+        "version": 5,
+        "values_version": 3,
         "contract": 5
        }
       },
       "strategy": {
        "id": "buffett",
        "name": "Buffett",
-       "version": 3,
-       "values_version": 1,
+       "version": 5,
+       "values_version": 3,
        "contract": 5
       },
       "metrics": {
@@ -3241,16 +3706,24 @@
          "entered by hand on 2021-06-14"
         ]
        },
-       "total_debt_to_ebitda": {
-        "value": 1.2,
+       "total_debt_to_avg_fcf_5y": {
+        "value": 1.6,
         "source": "manual",
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-06-14"
         ]
        },
-       "owner_earnings_yield": {
+       "owner_earnings_yield_on_ev": {
         "value": 6.6,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2021-06-14"
+        ]
+       },
+       "incremental_roic_5y": {
+        "value": 22.0,
         "source": "manual",
         "cautions": [],
         "provenance": [
@@ -3265,8 +3738,8 @@
          "entered by hand on 2021-06-14"
         ]
        },
-       "gross_margin_range_5y": {
-        "value": 2.8,
+       "roe_minus_roic_gap_5y": {
+        "value": 4.6,
         "source": "manual",
         "cautions": [],
         "provenance": [
@@ -3289,22 +3762,6 @@
          "entered by hand on 2021-06-14"
         ]
        },
-       "diluted_share_count_change_5y": {
-        "value": -5.0,
-        "source": "manual",
-        "cautions": [],
-        "provenance": [
-         "entered by hand on 2021-06-14"
-        ]
-       },
-       "roe_median_5y": {
-        "value": 24.0,
-        "source": "manual",
-        "cautions": [],
-        "provenance": [
-         "entered by hand on 2021-06-14"
-        ]
-       },
        "revenue_cagr_5y": {
         "value": 6.5,
         "source": "manual",
@@ -3321,8 +3778,32 @@
          "entered by hand on 2021-06-14"
         ]
        },
-       "goodwill_intangibles_to_assets": {
-        "value": 11.0,
+       "gross_margin_range_relative_5y": {
+        "value": 5.2,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2021-06-14"
+        ]
+       },
+       "diluted_share_count_change_5y": {
+        "value": -5.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2021-06-14"
+        ]
+       },
+       "goodwill_impairment_to_equity_5y": {
+        "value": 0.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2021-06-14"
+        ]
+       },
+       "total_debt_to_ebitda": {
+        "value": 1.2,
         "source": "manual",
         "cautions": [],
         "provenance": [
@@ -3415,19 +3896,21 @@
         "effective_tax_rate_median_5y",
         "fcf_margin_median_5y",
         "fcf_margin_ttm",
-        "goodwill_intangibles_to_assets",
-        "gross_margin_range_5y",
+        "goodwill_impairment_to_equity_5y",
+        "gross_margin_range_relative_5y",
+        "incremental_roic_5y",
         "interest_coverage",
         "ni_minus_revenue_cagr_spread_5y",
-        "owner_earnings_yield",
+        "owner_earnings_yield_on_ev",
         "payout_to_fcf_median_5y",
         "revenue_cagr_5y",
-        "roe_median_5y",
+        "roe_minus_roic_gap_5y",
         "roic_median_5y",
+        "total_debt_to_avg_fcf_5y",
         "total_debt_to_ebitda"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2021-06-21 could be consulted; 17 hand-entered values on record by 2021-06-21; judged by Buffett v3 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; this journal was created on 2024-01-02, so it held no answers on 2021-06-21 — free cash, and every figure measured against the account, are absent rather than taken from what you have told it since"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2021-06-21 could be consulted; 19 hand-entered values on record by 2021-06-21; judged by Buffett v5 as it stands today (values v3) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; this journal was created on 2024-01-02, so it held no answers on 2021-06-21 — free cash, and every figure measured against the account, are absent rather than taken from what you have told it since"
       },
       "thesis": null,
       "valuation": null,
@@ -3461,7 +3944,7 @@
      "seq": 4,
      "id": "capital_allocation",
      "mark": "fail",
-     "reasoning": "Four acquisitions in three years, each one further from the instruments, each one paid for partly in stock. Goodwill has gone from a ninth of the balance sheet to a third and the share count is rising for the first time. The returns still look fine because the acquired revenue is still new. I no longer think the chief executive is allocating capital; I think he is building something to run.",
+     "reasoning": "Four acquisitions in three years, each one further from the instruments, each one paid for partly in stock. Nothing has been written off yet and the share count is only just rising, so every number on this page is still fine — the returns look fine because the acquired revenue is still new, and a write-off is years of admitting away. I no longer think the chief executive is allocating capital; I think he is building something to run.",
      "recorded": "2026-07-26T12:00:00-04:00"
     }
    ],
@@ -3474,138 +3957,144 @@
     },
     {
      "seq": 2,
-     "id": "total_debt_to_ebitda",
-     "value": 1.2,
+     "id": "total_debt_to_avg_fcf_5y",
+     "value": 1.6,
      "recorded": "2021-06-14T12:00:00-04:00"
     },
     {
      "seq": 3,
-     "id": "owner_earnings_yield",
+     "id": "owner_earnings_yield_on_ev",
      "value": 6.6,
      "recorded": "2021-06-14T12:00:00-04:00"
     },
     {
      "seq": 4,
+     "id": "incremental_roic_5y",
+     "value": 22.0,
+     "recorded": "2021-06-14T12:00:00-04:00"
+    },
+    {
+     "seq": 5,
      "id": "interest_coverage",
      "value": 15.0,
      "recorded": "2021-06-14T12:00:00-04:00"
     },
     {
-     "seq": 5,
-     "id": "gross_margin_range_5y",
-     "value": 2.8,
+     "seq": 6,
+     "id": "roe_minus_roic_gap_5y",
+     "value": 4.6,
      "recorded": "2021-06-14T12:00:00-04:00"
     },
     {
-     "seq": 6,
+     "seq": 7,
      "id": "fcf_margin_median_5y",
      "value": 18.0,
      "recorded": "2021-06-14T12:00:00-04:00"
     },
     {
-     "seq": 7,
+     "seq": 8,
      "id": "cash_conversion_median_5y",
      "value": 1.02,
      "recorded": "2021-06-14T12:00:00-04:00"
     },
     {
-     "seq": 8,
-     "id": "diluted_share_count_change_5y",
-     "value": -5.0,
-     "recorded": "2021-06-14T12:00:00-04:00"
-    },
-    {
      "seq": 9,
-     "id": "roe_median_5y",
-     "value": 24.0,
-     "recorded": "2021-06-14T12:00:00-04:00"
-    },
-    {
-     "seq": 10,
      "id": "revenue_cagr_5y",
      "value": 6.5,
      "recorded": "2021-06-14T12:00:00-04:00"
     },
     {
-     "seq": 11,
+     "seq": 10,
      "id": "ni_minus_revenue_cagr_spread_5y",
      "value": 1.5,
      "recorded": "2021-06-14T12:00:00-04:00"
     },
     {
+     "seq": 11,
+     "id": "gross_margin_range_relative_5y",
+     "value": 5.2,
+     "recorded": "2021-06-14T12:00:00-04:00"
+    },
+    {
      "seq": 12,
-     "id": "goodwill_intangibles_to_assets",
-     "value": 11.0,
+     "id": "diluted_share_count_change_5y",
+     "value": -5.0,
      "recorded": "2021-06-14T12:00:00-04:00"
     },
     {
      "seq": 13,
+     "id": "goodwill_impairment_to_equity_5y",
+     "value": 0.0,
+     "recorded": "2021-06-14T12:00:00-04:00"
+    },
+    {
+     "seq": 14,
+     "id": "total_debt_to_ebitda",
+     "value": 1.2,
+     "recorded": "2021-06-14T12:00:00-04:00"
+    },
+    {
+     "seq": 15,
      "id": "effective_tax_rate_median_5y",
      "value": 22.0,
      "recorded": "2021-06-14T12:00:00-04:00"
     },
     {
-     "seq": 14,
+     "seq": 16,
      "id": "current_ratio",
      "value": 1.1,
      "recorded": "2021-06-14T12:00:00-04:00"
     },
     {
-     "seq": 15,
+     "seq": 17,
      "id": "payout_to_fcf_median_5y",
      "value": 58.0,
      "recorded": "2021-06-14T12:00:00-04:00"
     },
     {
-     "seq": 16,
+     "seq": 18,
      "id": "fcf_margin_ttm",
      "value": 17.0,
      "recorded": "2021-06-14T12:00:00-04:00"
     },
     {
-     "seq": 17,
+     "seq": 19,
      "id": "diluted_share_count_change_3y",
      "value": -3.0,
      "recorded": "2021-06-14T12:00:00-04:00"
     },
     {
-     "seq": 18,
+     "seq": 20,
      "id": "roic_median_5y",
      "value": 16.2,
      "recorded": "2026-07-26T12:00:00-04:00"
     },
     {
-     "seq": 19,
-     "id": "owner_earnings_yield",
+     "seq": 21,
+     "id": "owner_earnings_yield_on_ev",
      "value": 5.9,
      "recorded": "2026-07-26T12:00:00-04:00"
     },
     {
-     "seq": 20,
-     "id": "diluted_share_count_change_5y",
-     "value": -1.0,
-     "recorded": "2026-07-26T12:00:00-04:00"
-    },
-    {
-     "seq": 21,
-     "id": "roe_median_5y",
-     "value": 19.5,
-     "recorded": "2026-07-26T12:00:00-04:00"
-    },
-    {
      "seq": 22,
+     "id": "roe_minus_roic_gap_5y",
+     "value": 3.3,
+     "recorded": "2026-07-26T12:00:00-04:00"
+    },
+    {
+     "seq": 23,
      "id": "revenue_cagr_5y",
      "value": 4.4,
      "recorded": "2026-07-26T12:00:00-04:00"
     },
     {
-     "seq": 23,
-     "id": "goodwill_intangibles_to_assets",
-     "value": 34.0,
+     "seq": 24,
+     "id": "diluted_share_count_change_5y",
+     "value": -1.0,
      "recorded": "2026-07-26T12:00:00-04:00"
     },
     {
-     "seq": 24,
+     "seq": 25,
      "id": "diluted_share_count_change_3y",
      "value": 2.0,
      "recorded": "2026-07-26T12:00:00-04:00"
@@ -3670,7 +4159,7 @@
        },
        "reason": {
         "rule": "worth-owning",
-        "summary": "Every test this strategy will not bend passed, 9 of 9 core tests did against a bar of 7, and you have answered all three questions yes. The size is 10% of the account, set by an equal share of your places.",
+        "summary": "Every test this strategy will not bend passed, all six questions about the business are answered — 10 of the 10 tests behind them passed — and you have answered all three questions only you can. The size is 10% of the account, set by an equal share of your places.",
         "evidence": [
          {
           "subject": {
@@ -3707,8 +4196,8 @@
          {
           "subject": {
            "kind": "measure",
-           "id": "total_debt_to_ebitda",
-           "label": "Total debt to EBITDA",
+           "id": "total_debt_to_avg_fcf_5y",
+           "label": "Total debt to average free cash flow, 5-year",
            "unit": "times",
            "explain": null
           },
@@ -3724,11 +4213,11 @@
           "test": {
            "comparator": "at_most",
            "phrase": "at most",
-           "threshold": 2.5,
+           "threshold": 3.0,
            "threshold_from": {
             "kind": "value",
-            "id": "max-debt-to-ebitda",
-            "label": "Highest debt against earnings",
+            "id": "max-debt-to-fcf",
+            "label": "Highest debt against the cash it generates",
             "unit": "times"
            },
            "absent": null
@@ -3739,8 +4228,8 @@
          {
           "subject": {
            "kind": "measure",
-           "id": "owner_earnings_yield",
-           "label": "Owner earnings yield",
+           "id": "owner_earnings_yield_on_ev",
+           "label": "Owner earnings yield on enterprise value",
            "unit": "percent",
            "explain": null
           },
@@ -3767,6 +4256,38 @@
           },
           "outcome": "pass",
           "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "incremental_roic_5y",
+           "label": "Incremental return on invested capital, 5-year",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 22.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2022-10-03"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 15,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-incremental-roic",
+            "label": "Lowest return on the money it keeps",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "returns"
          },
          {
           "subject": {
@@ -3798,19 +4319,19 @@
            "absent": null
           },
           "outcome": "pass",
-          "group": "core"
+          "group": "leverage"
          },
          {
           "subject": {
            "kind": "measure",
-           "id": "gross_margin_range_5y",
-           "label": "Gross margin range, 5-year",
+           "id": "roe_minus_roic_gap_5y",
+           "label": "Return on equity above return on invested capital, 5-year",
            "unit": "percentage_points",
            "explain": null
           },
           "observed": {
            "status": "known",
-           "value": 2.8,
+           "value": 4.6,
            "source": "measure",
            "cautions": [],
            "provenance": [
@@ -3820,17 +4341,17 @@
           "test": {
            "comparator": "at_most",
            "phrase": "at most",
-           "threshold": 6,
+           "threshold": 10,
            "threshold_from": {
             "kind": "value",
-            "id": "max-gross-margin-range",
-            "label": "Widest the gross margin may swing",
+            "id": "max-roe-roic-gap",
+            "label": "Most of the return that may be borrowed",
             "unit": "percentage_points"
            },
            "absent": null
           },
           "outcome": "pass",
-          "group": "core"
+          "group": "leverage"
          },
          {
           "subject": {
@@ -3862,7 +4383,7 @@
            "absent": null
           },
           "outcome": "pass",
-          "group": "core"
+          "group": "cash"
          },
          {
           "subject": {
@@ -3894,71 +4415,7 @@
            "absent": null
           },
           "outcome": "pass",
-          "group": "core"
-         },
-         {
-          "subject": {
-           "kind": "measure",
-           "id": "diluted_share_count_change_5y",
-           "label": "Diluted share count change, 5-year",
-           "unit": "percent",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": -5.0,
-           "source": "measure",
-           "cautions": [],
-           "provenance": [
-            "entered by hand on 2022-10-03"
-           ]
-          },
-          "test": {
-           "comparator": "at_most",
-           "phrase": "at most",
-           "threshold": 0,
-           "threshold_from": {
-            "kind": "value",
-            "id": "max-share-count-change",
-            "label": "Most the share count may grow",
-            "unit": "percent"
-           },
-           "absent": null
-          },
-          "outcome": "pass",
-          "group": "core"
-         },
-         {
-          "subject": {
-           "kind": "measure",
-           "id": "roe_median_5y",
-           "label": "Return on equity, 5-year median",
-           "unit": "percent",
-           "explain": null
-          },
-          "observed": {
-           "status": "known",
-           "value": 24.0,
-           "source": "measure",
-           "cautions": [],
-           "provenance": [
-            "entered by hand on 2022-10-03"
-           ]
-          },
-          "test": {
-           "comparator": "at_least",
-           "phrase": "at least",
-           "threshold": 15,
-           "threshold_from": {
-            "kind": "value",
-            "id": "min-roe",
-            "label": "Lowest return on equity",
-            "unit": "percent"
-           },
-           "absent": null
-          },
-          "outcome": "pass",
-          "group": "core"
+          "group": "cash"
          },
          {
           "subject": {
@@ -3990,7 +4447,7 @@
            "absent": null
           },
           "outcome": "pass",
-          "group": "core"
+          "group": "growth"
          },
          {
           "subject": {
@@ -4022,19 +4479,19 @@
            "absent": null
           },
           "outcome": "pass",
-          "group": "core"
+          "group": "growth"
          },
          {
           "subject": {
            "kind": "measure",
-           "id": "goodwill_intangibles_to_assets",
-           "label": "Goodwill plus intangibles over total assets",
+           "id": "gross_margin_range_relative_5y",
+           "label": "Gross margin range as a share of the margin, 5-year",
            "unit": "percent",
            "explain": null
           },
           "observed": {
            "status": "known",
-           "value": 9.0,
+           "value": 5.2,
            "source": "measure",
            "cautions": [],
            "provenance": [
@@ -4044,17 +4501,113 @@
           "test": {
            "comparator": "at_most",
            "phrase": "at most",
-           "threshold": 40,
+           "threshold": 15,
            "threshold_from": {
             "kind": "value",
-            "id": "max-goodwill-to-assets",
-            "label": "Most of the company that may be goodwill",
+            "id": "max-gross-margin-swing",
+            "label": "Widest the gross margin may swing, against its own size",
             "unit": "percent"
            },
            "absent": null
           },
           "outcome": "pass",
-          "group": "core"
+          "group": "pricing"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "diluted_share_count_change_5y",
+           "label": "Diluted share count change, 5-year",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": -5.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2022-10-03"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 0,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-share-count-change",
+            "label": "Most the share count may grow",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "allocation"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "goodwill_impairment_to_equity_5y",
+           "label": "Goodwill written off over five years, against opening equity",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 0.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2022-10-03"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 5,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-goodwill-written-off",
+            "label": "Most of the owners' money that may have been written off",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "allocation"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "total_debt_to_ebitda",
+           "label": "Total debt to EBITDA",
+           "unit": "times",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 1.2,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2022-10-03"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 2.5,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-debt-to-ebitda",
+            "label": "Highest debt against earnings before depreciation",
+            "unit": "times"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "bonus"
          },
          {
           "subject": {
@@ -4076,7 +4629,7 @@
           "test": {
            "comparator": "at_least",
            "phrase": "at least",
-           "threshold": 10,
+           "threshold": 12,
            "threshold_from": {
             "kind": "value",
             "id": "min-effective-tax-rate",
@@ -4108,7 +4661,7 @@
           "test": {
            "comparator": "at_most",
            "phrase": "at most",
-           "threshold": 35,
+           "threshold": 28,
            "threshold_from": {
             "kind": "value",
             "id": "max-effective-tax-rate",
@@ -4370,24 +4923,95 @@
           "outcome": "pass"
          },
          {
-          "id": "core",
-          "name": "Core tests",
+          "id": "returns",
+          "name": "What the money it keeps earns",
+          "requires": "all",
+          "test": null,
+          "members": 1,
+          "tested": 1,
+          "passed": 1,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "leverage",
+          "name": "What it owes, and what its returns rest on",
+          "requires": "all",
+          "test": null,
+          "members": 2,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "cash",
+          "name": "Whether the profits are cash",
           "requires": "at_least",
           "test": {
            "comparator": "at_least",
            "phrase": "at least",
-           "threshold": 7,
+           "threshold": 1,
            "threshold_from": {
             "kind": "value",
-            "id": "core-tests-required",
-            "label": "Core tests that must pass",
+            "id": "cash-tests-required",
+            "label": "Cash tests that must pass, of two",
             "unit": "count"
            },
            "absent": null
           },
-          "members": 9,
-          "tested": 9,
-          "passed": 9,
+          "members": 2,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "growth",
+          "name": "Whether it is still growing",
+          "requires": "at_least",
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 1,
+           "threshold_from": {
+            "kind": "value",
+            "id": "growth-tests-required",
+            "label": "Growth tests that must pass, of two",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "members": 2,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "pricing",
+          "name": "Whether it sets its own prices",
+          "requires": "all",
+          "test": null,
+          "members": 1,
+          "tested": 1,
+          "passed": 1,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "allocation",
+          "name": "What management does with the money",
+          "requires": "all",
+          "test": null,
+          "members": 2,
+          "tested": 2,
+          "passed": 2,
           "failed": 0,
           "unknown": 0,
           "outcome": "pass"
@@ -4397,9 +5021,9 @@
           "name": "Reported, never blocking",
           "requires": "noted",
           "test": null,
-          "members": 4,
-          "tested": 4,
-          "passed": 4,
+          "members": 5,
+          "tested": 5,
+          "passed": 5,
           "failed": 0,
           "unknown": 0,
           "outcome": "noted"
@@ -4435,16 +5059,16 @@
        "strategy": {
         "id": "buffett",
         "name": "Buffett",
-        "version": 3,
-        "values_version": 1,
+        "version": 5,
+        "values_version": 3,
         "contract": 5
        }
       },
       "strategy": {
        "id": "buffett",
        "name": "Buffett",
-       "version": 3,
-       "values_version": 1,
+       "version": 5,
+       "values_version": 3,
        "contract": 5
       },
       "metrics": {
@@ -4456,7 +5080,7 @@
          "entered by hand on 2022-10-03"
         ]
        },
-       "total_debt_to_ebitda": {
+       "total_debt_to_avg_fcf_5y": {
         "value": 1.9,
         "source": "manual",
         "cautions": [],
@@ -4464,8 +5088,16 @@
          "entered by hand on 2022-10-03"
         ]
        },
-       "owner_earnings_yield": {
+       "owner_earnings_yield_on_ev": {
         "value": 6.9,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2022-10-03"
+        ]
+       },
+       "incremental_roic_5y": {
+        "value": 22.0,
         "source": "manual",
         "cautions": [],
         "provenance": [
@@ -4480,8 +5112,8 @@
          "entered by hand on 2022-10-03"
         ]
        },
-       "gross_margin_range_5y": {
-        "value": 2.8,
+       "roe_minus_roic_gap_5y": {
+        "value": 4.6,
         "source": "manual",
         "cautions": [],
         "provenance": [
@@ -4504,22 +5136,6 @@
          "entered by hand on 2022-10-03"
         ]
        },
-       "diluted_share_count_change_5y": {
-        "value": -5.0,
-        "source": "manual",
-        "cautions": [],
-        "provenance": [
-         "entered by hand on 2022-10-03"
-        ]
-       },
-       "roe_median_5y": {
-        "value": 24.0,
-        "source": "manual",
-        "cautions": [],
-        "provenance": [
-         "entered by hand on 2022-10-03"
-        ]
-       },
        "revenue_cagr_5y": {
         "value": 6.5,
         "source": "manual",
@@ -4536,8 +5152,32 @@
          "entered by hand on 2022-10-03"
         ]
        },
-       "goodwill_intangibles_to_assets": {
-        "value": 9.0,
+       "gross_margin_range_relative_5y": {
+        "value": 5.2,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2022-10-03"
+        ]
+       },
+       "diluted_share_count_change_5y": {
+        "value": -5.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2022-10-03"
+        ]
+       },
+       "goodwill_impairment_to_equity_5y": {
+        "value": 0.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2022-10-03"
+        ]
+       },
+       "total_debt_to_ebitda": {
+        "value": 1.2,
         "source": "manual",
         "cautions": [],
         "provenance": [
@@ -4630,19 +5270,21 @@
         "effective_tax_rate_median_5y",
         "fcf_margin_median_5y",
         "fcf_margin_ttm",
-        "goodwill_intangibles_to_assets",
-        "gross_margin_range_5y",
+        "goodwill_impairment_to_equity_5y",
+        "gross_margin_range_relative_5y",
+        "incremental_roic_5y",
         "interest_coverage",
         "ni_minus_revenue_cagr_spread_5y",
-        "owner_earnings_yield",
+        "owner_earnings_yield_on_ev",
         "payout_to_fcf_median_5y",
         "revenue_cagr_5y",
-        "roe_median_5y",
+        "roe_minus_roic_gap_5y",
         "roic_median_5y",
+        "total_debt_to_avg_fcf_5y",
         "total_debt_to_ebitda"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2022-10-11 could be consulted; 17 hand-entered values on record by 2022-10-11; judged by Buffett v3 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; this journal was created on 2024-01-02, so it held no answers on 2022-10-11 — free cash, and every figure measured against the account, are absent rather than taken from what you have told it since"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2022-10-11 could be consulted; 19 hand-entered values on record by 2022-10-11; judged by Buffett v5 as it stands today (values v3) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; this journal was created on 2024-01-02, so it held no answers on 2022-10-11 — free cash, and every figure measured against the account, are absent rather than taken from what you have told it since"
       },
       "thesis": null,
       "valuation": null,
@@ -4682,144 +5324,156 @@
     },
     {
      "seq": 2,
-     "id": "total_debt_to_ebitda",
+     "id": "total_debt_to_avg_fcf_5y",
      "value": 1.9,
      "recorded": "2022-10-03T12:00:00-04:00"
     },
     {
      "seq": 3,
-     "id": "owner_earnings_yield",
+     "id": "owner_earnings_yield_on_ev",
      "value": 6.9,
      "recorded": "2022-10-03T12:00:00-04:00"
     },
     {
      "seq": 4,
+     "id": "incremental_roic_5y",
+     "value": 22.0,
+     "recorded": "2022-10-03T12:00:00-04:00"
+    },
+    {
+     "seq": 5,
      "id": "interest_coverage",
      "value": 15.0,
      "recorded": "2022-10-03T12:00:00-04:00"
     },
     {
-     "seq": 5,
-     "id": "gross_margin_range_5y",
-     "value": 2.8,
+     "seq": 6,
+     "id": "roe_minus_roic_gap_5y",
+     "value": 4.6,
      "recorded": "2022-10-03T12:00:00-04:00"
     },
     {
-     "seq": 6,
+     "seq": 7,
      "id": "fcf_margin_median_5y",
      "value": 18.0,
      "recorded": "2022-10-03T12:00:00-04:00"
     },
     {
-     "seq": 7,
+     "seq": 8,
      "id": "cash_conversion_median_5y",
      "value": 1.02,
      "recorded": "2022-10-03T12:00:00-04:00"
     },
     {
-     "seq": 8,
-     "id": "diluted_share_count_change_5y",
-     "value": -5.0,
-     "recorded": "2022-10-03T12:00:00-04:00"
-    },
-    {
      "seq": 9,
-     "id": "roe_median_5y",
-     "value": 24.0,
-     "recorded": "2022-10-03T12:00:00-04:00"
-    },
-    {
-     "seq": 10,
      "id": "revenue_cagr_5y",
      "value": 6.5,
      "recorded": "2022-10-03T12:00:00-04:00"
     },
     {
-     "seq": 11,
+     "seq": 10,
      "id": "ni_minus_revenue_cagr_spread_5y",
      "value": 1.5,
      "recorded": "2022-10-03T12:00:00-04:00"
     },
     {
+     "seq": 11,
+     "id": "gross_margin_range_relative_5y",
+     "value": 5.2,
+     "recorded": "2022-10-03T12:00:00-04:00"
+    },
+    {
      "seq": 12,
-     "id": "goodwill_intangibles_to_assets",
-     "value": 9.0,
+     "id": "diluted_share_count_change_5y",
+     "value": -5.0,
      "recorded": "2022-10-03T12:00:00-04:00"
     },
     {
      "seq": 13,
+     "id": "goodwill_impairment_to_equity_5y",
+     "value": 0.0,
+     "recorded": "2022-10-03T12:00:00-04:00"
+    },
+    {
+     "seq": 14,
+     "id": "total_debt_to_ebitda",
+     "value": 1.2,
+     "recorded": "2022-10-03T12:00:00-04:00"
+    },
+    {
+     "seq": 15,
      "id": "effective_tax_rate_median_5y",
      "value": 22.0,
      "recorded": "2022-10-03T12:00:00-04:00"
     },
     {
-     "seq": 14,
+     "seq": 16,
      "id": "current_ratio",
      "value": 1.1,
      "recorded": "2022-10-03T12:00:00-04:00"
     },
     {
-     "seq": 15,
+     "seq": 17,
      "id": "payout_to_fcf_median_5y",
      "value": 58.0,
      "recorded": "2022-10-03T12:00:00-04:00"
     },
     {
-     "seq": 16,
+     "seq": 18,
      "id": "fcf_margin_ttm",
      "value": 17.0,
      "recorded": "2022-10-03T12:00:00-04:00"
     },
     {
-     "seq": 17,
+     "seq": 19,
      "id": "diluted_share_count_change_3y",
      "value": -3.0,
      "recorded": "2022-10-03T12:00:00-04:00"
     },
     {
-     "seq": 18,
+     "seq": 20,
      "id": "roic_median_5y",
      "value": 15.8,
      "recorded": "2026-07-24T12:00:00-04:00"
     },
     {
-     "seq": 19,
-     "id": "total_debt_to_ebitda",
-     "value": 4.6,
+     "seq": 21,
+     "id": "total_debt_to_avg_fcf_5y",
+     "value": 6.1,
      "recorded": "2026-07-24T12:00:00-04:00"
     },
     {
-     "seq": 20,
-     "id": "owner_earnings_yield",
+     "seq": 22,
+     "id": "owner_earnings_yield_on_ev",
      "value": 7.4,
      "recorded": "2026-07-24T12:00:00-04:00"
     },
     {
-     "seq": 21,
+     "seq": 23,
      "id": "interest_coverage",
      "value": 5.1,
      "recorded": "2026-07-24T12:00:00-04:00"
     },
     {
-     "seq": 22,
+     "seq": 24,
+     "id": "roe_minus_roic_gap_5y",
+     "value": 2.2,
+     "recorded": "2026-07-24T12:00:00-04:00"
+    },
+    {
+     "seq": 25,
      "id": "fcf_margin_median_5y",
      "value": 11.0,
      "recorded": "2026-07-24T12:00:00-04:00"
     },
     {
-     "seq": 23,
-     "id": "roe_median_5y",
-     "value": 18.0,
-     "recorded": "2026-07-24T12:00:00-04:00"
-    },
-    {
-     "seq": 24,
+     "seq": 26,
      "id": "revenue_cagr_5y",
      "value": 4.2,
      "recorded": "2026-07-24T12:00:00-04:00"
     },
     {
-     "seq": 25,
+     "seq": 27,
      "id": "fcf_margin_ttm",
      "value": 4.0,
      "recorded": "2026-07-24T12:00:00-04:00"
@@ -4870,12 +5524,12 @@
       "date": "2023-02-14",
       "as_of": "2023-02-14",
       "state": "Not enough to go on",
-      "why": "12 of the tests that decide this could not be worked out from the data on record, and the ones that could do not settle it either way.",
+      "why": "13 of the tests that decide this could not be worked out from the data on record, and the ones that could do not settle it either way.",
       "strategy": {
        "id": "buffett",
        "name": "Buffett",
-       "version": 3,
-       "values_version": 1,
+       "version": 5,
+       "values_version": 3,
        "contract": 5
       },
       "missing": [
@@ -4884,20 +5538,24 @@
         "label": "Lowest return on invested capital"
        },
        {
-        "key": "value:max-debt-to-ebitda",
-        "label": "Highest debt against earnings"
+        "key": "value:max-debt-to-fcf",
+        "label": "Highest debt against the cash it generates"
        },
        {
         "key": "value:min-owner-earnings-yield",
         "label": "Lowest owner earnings yield"
        },
        {
+        "key": "value:min-incremental-roic",
+        "label": "Lowest return on the money it keeps"
+       },
+       {
         "key": "value:min-interest-coverage",
         "label": "Lowest interest coverage"
        },
        {
-        "key": "value:max-gross-margin-range",
-        "label": "Widest the gross margin may swing"
+        "key": "value:max-roe-roic-gap",
+        "label": "Most of the return that may be borrowed"
        },
        {
         "key": "value:min-fcf-margin",
@@ -4908,14 +5566,6 @@
         "label": "Lowest cash conversion"
        },
        {
-        "key": "value:max-share-count-change",
-        "label": "Most the share count may grow"
-       },
-       {
-        "key": "value:min-roe",
-        "label": "Lowest return on equity"
-       },
-       {
         "key": "value:min-revenue-cagr",
         "label": "Lowest revenue growth"
        },
@@ -4924,8 +5574,20 @@
         "label": "Lowest gap between profit growth and sales growth"
        },
        {
-        "key": "value:max-goodwill-to-assets",
-        "label": "Most of the company that may be goodwill"
+        "key": "value:max-gross-margin-swing",
+        "label": "Widest the gross margin may swing, against its own size"
+       },
+       {
+        "key": "value:max-share-count-change",
+        "label": "Most the share count may grow"
+       },
+       {
+        "key": "value:max-goodwill-written-off",
+        "label": "Most of the owners' money that may have been written off"
+       },
+       {
+        "key": "value:max-debt-to-ebitda",
+        "label": "Highest debt against earnings before depreciation"
        },
        {
         "key": "value:min-effective-tax-rate",
@@ -4944,7 +5606,7 @@
         "label": "Most of free cash flow that may be paid out"
        }
       ],
-      "note": "no company is linked to this ticker, so no stored filing or price from 2023-02-14 could be consulted; judged by Buffett v3 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; this journal was created on 2024-01-02, so it held no answers on 2023-02-14 — free cash, and every figure measured against the account, are absent rather than taken from what you have told it since"
+      "note": "no company is linked to this ticker, so no stored filing or price from 2023-02-14 could be consulted; judged by Buffett v5 as it stands today (values v3) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; this journal was created on 2024-01-02, so it held no answers on 2023-02-14 — free cash, and every figure measured against the account, are absent rather than taken from what you have told it since"
      },
      "snapshot": {
       "frozen": "2023-02-14T12:00:00-05:00",
@@ -4960,7 +5622,7 @@
        "payload": {},
        "reason": {
         "rule": "screen-incomplete",
-        "summary": "12 of the tests that decide this could not be worked out from the data on record, and the ones that could do not settle it either way.",
+        "summary": "13 of the tests that decide this could not be worked out from the data on record, and the ones that could do not settle it either way.",
         "evidence": [
          {
           "subject": {
@@ -4993,8 +5655,8 @@
          {
           "subject": {
            "kind": "measure",
-           "id": "total_debt_to_ebitda",
-           "label": "Total debt to EBITDA",
+           "id": "total_debt_to_avg_fcf_5y",
+           "label": "Total debt to average free cash flow, 5-year",
            "unit": "times",
            "explain": null
           },
@@ -5006,11 +5668,11 @@
           "test": {
            "comparator": "at_most",
            "phrase": "at most",
-           "threshold": 2.5,
+           "threshold": 3.0,
            "threshold_from": {
             "kind": "value",
-            "id": "max-debt-to-ebitda",
-            "label": "Highest debt against earnings",
+            "id": "max-debt-to-fcf",
+            "label": "Highest debt against the cash it generates",
             "unit": "times"
            },
            "absent": null
@@ -5021,8 +5683,8 @@
          {
           "subject": {
            "kind": "measure",
-           "id": "owner_earnings_yield",
-           "label": "Owner earnings yield",
+           "id": "owner_earnings_yield_on_ev",
+           "label": "Owner earnings yield on enterprise value",
            "unit": "percent",
            "explain": null
           },
@@ -5045,6 +5707,34 @@
           },
           "outcome": "unknown",
           "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "incremental_roic_5y",
+           "label": "Incremental return on invested capital, 5-year",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "absent",
+           "reason": "no filing data is stored for this security — fetch data first",
+           "source": "measure"
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 15,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-incremental-roic",
+            "label": "Lowest return on the money it keeps",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "unknown",
+          "group": "returns"
          },
          {
           "subject": {
@@ -5072,13 +5762,13 @@
            "absent": null
           },
           "outcome": "unknown",
-          "group": "core"
+          "group": "leverage"
          },
          {
           "subject": {
            "kind": "measure",
-           "id": "gross_margin_range_5y",
-           "label": "Gross margin range, 5-year",
+           "id": "roe_minus_roic_gap_5y",
+           "label": "Return on equity above return on invested capital, 5-year",
            "unit": "percentage_points",
            "explain": null
           },
@@ -5090,17 +5780,17 @@
           "test": {
            "comparator": "at_most",
            "phrase": "at most",
-           "threshold": 6,
+           "threshold": 10,
            "threshold_from": {
             "kind": "value",
-            "id": "max-gross-margin-range",
-            "label": "Widest the gross margin may swing",
+            "id": "max-roe-roic-gap",
+            "label": "Most of the return that may be borrowed",
             "unit": "percentage_points"
            },
            "absent": null
           },
           "outcome": "unknown",
-          "group": "core"
+          "group": "leverage"
          },
          {
           "subject": {
@@ -5128,7 +5818,7 @@
            "absent": null
           },
           "outcome": "unknown",
-          "group": "core"
+          "group": "cash"
          },
          {
           "subject": {
@@ -5156,63 +5846,7 @@
            "absent": null
           },
           "outcome": "unknown",
-          "group": "core"
-         },
-         {
-          "subject": {
-           "kind": "measure",
-           "id": "diluted_share_count_change_5y",
-           "label": "Diluted share count change, 5-year",
-           "unit": "percent",
-           "explain": null
-          },
-          "observed": {
-           "status": "absent",
-           "reason": "no filing data is stored for this security — fetch data first",
-           "source": "measure"
-          },
-          "test": {
-           "comparator": "at_most",
-           "phrase": "at most",
-           "threshold": 0,
-           "threshold_from": {
-            "kind": "value",
-            "id": "max-share-count-change",
-            "label": "Most the share count may grow",
-            "unit": "percent"
-           },
-           "absent": null
-          },
-          "outcome": "unknown",
-          "group": "core"
-         },
-         {
-          "subject": {
-           "kind": "measure",
-           "id": "roe_median_5y",
-           "label": "Return on equity, 5-year median",
-           "unit": "percent",
-           "explain": null
-          },
-          "observed": {
-           "status": "absent",
-           "reason": "no filing data is stored for this security — fetch data first",
-           "source": "measure"
-          },
-          "test": {
-           "comparator": "at_least",
-           "phrase": "at least",
-           "threshold": 15,
-           "threshold_from": {
-            "kind": "value",
-            "id": "min-roe",
-            "label": "Lowest return on equity",
-            "unit": "percent"
-           },
-           "absent": null
-          },
-          "outcome": "unknown",
-          "group": "core"
+          "group": "cash"
          },
          {
           "subject": {
@@ -5240,7 +5874,7 @@
            "absent": null
           },
           "outcome": "unknown",
-          "group": "core"
+          "group": "growth"
          },
          {
           "subject": {
@@ -5268,13 +5902,13 @@
            "absent": null
           },
           "outcome": "unknown",
-          "group": "core"
+          "group": "growth"
          },
          {
           "subject": {
            "kind": "measure",
-           "id": "goodwill_intangibles_to_assets",
-           "label": "Goodwill plus intangibles over total assets",
+           "id": "gross_margin_range_relative_5y",
+           "label": "Gross margin range as a share of the margin, 5-year",
            "unit": "percent",
            "explain": null
           },
@@ -5286,17 +5920,101 @@
           "test": {
            "comparator": "at_most",
            "phrase": "at most",
-           "threshold": 40,
+           "threshold": 15,
            "threshold_from": {
             "kind": "value",
-            "id": "max-goodwill-to-assets",
-            "label": "Most of the company that may be goodwill",
+            "id": "max-gross-margin-swing",
+            "label": "Widest the gross margin may swing, against its own size",
             "unit": "percent"
            },
            "absent": null
           },
           "outcome": "unknown",
-          "group": "core"
+          "group": "pricing"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "diluted_share_count_change_5y",
+           "label": "Diluted share count change, 5-year",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "absent",
+           "reason": "no filing data is stored for this security — fetch data first",
+           "source": "measure"
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 0,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-share-count-change",
+            "label": "Most the share count may grow",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "unknown",
+          "group": "allocation"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "goodwill_impairment_to_equity_5y",
+           "label": "Goodwill written off over five years, against opening equity",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "absent",
+           "reason": "no filing data is stored for this security — fetch data first",
+           "source": "measure"
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 5,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-goodwill-written-off",
+            "label": "Most of the owners' money that may have been written off",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "unknown",
+          "group": "allocation"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "total_debt_to_ebitda",
+           "label": "Total debt to EBITDA",
+           "unit": "times",
+           "explain": null
+          },
+          "observed": {
+           "status": "absent",
+           "reason": "no filing data is stored for this security — fetch data first",
+           "source": "measure"
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 2.5,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-debt-to-ebitda",
+            "label": "Highest debt against earnings before depreciation",
+            "unit": "times"
+           },
+           "absent": null
+          },
+          "outcome": "unknown",
+          "group": "bonus"
          },
          {
           "subject": {
@@ -5314,7 +6032,7 @@
           "test": {
            "comparator": "at_least",
            "phrase": "at least",
-           "threshold": 10,
+           "threshold": 12,
            "threshold_from": {
             "kind": "value",
             "id": "min-effective-tax-rate",
@@ -5342,7 +6060,7 @@
           "test": {
            "comparator": "at_most",
            "phrase": "at most",
-           "threshold": 35,
+           "threshold": 28,
            "threshold_from": {
             "kind": "value",
             "id": "max-effective-tax-rate",
@@ -5425,26 +6143,97 @@
           "outcome": "unknown"
          },
          {
-          "id": "core",
-          "name": "Core tests",
+          "id": "returns",
+          "name": "What the money it keeps earns",
+          "requires": "all",
+          "test": null,
+          "members": 1,
+          "tested": 1,
+          "passed": 0,
+          "failed": 0,
+          "unknown": 1,
+          "outcome": "unknown"
+         },
+         {
+          "id": "leverage",
+          "name": "What it owes, and what its returns rest on",
+          "requires": "all",
+          "test": null,
+          "members": 2,
+          "tested": 2,
+          "passed": 0,
+          "failed": 0,
+          "unknown": 2,
+          "outcome": "unknown"
+         },
+         {
+          "id": "cash",
+          "name": "Whether the profits are cash",
           "requires": "at_least",
           "test": {
            "comparator": "at_least",
            "phrase": "at least",
-           "threshold": 7,
+           "threshold": 1,
            "threshold_from": {
             "kind": "value",
-            "id": "core-tests-required",
-            "label": "Core tests that must pass",
+            "id": "cash-tests-required",
+            "label": "Cash tests that must pass, of two",
             "unit": "count"
            },
            "absent": null
           },
-          "members": 9,
-          "tested": 9,
+          "members": 2,
+          "tested": 2,
           "passed": 0,
           "failed": 0,
-          "unknown": 9,
+          "unknown": 2,
+          "outcome": "unknown"
+         },
+         {
+          "id": "growth",
+          "name": "Whether it is still growing",
+          "requires": "at_least",
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 1,
+           "threshold_from": {
+            "kind": "value",
+            "id": "growth-tests-required",
+            "label": "Growth tests that must pass, of two",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "members": 2,
+          "tested": 2,
+          "passed": 0,
+          "failed": 0,
+          "unknown": 2,
+          "outcome": "unknown"
+         },
+         {
+          "id": "pricing",
+          "name": "Whether it sets its own prices",
+          "requires": "all",
+          "test": null,
+          "members": 1,
+          "tested": 1,
+          "passed": 0,
+          "failed": 0,
+          "unknown": 1,
+          "outcome": "unknown"
+         },
+         {
+          "id": "allocation",
+          "name": "What management does with the money",
+          "requires": "all",
+          "test": null,
+          "members": 2,
+          "tested": 2,
+          "passed": 0,
+          "failed": 0,
+          "unknown": 2,
           "outcome": "unknown"
          },
          {
@@ -5452,11 +6241,11 @@
           "name": "Reported, never blocking",
           "requires": "noted",
           "test": null,
-          "members": 4,
-          "tested": 4,
+          "members": 5,
+          "tested": 5,
           "passed": 0,
           "failed": 0,
-          "unknown": 4,
+          "unknown": 5,
           "outcome": "noted"
          }
         ],
@@ -5466,16 +6255,16 @@
        "strategy": {
         "id": "buffett",
         "name": "Buffett",
-        "version": 3,
-        "values_version": 1,
+        "version": 5,
+        "values_version": 3,
         "contract": 5
        }
       },
       "strategy": {
        "id": "buffett",
        "name": "Buffett",
-       "version": 3,
-       "values_version": 1,
+       "version": 5,
+       "values_version": 3,
        "contract": 5
       },
       "metrics": {},
@@ -5491,7 +6280,7 @@
        "priced": null,
        "manual_on_record": [],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2023-02-14 could be consulted; judged by Buffett v3 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; this journal was created on 2024-01-02, so it held no answers on 2023-02-14 — free cash, and every figure measured against the account, are absent rather than taken from what you have told it since"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2023-02-14 could be consulted; judged by Buffett v5 as it stands today (values v3) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; this journal was created on 2024-01-02, so it held no answers on 2023-02-14 — free cash, and every figure measured against the account, are absent rather than taken from what you have told it since"
       },
       "thesis": null,
       "valuation": null,
@@ -5556,96 +6345,108 @@
     },
     {
      "seq": 2,
-     "id": "total_debt_to_ebitda",
-     "value": 1.2,
+     "id": "total_debt_to_avg_fcf_5y",
+     "value": 1.6,
      "recorded": "2026-08-04T12:00:00-04:00"
     },
     {
      "seq": 3,
-     "id": "owner_earnings_yield",
+     "id": "owner_earnings_yield_on_ev",
      "value": 5.6,
      "recorded": "2026-08-04T12:00:00-04:00"
     },
     {
      "seq": 4,
+     "id": "incremental_roic_5y",
+     "value": 22.0,
+     "recorded": "2026-08-04T12:00:00-04:00"
+    },
+    {
+     "seq": 5,
      "id": "interest_coverage",
      "value": 15.0,
      "recorded": "2026-08-04T12:00:00-04:00"
     },
     {
-     "seq": 5,
-     "id": "gross_margin_range_5y",
-     "value": 2.2,
+     "seq": 6,
+     "id": "roe_minus_roic_gap_5y",
+     "value": 5.4,
      "recorded": "2026-08-04T12:00:00-04:00"
     },
     {
-     "seq": 6,
+     "seq": 7,
      "id": "fcf_margin_median_5y",
      "value": 18.0,
      "recorded": "2026-08-04T12:00:00-04:00"
     },
     {
-     "seq": 7,
+     "seq": 8,
      "id": "cash_conversion_median_5y",
      "value": 1.02,
      "recorded": "2026-08-04T12:00:00-04:00"
     },
     {
-     "seq": 8,
-     "id": "diluted_share_count_change_5y",
-     "value": -5.0,
-     "recorded": "2026-08-04T12:00:00-04:00"
-    },
-    {
      "seq": 9,
-     "id": "roe_median_5y",
-     "value": 26.0,
-     "recorded": "2026-08-04T12:00:00-04:00"
-    },
-    {
-     "seq": 10,
      "id": "revenue_cagr_5y",
      "value": 5.8,
      "recorded": "2026-08-04T12:00:00-04:00"
     },
     {
-     "seq": 11,
+     "seq": 10,
      "id": "ni_minus_revenue_cagr_spread_5y",
      "value": 1.5,
      "recorded": "2026-08-04T12:00:00-04:00"
     },
     {
+     "seq": 11,
+     "id": "gross_margin_range_relative_5y",
+     "value": 2.2,
+     "recorded": "2026-08-04T12:00:00-04:00"
+    },
+    {
      "seq": 12,
-     "id": "goodwill_intangibles_to_assets",
-     "value": 9.0,
+     "id": "diluted_share_count_change_5y",
+     "value": -5.0,
      "recorded": "2026-08-04T12:00:00-04:00"
     },
     {
      "seq": 13,
+     "id": "goodwill_impairment_to_equity_5y",
+     "value": 0.0,
+     "recorded": "2026-08-04T12:00:00-04:00"
+    },
+    {
+     "seq": 14,
+     "id": "total_debt_to_ebitda",
+     "value": 1.2,
+     "recorded": "2026-08-04T12:00:00-04:00"
+    },
+    {
+     "seq": 15,
      "id": "effective_tax_rate_median_5y",
      "value": 22.0,
      "recorded": "2026-08-04T12:00:00-04:00"
     },
     {
-     "seq": 14,
+     "seq": 16,
      "id": "current_ratio",
      "value": 1.1,
      "recorded": "2026-08-04T12:00:00-04:00"
     },
     {
-     "seq": 15,
+     "seq": 17,
      "id": "payout_to_fcf_median_5y",
      "value": 58.0,
      "recorded": "2026-08-04T12:00:00-04:00"
     },
     {
-     "seq": 16,
+     "seq": 18,
      "id": "fcf_margin_ttm",
      "value": 17.0,
      "recorded": "2026-08-04T12:00:00-04:00"
     },
     {
-     "seq": 17,
+     "seq": 19,
      "id": "diluted_share_count_change_3y",
      "value": -3.0,
      "recorded": "2026-08-04T12:00:00-04:00"
@@ -5676,96 +6477,108 @@
     },
     {
      "seq": 2,
-     "id": "total_debt_to_ebitda",
-     "value": 1.2,
+     "id": "total_debt_to_avg_fcf_5y",
+     "value": 1.6,
      "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 3,
-     "id": "owner_earnings_yield",
+     "id": "owner_earnings_yield_on_ev",
      "value": 5.2,
      "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 4,
+     "id": "incremental_roic_5y",
+     "value": 22.0,
+     "recorded": "2026-08-05T12:00:00-04:00"
+    },
+    {
+     "seq": 5,
      "id": "interest_coverage",
      "value": 15.0,
      "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
-     "seq": 5,
-     "id": "gross_margin_range_5y",
-     "value": 2.8,
+     "seq": 6,
+     "id": "roe_minus_roic_gap_5y",
+     "value": 4.4,
      "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
-     "seq": 6,
+     "seq": 7,
      "id": "fcf_margin_median_5y",
      "value": 18.0,
      "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
-     "seq": 7,
+     "seq": 8,
      "id": "cash_conversion_median_5y",
      "value": 1.02,
      "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
-     "seq": 8,
-     "id": "diluted_share_count_change_5y",
-     "value": -5.0,
-     "recorded": "2026-08-05T12:00:00-04:00"
-    },
-    {
      "seq": 9,
-     "id": "roe_median_5y",
-     "value": 22.5,
-     "recorded": "2026-08-05T12:00:00-04:00"
-    },
-    {
-     "seq": 10,
      "id": "revenue_cagr_5y",
      "value": 7.4,
      "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
-     "seq": 11,
+     "seq": 10,
      "id": "ni_minus_revenue_cagr_spread_5y",
      "value": 1.5,
      "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
+     "seq": 11,
+     "id": "gross_margin_range_relative_5y",
+     "value": 5.2,
+     "recorded": "2026-08-05T12:00:00-04:00"
+    },
+    {
      "seq": 12,
-     "id": "goodwill_intangibles_to_assets",
-     "value": 9.0,
+     "id": "diluted_share_count_change_5y",
+     "value": -5.0,
      "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 13,
+     "id": "goodwill_impairment_to_equity_5y",
+     "value": 0.0,
+     "recorded": "2026-08-05T12:00:00-04:00"
+    },
+    {
+     "seq": 14,
+     "id": "total_debt_to_ebitda",
+     "value": 1.2,
+     "recorded": "2026-08-05T12:00:00-04:00"
+    },
+    {
+     "seq": 15,
      "id": "effective_tax_rate_median_5y",
      "value": 22.0,
      "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
-     "seq": 14,
+     "seq": 16,
      "id": "current_ratio",
      "value": 1.1,
      "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
-     "seq": 15,
+     "seq": 17,
      "id": "payout_to_fcf_median_5y",
      "value": 58.0,
      "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
-     "seq": 16,
+     "seq": 18,
      "id": "fcf_margin_ttm",
      "value": 17.0,
      "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
-     "seq": 17,
+     "seq": 19,
      "id": "diluted_share_count_change_3y",
      "value": -3.0,
      "recorded": "2026-08-05T12:00:00-04:00"
@@ -5818,96 +6631,108 @@
     },
     {
      "seq": 2,
-     "id": "total_debt_to_ebitda",
-     "value": 1.2,
+     "id": "total_debt_to_avg_fcf_5y",
+     "value": 1.6,
      "recorded": "2026-08-03T12:00:00-04:00"
     },
     {
      "seq": 3,
-     "id": "owner_earnings_yield",
+     "id": "owner_earnings_yield_on_ev",
      "value": 6.4,
      "recorded": "2026-08-03T12:00:00-04:00"
     },
     {
      "seq": 4,
+     "id": "incremental_roic_5y",
+     "value": 22.0,
+     "recorded": "2026-08-03T12:00:00-04:00"
+    },
+    {
+     "seq": 5,
      "id": "interest_coverage",
      "value": 15.0,
      "recorded": "2026-08-03T12:00:00-04:00"
     },
     {
-     "seq": 5,
-     "id": "gross_margin_range_5y",
-     "value": 4.4,
+     "seq": 6,
+     "id": "roe_minus_roic_gap_5y",
+     "value": 2.9,
      "recorded": "2026-08-03T12:00:00-04:00"
     },
     {
-     "seq": 6,
+     "seq": 7,
      "id": "fcf_margin_median_5y",
      "value": 18.0,
      "recorded": "2026-08-03T12:00:00-04:00"
     },
     {
-     "seq": 7,
+     "seq": 8,
      "id": "cash_conversion_median_5y",
      "value": 1.02,
      "recorded": "2026-08-03T12:00:00-04:00"
     },
     {
-     "seq": 8,
-     "id": "diluted_share_count_change_5y",
-     "value": -5.0,
-     "recorded": "2026-08-03T12:00:00-04:00"
-    },
-    {
      "seq": 9,
-     "id": "roe_median_5y",
-     "value": 20.1,
-     "recorded": "2026-08-03T12:00:00-04:00"
-    },
-    {
-     "seq": 10,
      "id": "revenue_cagr_5y",
      "value": 9.2,
      "recorded": "2026-08-03T12:00:00-04:00"
     },
     {
-     "seq": 11,
+     "seq": 10,
      "id": "ni_minus_revenue_cagr_spread_5y",
      "value": 1.5,
      "recorded": "2026-08-03T12:00:00-04:00"
     },
     {
+     "seq": 11,
+     "id": "gross_margin_range_relative_5y",
+     "value": 4.4,
+     "recorded": "2026-08-03T12:00:00-04:00"
+    },
+    {
      "seq": 12,
-     "id": "goodwill_intangibles_to_assets",
-     "value": 9.0,
+     "id": "diluted_share_count_change_5y",
+     "value": -5.0,
      "recorded": "2026-08-03T12:00:00-04:00"
     },
     {
      "seq": 13,
+     "id": "goodwill_impairment_to_equity_5y",
+     "value": 0.0,
+     "recorded": "2026-08-03T12:00:00-04:00"
+    },
+    {
+     "seq": 14,
+     "id": "total_debt_to_ebitda",
+     "value": 1.2,
+     "recorded": "2026-08-03T12:00:00-04:00"
+    },
+    {
+     "seq": 15,
      "id": "effective_tax_rate_median_5y",
      "value": 22.0,
      "recorded": "2026-08-03T12:00:00-04:00"
     },
     {
-     "seq": 14,
+     "seq": 16,
      "id": "current_ratio",
      "value": 1.1,
      "recorded": "2026-08-03T12:00:00-04:00"
     },
     {
-     "seq": 15,
+     "seq": 17,
      "id": "payout_to_fcf_median_5y",
      "value": 58.0,
      "recorded": "2026-08-03T12:00:00-04:00"
     },
     {
-     "seq": 16,
+     "seq": 18,
      "id": "fcf_margin_ttm",
      "value": 17.0,
      "recorded": "2026-08-03T12:00:00-04:00"
     },
     {
-     "seq": 17,
+     "seq": 19,
      "id": "diluted_share_count_change_3y",
      "value": -3.0,
      "recorded": "2026-08-03T12:00:00-04:00"
@@ -5938,96 +6763,108 @@
     },
     {
      "seq": 2,
-     "id": "total_debt_to_ebitda",
+     "id": "total_debt_to_avg_fcf_5y",
      "value": 2.9,
      "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 3,
-     "id": "owner_earnings_yield",
+     "id": "owner_earnings_yield_on_ev",
      "value": 8.8,
      "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 4,
+     "id": "incremental_roic_5y",
+     "value": 22.0,
+     "recorded": "2026-08-02T12:00:00-04:00"
+    },
+    {
+     "seq": 5,
      "id": "interest_coverage",
      "value": 5.2,
      "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
-     "seq": 5,
-     "id": "gross_margin_range_5y",
-     "value": 7.8,
+     "seq": 6,
+     "id": "roe_minus_roic_gap_5y",
+     "value": 2.3,
      "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
-     "seq": 6,
+     "seq": 7,
      "id": "fcf_margin_median_5y",
      "value": 4.0,
      "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
-     "seq": 7,
+     "seq": 8,
      "id": "cash_conversion_median_5y",
      "value": 1.02,
      "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
-     "seq": 8,
-     "id": "diluted_share_count_change_5y",
-     "value": -5.0,
-     "recorded": "2026-08-02T12:00:00-04:00"
-    },
-    {
      "seq": 9,
-     "id": "roe_median_5y",
-     "value": 9.4,
-     "recorded": "2026-08-02T12:00:00-04:00"
-    },
-    {
-     "seq": 10,
      "id": "revenue_cagr_5y",
      "value": 3.1,
      "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
-     "seq": 11,
+     "seq": 10,
      "id": "ni_minus_revenue_cagr_spread_5y",
      "value": 1.5,
      "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
+     "seq": 11,
+     "id": "gross_margin_range_relative_5y",
+     "value": 7.8,
+     "recorded": "2026-08-02T12:00:00-04:00"
+    },
+    {
      "seq": 12,
-     "id": "goodwill_intangibles_to_assets",
-     "value": 9.0,
+     "id": "diluted_share_count_change_5y",
+     "value": -5.0,
      "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 13,
+     "id": "goodwill_impairment_to_equity_5y",
+     "value": 0.0,
+     "recorded": "2026-08-02T12:00:00-04:00"
+    },
+    {
+     "seq": 14,
+     "id": "total_debt_to_ebitda",
+     "value": 1.2,
+     "recorded": "2026-08-02T12:00:00-04:00"
+    },
+    {
+     "seq": 15,
      "id": "effective_tax_rate_median_5y",
      "value": 22.0,
      "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
-     "seq": 14,
+     "seq": 16,
      "id": "current_ratio",
      "value": 1.1,
      "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
-     "seq": 15,
+     "seq": 17,
      "id": "payout_to_fcf_median_5y",
      "value": 58.0,
      "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
-     "seq": 16,
+     "seq": 18,
      "id": "fcf_margin_ttm",
      "value": 3.6,
      "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
-     "seq": 17,
+     "seq": 19,
      "id": "diluted_share_count_change_3y",
      "value": -3.0,
      "recorded": "2026-08-02T12:00:00-04:00"
@@ -6052,38 +6889,38 @@
    "hand_entered": [
     {
      "seq": 1,
-     "id": "total_debt_to_ebitda",
-     "value": 1.2,
+     "id": "total_debt_to_avg_fcf_5y",
+     "value": 1.6,
      "recorded": "2026-08-01T12:00:00-04:00"
     },
     {
      "seq": 2,
+     "id": "incremental_roic_5y",
+     "value": 22.0,
+     "recorded": "2026-08-01T12:00:00-04:00"
+    },
+    {
+     "seq": 3,
      "id": "interest_coverage",
      "value": 15.0,
      "recorded": "2026-08-01T12:00:00-04:00"
     },
     {
-     "seq": 3,
+     "seq": 4,
+     "id": "roe_minus_roic_gap_5y",
+     "value": 3.0,
+     "recorded": "2026-08-01T12:00:00-04:00"
+    },
+    {
+     "seq": 5,
      "id": "fcf_margin_median_5y",
      "value": 18.0,
      "recorded": "2026-08-01T12:00:00-04:00"
     },
     {
-     "seq": 4,
+     "seq": 6,
      "id": "cash_conversion_median_5y",
      "value": 1.02,
-     "recorded": "2026-08-01T12:00:00-04:00"
-    },
-    {
-     "seq": 5,
-     "id": "diluted_share_count_change_5y",
-     "value": -5.0,
-     "recorded": "2026-08-01T12:00:00-04:00"
-    },
-    {
-     "seq": 6,
-     "id": "roe_median_5y",
-     "value": 21.0,
      "recorded": "2026-08-01T12:00:00-04:00"
     },
     {
@@ -6100,36 +6937,48 @@
     },
     {
      "seq": 9,
-     "id": "goodwill_intangibles_to_assets",
-     "value": 9.0,
+     "id": "diluted_share_count_change_5y",
+     "value": -5.0,
      "recorded": "2026-08-01T12:00:00-04:00"
     },
     {
      "seq": 10,
+     "id": "goodwill_impairment_to_equity_5y",
+     "value": 0.0,
+     "recorded": "2026-08-01T12:00:00-04:00"
+    },
+    {
+     "seq": 11,
+     "id": "total_debt_to_ebitda",
+     "value": 1.2,
+     "recorded": "2026-08-01T12:00:00-04:00"
+    },
+    {
+     "seq": 12,
      "id": "effective_tax_rate_median_5y",
      "value": 22.0,
      "recorded": "2026-08-01T12:00:00-04:00"
     },
     {
-     "seq": 11,
+     "seq": 13,
      "id": "current_ratio",
      "value": 1.1,
      "recorded": "2026-08-01T12:00:00-04:00"
     },
     {
-     "seq": 12,
+     "seq": 14,
      "id": "payout_to_fcf_median_5y",
      "value": 58.0,
      "recorded": "2026-08-01T12:00:00-04:00"
     },
     {
-     "seq": 13,
+     "seq": 15,
      "id": "fcf_margin_ttm",
      "value": 17.0,
      "recorded": "2026-08-01T12:00:00-04:00"
     },
     {
-     "seq": 14,
+     "seq": 16,
      "id": "diluted_share_count_change_3y",
      "value": -3.0,
      "recorded": "2026-08-01T12:00:00-04:00"

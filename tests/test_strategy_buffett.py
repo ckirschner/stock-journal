@@ -38,25 +38,46 @@ from engine import strategy_loader, strategy_values
 
 QUALITATIVE = ("moat_durability", "management_integrity", "capital_allocation")
 
-MEASURES = ("roic_median_5y", "total_debt_to_ebitda", "owner_earnings_yield",
-            "interest_coverage", "gross_margin_range_5y",
+MEASURES = ("roic_median_5y", "total_debt_to_avg_fcf_5y",
+            "owner_earnings_yield_on_ev",
+            "incremental_roic_5y",
+            "interest_coverage", "roe_minus_roic_gap_5y",
             "fcf_margin_median_5y", "cash_conversion_median_5y",
-            "diluted_share_count_change_5y", "roe_median_5y",
             "revenue_cagr_5y", "ni_minus_revenue_cagr_spread_5y",
-            "goodwill_intangibles_to_assets", "effective_tax_rate_median_5y",
+            "gross_margin_range_relative_5y",
+            "diluted_share_count_change_5y",
+            "goodwill_impairment_to_equity_5y",
+            "total_debt_to_ebitda", "effective_tax_rate_median_5y",
             "current_ratio", "payout_to_fcf_median_5y", "fcf_margin_ttm",
             "diluted_share_count_change_3y")
+
+# Which group each entry measure is cited under, so a test can say "make this
+# dimension fail" without restating the strategy's own arrangement. The point
+# of the arrangement is that the dimensions are separable, and a test that
+# hard-codes which measure sits where would not notice one moving.
+DIMENSION_OF = {
+    "incremental_roic_5y": "returns",
+    "interest_coverage": "leverage", "roe_minus_roic_gap_5y": "leverage",
+    "fcf_margin_median_5y": "cash", "cash_conversion_median_5y": "cash",
+    "revenue_cagr_5y": "growth", "ni_minus_revenue_cagr_spread_5y": "growth",
+    "gross_margin_range_relative_5y": "pricing",
+    "diluted_share_count_change_5y": "allocation",
+    "goodwill_impairment_to_equity_5y": "allocation",
+}
 
 # A business that clears every entry test. Invented, like everything else
 # presented as an example here.
 CLEARS_ENTRY = {
-    "roic_median_5y": 18.9, "total_debt_to_ebitda": 1.4,
-    "owner_earnings_yield": 6.2, "interest_coverage": 14.0,
-    "gross_margin_range_5y": 3.1, "fcf_margin_median_5y": 17.0,
-    "cash_conversion_median_5y": 1.05, "diluted_share_count_change_5y": -6.0,
-    "roe_median_5y": 22.0, "revenue_cagr_5y": 7.0,
-    "ni_minus_revenue_cagr_spread_5y": 1.8,
-    "goodwill_intangibles_to_assets": 12.0,
+    "roic_median_5y": 18.9, "total_debt_to_avg_fcf_5y": 1.4,
+    "owner_earnings_yield_on_ev": 6.2,
+    "incremental_roic_5y": 24.0,
+    "interest_coverage": 14.0, "roe_minus_roic_gap_5y": 3.1,
+    "fcf_margin_median_5y": 17.0, "cash_conversion_median_5y": 1.05,
+    "revenue_cagr_5y": 7.0, "ni_minus_revenue_cagr_spread_5y": 1.8,
+    "gross_margin_range_relative_5y": 4.4,
+    "diluted_share_count_change_5y": -6.0,
+    "goodwill_impairment_to_equity_5y": 0.0,
+    "total_debt_to_ebitda": 1.1,
     "effective_tax_rate_median_5y": 21.0, "current_ratio": 1.3,
     "payout_to_fcf_median_5y": 55.0,
 }
@@ -237,26 +258,42 @@ class TestTheThresholdsAreTheReports:
     project exists to catch, so the expected figures are typed out here."""
 
     REPORT = {
-        "core-tests-required": 7,
-        "min-roic": 15, "max-debt-to-ebitda": 2.5,
-        "min-owner-earnings-yield": 5,
-        "min-interest-coverage": 8, "max-gross-margin-range": 6,
+        "min-roic": 15, "min-owner-earnings-yield": 5,
+        "min-interest-coverage": 8,
         "min-fcf-margin": 10, "min-cash-conversion": 0.90,
-        "max-share-count-change": 0, "min-roe": 15, "min-revenue-cagr": 4,
-        "min-profit-growth-spread": -1, "max-goodwill-to-assets": 40,
-        "min-effective-tax-rate": 10, "max-effective-tax-rate": 35,
+        "max-share-count-change": 0, "min-revenue-cagr": 4,
+        "min-profit-growth-spread": -1,
+        "max-debt-to-ebitda": 2.5,
         "min-current-ratio": 1.0, "max-payout-to-fcf": 80,
         "exit-roic-fall": -33, "exit-roic-level": 12,
-        "exit-debt-to-ebitda": 4.0, "exit-interest-coverage": 4,
+        "exit-interest-coverage": 4,
         "exit-fcf-margin": 0, "exit-share-count-change": 10,
     }
 
-    # Not the report's. The report was scoped to selection and to exits.
+    # The seven the second review overruled the report on. Typed out here for
+    # the same reason the report's are: these are the levels somebody
+    # deliberately moved, so a later quiet move back has to break something.
+    REVIEW = {
+        "max-debt-to-fcf": 3.0, "min-incremental-roic": 15,
+        "max-roe-roic-gap": 10, "max-gross-margin-swing": 15,
+        "max-goodwill-written-off": 5,
+        "min-effective-tax-rate": 12, "max-effective-tax-rate": 28,
+    }
+
+    # Not either source's. Neither was asked how much to buy.
     PRACTICE = {"portfolio-slots": 10, "position-weight-cap": 40}
+
+    # Nobody's but this file's, and the ones to argue with hardest.
+    AUTHOR = {"cash-tests-required": 1, "growth-tests-required": 1,
+              "exit-debt-to-fcf": 5.0}
 
     def test_every_level_is_what_the_source_says(self, buffett):
         shipped = values_for(buffett)
         assert {k: shipped[k] for k in self.REPORT} == self.REPORT
+
+    def test_every_level_the_review_moved_is_where_it_put_it(self, buffett):
+        shipped = values_for(buffett)
+        assert {k: shipped[k] for k in self.REVIEW} == self.REVIEW
 
     def test_sizing_is_buffetts_practice_and_says_so(self, buffett):
         shipped = values_for(buffett)
@@ -268,41 +305,88 @@ class TestTheThresholdsAreTheReports:
                 assert "says nothing whatever about how much to buy" in \
                     v["source"]["name"]
 
-    def test_the_report_is_not_claimed_for_what_it_did_not_say(self, buffett):
-        """Two values, and only two, are attributed to somewhere other than
-        the report. Every other one names the report, so a value added later
-        without provenance cannot hide in the count."""
-        by_source = {}
+    def test_what_has_no_source_says_it_has_no_source(self, buffett):
+        """The three values with nothing behind them are the three most
+        likely to be mistaken for someone's published figure, so each has to
+        say plainly that it is not one."""
+        shipped = values_for(buffett)
+        assert {k: shipped[k] for k in self.AUTHOR} == self.AUTHOR
         for v in buffett["values"]:
-            by_source.setdefault(v["source"]["name"].split(" —")[0]
-                                 .split(",")[0], []).append(v["id"])
-        practice = [ids for name, ids in by_source.items()
-                    if name.startswith("Buffett's own")]
-        assert practice and sorted(practice[0]) == sorted(self.PRACTICE)
+            if v["id"] in self.AUTHOR:
+                assert "this strategy's own author" in v["source"]["name"]
+                assert "none is\nclaimed for it" in v["source"]["name"] \
+                    or "none is claimed for it" in " ".join(
+                        v["source"]["name"].split())
+
+    def test_every_value_belongs_to_exactly_one_of_the_four_sources(
+            self, buffett):
+        """Four groups, and the four together are the whole list. A value
+        added later without provenance cannot hide inside one of them, and a
+        value that quietly changes source is a different claim about who
+        stands behind the number."""
+        buckets = {"report": self.REPORT, "review": self.REVIEW,
+                   "practice": self.PRACTICE, "author": self.AUTHOR}
+
+        def which(v):
+            name = " ".join(v["source"]["name"].split())
+            if name.startswith("Buffett's own"):
+                return "practice"
+            if name.startswith("this strategy's own author"):
+                return "author"
+            if name.startswith("the second expert review"):
+                return "review"
+            if name.startswith("the expert report"):
+                return "report"
+            raise AssertionError(f'{v["id"]} names an unknown source: {name}')
+
+        found = {}
+        for v in buffett["values"]:
+            found.setdefault(which(v), []).append(v["id"])
+        assert sorted(found) == sorted(buckets)
+        for key, expected in buckets.items():
+            assert sorted(found[key]) == sorted(expected), key
 
     def test_the_file_counts_its_own_thresholds_correctly(self, buffett):
-        """The module docstring makes a counting claim about provenance, and
-        a claim made once at the top of a file is exactly the kind nobody
-        rechecks when the twenty-eighth value is added."""
+        """The module docstring makes counting claims about provenance, and a
+        claim made once at the top of a file is exactly the kind nobody
+        rechecks when the twenty-ninth value is added.
+
+        All four counts, not just the report's. The one that would have gone
+        stale silently before is the review's — it is the newest, it is the
+        one a later correction would grow, and it is the count a reader uses
+        to judge how much of this file is still the document it names.
+        """
         import re
         doc = open(buffett["dir"] + "/strategy.py",
                    encoding="utf-8").read().split('"""')[1]
+        words = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five",
+                 6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten",
+                 11: "eleven", 12: "twelve", 13: "thirteen",
+                 14: "fourteen", 15: "fifteen", 16: "sixteen",
+                 17: "seventeen", 18: "eighteen", 19: "nineteen",
+                 20: "twenty", 21: "twenty-one", 22: "twenty-two",
+                 23: "twenty-three", 24: "twenty-four", 25: "twenty-five",
+                 26: "twenty-six", 27: "twenty-seven", 28: "twenty-eight",
+                 29: "twenty-nine", 30: "thirty", 31: "thirty-one",
+                 32: "thirty-two", 33: "thirty-three"}
+
         claim = re.search(r"([\w-]+) of the ([\w-]+)\s+thresholds below", doc)
         assert claim, "the docstring no longer states a threshold count"
-
-        words = {22: "twenty-two", 23: "twenty-three",
-                 24: "twenty-four",
-                 25: "twenty-five", 26: "twenty-six", 27: "twenty-seven",
-                 28: "twenty-eight", 29: "twenty-nine", 30: "thirty",
-                 31: "thirty-one", 32: "thirty-two", 33: "thirty-three"}
         total = len(buffett["values"])
-        practice = len([v for v in buffett["values"]
-                        if v["source"]["name"].startswith("Buffett's own")])
         assert claim.group(2).lower() == words[total], \
             f"docstring says {claim.group(2)} values; there are {total}"
-        assert claim.group(1).lower() == words[total - practice], \
+        assert claim.group(1).lower() == words[len(self.REPORT)], \
             (f"docstring credits {claim.group(1)} to the report; "
-             f"{total - practice} name it")
+             f"{len(self.REPORT)} name it")
+
+        for count, phrase in ((len(self.REVIEW), "are the second expert "
+                                                 "review's"),
+                              (len(self.PRACTICE), "come from Buffett's own"),
+                              (len(self.AUTHOR), "are nobody's but this "
+                                                 "file's author's")):
+            wanted = f"{words[count].capitalize()} {phrase}"
+            assert wanted in " ".join(doc.split()), \
+                f"the docstring does not say: {wanted}"
 
     def test_every_declared_value_ships_a_default_and_is_explained(
             self, buffett):
@@ -388,7 +472,8 @@ class TestAQuestionNobodyAnsweredIsNeverAPass:
         assert out["state"]["id"] == "judgement-owed"
         assert out["render"] == "blocked"
         assert rollup(out)["knockouts"]["outcome"] == "pass"
-        assert rollup(out)["core"]["passed"] == 9
+        assert all(rollup(out)[g]["outcome"] == "pass"
+                   for g in set(DIMENSION_OF.values()))
 
     def test_the_unanswered_questions_resolve_as_unknown_never_pass(
             self, buffett):
@@ -529,10 +614,10 @@ class TestABusinessThatStoppedBeingWonderful:
         evidence is the one to lead with."""
         out = verdict(
             buffett,
-            known={**CLEARS_EXITS, "total_debt_to_ebitda": 5.2},
+            known={**CLEARS_EXITS, "total_debt_to_avg_fcf_5y": 6.4},
             judged={**SAID_YES, "moat_durability": False},
             held=True, opened="2019-04-01", weight=14.0,
-            series={"total_debt_to_ebitda": [(q, 5.2) for q in QUARTERS]})
+            series={"total_debt_to_avg_fcf_5y": [(q, 6.4) for q in QUARTERS]})
         assert out["state"]["id"] == "business-broken"
         # And the mark is still on the screen, in a group demanding a pass.
         assert outcomes(out)["quality/moat_durability:equals"] == "fail"
@@ -546,23 +631,23 @@ class TestNothingFiresOnOneReading:
 
     def test_one_bad_reading_is_a_breach_and_not_an_exit(self, buffett):
         out = verdict(buffett, known={**CLEARS_EXITS,
-                                      "total_debt_to_ebitda": 5.2},
+                                      "total_debt_to_avg_fcf_5y": 6.4},
                       judged=SAID_YES, held=True, opened="2019-04-01",
                       weight=14.0,
-                      series={"total_debt_to_ebitda":
+                      series={"total_debt_to_avg_fcf_5y":
                               [(q, 1.4) for q in QUARTERS[:-1]]
-                              + [(QUARTERS[-1], 5.2)]})
+                              + [(QUARTERS[-1], 6.4)]})
         assert out["state"]["id"] == "one-reading-past"
         assert out["render"] == "hold"
 
     def test_two_bad_readings_end_it(self, buffett):
         out = verdict(buffett, known={**CLEARS_EXITS,
-                                      "total_debt_to_ebitda": 5.2},
+                                      "total_debt_to_avg_fcf_5y": 6.4},
                       judged=SAID_YES, held=True, opened="2019-04-01",
                       weight=14.0,
-                      series={"total_debt_to_ebitda":
+                      series={"total_debt_to_avg_fcf_5y":
                               [(q, 1.4) for q in QUARTERS[:-2]]
-                              + [(q, 5.2) for q in QUARTERS[-2:]]})
+                              + [(q, 6.4) for q in QUARTERS[-2:]]})
         assert out["state"]["id"] == "business-broken"
 
     def test_free_cash_flow_takes_two_filings_and_not_four_quarters(
@@ -624,9 +709,9 @@ class TestNothingFiresOnOneReading:
         one set of filings" whatever had happened — one rule speaking for
         five exits that are read three different ways."""
         debt = verdict(
-            buffett, known={**CLEARS_EXITS, "total_debt_to_ebitda": 5.2},
+            buffett, known={**CLEARS_EXITS, "total_debt_to_avg_fcf_5y": 6.4},
             judged=SAID_YES, held=True, opened="2019-04-01", weight=14.0,
-            series={"total_debt_to_ebitda": [(q, 5.2) for q in QUARTERS]},
+            series={"total_debt_to_avg_fcf_5y": [(q, 6.4) for q in QUARTERS]},
         )["reason"]["summary"]
         assert "on 2 consecutive filings" in debt
 
@@ -653,24 +738,24 @@ class TestNothingFiresOnOneReading:
         something nobody observed, and must not grant an indefinite reprieve
         either."""
         out = verdict(buffett, known={**CLEARS_EXITS,
-                                      "total_debt_to_ebitda": 5.2},
+                                      "total_debt_to_avg_fcf_5y": 6.4},
                       judged=SAID_YES, held=True, opened="2019-04-01",
                       weight=14.0,
-                      series={"total_debt_to_ebitda":
-                              [(QUARTERS[0], 1.4), (QUARTERS[1], 5.2),
-                               (QUARTERS[2], None), (QUARTERS[3], 5.2),
-                               (QUARTERS[4], 5.2)]})
+                      series={"total_debt_to_avg_fcf_5y":
+                              [(QUARTERS[0], 1.4), (QUARTERS[1], 6.4),
+                               (QUARTERS[2], None), (QUARTERS[3], 6.4),
+                               (QUARTERS[4], 6.4)]})
         assert out["state"]["id"] == "business-broken"
 
     def test_absence_never_fires_an_exit(self, buffett):
         """A missing reading is not evidence a company is in trouble, and
         this program does not sell on silence."""
         out = verdict(buffett, known={k: v for k, v in CLEARS_EXITS.items()
-                                      if k != "total_debt_to_ebitda"},
+                                      if k != "total_debt_to_avg_fcf_5y"},
                       judged=SAID_YES, held=True, opened="2019-04-01",
                       weight=14.0)
         assert out["state"]["id"] != "business-broken"
-        assert outcomes(out)["decay/total_debt_to_ebitda:at_most"] == "unknown"
+        assert outcomes(out)["decay/total_debt_to_avg_fcf_5y:at_most"] == "unknown"
 
     def test_no_exit_readable_at_all_says_so(self, buffett):
         out = verdict(buffett, known={}, judged=SAID_YES, held=True,
@@ -774,11 +859,11 @@ class TestTheFallInReturnsIsProportional:
             "decay/roic_median_5y:at_least"] == "pass"
         assert outcomes(at(roic_median_5y=11.99))[
             "decay/roic_median_5y:at_least"] == "fail"
-        # "greater_than 4.0" — 4.0 exactly does not fire.
-        assert outcomes(at(total_debt_to_ebitda=4.0))[
-            "decay/total_debt_to_ebitda:at_most"] == "pass"
-        assert outcomes(at(total_debt_to_ebitda=4.01))[
-            "decay/total_debt_to_ebitda:at_most"] == "fail"
+        # "greater_than 5.0" — 5.0 exactly does not fire.
+        assert outcomes(at(total_debt_to_avg_fcf_5y=5.0))[
+            "decay/total_debt_to_avg_fcf_5y:at_most"] == "pass"
+        assert outcomes(at(total_debt_to_avg_fcf_5y=5.01))[
+            "decay/total_debt_to_avg_fcf_5y:at_most"] == "fail"
         # "less_than 4" — 4 exactly does not fire.
         assert outcomes(at(interest_coverage=4.0))[
             "decay/interest_coverage:at_least"] == "pass"
@@ -896,22 +981,22 @@ class TestHowMuchAndHowMany:
         """Not a softer set because you already own it and not a harder one
         because you are averaging in."""
         out = verdict(buffett,
-                      known={**CLEARS_EXITS, "owner_earnings_yield": 3.1},
+                      known={**CLEARS_EXITS, "owner_earnings_yield_on_ev": 3.1},
                       judged=SAID_YES, held=True, opened="2019-04-01",
                       weight=14.0)
         assert out["state"]["id"] == "hold"
         assert out["reason"]["rule"] == "would-not-buy-it-today"
-        assert outcomes(out)["knockouts/owner_earnings_yield:at_least"] == \
-            "fail"
+        assert outcomes(out)[
+            "knockouts/owner_earnings_yield_on_ev:at_least"] == "fail"
 
     def test_a_screen_that_did_not_finish_is_not_a_passing_one(self, buffett):
-        """A knockout nobody could read. Note it has to be a knockout: one
-        unreadable core test out of nine still leaves eight passing against a
-        bar of seven, and a screen that reached its bar without it has
-        finished."""
+        """A knockout nobody could read. Note it has to be a knockout, or
+        one of the rows a question depends on alone: an unreadable row beside
+        a passing one in the same near-duplicate pair still answers that
+        question, and a screen that answered all six has finished."""
         out = verdict(buffett,
                       known={k: v for k, v in CLEARS_EXITS.items()
-                             if k != "owner_earnings_yield"},
+                             if k != "owner_earnings_yield_on_ev"},
                       judged=SAID_YES, held=True, opened="2019-04-01",
                       weight=14.0)
         assert out["state"]["id"] == "hold"
@@ -919,10 +1004,11 @@ class TestHowMuchAndHowMany:
 
     def test_one_unreadable_core_test_does_not_stop_an_add(self, buffett):
         """The other side of the same rule, and the reason the one above
-        names a knockout. Seven of nine were needed and eight passed."""
+        names a knockout. One row of a near-duplicate pair is unreadable and
+        the other passes, so its question is still answered."""
         out = verdict(buffett,
                       known={k: v for k, v in CLEARS_EXITS.items()
-                             if k != "goodwill_intangibles_to_assets"},
+                             if k != "cash_conversion_median_5y"},
                       judged=SAID_YES, held=True, opened="2019-04-01",
                       weight=14.0)
         assert out["state"]["id"] == "room-for-more"
@@ -950,32 +1036,136 @@ class TestAbsenceIsNeverSuccessAndNeverFailure:
     def test_a_missing_knockout_cannot_be_bought_through(self, buffett):
         out = verdict(buffett,
                       known={k: v for k, v in CLEARS_ENTRY.items()
-                             if k != "total_debt_to_ebitda"},
+                             if k != "total_debt_to_avg_fcf_5y"},
                       judged=SAID_YES)
         assert out["state"]["id"] == "cannot-screen"
         assert rollup(out)["knockouts"]["outcome"] == "unknown"
 
-    def test_a_missing_core_test_that_cannot_change_the_answer_is_settled(
-            self, buffett):
-        """Seven of nine are needed. With three core tests failed outright,
-        seven is out of reach whatever the missing ones would have said, and
-        that is a no rather than a shrug."""
-        out = verdict(buffett, known={**CLEARS_ENTRY, "roe_median_5y": 4.0,
-                                      "revenue_cagr_5y": 0.5,
-                                      "interest_coverage": 2.0},
+    def test_a_dimension_that_cannot_be_answered_is_settled(self, buffett):
+        """A question about the business with no passing row under it is a
+        no, whatever else passed. Both rows about what the company owes fail
+        here, and nothing anywhere else can make up for it."""
+        out = verdict(buffett, known={**CLEARS_ENTRY,
+                                      "interest_coverage": 2.0,
+                                      "roe_minus_roic_gap_5y": 31.0},
                       judged=SAID_YES)
         assert out["state"]["id"] == "not-wonderful-enough"
-        assert out["reason"]["rule"] == "core-tests-short"
+        assert out["reason"]["rule"] == "dimension-short"
+        assert rollup(out)["leverage"]["outcome"] == "fail"
 
-    def test_two_core_failures_still_buy_it(self, buffett):
-        """Seven of nine, so two may fail. The verdict has to survive its own
-        failed rows without the host refusing it as a contradiction."""
-        out = verdict(buffett, known={**CLEARS_ENTRY, "roe_median_5y": 4.0,
-                                      "revenue_cagr_5y": 0.5},
+    def test_one_of_a_near_duplicate_pair_may_fail(self, buffett):
+        """The two cash tests are two readings of the same cash, so one of
+        them is the coverage statement. The verdict has to survive its own
+        failed row without the host refusing it as a contradiction."""
+        out = verdict(buffett,
+                      known={**CLEARS_ENTRY, "cash_conversion_median_5y": 0.4},
                       judged=SAID_YES)
         assert out["state"]["id"] == "wonderful-and-priced"
-        assert rollup(out)["core"]["passed"] == 7
-        assert rollup(out)["core"]["outcome"] == "pass"
+        assert rollup(out)["cash"]["passed"] == 1
+        assert rollup(out)["cash"]["outcome"] == "pass"
+
+
+class TestCoverageIsNotACount:
+    """The correction this version exists for, and the one thing here that
+    would go wrong silently if it regressed: a company must be strong across
+    dimensions, not strong in one dimension measured several ways.
+
+    The old arrangement was seven of nine. Under it, a company weak on what
+    it owes and on what it hands to employees could still buy, because four
+    passes from cash and growth and returns paid for them. That is the case
+    driven below, and it must now refuse.
+    """
+
+    def test_excellent_at_one_thing_no_longer_pays_for_the_rest(
+            self, buffett):
+        """Nine of the ten rows are exceptional and both rows under one
+        question fail. Under a seven-of-nine quota this bought. It must not
+        now, and the reason has to name the question rather than a count."""
+        out = verdict(buffett, known={**CLEARS_ENTRY,
+                                      "diluted_share_count_change_5y": 9.0,
+                                      "goodwill_impairment_to_equity_5y": 24.0},
+                      judged=SAID_YES)
+        assert out["state"]["id"] == "not-wonderful-enough"
+        assert "what management does with the money" in \
+            out["reason"]["summary"]
+        # And the count it would have cleared is stated, so nobody reads the
+        # refusal as the tests having gone badly across the board.
+        assert "8 of the 10 tests behind them passed" in \
+            out["reason"]["summary"]
+
+    def test_every_dimension_is_its_own_group_and_all_are_demanded(
+            self, buffett):
+        """Six questions, each declared to the host with its own requirement,
+        and not one of them `noted`. A dimension that demanded nothing would
+        be the quota back by another door — and the host would let a commit
+        stand beside its failures."""
+        out = verdict(buffett, known=CLEARS_ENTRY, judged=SAID_YES)
+        groups = rollup(out)
+        wanted = {"returns", "leverage", "cash", "growth", "pricing",
+                  "allocation"}
+        assert wanted <= set(groups)
+        for gid in wanted:
+            assert groups[gid]["requires"] in ("all", "at_least"), gid
+            assert groups[gid]["outcome"] == "pass", gid
+
+    def test_each_group_fails_on_its_own_and_takes_the_verdict_with_it(
+            self, buffett):
+        """Every dimension, driven short one at a time. Any of them alone has
+        to stop the purchase — which is the whole claim, and the claim would
+        be worth nothing if it held for five of the six."""
+        breaks = {
+            "returns": {"incremental_roic_5y": 2.0},
+            "leverage": {"interest_coverage": 2.0,
+                         "roe_minus_roic_gap_5y": 31.0},
+            "cash": {"fcf_margin_median_5y": 1.0,
+                     "cash_conversion_median_5y": 0.3},
+            "growth": {"revenue_cagr_5y": 0.5,
+                       "ni_minus_revenue_cagr_spread_5y": -9.0},
+            "pricing": {"gross_margin_range_relative_5y": 61.0},
+            "allocation": {"diluted_share_count_change_5y": 9.0},
+        }
+        assert set(breaks) == set(DIMENSION_OF.values())
+        for gid, over in breaks.items():
+            out = verdict(buffett, known={**CLEARS_ENTRY, **over},
+                          judged=SAID_YES)
+            assert out["state"]["id"] == "not-wonderful-enough", gid
+            assert rollup(out)[gid]["outcome"] == "fail", gid
+
+    def test_an_unreadable_dimension_is_undecided_and_not_refused(
+            self, buffett):
+        """Absence is neither. A question whose only row could not be worked
+        out has not been answered no — it has not been answered, and the
+        verdict says it cannot tell."""
+        out = verdict(buffett,
+                      known={k: v for k, v in CLEARS_ENTRY.items()
+                             if k != "gross_margin_range_relative_5y"},
+                      judged=SAID_YES)
+        assert out["state"]["id"] == "cannot-screen"
+        assert rollup(out)["pricing"]["outcome"] == "unknown"
+
+    def test_the_count_a_group_demands_is_the_one_the_host_reads(
+            self, buffett):
+        """A group's bar is cited from the strategy's own setting rather than
+        stated, so the number the strategy screened against and the number
+        the reader is shown cannot be two numbers."""
+        out = verdict(buffett, known=CLEARS_ENTRY, judged=SAID_YES)
+        for gid, setting in (("cash", "cash-tests-required"),
+                             ("growth", "growth-tests-required")):
+            group = rollup(out)[gid]
+            assert group["test"]["threshold_from"]["id"] == setting
+            assert group["test"]["threshold"] == values_for(buffett)[setting]
+
+    def test_raising_a_groups_bar_is_a_real_tightening(self, buffett):
+        """The settings do something. Demanding both cash readings refuses a
+        company that passes one — which is the user making the strategy
+        stricter, on the record, rather than a number that does nothing."""
+        weak = {**CLEARS_ENTRY, "cash_conversion_median_5y": 0.4}
+        assert verdict(buffett, known=weak,
+                       judged=SAID_YES)["state"]["id"] == \
+            "wonderful-and-priced"
+        assert verdict(buffett, known=weak, judged=SAID_YES,
+                       **{"cash-tests-required": 2})["state"]["id"] == \
+            "not-wonderful-enough"
 
     def test_a_failed_bonus_test_never_blocks(self, buffett):
         out = verdict(buffett, known={**CLEARS_ENTRY,
@@ -996,12 +1186,12 @@ class TestAbsenceIsNeverSuccessAndNeverFailure:
     def test_the_rollup_is_the_hosts_count_and_not_a_tally(self, buffett):
         out = verdict(buffett, known=CLEARS_ENTRY, judged=SAID_YES)
         groups, got = rollup(out), outcomes(out)
-        assert groups["core"]["tested"] == 9
-        assert groups["core"]["passed"] == sum(
-            1 for k, v in got.items() if k.startswith("core/") and v == "pass")
-        assert groups["core"]["test"]["threshold"] == 7
-        assert groups["core"]["test"]["threshold_from"]["id"] == \
-            "core-tests-required"
+        assert sum(groups[g]["tested"]
+                   for g in set(DIMENSION_OF.values())) == 10
+        for gid in set(DIMENSION_OF.values()):
+            assert groups[gid]["passed"] == sum(
+                1 for k, v in got.items()
+                if k.startswith(gid + "/") and v == "pass"), gid
 
 
 class TestEveryDeclaredStateIsReachable:
@@ -1026,18 +1216,18 @@ class TestEveryDeclaredStateIsReachable:
             verdict(buffett, known=CLEARS_EXITS, judged=SAID_YES, held=True,
                     opened="2019-04-01", weight=14.0)["state"]["id"],
             verdict(buffett, known={**CLEARS_EXITS,
-                                    "total_debt_to_ebitda": 5.2},
+                                    "total_debt_to_avg_fcf_5y": 6.4},
                     judged=SAID_YES, held=True, opened="2019-04-01",
                     weight=14.0,
-                    series={"total_debt_to_ebitda":
+                    series={"total_debt_to_avg_fcf_5y":
                             [(q, 1.4) for q in QUARTERS[:-1]]
-                            + [(QUARTERS[-1], 5.2)]})["state"]["id"],
+                            + [(QUARTERS[-1], 6.4)]})["state"]["id"],
             verdict(buffett, known={**CLEARS_EXITS,
-                                    "total_debt_to_ebitda": 5.2},
+                                    "total_debt_to_avg_fcf_5y": 6.4},
                     judged=SAID_YES, held=True, opened="2019-04-01",
                     weight=14.0,
-                    series={"total_debt_to_ebitda":
-                            [(q, 5.2) for q in QUARTERS]})["state"]["id"],
+                    series={"total_debt_to_avg_fcf_5y":
+                            [(q, 6.4) for q in QUARTERS]})["state"]["id"],
             verdict(buffett, known=CLEARS_EXITS,
                     judged={**SAID_YES, "capital_allocation": False},
                     held=True, opened="2019-04-01",

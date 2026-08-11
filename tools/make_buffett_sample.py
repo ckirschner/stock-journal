@@ -65,13 +65,16 @@ FREE_CASH = 40_000.0
 # set is what matters — high returns on capital, little debt, steady margins,
 # a share count going down rather than up.
 WONDERFUL = {
-    "roic_median_5y": 19.4, "total_debt_to_ebitda": 1.2,
-    "owner_earnings_yield": 6.1, "interest_coverage": 15.0,
-    "gross_margin_range_5y": 2.8, "fcf_margin_median_5y": 18.0,
-    "cash_conversion_median_5y": 1.02, "diluted_share_count_change_5y": -5.0,
-    "roe_median_5y": 24.0, "revenue_cagr_5y": 6.5,
-    "ni_minus_revenue_cagr_spread_5y": 1.5,
-    "goodwill_intangibles_to_assets": 9.0,
+    "roic_median_5y": 19.4, "total_debt_to_avg_fcf_5y": 1.6,
+    "owner_earnings_yield_on_ev": 6.1,
+    "incremental_roic_5y": 22.0,
+    "interest_coverage": 15.0, "roe_minus_roic_gap_5y": 4.6,
+    "fcf_margin_median_5y": 18.0, "cash_conversion_median_5y": 1.02,
+    "revenue_cagr_5y": 6.5, "ni_minus_revenue_cagr_spread_5y": 1.5,
+    "gross_margin_range_relative_5y": 5.2,
+    "diluted_share_count_change_5y": -5.0,
+    "goodwill_impairment_to_equity_5y": 0.0,
+    "total_debt_to_ebitda": 1.2,
     "effective_tax_rate_median_5y": 22.0, "current_ratio": 1.1,
     "payout_to_fcf_median_5y": 58.0, "fcf_margin_ttm": 17.0,
     "diluted_share_count_change_3y": -3.0,
@@ -93,14 +96,15 @@ journal("Sample — Buffett", "buffett", {"free-cash": FREE_CASH})
 
 security(
     "NORBRY", "Norbury Ceramics", 88.00,
-    like(roic_median_5y=23.8, roe_median_5y=29.0, owner_earnings_yield=4.2,
+    like(roic_median_5y=23.8, roe_minus_roic_gap_5y=5.2,
+         owner_earnings_yield_on_ev=4.2,
          revenue_cagr_5y=8.1, fcf_margin_median_5y=21.0, fcf_margin_ttm=20.4,
          diluted_share_count_change_5y=-8.0,
          diluted_share_count_change_3y=-4.5),
     on="2026-07-30",
     earlier=("2021-03-08",
-             like(roic_median_5y=21.0, owner_earnings_yield=6.8,
-                  roe_median_5y=25.0), 31.50),
+             like(roic_median_5y=21.0, owner_earnings_yield_on_ev=6.8,
+                  roe_minus_roic_gap_5y=4.0), 31.50),
     judged=[("2021-03-10", "moat_durability", "pass",
              "Kiln capacity in this grade of technical ceramic takes four "
              "years and a licence to build. The two firms that could have "
@@ -132,11 +136,12 @@ buy("NORBRY", 900, 31.50, "2021-03-15")
 
 security(
     "CRESSET", "Cresset Abrasives", 62.40,
-    like(roic_median_5y=17.6, roe_median_5y=21.0, owner_earnings_yield=5.4,
-         revenue_cagr_5y=5.2, gross_margin_range_5y=3.9),
+    like(roic_median_5y=17.6, roe_minus_roic_gap_5y=3.4,
+         owner_earnings_yield_on_ev=5.4,
+         revenue_cagr_5y=5.2, gross_margin_range_relative_5y=3.9),
     on="2026-07-28",
     earlier=("2023-09-05",
-             like(roic_median_5y=17.9, owner_earnings_yield=7.2), 44.10),
+             like(roic_median_5y=17.9, owner_earnings_yield_on_ev=7.2), 44.10),
     judged=[("2023-09-06", "moat_durability", "pass",
              "Bonded abrasives are specified into customers' own process "
              "documents. Changing supplier means requalifying the process, "
@@ -171,14 +176,13 @@ buy("CRESSET", 300, 44.10, "2023-09-12")
 
 security(
     "HALLAM", "Hallam Instruments", 41.00,
-    like(roic_median_5y=16.2, roe_median_5y=19.5, owner_earnings_yield=5.9,
-         goodwill_intangibles_to_assets=34.0, revenue_cagr_5y=4.4,
+    like(roic_median_5y=16.2, roe_minus_roic_gap_5y=3.3,
+         owner_earnings_yield_on_ev=5.9, revenue_cagr_5y=4.4,
          diluted_share_count_change_5y=-1.0,
          diluted_share_count_change_3y=2.0),
     on="2026-07-26",
     earlier=("2021-06-14",
-             like(roic_median_5y=18.4, owner_earnings_yield=6.6,
-                  goodwill_intangibles_to_assets=11.0), 28.80),
+             like(roic_median_5y=18.4, owner_earnings_yield_on_ev=6.6), 28.80),
     judged=[("2021-06-15", "moat_durability", "pass",
              "Calibration records live in their software. Ripping it out "
              "means revalidating a decade of instrument history."),
@@ -190,10 +194,11 @@ security(
              "which is the moat."),
             ("2026-07-26", "capital_allocation", "fail",
              "Four acquisitions in three years, each one further from the "
-             "instruments, each one paid for partly in stock. Goodwill has "
-             "gone from a ninth of the balance sheet to a third and the "
-             "share count is rising for the first time. The returns still "
-             "look fine because the acquired revenue is still new. I no "
+             "instruments, each one paid for partly in stock. Nothing has "
+             "been written off yet and the share count is only just rising, "
+             "so every number on this page is still fine — the returns look "
+             "fine because the acquired revenue is still new, and a "
+             "write-off is years of admitting away. I no "
              "longer think the chief executive is allocating capital; I "
              "think he is building something to run.")],
     thesis=("Instruments whose real product is the calibration record, which "
@@ -215,14 +220,15 @@ buy("HALLAM", 250, 28.80, "2021-06-21")
 
 security(
     "TILNEY", "Tilney Foods", 22.50,
-    like(roic_median_5y=15.8, roe_median_5y=18.0, owner_earnings_yield=7.4,
-         total_debt_to_ebitda=4.6, interest_coverage=5.1,
+    like(roic_median_5y=15.8, roe_minus_roic_gap_5y=2.2,
+         owner_earnings_yield_on_ev=7.4,
+         total_debt_to_avg_fcf_5y=6.1, interest_coverage=5.1,
          fcf_margin_median_5y=11.0, fcf_margin_ttm=4.0,
          revenue_cagr_5y=4.2),
     on="2026-07-24",
     earlier=("2022-10-03",
-             like(roic_median_5y=16.9, total_debt_to_ebitda=1.9,
-                  owner_earnings_yield=6.9), 19.20),
+             like(roic_median_5y=16.9, total_debt_to_avg_fcf_5y=1.9,
+                  owner_earnings_yield_on_ev=6.9), 19.20),
     judged=[("2022-10-04", "moat_durability", "pass",
              "Two brands people ask for by name in a category nobody enters "
              "for the margins."),
@@ -271,8 +277,9 @@ buy("WEXTON", 150, 26.40, "2023-02-14",
 
 security(
     "LARKFD", "Larkfield Brewing", 54.20,
-    like(roic_median_5y=20.6, roe_median_5y=26.0, owner_earnings_yield=5.6,
-         revenue_cagr_5y=5.8, gross_margin_range_5y=2.2),
+    like(roic_median_5y=20.6, roe_minus_roic_gap_5y=5.4,
+         owner_earnings_yield_on_ev=5.6,
+         revenue_cagr_5y=5.8, gross_margin_range_relative_5y=2.2),
     on="2026-08-04",
     judged=[("2026-08-05", "moat_durability", "pass",
              "A regional beer nobody outside the region has heard of, with "
@@ -300,7 +307,8 @@ security(
 
 security(
     "MARLOW", "Marlowe Precision", 71.80,
-    like(roic_median_5y=18.1, roe_median_5y=22.5, owner_earnings_yield=5.2,
+    like(roic_median_5y=18.1, roe_minus_roic_gap_5y=4.4,
+         owner_earnings_yield_on_ev=5.2,
          revenue_cagr_5y=7.4),
     on="2026-08-05",
     notes=[("2026-08-05",
@@ -314,8 +322,9 @@ security(
 
 security(
     "ASHDWN", "Ashdown Group", 33.60,
-    like(roic_median_5y=17.2, roe_median_5y=20.1, owner_earnings_yield=6.4,
-         revenue_cagr_5y=9.2, gross_margin_range_5y=4.4),
+    like(roic_median_5y=17.2, roe_minus_roic_gap_5y=2.9,
+         owner_earnings_yield_on_ev=6.4,
+         revenue_cagr_5y=9.2, gross_margin_range_relative_5y=4.4),
     on="2026-08-03",
     judged=[("2026-08-04", "moat_durability", "fail",
              "The returns are real and I cannot find the reason for them. "
@@ -337,10 +346,11 @@ security(
 
 security(
     "PENRYN", "Penryn Logistics", 18.90,
-    like(roic_median_5y=7.1, roe_median_5y=9.4, total_debt_to_ebitda=2.9,
+    like(roic_median_5y=7.1, roe_minus_roic_gap_5y=2.3,
+         total_debt_to_avg_fcf_5y=2.9,
          interest_coverage=5.2, fcf_margin_median_5y=4.0,
-         fcf_margin_ttm=3.6, gross_margin_range_5y=7.8,
-         owner_earnings_yield=8.8, revenue_cagr_5y=3.1),
+         fcf_margin_ttm=3.6, gross_margin_range_relative_5y=7.8,
+         owner_earnings_yield_on_ev=8.8, revenue_cagr_5y=3.1),
     on="2026-08-02",
     notes=[("2026-08-02",
             "Cheaper than anything else on this list and this strategy does "
@@ -355,9 +365,9 @@ security(
 
 security(
     "BRAMBR", "Bramber Analytics", 46.70,
-    {k: v for k, v in like(roe_median_5y=21.0, revenue_cagr_5y=11.0).items()
-     if k not in ("roic_median_5y", "owner_earnings_yield",
-                  "gross_margin_range_5y")},
+    {k: v for k, v in like(roe_minus_roic_gap_5y=3.0, revenue_cagr_5y=11.0).items()
+     if k not in ("roic_median_5y", "owner_earnings_yield_on_ev",
+                  "gross_margin_range_relative_5y")},
     on="2026-08-01",
     notes=[("2026-08-01",
             "Three figures missing, and two of them are tests this strategy "
