@@ -30,6 +30,9 @@ Rendering the second as the first would put a permanent item in the list of
 things to go and do, which is how that list stops being read.
 """
 
+import ast
+import pathlib
+
 import pytest
 from conftest import (balance_face, dur, filer, filing, inst, journal_for,
                       no_filer)
@@ -281,6 +284,206 @@ class TestTheShippedBankSaysWhatItMeans:
             for c in item["industry"]:
                 assert c["label"] == contract.INDUSTRY_CLASSES[c["id"]][
                     "label"]
+
+
+# ---------------------------------------------------------------------------
+# the other form — the one the host cannot evaluate
+# ---------------------------------------------------------------------------
+#
+# `industry` is settled before the formula runs, so the host can be made to
+# perform it and is. `data` is a reading of the figures, so only the formula
+# can — which left the declaration in one file and the enforcement in another
+# with nothing joining them. Both directions of that join had failed:
+#
+#   declared, never performed    A payout ratio the bank itself calls
+#                                uninterpretable was served with a caution
+#                                beside it. A cash conversion divided through
+#                                a loss. A ROIC gate switched itself off for
+#                                exactly the filers it was written for.
+#   performed, never declared    Two formulas refused citing "the bank's own
+#                                test" for a test their entry does not state,
+#                                so a reader following the sentence to the
+#                                Metrics page found nothing there.
+#
+# The second direction is checkable and is checked, here and at run time. The
+# first is not, and the honest reason is below.
+# ---------------------------------------------------------------------------
+
+def _cited_conditions():
+    """Every (entry, condition) pair engine/compute.py refuses on, read out of
+    the source rather than by running it.
+
+    Statically, because the point is coverage: a branch nobody's filings
+    reach is exactly the branch a test would not exercise, and it is where a
+    refusal citing a test nobody declared would sit undisturbed. `condition`
+    is always a literal at the call — that is what makes this readable, and
+    it is why the helper takes the sentence rather than an id.
+
+    Two shapes are collected. A formula refusing for itself names both; a
+    formula refusing through a helper that serves several entries hands the
+    pair down, and the pair is still a literal at the entry's own function.
+    """
+    tree = ast.parse(pathlib.Path(compute.__file__).read_text(
+        encoding="utf-8"))
+
+    def literals(call, where):
+        out = []
+        for i in where:
+            if i >= len(call.args):
+                return None
+            try:
+                got = ast.literal_eval(call.args[i])
+            except Exception:                             # noqa: BLE001
+                return None
+            if not isinstance(got, str):
+                return None
+            out.append(" ".join(got.split()))
+        return tuple(out)
+
+    # A helper that hands two of its own parameters to not_meaningful passes
+    # the question on rather than answering it, so the pair to read is at the
+    # call one level out — where the entry it is being asked for is known.
+    forwards = {"not_meaningful": (0, 1)}
+    for fn in [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]:
+        params = [a.arg for a in fn.args.args]
+        for call in ast.walk(fn):
+            if isinstance(call, ast.Call) \
+                    and getattr(call.func, "id", None) == "not_meaningful" \
+                    and len(call.args) >= 2:
+                named = [getattr(a, "id", None) for a in call.args[:2]]
+                if all(n in params for n in named):
+                    forwards[fn.name] = tuple(params.index(n) for n in named)
+
+    pairs = set()
+    for call in ast.walk(tree):
+        if not isinstance(call, ast.Call):
+            continue
+        where = forwards.get(getattr(call.func, "id", None))
+        if where is None:
+            continue
+        got = literals(call, where)
+        if got:
+            pairs.add(got)
+    return pairs
+
+
+# Conditions performed by machinery shared between several entries, where the
+# refusal is built once and the entry it is being built for is not a literal
+# anywhere — a compound-rate window, a gross margin, a component that came
+# back absent. They are enforced; what they are not is checkable from here.
+#
+# This is a list and not a rule, and it is the honest shape of the thing: the
+# declaration-to-enforcement direction cannot be proved, because "the formula
+# refuses on this" is a statement about arithmetic and no signature carries
+# it. What the list buys is that it cannot grow quietly — a condition added
+# to the bank and performed nowhere fails this file, and the author is asked
+# which of the two it is. It should shrink.
+ENFORCED_BY_SHARED_MACHINERY = {
+    # _cagr and _appeared_rather_than_grew, over four windows and two inputs
+    ("revenue_cagr_5y", "mean revenue over the three base years is zero or negative"),
+    ("revenue_cagr_5y", "fewer than eight fiscal years of revenue are available on one accounting basis"),
+    ("revenue_cagr_3y", "mean revenue over the three base years is zero or negative"),
+    ("revenue_cagr_3y", "fewer than six fiscal years of revenue are available on one accounting basis"),
+    ("net_income_cagr_5y", "mean net income over the three base years is zero or negative"),
+    ("net_income_cagr_5y", "fewer than eight fiscal years of net income are available on one accounting basis"),
+    ("net_income_cagr_5y", "mean net income over the three base years is at most a tenth of the mean over the three end years, AND the base years' net margin is under half the end years'"),
+    ("eps_cagr_5y", "mean diluted EPS over the three base years is zero or negative"),
+    ("eps_cagr_5y", "fewer than eight fiscal years of diluted EPS are available on one accounting basis"),
+    ("eps_cagr_5y", "mean net income over the three base years is at most a tenth of the mean over the three end years, AND the base years' net margin is under half the end years'"),
+    ("eps_growth_10y", "fewer than ten fiscal years of EPS are available"),
+    ("eps_growth_10y", "mean net income over the three base years is at most a tenth of the mean over the three end years, AND the base years' net margin is under half the end years'"),
+    # the gross-margin helpers, over five entries reading one input
+    ("gross_margin_ttm", "the company does not report cost of revenue separately"),
+    ("gross_margin_range_5y", "the company does not report cost of revenue separately"),
+    ("gross_margin_range_relative_5y", "the company does not report cost of revenue separately"),
+    ("gross_margin_change_3y", "the company does not report cost of revenue separately"),
+    ("gross_margin_vs_3y_median", "the company does not report cost of revenue separately"),
+    # a consumed entry came back absent and its own reason is passed straight
+    # on, so the sentence a reader gets is the one that entry refused with
+    ("eps_minus_revenue_cagr_spread_5y", "either component CAGR is not meaningful"),
+    ("dividend_adjusted_peg", "the five-year EPS CAGR is not meaningful"),
+    ("dividend_adjusted_peg", "P/E (TTM) is not meaningful"),
+    ("peg_trailing", "P/E (TTM) is not meaningful"),
+    # a window too short to read, refused where windows are assembled
+    ("ev_ebit_to_own_5y_median", "fewer than 20 trailing quarters of EV/EBIT are available"),
+    ("pe_to_own_5y_median_pe", "fewer than 20 trailing quarters of P/E are available"),
+    ("profitable_years_10y", "fewer than ten fiscal years of filings are available"),
+    ("incremental_roic_5y", "fewer than eight fiscal years are available on one accounting basis"),
+    ("incremental_roic_5y", "invested capital did not grow across the window"),
+    ("incremental_roic_5y", "pre-tax income in any year of the window is zero or negative"),
+    ("goodwill_impairment_to_equity_5y", "any year in the window has no resolvable impairment figure"),
+    ("consecutive_capital_return_years", "a year in the run paid no dividend and has no resolvable repurchase figure"),
+    ("altman_z_double_prime", "total liabilities are zero"),
+    # no such data source is ingested, so the entry is absent for everyone
+    ("insider_net_buying_6m", "no Form 4 filings exist for the issuer in the window"),
+    ("institutional_ownership_pct", "13F holdings have not been aggregated for the ticker"),
+}
+
+
+class TestADataConditionAndItsEnforcementAreTheSameThing:
+
+    def declared(self):
+        return {(eid, c) for eid, cs in bank.data_conditions().items()
+                for c in cs}
+
+    def test_nothing_claims_the_banks_authority_without_citing_it(self):
+        """The phrase is the claim, so the phrase has one home. A formula
+        writing it into a sentence of its own is a citation nothing checked —
+        which is how two of them came to name a test that did not exist."""
+        tree = ast.parse(pathlib.Path(compute.__file__).read_text(
+            encoding="utf-8"))
+        helper = next(n for n in ast.walk(tree)
+                      if isinstance(n, ast.FunctionDef)
+                      and n.name == "not_meaningful")
+        mine = {id(n) for n in ast.walk(helper)}
+        stray = [n.value[:50] for n in ast.walk(tree)
+                 if isinstance(n, ast.Constant) and isinstance(n.value, str)
+                 and "the bank's own test" in n.value and id(n) not in mine]
+        assert stray == [], (
+            "engine/compute.py claims the bank's own test in a sentence of "
+            "its own: " + str(stray) + ". Cite the condition; the sentence "
+            "has one home.")
+
+    def test_every_refusal_names_a_condition_the_bank_states(self):
+        assert _cited_conditions() - self.declared() == set()
+
+    def test_naming_one_the_bank_does_not_state_is_refused_at_the_call(self):
+        """The static check above is for coverage; this is the one that fires
+        whatever a scanner can read."""
+        with pytest.raises(ValueError) as e:
+            compute.not_meaningful("pe_ttm", "the moon is in the wrong house")
+        assert "not one of the `data` conditions" in str(e.value)
+        with pytest.raises(ValueError) as e:
+            compute.not_meaningful("market_cap", "anything at all")
+        assert "it declares none" in str(e.value)
+
+    def test_the_sentence_a_reader_gets_is_the_banks_own(self):
+        """One copy. A formula that restated the condition could restate it
+        wrongly, and the reader has no way to tell which of the two is the
+        rule."""
+        stated = bank.data_conditions()["pe_ttm"][0]
+        got = compute.not_meaningful("pe_ttm", stated, "diluted EPS is -0.44")
+        assert got["status"] == "absent"
+        assert stated in got["reason"]
+        assert "diluted EPS is -0.44" in got["reason"]
+
+    def test_no_condition_is_declared_and_performed_nowhere(self):
+        """The direction that cannot be proved, pinned so it cannot grow
+        quietly. A condition that is neither cited nor on the list is one
+        nobody has said is enforced — which is exactly how a payout ratio
+        came to be served with a warning instead of refused."""
+        orphans = self.declared() - _cited_conditions() \
+            - ENFORCED_BY_SHARED_MACHINERY
+        assert orphans == set(), (
+            "declared in the metric bank and performed nowhere this file can "
+            "see: " + str(sorted(orphans)))
+
+    def test_the_list_of_the_unprovable_ones_does_not_outlive_them(self):
+        """And it shrinks. An entry left on it after its condition became
+        citable is the list turning into decoration."""
+        stale = ENFORCED_BY_SHARED_MACHINERY - self.declared()
+        assert stale == set(), stale
+        assert not (ENFORCED_BY_SHARED_MACHINERY & _cited_conditions())
 
 
 # ---------------------------------------------------------------------------

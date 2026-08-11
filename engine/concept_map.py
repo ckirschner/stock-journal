@@ -50,6 +50,21 @@ def load_map() -> dict:
             doc = yaml.load(f) or {}
         if not str(doc.get("schema", "")).startswith("ledger.concept-map/"):
             raise ValueError(f"{MAP_PATH.name} does not declare a concept-map schema.")
+        # A convention nobody enforces is what `sign` was for as long as this
+        # file has existed: three inputs declared it, nothing read it, and the
+        # one consumer that noticed a breach cautioned and computed anyway. So
+        # the word is now checked against what the resolver can actually
+        # enforce, and an unknown one refuses the file rather than sitting
+        # there looking like a rule.
+        unknown = sorted({str(s.get("sign"))
+                          for s in (doc.get("inputs") or {}).values()
+                          if s.get("sign") and s.get("sign") not in _SIGNS})
+        if unknown:
+            raise ValueError(
+                f"{MAP_PATH.name} declares sign convention(s) this host does "
+                "not enforce: " + ", ".join(unknown) + ". It is one of "
+                + ", ".join(_SIGNS) + " — adding one is a change in "
+                "engine/concept_map.py, never a new word here.")
         _cache["mtime"] = mtime
         _cache["doc"] = doc
     return _cache["doc"]
@@ -217,7 +232,7 @@ def resolve_duration(fi: FilingIndex, input_id: str, start: str, end: str):
     for cand in _cand_list(spec):
         r = _try_candidate_duration(fi, input_id, cand, start, end)
         if r is not None:
-            return r
+            return r if _sign_holds(spec, r) else None
     if spec.get("absent_means_zero") and (start, end) in fi._cf_periods:
         # Cash-flow-face completeness: the statement's sections sum to their
         # totals, so a located cash flow statement with no such line is the
@@ -228,6 +243,43 @@ def resolve_duration(fi: FilingIndex, input_id: str, start: str, end: str):
                               "statement reports none."],
                     start=start, end=end)
     return None
+
+
+# The sign conventions an input may declare. Adding one is a change here,
+# never a new word in the map — an unknown `sign` is refused at load, because
+# a convention nothing enforces is what this table exists to stop being.
+_SIGNS = {
+    # A payments element: the taxonomy tags the amount LEAVING the company as
+    # a positive number, and every consumer subtracts it.
+    "outflow_positive": lambda v: v >= 0,
+}
+
+
+def _sign_holds(spec, r) -> bool:
+    """Whether a resolved fact respects the sign its input declares.
+
+    `sign` sat in this map for as long as it has existed and nothing read it.
+    What noticed instead was one consumer: fcf_ttm appended a caution saying
+    capex had resolved negative and then computed free cash flow anyway — as
+    `cfo - capex`, so a negative capex was ADDED. Free cash flow came back
+    overstated by twice the capital spending, with a sentence beside it for a
+    reader and nothing at all for the arithmetic, which carried it into an
+    exit rule through the margin.
+
+    Refused rather than corrected, because correcting it means deciding what
+    the filer meant, and a negative on a payments line is either the opposite
+    sign convention or a real reversal — a refund, a sale-leaseback credited
+    back to the same caption. The two want opposite corrections and the
+    filing does not say which it is. Principle 4: where it cannot be right,
+    it is absent.
+
+    Refused HERE rather than in each consumer, because the declaration is
+    here. A check in a consumer is a check the next consumer does not have,
+    and free cash flow was not the only thing reading these lines — the
+    payout ratio divides by two more of them.
+    """
+    rule = _SIGNS.get(spec.get("sign"))
+    return rule is None or rule(r["value"])
 
 
 def _try_candidate_duration(fi, input_id, cand, start, end):
@@ -396,18 +448,27 @@ def _resolve_aggregate(fi, input_id, spec, date):
                         "top.")
 
     if not found:
-        # A recognised-total fallback must be tried BEFORE any completeness
-        # zero: a filer whose only debt line is us-gaap:LongTermDebt would
-        # otherwise get a confident zero with the real figure sitting in the
-        # same filing.
-        for cand in spec.get("fallback_total") or []:
-            f = fi.instant_fact(cand["concept"], date)
-            if f is not None:
-                r = _res(input_id, fi, f["value"], matched="fallback_total",
-                         concept=cand["concept"],
-                         cautions=[cand.get("caution")], instant=date)
-                r["includes_finance_leases"] = False
-                return r
+        # There was a `fallback_total` here: a concept tried when nothing
+        # mapped appeared, served with a caution saying it might be a
+        # different quantity. Its one user was long_term_debt falling back to
+        # us-gaap:LongTermDebt, which usually includes the current portion —
+        # so it answered a wider quantity than the input it was answering
+        # for, and Graham exits on that input.
+        #
+        # The mechanism went with it rather than only its one entry, because
+        # the caution was the tell. A concept that genuinely answers the same
+        # quantity belongs in `total_candidates`, where it is served with
+        # nothing to warn about. Anything that needed a sentence explaining
+        # how it differs was, by its own admission, a number that could not
+        # be right — and principle 4 does not let a caution stand in for
+        # that, because the caution is read by a person and the arithmetic
+        # acts on the number. Leaving the mechanism in place would leave the
+        # same trade available to whoever writes the next spec, without the
+        # afternoon that explains why it is not one.
+        #
+        # What it was actually protecting against — a confident zero where a
+        # figure was sitting in the same filing — is the zero_guard below.
+        #
         # Split aggregates (short/long classification) may not claim zero
         # while unclassifiable debt-like lines sit on the same face — the
         # guard spec (total_debt) knows how to spot them.

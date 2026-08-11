@@ -1087,7 +1087,7 @@ class TestGroups:
 
     def rec(self, **over):
         r = record(values=[{"id": "need", "label": "Core tests needed",
-                            "type": "integer",
+                            "type": "integer", "min": 0,
                             "source": {"name": "a fixture",
                                        "reasoning": True},
                             "explain": "e"}])
@@ -1213,17 +1213,65 @@ class TestGroups:
         assert (g["passed"], g["unknown"]) == (1, 1)
         assert g["outcome"] == "unknown"
 
-    def test_a_bar_nobody_answered_leaves_the_group_undecided(self):
-        rec = record(inputs=[{"id": "floor", "label": "Your floor",
-                              "type": "integer", "explain": "e"}])
+    def test_a_bar_that_could_go_unanswered_is_refused_outright(self):
+        """A group's own count is the one absence that must never be served
+        as `unknown`. An undecided requirement refuses every commit beside
+        it, so a bar read out of an input nobody answered is a strategy that
+        silently never buys anything — and the reason sits in a field the
+        rollup does not have to render. The declaration is refused instead,
+        which is a sentence naming the fix."""
+        errors = self.cited(
+            [{"id": "a", "name": "A", "requires": "at_least",
+              "threshold_from": "floor"}],
+            [{"measure": "fcf_ttm", "group": "a"}],
+            rec=self.rec(inputs=[{"id": "floor", "label": "Your floor",
+                                  "type": "integer", "min": 0,
+                                  "explain": "e"}]))
+        assert any("declares as an input" in e for e in errors)
+
+    def test_a_count_a_journal_could_make_fractional_is_refused(self):
+        """The check is on the DECLARATION, not on the number. The number is
+        resolved every evaluation out of a chain the user edits; the type is
+        settled once and holds for every layer of it."""
+        errors = self.cited(
+            [{"id": "a", "name": "A", "requires": "at_least",
+              "threshold_from": "loose"}],
+            [{"measure": "fcf_ttm", "group": "a"}],
+            rec=self.rec(values=[{"id": "loose", "label": "How many",
+                                  "type": "number", "min": 0,
+                                  "source": {"name": "a fixture",
+                                             "reasoning": True},
+                                  "explain": "e"}]))
+        assert any("`type: integer`" in e for e in errors)
+
+    def test_a_count_with_no_floor_is_refused(self):
+        """Below nought, `passed >= need` is true however many failed, so a
+        counting group would pass with no passes in it."""
+        errors = self.cited(
+            [{"id": "a", "name": "A", "requires": "at_least",
+              "threshold_from": "unfloored"}],
+            [{"measure": "fcf_ttm", "group": "a"}],
+            rec=self.rec(values=[{"id": "unfloored", "label": "How many",
+                                  "type": "integer",
+                                  "source": {"name": "a fixture",
+                                             "reasoning": True},
+                                  "explain": "e"}]))
+        assert any("`min: 0`" in e for e in errors)
+
+    def test_a_count_that_is_not_a_count_is_loud_and_not_undecided(self):
+        """What the refusals above make unreachable, asserted where it used
+        to happen. The rollup raises rather than returning `unknown`: an
+        undecided requirement reads to the user as a strategy that never
+        wants to buy, with nothing on screen saying why."""
+        rec = self.rec()
         rendered, _ = contract.resolve_evidence(rec, self.ctx(),
                                                 self.rows(1, 1))
-        [g] = contract.resolve_groups(
-            rec, self.ctx(inputs={}),
-            [{"id": "a", "name": "A", "requires": "at_least",
-              "threshold_from": "floor"}], rendered)
-        assert g["outcome"] == "unknown"
-        assert g["test"]["absent"]
+        with pytest.raises(ValueError) as e:
+            contract.resolve_groups(
+                rec, self.ctx(values={"need": 2.5}),
+                [{"id": "a", "name": "A", "requires": "at_least",
+                  "threshold_from": "need"}], rendered)
+        assert "not a whole number of rows" in str(e.value)
 
     def test_a_noted_group_is_counted_and_never_judged(self):
         g = self.rollup({"id": "a", "name": "A", "requires": "noted"},
@@ -1261,7 +1309,7 @@ class TestACommitCannotContradictItsOwnEvidence:
             reason["groups"] = groups
         rec = record(states=self.STATES,
                      values=[{"id": "need", "label": "Core tests needed",
-                              "type": "integer",
+                              "type": "integer", "min": 0,
                               "source": {"name": "a fixture",
                                          "reasoning": True},
                               "explain": "e"}],

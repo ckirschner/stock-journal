@@ -360,9 +360,15 @@ INDUSTRY_CLASSES = MappingProxyType({
 # citations, so a verdict that says "answer these" and cites none of them
 # sends the reader to an empty section — a dead end one screen further along,
 # which is worse than the first one because it looks like it worked. Where
-# `cites` names a subject kind, `evaluate` refuses a blocked verdict that
-# does not cite one. The author finds out the first time they run it; the
-# user never finds out at all.
+# `cites` names a kind of METRIC-BANK ENTRY, `evaluate` refuses a blocked
+# verdict that does not cite one. The author finds out the first time they
+# run it; the user never finds out at all.
+#
+# The bank's kind and not the citation's, because that is what the section
+# behind the button is built from — see `cited_bank_ids`. Asking the same
+# question the screen asks is the point: a check that matched the shape a
+# citation renders in would pass while the screen it is protecting came back
+# empty, which is the failure it exists to catch wearing its own clothes.
 #
 # Adding a fix is a host change in this one table, and it means adding the
 # screen behind it.
@@ -380,7 +386,7 @@ STATE_FIXES = MappingProxyType({
     "judgement": MappingProxyType({
         "label": "Answer these questions",
         "where": '"Your judgement" on this security\'s page',
-        "cites": "judgement",
+        "cites": "qualitative",
         "explain": "The questions no filing can answer, asked per security. "
                    "They are built from what the decision cited, which is "
                    "why a verdict that blocks on one has to cite it: the "
@@ -2271,6 +2277,63 @@ def _check_limit(record, spec, where, errors, *, what="`comparator`") -> None:
                 "owns.")
 
 
+def _check_counting_setting(record, g, where, errors) -> None:
+    """A group counting rows against a setting: what that setting has to be.
+
+    The count is checked here, where it can only be checked once, rather than
+    where the number is finally read. A stated `threshold` is the strategy's
+    and settled at load; a cited one is resolved every evaluation out of a
+    chain the user can edit afterwards, so a check at load on the *number*
+    would be a check on a value that has since moved. Checking the
+    DECLARATION instead settles it for good: an `integer` value cannot hold a
+    fraction in the bundle, in a journal's override, or in anything added to
+    the chain later, because every layer of it goes through
+    `check_typed_value`. The wrong thing is unrepresentable rather than
+    caught, which is the only version that survives the file being edited by
+    hand at midnight.
+
+    It has to be a value and not an input for the same reason. A value always
+    resolves — every declared one ships a default — so the count is always
+    there to compare against. An optional input nobody answered would leave
+    the group with no limit, and a group with no limit is `unknown`, and an
+    unknown group refuses every commit beside it while saying nothing a
+    reader could act on. That is the dead end this check exists to close, and
+    it would have survived a check on the number.
+
+    How many of a strategy's own tests it demands is a strategy's opinion in
+    any case, which is what a value is. An input is a fact about the account
+    nobody could guess.
+    """
+    fid = g.get("threshold_from")
+    if fid is None:
+        return
+    kind, spec = _declared_spec(record, fid)
+    if spec is None:                       # already refused by _check_limit
+        return
+    if kind != "value":
+        errors.append(
+            f'{where}: `requires: at_least` counts against "{fid}", which '
+            "this strategy declares as an input. It has to be a declared "
+            "value: a value always resolves, and an input the user leaves "
+            "unanswered would leave this group with no count — which reads "
+            "as `unknown` and quietly refuses any commit beside it.")
+        return
+    if spec.get("type") != "integer":
+        errors.append(
+            f'{where}: `requires: at_least` counts rows, so "{fid}" has to '
+            f'be declared `type: integer`. It is `{spec.get("type")}`, which '
+            "a journal could set to a fraction after this bundle loaded — "
+            "and a count that is not a whole number makes this group read "
+            "`unknown` with nothing on screen saying why.")
+    lo = spec.get("min")
+    if lo is None or lo < 0:
+        errors.append(
+            f'{where}: `requires: at_least` counts rows, so "{fid}" needs '
+            "`min: 0` or higher. Without it a journal could set the count "
+            "below nought, and a group demanding fewer than none of its "
+            "rows is not a requirement.")
+
+
 def _check_groups(record, reason, errors) -> set:
     """Every group a decision declares, and every way the set can be wrong.
     Returns the ids that are usable, so an item naming one can be checked.
@@ -2329,6 +2392,7 @@ def _check_groups(record, reason, errors) -> set:
                 errors.append(f"{where}: `requires: at_least` counts rows, "
                               "so its `threshold` must be a whole number of "
                               "them, nought or more.")
+            _check_counting_setting(record, g, where, errors)
         elif any(k in g for k in ("threshold", "threshold_from")):
             errors.append(
                 f'{where}: `requires: {requires}` sets no limit, so it '
@@ -2942,8 +3006,9 @@ def _declared_observation(record, ctx, item, subject):
     if spec is None:
         return None, (f'the {subject} "{fid}", which this strategy does not '
                       "declare.")
-    return {"kind": subject, "id": fid, "label": spec["label"],
-            "unit": _declared_unit(spec), "explain": spec["explain"]}, None
+    return _subject(subject, fid, reads=None, label=spec["label"],
+                    unit=_declared_unit(spec),
+                    explain=spec["explain"]), None
 
 
 def _limit(ctx, item):
@@ -3178,6 +3243,25 @@ def confirm(ctx: dict, item: dict) -> dict:
             f"{_cited_as(item)} states no requirement, so there is nothing "
             "for a filing to confirm. Cite what the holding must keep being "
             "true and the breach is that failing.")
+    # A change since a purchase is measured against a frozen baseline and a
+    # reading now. There is no reading of it "at" an older filing — the
+    # baseline is not re-observed per period, and asking for one is exactly
+    # the pair `at` and `since` that an evidence item is refused for
+    # carrying. Before this refusal the loop below synthesised that pair
+    # itself: `_observation` reads `since` first, `at` was ignored, and every
+    # filing in the history was answered with the identical comparison. The
+    # run came back as the length of the record, `periods` named filings that
+    # were never re-read, and the robustness reading compared the number
+    # against itself and always survived. A breach nobody observed was
+    # reported as established, on evidence that did not exist, and it is an
+    # exit that reads it.
+    if "since" in item:
+        raise ValueError(
+            f"{_cited_as(item)} is a change since one of your purchases, and "
+            "a confirmation counts filings that each carry the failure on "
+            "their own reading. A baseline is frozen at the purchase and is "
+            "never re-read, so there is nothing at an older filing to count. "
+            "Confirm the level and cite the drift beside it.")
     outcome = test(ctx, item)
     est = estimator_of(item["measure"])
     if est is None:
@@ -3243,6 +3327,60 @@ def _why_confirmed(est, run, needs) -> str:
             f"{'carries' if needs == 1 else 'carry'} the failure")
 
 
+def _subject(kind: str, subject_id, *, reads, label, unit, explain=None,
+             **extra) -> dict:
+    """One citation's subject as a screen reads it, and — separately — which
+    metric-bank entry it draws on.
+
+    `reads` is the whole reason this is a constructor and not a literal.
+    Everything that answers a citation per security has to know which bank
+    entry it touches: the hand-entry surface offers exactly those figures,
+    the judgement section asks exactly those questions, and a blocked verdict
+    is refused when it sends a reader somewhere its own citations do not
+    fill. All three used to work that out by matching the subject KIND, which
+    put a list of this host's kinds inside the surfaces that answer them —
+    and it was already wrong. A measure cited only as a change since a
+    purchase resolves as kind `change`, matched none of them, and never
+    reached the screen that would let the user supply it: the strategy told
+    the user about a figure and offered no way to give it. Graham escaped by
+    coincidence, every one of its drift measures also appearing in a safety
+    exit; the first strategy with a drift-only rule would not.
+
+    So the answer travels with the subject rather than being re-derived from
+    the shape it renders in. `reads` has no default: a kind added later
+    cannot be constructed without saying what it draws on, which is the
+    version of this that survives the next kind rather than the one that
+    closes the case in front of us.
+
+    None is a real answer here and means "no bank entry" — a host fact, a
+    figure the strategy stated outright, one of its own settings. Those are
+    answerable somewhere else or not at all, and never on the surfaces above.
+    """
+    return {"kind": kind, "id": subject_id, "reads": reads, "label": label,
+            "unit": unit, "explain": explain, **extra}
+
+
+def cited_bank_ids(evidence, kind=None) -> list:
+    """Every metric-bank entry a decision read, in the order it cited them.
+
+    Read off what each citation says it draws on, never off the kind it
+    renders as — see `_subject`. `kind` filters by what the BANK says an
+    entry is: "computed" for a figure this tool works out, "qualitative" for
+    a question only the user can answer. That distinction is the bank's to
+    make and not a citation's, which is the same reason `resolve_evidence`
+    takes it from there rather than letting a strategy choose it.
+    """
+    out = []
+    for row in evidence or []:
+        eid = ((row or {}).get("subject") or {}).get("reads")
+        if eid is None or eid in out:
+            continue
+        if kind is not None and (_bank_entry(eid) or {}).get("kind") != kind:
+            continue
+        out.append(eid)
+    return out
+
+
 def resolve_evidence(record: dict, ctx: dict, items: list):
     """(rendered, errors) — every citation answered by the host.
 
@@ -3282,43 +3420,44 @@ def resolve_evidence(record: dict, ctx: dict, items: list):
                 # screen and the second is the one deciding something.
                 anchor = BASELINE_ANCHORS.get(item["since"]) or {}
                 form = _change_form(item)
-                view = {"kind": "change", "id": item["measure"],
-                        "label": f'{_bank_label(item["measure"])}, change '
-                                 f'{anchor.get("label", "")}'.strip()
-                                 + CHANGE_FORMS[form]["suffix"],
-                        "unit": _change_unit(item["measure"], form),
-                        "since": item["since"], "change": form,
-                        "explain": _change_explain(item["measure"], anchor,
-                                                   form)}
+                view = _subject(
+                    "change", item["measure"], reads=item["measure"],
+                    label=f'{_bank_label(item["measure"])}, change '
+                          f'{anchor.get("label", "")}'.strip()
+                          + CHANGE_FORMS[form]["suffix"],
+                    unit=_change_unit(item["measure"], form),
+                    since=item["since"], change=form,
+                    explain=_change_explain(item["measure"], anchor, form))
             elif "without" in item:
                 # Also its own subject. "18.9%" and "18.9% with its worst
                 # year dropped" are two different figures, they render side
                 # by side on an exit, and the second is the one deciding
                 # whether the first is a year or a trend.
                 form = ROBUSTNESS.get(item["without"]) or {}
-                view = {"kind": "robustness", "id": item["measure"],
-                        "label": f'{_bank_label(item["measure"])}, '
-                                 + form.get("label", item["without"]),
-                        "unit": _bank_unit(item["measure"]),
-                        "without": item["without"],
-                        "explain": form.get("explain")}
+                view = _subject(
+                    "robustness", item["measure"], reads=item["measure"],
+                    label=f'{_bank_label(item["measure"])}, '
+                          + form.get("label", item["without"]),
+                    unit=_bank_unit(item["measure"]),
+                    without=item["without"], explain=form.get("explain"))
             else:
-                view = {"kind": "judgement" if judged else "measure",
-                        "id": item["measure"],
-                        "label": _bank_label(item["measure"]),
-                        "unit": _bank_unit(item["measure"]),
-                        "explain": meta.get("question") if judged else None}
+                view = _subject(
+                    "judgement" if judged else "measure", item["measure"],
+                    reads=item["measure"],
+                    label=_bank_label(item["measure"]),
+                    unit=_bank_unit(item["measure"]),
+                    explain=meta.get("question") if judged else None)
                 if "at" in item:
                     view["at"] = item["at"]
                     view["cadence"] = _read(entry.get("series"), "cadence")
         elif subject == "fact":
             spec = HOST_FACTS.get(item["fact"])
-            view = ({"kind": "fact", "id": item["fact"],
-                     "label": spec["label"], "unit": spec["unit"],
-                     "explain": spec["explain"]} if spec else None)
+            view = (_subject("fact", item["fact"], reads=None,
+                             label=spec["label"], unit=spec["unit"],
+                             explain=spec["explain"]) if spec else None)
         elif subject == "label":
-            view = {"kind": "stated", "id": None, "label": item["label"],
-                    "unit": item["unit"], "explain": None}
+            view = _subject("stated", None, reads=None, label=item["label"],
+                            unit=item["unit"], explain=None)
         else:
             view, problem = _declared_observation(record, ctx, item, subject)
             if problem is not None:
@@ -3390,8 +3529,22 @@ def resolve_groups(record: dict, ctx: dict, groups, rendered: list) -> list:
                                       {**g, "comparator": "at_least"})
             need = view["test"]["threshold"]
         if not isinstance(need, int) or isinstance(need, bool):
-            view["outcome"] = UNKNOWN
-        elif passed >= need:
+            # Refused before this runs — validate_decision demands that a
+            # counting group cite an integer value with a floor, and every
+            # layer of the chain that could set one is typed. So this is
+            # unreachable through `evaluate`, and it is a raise rather than
+            # an `unknown` because of what `unknown` did while it stood here:
+            # it made the group undecided, which refused every commit beside
+            # it, which read to the user as a strategy that simply never
+            # wanted to buy anything, with nothing on any screen saying why.
+            # A count that is not a count is a broken strategy, and a broken
+            # strategy says so.
+            raise ValueError(
+                f'"{g.get("name") or g.get("id")}" counts how many of its '
+                f"rows passed, and the count it was given is {need!r} — not "
+                "a whole number of rows. A group's `at_least` reads its "
+                "limit out of one of the strategy's own integer values.")
+        if passed >= need:
             view["outcome"] = PASS
         elif passed + unknown < need:
             view["outcome"] = FAIL
@@ -3473,12 +3626,17 @@ def _unanswerable_block(record, state, evidence) -> str | None:
     a citation, the host cannot read it, and a convention that lives in one
     strategy's prose is not a guarantee — which is the whole reason this is
     a refusal and not a paragraph of documentation.
+
+    Asked through the same call the section itself is built from, so the two
+    cannot answer differently. Matching the subject kind here would have been
+    a second reading of the same question, and a second reading is how a
+    check comes to pass over a screen that is empty.
     """
     spec = STATE_FIXES.get(state.get("fix")) or {}
     kind = spec.get("cites")
     if kind is None:
         return None
-    if any((r.get("subject") or {}).get("kind") == kind for r in evidence):
+    if cited_bank_ids(evidence, kind):
         return None
     return (f'{record["name"]} blocked on "{state["name"]}" and sent the '
             f'reader to {spec["where"]} without citing anything that is '

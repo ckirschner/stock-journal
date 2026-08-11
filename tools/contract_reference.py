@@ -81,7 +81,8 @@ def _state_fixes() -> str:
     return _table(
         ["`fix`", "button", "where it goes", "must cite"],
         [(f"`{k}`", v["label"], v["where"],
-          f'a `{v["cites"]}` citation' if v["cites"] else "—")
+          f'a bank entry of kind `{v["cites"]}`, however it is cited'
+          if v["cites"] else "—")
          for k, v in contract.STATE_FIXES.items()])
 
 

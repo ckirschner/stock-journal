@@ -567,13 +567,6 @@ inputs:
     lease_combined:
       - us-gaap:LongTermDebtAndCapitalLeaseObligationsNoncurrent
     zero_guard: total_debt
-    fallback_total:
-      - concept: us-gaap:LongTermDebt
-        caution: >
-          LongTermDebt often INCLUDES the current portion, so where this
-          serves, long-term debt may be overstated by the current maturities
-          — conservative for the one entry that uses the split alone
-          (Graham's long-term debt to working capital).
     notes: >
       On unclassified balance sheets (REITs, banks) there is no noncurrent
       classification at all; the unclassified debt lines are picked up by
@@ -582,6 +575,23 @@ inputs:
       debt to working capital) needs a classified sheet anyway. zero_guard
       means this input may never claim a completeness zero while debt-like
       lines it cannot classify sit on the same face.
+
+      There was a fallback here on us-gaap:LongTermDebt, cautioned as
+      possibly including the current portion. It is gone, and the reason is
+      the direction that caution was reasoned in. Overstating long-term debt
+      was called conservative because it can only make a limit harder to
+      meet — true on the way IN, where a false fail declines a purchase and
+      nothing happens. Graham cites the same measure on its exit path, and
+      there a false fail sells a holding. Conservative is not a property of
+      a number, it is a property of a number and a direction, and this one
+      pointed both ways. A figure that is wrong by an unknown amount for a
+      known reason is what principle 4 calls absent: the caution beside it
+      was read by a person and ignored by the arithmetic that acted on it.
+      us-gaap:LongTermDebt is a component of total_debt below, which is
+      where an unclassified filer's borrowing is meant to land, and
+      zero_guard names that spec — so a filer with only this line comes back
+      absent here rather than zero, which is what it was actually protecting
+      against.
 
   total_debt:
     label: Total debt (all interest-bearing borrowings)

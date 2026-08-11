@@ -629,3 +629,52 @@ class TestHowFarHasTwoHonestAnswers:
         # And the same citation is refused legibly on the rendering path.
         _rows, errors = contract.resolve_evidence(RECORD, context, [item])
         assert errors and "counts a move" in errors[0]
+
+
+class TestADriftCitationCannotBeConfirmed:
+    """The third way a `since` citation fell through machinery written before
+    it existed, and the one that acts.
+
+    `confirm` counts consecutive filings that each carry a failure on their
+    own reading, by re-asking the same citation `at` each past period. A
+    baseline is frozen at a purchase and never re-read, so there is no
+    reading of a drift at an older filing — which is exactly why an evidence
+    item carrying both `at` and `since` is refused.
+
+    The loop synthesised that pair itself. `_observation` reads `since`
+    first, so `at` was ignored and every filing in the record was answered
+    with the identical comparison: the run came back as the length of the
+    history, `periods` named filings nobody had re-read, and the drop-a-year
+    reading compared the number against itself and always survived. An exit
+    that waits for a breach to be established was told it had been, on
+    evidence that did not exist.
+    """
+
+    def context(self):
+        return ctx(now={RATIO: 1.2},
+                   first=anchor("2024-06-01", {RATIO: 3.0}))
+
+    def item(self, **over):
+        return {"measure": RATIO, "since": "first-purchase",
+                "comparator": "at_least", "threshold": -0.5, **over}
+
+    def test_it_is_refused_rather_than_answered_from_nothing(self):
+        with pytest.raises(ValueError) as e:
+            contract.confirm(self.context(), self.item())
+        assert "frozen at the purchase" in str(e.value)
+
+    def test_the_level_underneath_it_confirms_exactly_as_before(self):
+        """The refusal is about the drift and not about the measure. A
+        strategy that wants both cites the level and confirms that."""
+        got = contract.confirm(self.context(),
+                               {"measure": RATIO, "comparator": "at_least",
+                                "threshold": 2.0})
+        assert got["confirmation"] in contract.CONFIRMATIONS
+
+    def test_the_refusal_names_the_citation_it_is_refusing(self):
+        """A fault in the strategy rather than a fact about the security, so
+        the sentence has to be enough to find the rule that wrote it."""
+        with pytest.raises(ValueError) as e:
+            contract.confirm(self.context(), self.item())
+        assert RATIO in str(e.value)
+        assert "since you first bought" in str(e.value)

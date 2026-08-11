@@ -161,6 +161,7 @@ entries:
         - long-term debt
         - total shareholders' equity
         - cash and cash equivalents
+        - revenue
       prices: []
       entries: []
     explanation:
@@ -200,6 +201,16 @@ entries:
         because: |
           Asset-light companies can have near-zero or negative invested
           capital, which makes the ratio explode or invert into nonsense.
+
+          Revenue is what the denominator is judged small against, which is
+          why it is listed as an input even though the formula above never
+          uses it. Where the filer's revenue cannot be read over the same
+          fiscal years, this condition cannot be settled either way — and a
+          test that cannot be run has not been passed, so the measure is
+          absent rather than computed ungated. It used to be skipped
+          silently, which meant the one class of filer most likely to be
+          missing a revenue total was the one class computing this without
+          the guard the guard exists for.
 
   - id: roe_median_5y
     kind: computed
@@ -574,6 +585,14 @@ entries:
         Companies capitalising interest into construction projects understate
         the expense, which flatters the ratio.
 
+        A company with almost no borrowing reads absurdly high — a lease
+        interest line of a quarter of a million against three billion of
+        operating profit is twelve thousand times over. Nothing is wrong with
+        the arithmetic and nothing is wrong with the company; the ratio is
+        simply answering a question that does not apply to a business with no
+        interest bill to cover. Read it as "no meaningful borrowing" rather
+        than as a safety margin.
+
         For a lender, interest is closer to a cost of goods than to a
         financing choice, so a figure that would look alarming for a
         manufacturer can be ordinary here. Read it against what lenders earn
@@ -587,10 +606,24 @@ entries:
       attribution: |
         Graham's bond-safety standard, in its original form.
     not_meaningful_when:
-      - data: interest expense is zero or near zero
+      - data: interest expense is zero or negative
         because: |
-          Debt-free companies have interest expense near zero, which makes the
-          ratio infinite or undefined.
+          There is nothing to divide by. A company with no interest bill has
+          no coverage of it to state, and a negative one — net interest
+          income tagged into the expense line — would invert the ratio so
+          that the more the company earned, the worse its coverage read.
+
+          This said "zero or near zero" and the formula refused on zero, so
+          half of it was a sentence nothing performed. It is stated as what
+          is enforced, because a condition that overstates what the
+          arithmetic does is how a reader comes to trust a guard that is not
+          there. What "near zero" was reaching for is real and is in
+          `misfires` above, where a caution belongs: a near-debt-free company
+          reads absurdly high, and that reading is arithmetically correct.
+          There is no honest line between "no borrowing" and "a little
+          borrowing" that this bank has measured, and an unmeasured one in a
+          refusal would decide against real companies on a number somebody
+          picked.
 
   - id: ltd_to_working_capital
     kind: computed
@@ -1316,7 +1349,10 @@ entries:
         that's normal and not a defect. Software companies with large deferred
         revenue balances show conversion well above 1.0 and look better than
         they are. Companies with high depreciation and amortisation and low
-        current capex flatter this badly.
+        current capex flatter this badly. A profit small enough to be a
+        rounding error against revenue makes a year's ratio enormous without
+        saying anything about conversion; the number is right and the reading
+        is not.
       attribution: |
         Buffett's owner-earnings thinking, formalised. Also standard in forensic
         accounting (Schilit).
@@ -1347,6 +1383,23 @@ entries:
           This divides cash by profit, so a suppressed profit underneath makes
           the conversion read spectacularly well for a reason that is the
           depreciation schedule and nothing else.
+      - data: net income in any year of the window is zero or negative
+        because: |
+          This asks what share of the reported profit arrived as cash, and a
+          loss is not a share of anything. Worse than undefined, it inverts:
+          a company that lost money AND burned cash divides one negative by
+          another and reads as though it converted its earnings perfectly,
+          which is the best possible answer to the worst possible facts. A
+          loss-making year is real information and belongs on the earnings
+          record, where this bank keeps it; it does not belong in a
+          conversion ratio.
+
+          Any year and not the median year, because the median is taken of
+          the five ratios and one meaningless ratio is enough to be the
+          middle one. Dropping the year instead would quietly turn a
+          five-point estimator into a four-point one, and a measure that
+          becomes a weaker reading when the data thins is the same failure
+          wearing a different coat.
 
   - id: accruals_ratio
     kind: computed
@@ -1472,9 +1525,7 @@ entries:
         Sustainably above 100% means the returns are being funded with debt.
       misfires: |
         A single large buyback year, or an equity raise inside the window,
-        swings the ratio without describing a policy. Negative free cash flow in
-        any year makes that year's ratio uninterpretable before the median is
-        taken.
+        swings the ratio without describing a policy.
       attribution: |
         Standard capital-allocation check, in Buffett's owner-earnings
         tradition.
@@ -1499,6 +1550,20 @@ entries:
           of the company rather than a warning about it — and the cash
           underneath is struck after building spending this program cannot
           separate from acquisitions.
+      - data: free cash flow in any year of the window is zero or negative
+        because: |
+          This asks what share of the cash the business produced was handed
+          back. Where it produced none, there is no share to state — and the
+          ratio does not merely fail to answer, it answers backwards. Divide
+          a payout by negative free cash flow and the result is negative, so
+          a company borrowing to fund its dividend reads as paying out far
+          less than it earns. That is exactly the company this measure exists
+          to find, reported as the safest kind there is.
+
+          It was a caution for as long as this measure has existed, saying in
+          as many words that those years are uninterpretable — and the median
+          was taken anyway. A caution qualifies what a reader sees; the
+          arithmetic that reaches a verdict never reads it.
 
   - id: operating_income_ttm
     kind: computed
@@ -2038,6 +2103,18 @@ entries:
           The same two faults as the version measured against market value,
           plus a price that treats a property company's mortgages as though
           they were an ordinary company's borrowing.
+      - data: enterprise value is zero or negative
+        because: |
+          A company holding more cash than its shares and its debts are worth
+          together prices at nothing or less, and a yield measured against
+          that is not a yield. Divide by a negative and it inverts: the more
+          the business earns, the worse the number reads, on a measure where
+          higher is better.
+
+          The formula has always refused on this and cited "the bank's own
+          test" for it. Its sibling measured against market value states the
+          condition; this one did not, so a reader following the sentence
+          here found nothing to check it against.
 
   - id: ev_to_ebit
     kind: computed
@@ -2094,6 +2171,17 @@ entries:
 
           The profit underneath is after that charge, so a property company
           reads as expensive on this whatever it is worth.
+      - data: EBIT (TTM) is zero or negative
+        because: |
+          A multiple says how many years of profit the price represents, and
+          a company that made no profit has none to count. Negative is worse
+          than undefined: dividing a positive price by a loss gives a
+          negative multiple, which sorts alongside the cheapest companies on
+          a measure where lower is better — so the worst case reads as the
+          best bargain.
+
+          The formula has always refused on this and cited "the bank's own
+          test" for it. The test was not here; it is now.
 
   - id: ev_ebit_to_own_5y_median
     kind: computed

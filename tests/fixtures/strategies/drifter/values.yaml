@@ -1,0 +1,4 @@
+version: 1
+values:
+  drift-floor: -4
+  cushion-floor: 1.2

@@ -349,11 +349,12 @@ class Api:
                 record)
         return contract.evaluate(record, ctx)
 
-    def _cited_ids(self, decision, kind="measure") -> list:
-        """What this decision actually looked at, of one subject kind. It is
-        what the Edit-values dialog offers, and what the Judgements section
-        asks: the figures this strategy reads for THIS security, never the
-        whole bank.
+    @staticmethod
+    def _cited_ids(decision, kind="computed") -> list:
+        """What this decision actually looked at, of one kind of bank entry.
+        It is what the Edit-values dialog offers, and what the Judgements
+        section asks: the figures this strategy reads for THIS security,
+        never the whole bank.
 
         Citation is the whole discovery mechanism for anything per security,
         because a question about one cannot be asked before there is one to
@@ -363,13 +364,17 @@ class Api:
         after the numbers pass will not ask about a moat until they do. That
         is the right way round. Nobody should be assessing the durability of
         a business their own rules have already rejected.
+
+        The host answers which entries were read; this only says which kind
+        it wants. It used to match the subject kind itself, which meant this
+        screen held a copy of the host's list of them and silently dropped
+        every kind added after it was written — a measure cited only as a
+        change since a purchase never reached the dialog that supplies it.
+        See contract._subject.
         """
-        out = []
-        for item in ((decision or {}).get("reason") or {}).get("evidence", []):
-            subj = item.get("subject") or {}
-            if subj.get("kind") == kind and subj.get("id") not in out:
-                out.append(subj["id"])
-        return out
+        return contract.cited_bank_ids(
+            ((decision or {}).get("reason") or {}).get("evidence") or [],
+            kind)
 
     @staticmethod
     def _judgement_view(security, asked) -> list:
@@ -584,7 +589,7 @@ class Api:
             # answer, plus anything already assessed — so an answer stays
             # readable after the strategy stops reading the question.
             s["_judgements"] = self._judgement_view(
-                s, self._cited_ids(s["_decision"], "judgement"))
+                s, self._cited_ids(s["_decision"], "qualitative"))
             # The other two dated records the user writes. Both are read
             # through the same modules a purchase freezes from, so a screen
             # can never show a version the record would not have handed to a
