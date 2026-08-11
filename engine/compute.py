@@ -206,12 +206,22 @@ def _window(ctx, input_id, n):
 # exists to prevent one level up.
 # --------------------------------------------------------------------------
 
-def _with_one_out(values, years, stat):
+def _with_one_out(values, years, stat, defined=None):
     """(the statistic, [{"dropped": year, "value": v}, ...]).
 
     One entry per fiscal year in the window. A window of two would leave one
     observation behind and there is no statistic of one worth reporting, so
     nothing is offered there.
+
+    `defined` is for a statistic with a denominator. A ratio guarded against
+    a non-positive denominator on the full window can still meet one when a
+    year is dropped — five years averaging positive free cash flow with one
+    very good year among them is the case — and what comes back is either a
+    crash or a NEGATIVE ratio, which on a lower-is-better measure reads as
+    the company being in wonderful shape. A wrong number arriving through the
+    door marked robustness, in the flattering direction, is worse than no
+    reading at all. So the year is skipped: dropping it leaves nothing to
+    compare against rather than something excellent.
     """
     full = stat(values)
     if len(values) < 3:
@@ -219,6 +229,8 @@ def _with_one_out(values, years, stat):
     outs = []
     for i, y in enumerate(years):
         rest = values[:i] + values[i + 1:]
+        if defined is not None and not defined(rest):
+            continue
         outs.append({"dropped": y, "value": stat(rest)})
     return full, outs
 
@@ -2074,7 +2086,8 @@ def total_debt_to_avg_fcf_5y(ctx):
             "Not meaningful here: average free cash flow over the five years "
             "is zero or negative, so there is no number of years of it that "
             "repays the debt (the bank's own test)"))
-    value, outs = _with_one_out(fcf["values"], fcf["years"], ratio)
+    value, outs = _with_one_out(fcf["values"], fcf["years"], ratio,
+                                lambda rest: sum(rest) / len(rest) > 0)
     return computed(value,
                     debt["provenance"]
                     + [f"free cash flow for FY {fcf['years'][0]}.."
@@ -2212,7 +2225,8 @@ def gross_margin_range_relative_5y(ctx):
             "Not meaningful here: the middle annual gross margin over the "
             "window is zero or negative, so a swing measured against it has "
             "no scale (the bank's own test)"))
-    value, outs = _with_one_out(gm["values"], gm["years"], relative)
+    value, outs = _with_one_out(gm["values"], gm["years"], relative,
+                                lambda rest: median(rest) > 0)
     return computed(value,
                     [f"annual gross margins for FY {gm['years'][0]}.."
                      f"{gm['years'][-1]}, spread over the middle reading"],

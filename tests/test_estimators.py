@@ -30,7 +30,7 @@ tests/fixtures/groundtruth.
 import pytest
 from conftest import dur, filing
 
-from engine import bank, contract
+from engine import bank, compute, contract
 from engine.compute import compute_all
 
 
@@ -350,6 +350,68 @@ class TestTheBankDeclaresHowEveryMeasureIsRead:
         assert formed, "none of them computed on this fixture"
         for eid in formed:
             assert got[eid].get("leave_one_out"), eid
+
+
+class TestADroppedYearNeverFlatters:
+    """A leave-one-out reading exists so a breach can be asked whether one
+    year produced it. It must never be the way a wrong number gets in.
+
+    The failure it guards is specific to a ratio. Every measure here is
+    guarded against a meaningless denominator on the full window — but
+    dropping a year can produce one where the full window had none, and the
+    arithmetic then returns either a crash or a NEGATIVE figure. On a
+    lower-is-better measure a negative reads as the company being in
+    outstanding shape, so the flattering answer arrives through the one door
+    marked robustness, at exactly the moment a breach was being tested.
+    """
+
+    YEARS = ["2019-12-31", "2020-12-31", "2021-12-31", "2022-12-31",
+             "2023-12-31"]
+
+    # Debt of 100 against five years of free cash flow, one of them badly
+    # negative and one of them very good. The window averages +2, so the
+    # measure is computable and reads 50 years of cash flow owed.
+    CARRIED = [-38.0, 5.0, 6.0, 7.0, 30.0]
+
+    @staticmethod
+    def years_owed(values):
+        return 100.0 / (sum(values) / len(values))
+
+    def test_a_year_whose_removal_empties_the_denominator_is_skipped(self):
+        """Drop the good year and the average goes negative. That reading is
+        not offered, rather than offered as an improvement."""
+        full, outs = compute._with_one_out(
+            self.CARRIED, self.YEARS, self.years_owed,
+            lambda rest: sum(rest) / len(rest) > 0)
+        assert full == pytest.approx(50.0)
+        assert "2023-12-31" not in [o["dropped"] for o in outs]
+        assert len(outs) == 4
+        assert all(o["value"] > 0 for o in outs)
+
+    def test_without_the_guard_the_same_window_reads_as_excellent(self):
+        """The number this refuses, shown once so the guard is not mistaken
+        for tidiness. Dropping the good year takes the reading from 50 years
+        of cash flow owed to MINUS 20 — and on a measure where lower is
+        better, minus 20 is the best figure on the page."""
+        _full, unguarded = compute._with_one_out(
+            self.CARRIED, self.YEARS, self.years_owed)
+        assert {o["dropped"]: o["value"]
+                for o in unguarded}["2023-12-31"] < 0
+
+    def test_a_zero_denominator_would_take_the_whole_measure_down(self):
+        """The other half. Where a dropped year leaves an average of exactly
+        nought, the unguarded version raises — and `compute_all` turns that
+        into 'computation failed' for an entry that was perfectly
+        computable. Absence for the wrong reason is still a measure that
+        stopped working, and it reads identically to a company with no
+        filings."""
+        values = [-15.0, 5.0, 5.0, 5.0, 5.0]
+        with pytest.raises(ZeroDivisionError):
+            compute._with_one_out(values, self.YEARS, self.years_owed)
+        _full, outs = compute._with_one_out(
+            values, self.YEARS, self.years_owed,
+            lambda rest: sum(rest) / len(rest) > 0)
+        assert [o["dropped"] for o in outs] == ["2019-12-31"]
 
 
 # ---------------------------------------------------------------------------

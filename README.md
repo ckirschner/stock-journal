@@ -320,7 +320,7 @@ misfires.
 **`strategies/buffett/` is the second.** It buys a business good enough to
 be worth owning for decades, at a price that leaves something on the table,
 and sells only when the business breaks — never when the price gets high and
-never because time has passed. It declares twelve states and twenty-seven
+never because time has passed. It declares twelve states and twenty-eight
 settings, and two things about the shape of it are the point rather than
 gaps. There is no state that trims, so a holding that compounds to half the
 account is left alone. And three of the things it reads are not measurements
@@ -328,6 +328,31 @@ at all: whether the moat holds, whether management can be taken at their
 word, and what has been done with spare cash are questions you answer
 yourself, in writing, and an unanswered one blocks a purchase rather than
 being read as agreement.
+
+**Neither of them counts its tests, and that is the most consequential thing
+about how both are built.** A rule set with nine second-tier tests where seven
+must pass sounds like a standard and is not one, because the nine are not nine
+pieces of evidence. Cash flow margin and cash conversion are two readings of
+the same cash; three balance-sheet ratios are three readings of one balance
+sheet. A company banks passes for one strength measured several ways and
+spends them where it is weak, and the arithmetic runs that way every time, in
+the direction of buying. So each strategy groups its tests by **what they
+measure** — returns, borrowing, cash, growth, pricing power, capital
+allocation — and every group has to be satisfied on its own. Being excellent
+at one thing no longer pays for a balance sheet nobody looked at. Where two
+tests inside a group are near-duplicates of each other, one of them is the
+coverage statement and how many is a setting; where they measure different
+things, both are owed.
+
+**And each says what its method does not promise.** Both are drawn from
+portfolio methods with an expected rate of losers built in, and both of their
+authors said so. A screen rendering a verdict on one security is quietly
+offering something neither of them offered, so each strategy declares the
+things a journal looking at one security at a time cannot carry, and the
+strategy page renders them above everything else. Graham's is the one worth
+reading first: against a realistic universe his tests return nothing for years
+at a time, that is the method working, and the answer it gives is to hold more
+in something safe rather than to lower a threshold.
 
 ### Seeing it work without any of your own data
 
