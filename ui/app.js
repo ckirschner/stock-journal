@@ -1860,6 +1860,39 @@ function wontEvaluate(st) {
     </div>`).join("")}</div></section>`;
 }
 
+/* What the METHOD asks for or admits to that this program does not do.
+
+   Different from the section above it, and the distinction is the point.
+   That one is about a kind of COMPANY these rules cannot read. This is about
+   the method itself: something its own author said was part of it which a
+   journal evaluating one security at a time does not do.
+
+   It sits high on the page, above the states, because it changes how
+   everything under it should be read — a verdict is worth less than it
+   looks if the method it came from was never a promise about one security.
+   Every one of these methods is a portfolio method with an expected rate of
+   losers built in, and saying nothing about that is not neutral: it is the
+   screen quietly implying the opposite.
+
+   Nothing here is hardcoded and nothing here does anything. A strategy that
+   declares no limits renders no section, and the host neither reads these
+   nor acts on them. */
+function methodLimits(st) {
+  const list = st.limits || [];
+  if (!list.length) return "";
+  return `<section class="group" style="margin-top:26px">
+    <div class="ghead"><h3>What this method does not promise</h3>
+      <span>${list.length} thing${list.length === 1 ? "" : "s"} to know</span></div>
+    <p class="hint" style="margin:8px 0 0">These are not faults in the rules and they are not reasons to distrust
+    a verdict. They are the parts of the method that a journal looking at one security at a time cannot carry —
+    said here rather than left for you to discover, because a screen that stays silent about them is quietly
+    promising something the method never did.</p>
+    <div class="plist" style="margin-top:12px">${list.map((l) => `<div class="pentry">
+      <div class="pe-head"><b>${esc(l.title)}</b></div>
+      <div class="pe-why">${prose(l.body)}</div>
+    </div>`).join("")}</div></section>`;
+}
+
 /* Read-only, on purpose. A strategy is edited where it lives — as code and a
    values file beside it — and every change is caught and recorded here
    whether or not it came through this app. */
@@ -1885,6 +1918,8 @@ function strategyView() {
     <div class="pe-sub-block"><i>Bundle</i><p><code>${esc(st.bundle)}</code>${
       (st.reference || []).length ? ` · ships ${st.reference.map((r) => `<code>${esc(r)}</code>`).join(", ")}` : ""}</p></div>
   </div>`;
+
+  h += methodLimits(st);
 
   h += `<section class="group" style="margin-top:26px"><div class="ghead"><h3>What it can say</h3>
     <span>${st.states.length} state${st.states.length === 1 ? "" : "s"}</span></div>

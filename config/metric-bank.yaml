@@ -176,6 +176,59 @@ entries:
           Companies that have bought back so much stock that equity is negative
           produce a negative or absurd denominator.
 
+  - id: roe_minus_roic_gap_5y
+    kind: computed
+    estimator:
+      kind: median
+      observations: 5
+    label: Return on equity above return on invested capital, 5-year
+    unit: percentage_points
+    format: "+0.0"
+    polarity: lower_is_better
+    derivation:
+      formula: |
+        median(ROE over five fiscal years)
+        − median(ROIC over five fiscal years)
+      window: five fiscal years, annual observations, the difference of two
+        medians
+    inputs:
+      filings: []
+      prices: []
+      entries:
+        - roe_median_5y
+        - roic_median_5y
+    explanation:
+      plain: |
+        Return on equity counts only the owners' money. Return on invested
+        capital counts the borrowed money too. So the distance between them is
+        borrowing, and nothing else: a company earning 30% on its owners'
+        money and 12% on all the money in the business is producing most of
+        that 30% with debt rather than with the business.
+
+        A wide gap is not a fraud and not always a mistake. It is a statement
+        that the returns being admired belong partly to the lenders, and that
+        they get thinner the moment borrowing gets dearer or harder.
+      misfires: |
+        A company with very little equity left — after years of buybacks, or
+        after a large write-off — has a small denominator under return on
+        equity, so the gap widens for a reason that is arithmetic rather than
+        a change in how the business is funded. A company with no debt at all
+        shows a small gap, correctly, but the two measures then differ only by
+        the cash on the balance sheet and the tax treatment, so the number
+        stops carrying much.
+      attribution: |
+        The construction is standard practice rather than any one investor's.
+        What it formalises is the observation Buffett has made repeatedly:
+        return on equity is trivially inflated by borrowing, so a company that
+        levers up to defend a falling return keeps that measure looking well
+        right through the deterioration.
+    not_meaningful_when:
+      - test: either side is not meaningful for this company
+        because: |
+          The distance between a number and a meaningless one is meaningless.
+          Where return on equity or return on invested capital cannot be
+          computed, so is the gap.
+
   # ===========================================================================
   # Leverage and solvency
   # ===========================================================================
@@ -219,6 +272,68 @@ entries:
           book, not operations. The consolidated number is meaningless without
           splitting industrial from financial, which XBRL tagging won't
           reliably let you do.
+
+  - id: total_debt_to_avg_fcf_5y
+    kind: computed
+    estimator:
+      kind: instant
+    label: Total debt to average free cash flow, 5-year
+    unit: times
+    format: "0.0x"
+    polarity: lower_is_better
+    derivation:
+      formula: |
+        (short-term debt + long-term debt + finance lease obligations)
+        ÷ mean( free cash flow for each of the last five fiscal years )
+
+        where free cash flow = cash from operations − capital expenditure
+      window: debt at the latest balance-sheet date, against five fiscal
+        years of free cash flow averaged
+    inputs:
+      filings:
+        - short-term debt
+        - long-term debt
+        - finance lease obligations
+        - cash from operating activities
+        - capital expenditure
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        How many years of the cash the business actually generates it would
+        take to repay everything it owes. At 3 it would take three years of
+        every spare dollar.
+
+        It asks the same question as debt against EBITDA and answers it with a
+        number the company cannot present its way out of. EBITDA adds back
+        depreciation, which is the cost of the equipment wearing out;
+        free cash flow has already paid for replacing it. For a business that
+        needs a lot of machinery, the two figures can differ by half.
+      misfires: |
+        A company in the middle of a deliberate expansion — building
+        factories, laying fibre — has low free cash flow by choice rather than
+        by weakness, and reads as more indebted than it is. Averaging five
+        years absorbs one such year and not a programme of them.
+
+        The debt is a single date and the cash flow is five years, so a
+        company that borrowed heavily last quarter shows the new debt against
+        cash flows earned before it was spent.
+      attribution: |
+        The construction is standard credit practice. It is here because of a
+        specific objection: Munger's position on EBITDA is that the word
+        should be read as a synonym for fictitious earnings, and Buffett has
+        written repeatedly that depreciation is a real expense and that any
+        measure ignoring it flatters the capital-hungry.
+    not_meaningful_when:
+      - test: average free cash flow over the five years is zero or negative
+        because: |
+          There is no number of years of a negative figure that repays a debt.
+          The company is consuming cash rather than producing it, which is a
+          more serious statement than any ratio, and a ratio would hide it.
+      - test: the company has a captive finance arm
+        because: |
+          As with debt against EBITDA: the consolidated borrowing funds a loan
+          book rather than operations.
 
   - id: net_debt_to_ebitda
     kind: computed
@@ -444,6 +559,74 @@ entries:
         because: |
           Altman himself excluded financial companies; the ratios don't map.
 
+  - id: altman_z_double_prime
+    kind: computed
+    estimator:
+      kind: instant
+    label: Altman Z″-score, for companies that do not manufacture
+    unit: score
+    format: "0.00"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        6.56 × (working capital / total assets)
+        + 3.26 × (retained earnings / total assets)
+        + 6.72 × (EBIT / total assets)
+        + 1.05 × (book equity / total liabilities)
+      window: most recent balance sheet and trailing twelve months
+    inputs:
+      filings:
+        - total current assets
+        - total current liabilities
+        - retained earnings
+        - total assets
+        - total liabilities
+        - total shareholders' equity
+        - EBIT
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        The same bankruptcy score as above, in the version its author built
+        for companies that do not make things. Two differences, and both
+        matter more than the changed weights.
+
+        The sales-to-assets term is gone. It was fitted on public
+        manufacturers, where a factory turning over its assets slowly is a
+        warning; a consultancy or a software company turns over very few
+        assets at all and is not thereby in distress.
+
+        And the equity term uses what the books say the equity is worth
+        rather than what the market says. The score therefore does not move
+        when the share price does — which is what a solvency test inside a
+        valuation rule set needs, because otherwise a share falling for being
+        cheap reads as a share falling for being in trouble, and the one
+        measure meant to tell those apart moves with the wrong one.
+      misfires: |
+        The distress and safe zones are not the same numbers as the original
+        score's: Altman's published bands for this variant put distress below
+        1.1 and safety above 2.6, against 1.8 and 3.0 for the five-variable
+        version. A level carried across from one to the other means something
+        different.
+
+        Young companies still score low on retained earnings by construction,
+        having had few years in which to retain any.
+      attribution: |
+        Altman. The four-variable variant is his own, published for
+        non-manufacturers and for companies outside the US market the original
+        was fitted on.
+    not_meaningful_when:
+      - test: the company is a financial company
+        because: |
+          Altman excluded financial companies from the original study and the
+          variant does not change that. A bank's balance sheet is not divided
+          into current and non-current at all, so the working capital term has
+          nothing to read.
+      - test: total liabilities are zero
+        because: |
+          A company that owes nothing has no denominator for the equity term —
+          and no solvency question either.
+
   # ===========================================================================
   # Margins, cash generation and earnings quality
   # ===========================================================================
@@ -526,6 +709,72 @@ entries:
       - test: the company does not report cost of revenue separately
         because: |
           Gross margin cannot be computed, so its range cannot be either.
+
+  - id: gross_margin_range_relative_5y
+    kind: computed
+    estimator:
+      kind: range
+      observations: 5
+    label: Gross margin range as a share of the margin, 5-year
+    unit: percent
+    format: "0.0%"
+    polarity: lower_is_better
+    polarity_note: |
+      A dispersion measure, like the range it is built from. Less dispersion
+      means the margin is more stable; it says nothing about whether the level
+      is high or low.
+    derivation:
+      formula: |
+        ( max(annual gross margin, 5 yrs) − min(annual gross margin, 5 yrs) )
+        ÷ median(annual gross margin, 5 yrs)
+      window: five fiscal years, annual observations
+    inputs:
+      filings:
+        - revenue
+        - cost of revenue
+      prices: []
+      entries:
+        - gross_margin_ttm
+    explanation:
+      plain: |
+        The same question as the plain range — does this company set its own
+        prices, or does the market set them — asked in a way that means the
+        same thing at any margin.
+
+        A distributor earning 12% and swinging between 9% and 15% moved six
+        points, and half its margin came and went. A software company earning
+        81% and swinging between 78% and 84% also moved six points, and barely
+        noticed. The first is a commodity business; the second sets its own
+        prices. Measured in points they are identical, which is the problem.
+        Measured against the margin itself, the first reads 50% and the second
+        7%.
+      misfires: |
+        A company whose gross margin is genuinely thin — a few percent, as in
+        wholesale distribution or contract manufacturing — has a small
+        denominator, so ordinary movement reads as violent. That is arguably
+        correct, since a one-point move really does take a large share of such
+        a company's margin, but it means this measure will not distinguish
+        between thin-and-stable and thin-and-erratic as finely as it does
+        higher up.
+
+        It inherits the plain range's problem too: a segment reporting change,
+        a transformative acquisition or a restatement inside the window shows
+        as movement that is not the business moving.
+      attribution: |
+        Buffett's pricing-power thinking, as with the plain range. The
+        scale-free form is standard practice rather than his; absolute
+        percentage points do not travel across businesses of different margin,
+        and the same objection applies to any threshold stated in points.
+    not_meaningful_when:
+      - test: the company does not report cost of revenue separately
+        because: |
+          Gross margin cannot be computed, so neither its range nor the
+          relative version can be.
+      - test: the middle annual gross margin is zero or negative
+        because: |
+          A swing measured against nothing has no scale, and measured against
+          a negative it changes sign for a reason that is arithmetic rather
+          than a fact about the company.
 
   - id: gross_margin_change_3y
     kind: computed
@@ -959,6 +1208,53 @@ entries:
         Standard. Used both as a size test and as an input to several ratios
         below.
 
+  - id: revenue_ttm
+    kind: computed
+    estimator:
+      kind: trailing
+    label: Revenue, trailing twelve months
+    unit: usd
+    format: "$0,0"
+    polarity: none
+    polarity_note: |
+      Size has no favourable direction. What a large company buys you is
+      filing quality, analyst attention you may not want, and the ability to
+      sell when you choose.
+    derivation:
+      formula: |
+        revenue over the last four quarters
+      window: trailing twelve months
+    inputs:
+      filings:
+        - revenue
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        What the company sold in the last year, in money.
+
+        It is here as a measure of how big a company is that does not depend
+        on what the market thinks it is worth. Market capitalization is the
+        other one, and the difference is not academic: a rule set that hunts
+        for companies the market has priced too cheaply, and then requires a
+        large market capitalization, is partly rejecting companies for being
+        cheap. Sales do not move when the share price does.
+      misfires: |
+        Sales are not comparable across industries as a measure of size. A
+        grocery chain turning over ten billion dollars at two percent margins
+        is a smaller business, on any other reading, than a software company
+        turning over two billion at thirty. A floor set on revenue is a floor
+        on filing quality and tradeability rather than on how substantial the
+        company is.
+
+        Companies that shifted between gross and net revenue recognition under
+        ASC 606 show a step change across the 2018 boundary that is
+        presentation rather than trade.
+      attribution: |
+        Standard. Graham's own adequate-size test was stated in annual sales —
+        $100 million for an industrial company in the 1973 edition — rather
+        than in market value.
+
   - id: enterprise_value
     kind: computed
     estimator:
@@ -1211,6 +1507,72 @@ entries:
         Buffett, from the 1986 shareholder letter appendix. He would recognise
         owner earnings; he'd quibble that the maintenance capex proxy is crude,
         and he'd be right.
+
+  - id: owner_earnings_yield_on_ev
+    kind: computed
+    estimator:
+      kind: instant
+    label: Owner earnings yield on enterprise value
+    unit: percent
+    format: "0.0%"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        (cash flow from operations − maintenance capex) ÷ enterprise value
+
+        where maintenance capex is proxied as min(capex, depreciation and
+        amortization LESS the amortization of intangible assets)
+      window: trailing twelve months over the current enterprise value
+    inputs:
+      filings:
+        - net cash provided by operating activities
+        - payments to acquire property, plant and equipment
+        - depreciation, depletion and amortization
+        - amortization of intangible assets
+      prices:
+        - current price
+      entries:
+        - enterprise_value
+    explanation:
+      plain: |
+        The cash the business throws off for its owners each year, divided by
+        what the whole business costs — the shares AND the debts that come
+        with them.
+
+        It differs from the plainer owner earnings yield in two ways, and both
+        of them make the answer smaller for the companies that were being
+        flattered.
+
+        The price is the enterprise value. Owner earnings is a figure about
+        the business, and buying a business with borrowings attached means
+        taking on the borrowings; priced against the shares alone, a heavily
+        indebted company looks cheap precisely for being indebted.
+
+        And the maintenance-capex proxy leaves out the amortization of
+        intangibles. The proxy works on the reasoning that a business
+        replacing its equipment spends about what it writes it down by. A
+        customer list bought in an acquisition is written down over ten years
+        and is never replaced by spending — it is replaced by another
+        acquisition. Counting it raises the floor of the proxy, so it
+        subtracts less, so owner earnings come out higher — and they come out
+        highest for the serial acquirers where the reasoning holds least.
+      misfires: |
+        It inherits every problem of the plainer version: cyclicals look
+        cheapest at the peak, lumpy capital spending makes the proxy wander,
+        and capital spending that is really acquisition in disguise breaks it
+        outright.
+
+        It adds one of its own. A filer who never reports the amortization of
+        intangibles separately from depreciation has no figure here at all,
+        so this reads absent where the plainer version reads a number. That is
+        deliberate — filling the gap with total D&A would report the
+        overstated answer under the corrected name.
+      attribution: |
+        Owner earnings is Buffett's, from the 1986 shareholder letter
+        appendix. Neither refinement is his: pricing a business-level figure
+        against enterprise value is standard practice, and taking acquired
+        intangible amortization out of the proxy answers a specific objection
+        about serial acquirers rather than anything he wrote.
 
   - id: ev_to_ebit
     kind: computed
@@ -1530,6 +1892,94 @@ entries:
   # ===========================================================================
   # Growth
   # ===========================================================================
+
+  - id: incremental_roic_5y
+    kind: computed
+    estimator:
+      kind: averaged
+      observations: 8
+    label: Incremental return on invested capital, 5-year
+    unit: percent
+    format: "0.0%"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        NOPAT(year)    = EBIT × (1 − effective tax rate)
+        invested(year) = total debt + total equity − cash & equivalents
+
+        base_profit  = mean( NOPAT, the 3 fiscal years ending 5 years before
+                             the most recent 3 )
+        end_profit   = mean( NOPAT, the most recent 3 fiscal years )
+        base_capital = mean( invested, the same 3 early years )
+        end_capital  = mean( invested, the most recent 3 years )
+
+        value = (end_profit − base_profit) ÷ (end_capital − base_capital)
+      window: eight fiscal years, three-year means at each end, five years
+        centre to centre
+    inputs:
+      filings:
+        - EBIT
+        - income tax expense
+        - pre-tax income
+        - short-term debt
+        - long-term debt
+        - total shareholders' equity
+        - cash and cash equivalents
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        What the money the company kept has earned — as opposed to what the
+        money already in the business earns.
+
+        Return on invested capital describes the existing base: everything
+        built, bought and borrowed over the company's whole life, taken
+        together. This describes only the increment. Profit is higher than it
+        was five years ago by some amount; the capital tied up in the business
+        is higher by some amount; the first divided by the second is what the
+        retained profits bought.
+
+        It is the number that decides how fast a business compounds. A company
+        earning 30% on its existing base and 6% on everything new is a company
+        that has run out of places to put money, and the 30% will drift down
+        toward the 6% for as long as it keeps reinvesting. The base tells you
+        what was built. This tells you what is being built now.
+      misfires: |
+        It is a ratio of two differences, so it is more sensitive to the
+        endpoints than any level measure — which is why both ends are
+        three-year means, and why it needs eight fiscal years to say anything
+        at all.
+
+        A large acquisition lands its whole price in the denominator at once
+        and its profits arrive over years, so an acquisitive company reads low
+        for a while after a deal and then recovers. The reverse holds for
+        divestitures.
+
+        A company that funds growth off the balance sheet — leases before ASC
+        842, or an asset-light model where the capital sits with suppliers —
+        shows little change in invested capital, so the ratio reads very high
+        on a small denominator.
+      attribution: |
+        Buffett's, in substance rather than in this arithmetic. His stated
+        test for retained earnings is whether each dollar kept has created at
+        least a dollar of market value, which is the same question asked of
+        the market rather than of the filings.
+    not_meaningful_when:
+      - test: invested capital did not grow across the window
+        because: |
+          No capital was retained for this to be the return on. A company that
+          grew while keeping nothing is a real and interesting case, and it is
+          one this ratio has no way to express: dividing by zero or by a
+          negative would print a figure that reads like an answer.
+      - test: pre-tax income in any year of the window is zero or negative
+        because: |
+          The effective tax rate for that year has no meaning, so after-tax
+          operating profit cannot be built for the window.
+      - test: fewer than eight fiscal years are available on one accounting
+          basis
+        because: |
+          The window cannot be constructed, and there is deliberately no
+          shorter fallback — the same reasoning as the averaged growth rates.
 
   - id: revenue_cagr_5y
     kind: computed
@@ -2105,6 +2555,66 @@ entries:
         Graham. His own test used a twenty-year run, written before the
         buyback-versus-dividend choice existed in its modern form.
 
+  - id: consecutive_capital_return_years
+    kind: computed
+    estimator:
+      kind: count
+    label: Consecutive years returning capital, by either route
+    unit: years
+    format: "0 yrs"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        Count of consecutive fiscal years, counting back from the most recent,
+        in which EITHER dividends paid > 0
+        OR (share repurchases − share issuance) > 0
+      window: consecutive fiscal years, most recent backward
+    inputs:
+      filings:
+        - payments of dividends
+        - payments for repurchase of common stock
+        - proceeds from issuance of common stock
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        How many years in an unbroken run the company has handed cash back to
+        its owners — by paying a dividend, by buying its own shares back, or
+        by both.
+
+        A long run says two things at once, and they are separable. It says
+        the company generates more cash than it needs, consistently. And it
+        says the company was still there: a run of twenty years reaches back
+        through whatever the last two decades contained, which no shorter
+        window can evidence at all.
+
+        Buybacks count NET of shares issued. A company handing out more stock
+        than it repurchases is not returning capital, it is mopping up after
+        its own issuance, and counting the repurchase line gross would let
+        that read as a capital return in the year it is least true.
+      misfires: |
+        Buybacks are discretionary in a way dividends are not. A company can
+        repurchase in good years and quietly stop in bad ones without the
+        signal a dividend cut sends, so a run counted this way is weaker
+        evidence of commitment than the same run of dividends — it evidences
+        capacity rather than promise.
+
+        A company that returns capital by special dividend every other year
+        breaks the run here even though it has returned a great deal of cash.
+      attribution: |
+        Graham's twenty-year dividend test, with the mechanism widened. The
+        widening is not his: SEC Rule 10b-18 (1982) made repurchases a safe
+        and routine alternative to dividends decades after he wrote, and a
+        dividend-only count now excludes companies returning capital
+        consistently by a route he had no reason to anticipate.
+    not_meaningful_when:
+      - test: a year in the run paid no dividend and has no resolvable
+          repurchase figure
+        because: |
+          Whether capital was returned that year is unknown, and a streak
+          either side of a year nobody can read is not a streak. Stopping the
+          count there would assert a break that may not have happened.
+
   - id: diluted_share_count_change_5y
     kind: computed
     estimator:
@@ -2234,6 +2744,77 @@ entries:
       attribution: |
         Buffett's preference for return on unleveraged net *tangible* assets,
         expressed as a balance-sheet composition.
+
+  - id: goodwill_impairment_to_equity_5y
+    kind: computed
+    estimator:
+      kind: cumulative
+      observations: 5
+    label: Goodwill written off over five years, against opening equity
+    unit: percent
+    format: "0.0%"
+    polarity: lower_is_better
+    derivation:
+      formula: |
+        sum( goodwill impairment charged in each of the last 5 fiscal years )
+        ÷ total shareholders' equity at the year end BEFORE the window opened
+      window: five fiscal years of charges, over the balance sheet that
+        preceded them
+    inputs:
+      filings:
+        - goodwill impairment charge
+        - total shareholders' equity
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        How much of what the company paid for other businesses it has since
+        admitted was not there — measured against the owners' money that
+        existed before the write-offs began.
+
+        Goodwill is the premium an acquirer pays over what the acquired
+        company's identifiable assets are worth. Writing it off is management
+        conceding, in public and in the accounts, that the premium bought
+        nothing. One write-off is a deal that went wrong. A run of them
+        against a large share of the equity base is a company whose growth has
+        been purchased at prices it could not justify.
+
+        The denominator is the equity BEFORE the window rather than after it,
+        and that is deliberate: impairments reduce equity, so measuring
+        against today's would divide a large numerator by a denominator the
+        same charges had already shrunk, and flatter the worst cases most.
+      misfires: |
+        Impairment testing is annual and judgement-heavy, so the timing says
+        more about when management conceded than about when the value went.
+        Two companies whose acquisitions failed identically can be years apart
+        here.
+
+        A write-off can also follow a change in interest rates rather than in
+        the business — discount rates feed the impairment test directly — so a
+        charge in a year rates moved sharply is weaker evidence than a charge
+        in a quiet one.
+
+        A company that has never acquired anything reads zero, correctly, and
+        so does one whose acquisitions have all worked. The measure cannot
+        tell those apart and is not trying to.
+      attribution: |
+        Not Buffett's, and pointedly the opposite of a related test he would
+        object to. His 1983 letter appendix argues that economic goodwill is
+        the most valuable asset a business owns and that accounting goodwill
+        measures it poorly — which is an argument against judging a company by
+        how much goodwill sits on its balance sheet, and no argument at all
+        against judging it by how much it has had to write back off.
+    not_meaningful_when:
+      - test: shareholders' equity before the window is zero or negative
+        because: |
+          There is no base to measure the write-offs against.
+      - test: any year in the window has no resolvable impairment figure
+        because: |
+          A missing caption is not evidence of no write-off. A filer reporting
+          one combined goodwill-and-intangibles line, and nothing this map
+          reads, would show nothing in a year it wrote off billions — and a
+          zero there is a large confident number in the direction that
+          flatters the company.
 
   # ===========================================================================
   # Ownership and insider behaviour

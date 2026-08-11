@@ -200,6 +200,12 @@ def _load_bundle(bundle_dir: Path) -> dict:
     # and so the screen that offers a strategy can say what it covers before
     # any journal is stamped with it.
     record["declines"] = decl.get("declines", [])
+    # What the METHOD asks for or admits to that this program does not do —
+    # prose the screen renders and nothing reads. Carried on the record for
+    # the same reason `declines` is: a reader choosing a strategy should be
+    # able to see what it does not promise before a journal is stamped with
+    # it, not after the first verdict.
+    record["limits"] = decl.get("limits", [])
     record["reference"] = MappingProxyType(reference)
     record["defaults"] = dict((values_doc or {}).get("values") or {})
     record["values_version"] = (values_doc or {}).get("version")

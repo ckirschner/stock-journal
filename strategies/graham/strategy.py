@@ -88,28 +88,83 @@ from engine import contract
 # the buy went through on a company whose shares cannot be sold in the size
 # this strategy would take, with a note underneath saying so — and the whole
 # reason for a discipline agreed while calm is that it is not a note.
+# The price ceiling is not here, and it is the only test in this file the
+# strategy works out for itself — see `_price_ceiling`. Everything else names
+# a measure and a setting and lets the host do the comparing.
 REQUIRED = (
-    ("pe_3y_avg_eps", "at_most", "max-pe-3y-avg"),
     ("price_to_book", "at_most", "max-price-to-book"),
-    ("graham_combined_multiple", "at_most", "max-combined-multiple"),
     ("current_ratio", "at_least", "min-current-ratio"),
-    ("market_cap", "at_least", "min-market-cap"),
+    ("revenue_ttm", "at_least", "min-revenue"),
 )
 
-# Most of these must pass; how many is a declared value.
-CORE = (
+# ---------------------------------------------------------------------------
+# The rest of the entry tests, gathered by WHAT THEY MEASURE.
+#
+# This replaced a single list of eight where six had to pass. A count assumes
+# its members are independent evidence, and three of these eight are three
+# readings of one balance sheet while two more read one decade of earnings.
+# Under a quota a company banked passes for the same strength twice and spent
+# them somewhere it was weak — and the arithmetic ran that way every time, in
+# the direction of buying.
+#
+# So the demand is coverage rather than a total. Each group below is one
+# question, every group has to be satisfied, and no group's passes can be
+# spent on another's. Within a group the rule follows from whether the
+# members are substitutes: `all` where they measure different things,
+# `at_least` where they are near-readings of one another and requiring both
+# would count one piece of evidence twice.
+#
+# The bar in total is six of these eight, exactly as before. That is a
+# coincidence of arithmetic and not the point: what changed is that the six
+# can no longer all be the balance sheet.
+# ---------------------------------------------------------------------------
+
+SAFETY = (
     ("ltd_to_working_capital", "at_most", "max-ltd-to-working-capital"),
-    ("profitable_years_10y", "at_least", "min-profitable-years"),
-    ("altman_z_score", "at_least", "min-altman-z"),
-    ("eps_growth_10y", "at_least", "min-eps-growth-10y"),
-    ("consecutive_dividend_years", "at_least", "min-dividend-years"),
+    ("altman_z_double_prime", "at_least", "min-altman-z"),
     ("debt_to_equity", "at_most", "max-debt-to-equity"),
+)
+
+RECORD = (
+    ("profitable_years_10y", "at_least", "min-profitable-years"),
+    ("eps_growth_10y", "at_least", "min-eps-growth-10y"),
+)
+
+CAPITAL_RETURNED = (
+    ("consecutive_capital_return_years", "at_least",
+     "min-capital-return-years"),
+)
+
+ASSET_BACKING = (
     ("price_to_net_tangible_assets", "at_most", "max-price-to-tangible"),
+)
+
+EARNINGS_QUALITY = (
     ("accruals_ratio", "at_most", "max-accruals-ratio"),
 )
 
 # Never block. They are reported so the reader can see them and stop there.
+#
+# The combined multiple is here and used to be a knockout, and the move is
+# arithmetic rather than judgement. It is price-to-earnings multiplied by
+# price-to-book against a ceiling that is the product of their two ceilings —
+# so while both of those are demanded, this one CANNOT fail. A row that can
+# never be the reason for anything is not a knockout; it is a row nobody can
+# learn from, taking up the tier where the reader looks for what decided the
+# verdict.
+#
+# It keeps its exit, where it is a genuinely separate test: on the way out
+# the three levels are alternatives rather than requirements, and a holding
+# at 20 times earnings and 2.8 times book trips the product at 56 while
+# tripping neither of the others.
+#
+# Graham's own intent for it was as a RELAXATION — a low multiple of earnings
+# justifying a higher multiple of assets — and this strategy does not
+# implement it that way. Doing so would let a company at thirty times
+# earnings through on a low price to book, which is not a company this
+# strategy is for. That is a departure and it is stated rather than hidden.
 BONUS = (
+    ("graham_combined_multiple", "at_most", "max-combined-multiple"),
     ("ncav_to_market_cap", "at_least", "min-ncav-to-market-cap"),
 )
 
@@ -140,7 +195,7 @@ BONUS = (
 EXITS_SAFETY = (
     ("current_ratio", "at_least", "exit-current-ratio"),
     ("ltd_to_working_capital", "at_most", "exit-ltd-to-working-capital"),
-    ("altman_z_score", "at_least", "exit-altman-z"),
+    ("altman_z_double_prime", "at_least", "exit-altman-z"),
     ("debt_to_equity", "below", "exit-debt-to-equity"),
     ("consecutive_annual_loss_years", "below", "exit-loss-years"),
 )
@@ -151,10 +206,18 @@ EXITS_DISCOUNT = (
     ("graham_combined_multiple", "below", "exit-combined-multiple"),
 )
 
-# The dividend run is watched but never acts. A cut is real information about
-# distress, and by the time it lands the balance-sheet exits will already be
-# talking; it should send the reader to the filings, not to the sell button.
-DIVIDEND_RUN = "consecutive_dividend_years"
+# The run of years returning capital is watched but never acts. A break in it
+# is real information about distress, and by the time it lands the
+# balance-sheet exits will already be talking; it should send the reader to
+# the filings, not to the sell button.
+#
+# It watches the same measure the entry test demands twenty years of, so a
+# company that stops paying AND stops buying back is what breaks it. That is
+# a later and stronger signal than a dividend cut alone — a company that
+# suspends its dividend while continuing to repurchase has not stopped
+# returning capital, and flagging it would send a reader to the filings over
+# a change of route.
+CAPITAL_RUN = "consecutive_capital_return_years"
 
 # What must not have moved too far since a purchase, before more money goes
 # into the same name.
@@ -194,7 +257,7 @@ DIVIDEND_RUN = "consecutive_dividend_years"
 DRIFT = (
     ("current_ratio", "at_least", "drift-current-ratio"),
     ("ltd_to_working_capital", "at_most", "drift-ltd-to-working-capital"),
-    ("altman_z_score", "at_least", "drift-altman-z"),
+    ("altman_z_double_prime", "at_least", "drift-altman-z"),
     ("debt_to_equity", "at_most", "drift-debt-to-equity"),
     ("consecutive_annual_loss_years", "at_most", "drift-loss-years"),
 )
@@ -215,8 +278,34 @@ DRIFT = (
 
 KNOCKOUTS = {"id": "knockouts", "name": "Tests this strategy will not bend",
              "requires": "all"}
-CORE_GROUP = {"id": "core", "name": "Core tests", "requires": "at_least",
-              "threshold_from": "core-tests-required"}
+
+SAFETY_TESTS = {"id": "safety-tests",
+                "name": "What the balance sheet can carry",
+                "requires": "at_least",
+                "threshold_from": "safety-tests-required"}
+RECORD_GROUP = {"id": "record", "name": "The ten-year earnings record",
+                "requires": "at_least",
+                "threshold_from": "record-tests-required"}
+RETURNED_GROUP = {"id": "returned",
+                  "name": "Whether it has paid its owners, and for how long",
+                  "requires": "all"}
+BACKING_GROUP = {"id": "backing",
+                 "name": "What you pay per dollar of real assets",
+                 "requires": "all"}
+QUALITY_TESTS = {"id": "quality-tests",
+                 "name": "Whether the reported profit is cash",
+                 "requires": "all"}
+
+# In the order they are asked, cited and drawn: the balance sheet first,
+# because it is the whole reason an unremarkable business is acceptable here.
+DIMENSIONS = (
+    (SAFETY_TESTS, SAFETY),
+    (RECORD_GROUP, RECORD),
+    (RETURNED_GROUP, CAPITAL_RETURNED),
+    (BACKING_GROUP, ASSET_BACKING),
+    (QUALITY_TESTS, EARNINGS_QUALITY),
+)
+
 BONUS_GROUP = {"id": "bonus", "name": "Reported, never blocking",
                "requires": "noted"}
 SIZING_GROUP = {"id": "sizing", "name": "Room in the list, and how much",
@@ -234,7 +323,7 @@ DISCOUNT_GROUP = {"id": "discount", "name": "The discount you bought",
                   "requires": "noted"}
 CLOCK_GROUP = {"id": "clock", "name": "The holding period", "requires": "all"}
 SIZE_GROUP = {"id": "size", "name": "How big it has got", "requires": "all"}
-DIVIDEND_GROUP = {"id": "dividend", "name": "The dividend run",
+DIVIDEND_GROUP = {"id": "dividend", "name": "The run of capital returned",
                   "requires": "noted"}
 
 # The two drift families, and both demand `all`. That is not decoration: a
@@ -272,6 +361,16 @@ _REPORT = "the expert report commissioned for this strategy"
 
 REPORT = {"name": _REPORT, "reasoning": True}
 REPORT_LEVEL_ONLY = {"name": _REPORT, "reasoning": False}
+
+# The second expert review of the profile document, which read that report
+# and disputed it in every profile. Where a level cites this rather than the
+# report, the report's own number was overruled and the value says why in its
+# own `explain`.
+REVIEW = {
+    "name": "the second expert review of the profile document, held at "
+            "dev_reference_docs/ledger-default-profiles-addendum.md, which "
+            "disputes this level in the report it reviewed",
+    "reasoning": True}
 GRAHAM_PRACTICE = {
     "name": "Graham's own documented practice in The Intelligent Investor. "
             "The expert report was scoped to selection and to exits and says "
@@ -353,6 +452,59 @@ DECLINES = [
 ]
 
 
+# What the METHOD asks for or admits to that this program does not do.
+#
+# Separate from DECLINES, which is about a kind of company these tests cannot
+# read. This is about the method, and the first of the two is the one most
+# likely to be experienced as the tool being broken.
+LIMITS = [
+    {"title": "Returning nothing for years is this strategy working",
+     "body": "**Against a realistic set of US companies these tests will "
+             "produce no candidates at all, for years at a time.** That is "
+             "faithful rather than broken, and it is worth understanding "
+             "before you are tempted to loosen anything.\n\n"
+             "Graham's own programme was never a stock-selection rule set "
+             "standing on its own. It sat inside an allocation between "
+             "shares and bonds — never less than a quarter in either, "
+             "rebalanced as prices moved — and he was explicit that in an "
+             "expensive market the criteria would find nothing, and that "
+             "this was the signal to hold more bonds rather than to relax "
+             "the criteria. The empty screen was the output. It was telling "
+             "you where the money should be.\n\n"
+             "**This program does not implement that allocation and cannot "
+             "tell you to hold bonds.** It has no view of your account "
+             "beyond what you tell it and it does not know what else you "
+             "own. So the half of the method that gave an empty screen its "
+             "meaning is missing here, and what is left looks like a tool "
+             "that has stopped working.\n\n"
+             "If you take one thing from this page: when this strategy has "
+             "nothing to buy for a long stretch, the answer the method "
+             "gives is to hold more in something safe and wait. It is not "
+             "to lower a threshold. A level moved during a drought is a "
+             "level moved at the exact moment you had the least reason to "
+             "trust yourself, which is the whole thing a written-down rule "
+             "exists to prevent."},
+
+    {"title": "It is a portfolio method, and this is one security",
+     "body": "This method buys a statistical discount, and statistics is "
+             "the operative word. Graham expected a meaningful share of "
+             "these positions to disappoint and said so plainly; the "
+             "arithmetic works because a diversified set of them works on "
+             "average, not because any one of them was correctly "
+             "picked.\n\n"
+             "**A verdict on this page is about one security, and no method "
+             "here can tell you that one will work.** A buy verdict says "
+             "this security is cheap against its own assets and its own "
+             "typical earnings by the standard you set while you were calm. "
+             "Some of the companies that pass will be cheap because "
+             "something is wrong that no filing shows.\n\n"
+             "It is also why the number of names this strategy holds is a "
+             "setting rather than a suggestion. Twenty positions at five "
+             "percent each is not timidity — it is the mechanism by which "
+             "a method with an expected loser rate is supposed to work."},
+]
+
+
 STRATEGY = {
     "id": "graham",
     "name": "Graham",
@@ -360,10 +512,96 @@ STRATEGY = {
                "what its assets and its typical earnings justify, and sells "
                "when that gap closes, when the balance sheet stops being "
                "safe, or when two years are up — whichever comes first.",
-    "version": 7,
+    "version": 8,
     "contract": 5,
     "declines": DECLINES,
+    "limits": LIMITS,
     "changelog": {
+        8: "A SECOND EXPERT REVIEW READ THE REPORT THIS STRATEGY WAS BUILT "
+           "FROM AND DISPUTED IT. This version is that review's "
+           "corrections, and every one of them changes what this strategy "
+           "will buy.\n\n"
+           "THE TWO PRICE TESTS CONTRADICTED EACH OTHER AND THE STRICTER "
+           "ONE NEVER DECIDED ANYTHING. A ceiling of fifteen times typical "
+           "earnings sat among the knockouts while the rule that the "
+           "earnings yield must beat the bond yield twice over sat among "
+           "the rows that never block — and above a bond yield of about "
+           "3.3% the second is the stricter. So in every environment since "
+           "this shipped, the strategy was quietly running the looser rule "
+           "because of where the two happened to sit. There is now one "
+           "test, and its ceiling is the stricter of the two rules. At the "
+           "shipped 5% bond yield that is a price of at most ten times "
+           "typical earnings rather than fifteen, which is a materially "
+           "harder test.\n\n"
+           "AND THE RATE IT COMPARES AGAINST IS NOW A CORPORATE BOND YIELD "
+           "RATHER THAN A TREASURY. Graham's test was written against "
+           "high-grade corporate bonds; a Treasury typically pays around "
+           "0.7 to 1.0 points less, so twice a Treasury yield was "
+           "materially looser than what he wrote. The setting is renamed "
+           "and its shipped figure changed with it. It remains the one "
+           "number here that nothing fetches and that goes wrong by "
+           "sitting still — and it now sets the price ceiling on every "
+           "purchase, so leaving it stale is no longer a small quiet.\n\n"
+           "THE SIZE FLOOR IS ON SALES RATHER THAN ON MARKET VALUE, at "
+           "$750M rather than $300M. Graham's adequate-size test was $100M "
+           "of annual sales, which inflation-adjusts to roughly that; the "
+           "old level was a market value defended with an argument about "
+           "sales. It was also the wrong variable for this strategy in "
+           "particular — a rule set hunting companies the market has "
+           "priced too cheaply, which then refuses anything the market "
+           "prices too low, is partly rejecting companies for being cheap. "
+           "This will refuse smaller companies it used to buy.\n\n"
+           "THE EIGHT SECOND-TIER TESTS ARE NOW FIVE QUESTIONS, AND EVERY "
+           "ONE MUST BE ANSWERED. Six of eight had to pass. That treated "
+           "the eight as eight pieces of evidence when three of them are "
+           "three readings of one balance sheet and two more read one "
+           "decade of earnings — so a company banked passes for the same "
+           "strength twice and spent them where it was weak. Now the "
+           "balance sheet, the earnings record, capital returned, asset "
+           "backing and earnings quality are each satisfied on their own. "
+           "The total is still six of eight, which is a coincidence of "
+           "arithmetic: what changed is that the six can no longer all be "
+           "the balance sheet.\n\n"
+           "TWENTY YEARS OF RETURNING CAPITAL, BY EITHER ROUTE, replaces "
+           "ten years of dividends. Graham's twenty was doing two jobs — "
+           "evidence of capital return, and evidence of survival across a "
+           "full cycle including a bad one — and cutting it to ten kept "
+           "the first and threw away the second, which was the half that "
+           "cannot be replaced. Counting net buybacks alongside dividends "
+           "handles the 1982 change in how companies return cash without "
+           "shortening the window. Buybacks count NET of issuance.\n\n"
+           "THE DISTRESS SCORE IS ALTMAN'S FOUR-VARIABLE VERSION, the one "
+           "he published for companies that do not manufacture, which is "
+           "most of what this strategy meets. The entry level moved from "
+           "3.0 to 2.6 and the exit from 1.8 to 1.1 — those are his "
+           "published bands for the variant, so the DEMAND is unchanged "
+           "and only the scale moved. Carrying the old numbers across "
+           "would have made the exit fire far too early on every company. "
+           "It also stops the score moving with the share price, which is "
+           "what a solvency test inside a valuation strategy needs: "
+           "otherwise a share falling for being cheap reads as a share "
+           "falling for being in trouble.\n\n"
+           "THE COMBINED MULTIPLE IS NO LONGER A KNOCKOUT, and this is "
+           "arithmetic rather than judgement. It is the earnings multiple "
+           "times the book multiple against a ceiling that is the product "
+           "of their two ceilings — so while both of those are demanded, "
+           "it CANNOT fail. A row that can never be the reason for "
+           "anything does not belong at the tier where a reader looks for "
+           "what decided the verdict. It keeps its exit, where it is a "
+           "genuinely separate test: on the way out the three levels are "
+           "alternatives, and a holding at twenty times earnings and 2.8 "
+           "times book trips this while tripping neither of the others.\n\n"
+           "NOTHING ELSE MOVED, but two things are now written down that "
+           "were not. The two-year clock is not from the defensive "
+           "programme this strategy implements — it is from Graham's "
+           "net-net work — and it is imported deliberately because "
+           "otherwise nothing here answers a security that stays cheap "
+           "forever. Its companion leg, sell at roughly +50%, cannot be "
+           "built at all: it needs what you paid, and the host does not "
+           "hand a strategy the cost of a position, deliberately, because "
+           "that is the same rule that stops any strategy buying more "
+           "because the price fell below your own cost. So the clock runs "
+           "as the looser half of a pair. See `holding-period-months`.",
         1: "First version. The fifteen entry tests, the four-knockout / "
            "six-of-eight rollup, the eight exits with two-filing "
            "confirmation, the dividend-cut flag and the two-year clock, all "
@@ -682,19 +920,64 @@ STRATEGY = {
     "values": [
 
         # -- how the tests roll up -----------------------------------------
-        {"id": "core-tests-required", "label": "Core tests that must pass",
-         "type": "integer", "unit": "count", "min": 0, "max": 8,
-         "source": REPORT_LEVEL_ONLY,
-         "explain": "There are eight second-tier tests, and this is how "
-                    "many of them have to come back clear before a buy is "
-                    "possible. Six of eight is the report's figure. It is "
-                    "not eight of eight because no real company passes "
-                    "every test in a list this strict, and it is not four "
-                    "because at that point the list has stopped being a "
-                    "standard. A test that could not be worked out counts "
-                    "as neither a pass nor a failure: if the ones that are "
-                    "missing could still have got you to six, the verdict "
-                    "says it cannot tell rather than saying no."},
+        #
+        # Two settings where there used to be one, and the one they replaced
+        # was a single count over all eight second-tier tests. See the
+        # comment above SAFETY for why a count was the wrong instrument.
+        #
+        # There is deliberately no setting for the three groups that demand
+        # all of their rows. "This must pass" is not a level anybody can
+        # retune without changing what the group means, and a group that
+        # could be quietly set to nought is the quota arriving by another
+        # door.
+        {"id": "safety-tests-required",
+         "label": "Balance-sheet tests that must pass, of three",
+         "type": "integer", "unit": "count", "min": 0, "max": 3,
+         "source": AUTHOR,
+         "explain": "This strategy reads the balance sheet three ways: "
+                    "whether long-term borrowings could be covered by the "
+                    "liquid cushion, what the distress score says, and how "
+                    "the borrowings compare to the owners' money. This is "
+                    "how many of the three have to come back clear.\n\n"
+                    "Two, because they are three readings of one thing. All "
+                    "three are built from the same balance sheet on the same "
+                    "date and they move together — a company that has "
+                    "borrowed too much fails them together, and a company "
+                    "that has not passes them together. Requiring all three "
+                    "would count one piece of evidence three times, which is "
+                    "the fault the grouping here exists to correct. "
+                    "Requiring one would let a single favourable reading "
+                    "speak for a balance sheet the other two disliked.\n\n"
+                    "This is the dimension that matters most in this "
+                    "strategy, because the whole reason an unremarkable "
+                    "business is acceptable is that its liquid position "
+                    "carries the risk its operations cannot. Set it to 3 if "
+                    "you want the strictest reading; set it below 2 and the "
+                    "balance sheet has stopped carrying anything."},
+
+        {"id": "record-tests-required",
+         "label": "Earnings-record tests that must pass, of two",
+         "type": "integer", "unit": "count", "min": 0, "max": 2,
+         "source": AUTHOR,
+         "explain": "This strategy asks two questions about the last ten "
+                    "years of earnings: whether the company lost money in "
+                    "any of them, and whether it earns meaningfully more now "
+                    "than it did then. This is how many of the two have to "
+                    "come back clear.\n\n"
+                    "One, because they read the same decade of the same "
+                    "earnings line. One is stability and one is progress, "
+                    "and a company whose earnings record is distorted — by a "
+                    "single dreadful year, by a restatement — has both "
+                    "readings moved by the same event at the same time. Two "
+                    "tests that fail together on one cause are one test.\n\n"
+                    "There is a particular reason to leave room here rather "
+                    "than demand both. The no-loss test is the most "
+                    "punishing in this strategy and will stay that way for "
+                    "years: 2020 put a shutdown loss or a non-cash "
+                    "impairment on the books of a great many companies "
+                    "Graham would have bought without hesitating. Requiring "
+                    "both readings would let one pandemic year decide this "
+                    "dimension outright."},
 
         # -- how much, and how many ----------------------------------------
         #
@@ -800,14 +1083,17 @@ STRATEGY = {
         {"id": "drift-altman-z",
          "label": "Worst change in the distress score you will add behind",
          "type": "number", "unit": "score", "max": 0, "source": AUTHOR,
-         "explain": "How far the Altman Z-score — a combined read on how "
+         "explain": "How far the Altman score — a combined read on how "
                     "close a company is to financial distress — may fall "
                     "from where it was at a purchase before this strategy "
                     "stops adding.\n\n"
-                    "A negative number, because it is a fall. Minus 0.6 is "
-                    "half the distance from the 3.0 required to buy to the "
-                    "1.8 that sells, and the score is built to move slowly, "
-                    "so a fall of this size is not noise."},
+                    "A negative number, because it is a fall. Minus 0.75 is "
+                    "half the distance from the 2.6 required to buy to the "
+                    "1.1 that sells, and the score is built to move slowly, "
+                    "so a fall of this size is not noise. It moved with "
+                    "those two levels when the score changed to the "
+                    "four-variable version, so the tolerance still means "
+                    "the same share of the distance it always did."},
 
         {"id": "drift-debt-to-equity",
          "label": "Worst change in debt against equity you will add behind",
@@ -847,6 +1133,34 @@ STRATEGY = {
                     "nothing. No measure can hold \"it has been two "
                     "years\", so without this there is no exit for that "
                     "case at all.\n\n"
+                    "**Two things about where this rule comes from, and "
+                    "neither is comfortable.**\n\n"
+                    "It is not from the programme this strategy otherwise "
+                    "implements. Graham's sell-after-two-years discipline "
+                    "belongs to his net-net and simplified-criteria work "
+                    "rather than to the defensive programme of chapter 14, "
+                    "which is where nearly every other test here comes "
+                    "from. So this is a rule imported from a neighbouring "
+                    "method, and it is imported deliberately: without it "
+                    "this strategy has no answer at all for a security that "
+                    "stays cheap forever, which is the way this style of "
+                    "investing most commonly fails.\n\n"
+                    "And as Graham stated it, the rule had two legs — sell "
+                    "at roughly a fifty percent gain, or after two years, "
+                    "whichever comes first. Only the clock is here, and the "
+                    "gain leg cannot be built. It would need to know what "
+                    "you paid, and nothing in this program hands a strategy "
+                    "the cost of a position. That is deliberate on the "
+                    "host's part rather than a gap: the same rule that "
+                    "makes the gain leg unwritable is what stops any "
+                    "strategy writing \"buy more when it falls below what "
+                    "you paid\", which is the failure mode the whole "
+                    "program is built against. The clock therefore runs "
+                    "alone, which makes it the LOOSER half of the pair — a "
+                    "position that doubles in eighteen months is held to "
+                    "the full two years here where Graham would have taken "
+                    "the gain. The valuation exits do some of that work and "
+                    "not all of it.\n\n"
                     "Shorten it and you will be selling discounts that had "
                     "not finished closing. Lengthen it and you are "
                     "reintroducing exactly the open-ended patience it "
@@ -868,6 +1182,23 @@ STRATEGY = {
                     "the company's earnings paying you 6.7% a year. His "
                     "number is used rather than a modernised one, because "
                     "the whole value of this strategy is that it is his.\n\n"
+                    "**This is a ceiling on the ceiling rather than the "
+                    "test itself.** What this strategy actually demands is "
+                    "the STRICTER of two rules Graham wrote: this fixed "
+                    "fifteen, and the separate requirement that the "
+                    "earnings yield beat the bond yield several times over. "
+                    "The second is the binding one at any bond yield above "
+                    "about 3.3%, so in most rate environments the price "
+                    "test is well below fifteen and this number is doing "
+                    "nothing. That is intended: raising this cannot loosen "
+                    "the strategy while the bond rule binds, and lowering "
+                    "it can always tighten it.\n\n"
+                    "The two used to be separate tests at different tiers — "
+                    "this one a knockout and the bond rule reported and "
+                    "never blocking — which meant that whenever the bond "
+                    "rule was the stricter, the strategy was quietly using "
+                    "the looser one. Nobody decided that; it fell out of "
+                    "where the two happened to sit.\n\n"
                     "Where it misfires: a company in a cyclical industry at "
                     "the bottom of its cycle has collapsed earnings, so "
                     "this number explodes and the company looks expensive "
@@ -986,17 +1317,39 @@ STRATEGY = {
 
         {"id": "min-altman-z", "label": "Lowest bankruptcy score",
          "type": "number", "unit": "score",
-         "source": REPORT,
-         "explain": "A single score built from five things about the "
+         "source": REVIEW,
+         "explain": "A single score built from four things about the "
                     "balance sheet and the profits, weighted by how well "
                     "each one predicted companies going broke in the study "
-                    "that produced it. Above 3.0 is the safe zone; below "
-                    "1.8 is the distress zone; in between is a grey "
+                    "that produced it. Above 2.6 is the safe zone; below "
+                    "1.1 is the distress zone; in between is a grey "
                     "area.\n\n"
-                    "3.0 rather than the grey area, because this strategy "
+                    "2.6 rather than the grey area, because this strategy "
                     "holds a business it has formed no opinion about and "
                     "therefore takes the full cushion rather than half of "
                     "it.\n\n"
+                    "**This is the four-variable score and it used to be "
+                    "the five-variable one, which is why the level moved "
+                    "from 3.0 to 2.6 without the demand changing.** The "
+                    "original was fitted on public manufacturers and "
+                    "carries a sales-to-assets term: a factory turning its "
+                    "assets over slowly is a warning, and a consultancy "
+                    "turning over almost no assets at all is not thereby in "
+                    "trouble. Its author published this variant for exactly "
+                    "that reason, for service and non-manufacturing "
+                    "companies, which is most of what any screen meets now. "
+                    "2.6 and 1.1 are his published bands for the variant, "
+                    "as 3.0 and 1.8 were for the original.\n\n"
+                    "The second difference matters as much and is easy to "
+                    "miss. The variant compares the owners\u2019 money to what "
+                    "the company owes using what the BOOKS say the equity "
+                    "is worth, where the original used what the market says. "
+                    "So the score no longer moves when the share price "
+                    "does — which is what a solvency test inside a "
+                    "valuation strategy needs, because otherwise a share "
+                    "falling for being cheap reads as a share falling for "
+                    "being in trouble, and the one measure meant to tell "
+                    "those apart moves with the wrong one.\n\n"
                     "This is the one test here that Graham never used. It "
                     "was published in 1968 and it is not his, but it is "
                     "the formalisation of precisely what his balance-sheet "
@@ -1005,9 +1358,8 @@ STRATEGY = {
                     "individual ratios do. He would recognise the intent "
                     "even though he never saw the formula.\n\n"
                     "Where it misfires: its author excluded financial "
-                    "companies, because the ratios do not map onto them. "
-                    "Companies that own very little score poorly for "
-                    "reasons unrelated to distress, and young companies "
+                    "companies, because the ratios do not map onto them, "
+                    "and the variant does not change that. Young companies "
                     "score low simply for not having existed long enough to "
                     "accumulate past profits."},
 
@@ -1034,26 +1386,45 @@ STRATEGY = {
                     "Where it misfires: it needs ten years of filings, "
                     "which excludes anything that listed recently."},
 
-        {"id": "min-dividend-years",
-         "label": "Lowest unbroken run of dividend years",
+        {"id": "min-capital-return-years",
+         "label": "Lowest unbroken run of years returning capital",
          "type": "integer", "unit": "years", "min": 0,
-         "source": REPORT,
-         "explain": "How many years in a row the company has paid its "
-                    "owners cash. A long unbroken run means it has come "
-                    "through a full economic cycle and hands money back "
-                    "rather than only promising to.\n\n"
-                    "Ten rather than Graham's own twenty, and this is a "
-                    "deliberate departure worth being explicit about. He "
-                    "wrote before a 1982 rule change made buying back "
-                    "shares a safe, routine alternative to paying "
-                    "dividends. A twenty-year requirement today screens out "
-                    "a large set of companies that return capital "
-                    "consistently by repurchasing shares instead, which he "
-                    "had no reason to anticipate. Ten preserves the signal "
-                    "without penalising the change of mechanism.\n\n"
-                    "Where it misfires: precisely there. A company that has "
-                    "returned every spare dollar to shareholders through "
-                    "buybacks for fifteen years reads as zero here."},
+         "source": REVIEW,
+         "explain": "How many years in a row the company has handed cash "
+                    "back to its owners — by dividend, by buying its own "
+                    "shares back, or by both.\n\n"
+                    "Twenty is Graham's own figure, and it was doing two "
+                    "jobs rather than one. It evidences that the company "
+                    "returns capital rather than only promising to. And it "
+                    "evidences SURVIVAL: twenty years reaches back through "
+                    "whatever the last two decades contained, including "
+                    "something bad, which no shorter window can show at "
+                    "all.\n\n"
+                    "**This used to demand ten years of dividends, and that "
+                    "solved the right problem the wrong way.** The problem "
+                    "is real: Graham wrote before a 1982 rule change made "
+                    "buying back shares a safe, routine alternative to "
+                    "paying dividends, so a dividend-only test now excludes "
+                    "companies that have returned capital every year by a "
+                    "route he had no reason to anticipate. But cutting the "
+                    "run from twenty to ten kept the capital-return "
+                    "evidence and threw away the survival evidence, which "
+                    "was the half that could not be replaced. Widening the "
+                    "mechanism and keeping the twenty years keeps "
+                    "both.\n\n"
+                    "Buybacks count NET of shares issued. A company handing "
+                    "out more stock than it repurchases is not returning "
+                    "capital, it is mopping up after its own issuance, and "
+                    "counting the repurchase line gross would let that read "
+                    "as a capital return in the year it is least true.\n\n"
+                    "Where it misfires: buybacks are discretionary in a way "
+                    "dividends are not. A company can repurchase in good "
+                    "years and quietly stop in bad ones without the signal "
+                    "a dividend cut sends, so a run counted this way "
+                    "evidences capacity more than it evidences commitment. "
+                    "And a company that returns capital by special dividend "
+                    "every other year breaks the run despite having handed "
+                    "back a great deal."},
 
         {"id": "max-debt-to-equity", "label": "Highest debt to equity",
          "type": "number", "unit": "ratio", "min": 0,
@@ -1115,39 +1486,49 @@ STRATEGY = {
                     "legitimately, and seasonal businesses read oddly at "
                     "particular quarter-ends."},
 
-        # -- the three bonus tests -----------------------------------------
-        {"id": "min-market-cap", "label": "Smallest company worth buying",
+        {"id": "min-revenue", "label": "Smallest company worth buying",
          "type": "number", "unit": "usd", "min": 0,
-         "source": REPORT_LEVEL_ONLY,
-         "explain": "What the stock market says the whole company's shares "
-                    "are worth: every share multiplied by the price of "
-                    "one.\n\n"
-                    "Graham used $100M in 1972 as a test of adequate size, "
-                    "which adjusts for inflation to roughly $750M today. "
-                    "$300M is deliberately lower, because the discounts "
-                    "this strategy hunts are disproportionately in smaller "
-                    "companies and a $750M floor removes most of the "
-                    "opportunity. $300M keeps filing quality and the "
-                    "ability to sell when you want to acceptable without "
-                    "gutting the list.\n\n"
+         "source": REVIEW,
+         "explain": "What the company sold in the last year, in money.\n\n"
+                    "Graham's own test of adequate size, which he set at "
+                    "$100M of annual sales for an industrial company in the "
+                    "1973 edition. Adjusted for inflation that is roughly "
+                    "$750M today, and that is the figure used.\n\n"
+                    "**This used to be a floor on market capitalisation, "
+                    "and that was the wrong quantity.** Graham stated the "
+                    "criterion in sales; the level here was a market value "
+                    "defended with an argument about sales. Worse, it was "
+                    "the wrong variable for this particular strategy: a "
+                    "rule set that hunts for companies the market has "
+                    "priced too cheaply, and then refuses anything the "
+                    "market prices too low, is partly rejecting companies "
+                    "for being cheap. Sales do not move when the share "
+                    "price does.\n\n"
                     "It is a test this strategy will not bend: below it, no "
                     "amount of cheapness counts. That placement is this "
-                    "strategy's and not the report's, which scores this "
-                    "test rather than disqualifying on it. The reasoning "
-                    "the report gives for the level is filing quality and "
-                    "being able to sell when you want to, and neither of "
-                    "those is something a good score somewhere else makes "
-                    "up for. A forty-million-dollar company can be cheap on "
-                    "every other line here and still be a position you "
-                    "cannot get out of.\n\n"
-                    "Where it misfires: it is a price times a share count, "
-                    "so it moves with the price. A holding that has halved "
-                    "may now fail a test it passed when you bought — which "
-                    "is why it is an entry test and there is no exit on the "
-                    "other side of it. And a company whose shares are "
-                    "closely held trades far less than its size suggests, "
-                    "which this cannot see."},
+                    "strategy's, not the report's, which scores the size "
+                    "test rather than disqualifying on it — and the "
+                    "argument for the tier survives the change of variable. "
+                    "Filing quality and being able to sell when you want to "
+                    "are not things a good score somewhere else makes up "
+                    "for.\n\n"
+                    "The old level was deliberately below Graham's, on the "
+                    "argument that the discounts this strategy hunts are "
+                    "disproportionately in smaller companies. That argument "
+                    "is still available and it now has to be made about "
+                    "sales rather than about market value, which nobody has "
+                    "made. So the level went to Graham's own.\n\n"
+                    "Where it misfires: sales are a poor comparison of size "
+                    "across industries. A grocery chain turning over ten "
+                    "billion at two percent margins is a smaller business, "
+                    "on any other reading, than a software company turning "
+                    "over two billion at thirty. And what this is really "
+                    "guarding — being able to sell your position when you "
+                    "want to — is liquidity, which no figure in any filing "
+                    "measures. Sales are a proxy for it and not the thing "
+                    "itself."},
 
+        # -- the two bonus tests -------------------------------------------
         {"id": "min-ncav-to-market-cap",
          "label": "Lowest liquid assets against the price",
          "type": "number", "unit": "ratio",
@@ -1171,57 +1552,74 @@ STRATEGY = {
                     "happen."},
 
         {"id": "min-earnings-yield-multiple",
-         "label": "Lowest earnings yield against the risk-free rate",
+         "label": "Lowest earnings yield against the bond yield",
          "type": "number", "unit": "times", "min": 0,
          "source": REPORT,
          "explain": "How many times more the company's earnings pay you "
-                    "than lending the same money to the government would. "
-                    "At 2.0 the stock's earnings yield is twice the "
-                    "risk-free rate; at 1.0 you are taking every risk of "
-                    "owning a business for a government-bond return.\n\n"
-                    "Graham's Enterprising Investor test, which compared "
-                    "the earnings yield to the corporate bond yield of his "
-                    "day. It is the one test here that makes every other "
-                    "valuation level in the strategy aware of what interest "
-                    "rates are doing — a 6.7% earnings yield means "
-                    "something very different when cash pays 1% than when "
-                    "it pays 5%.\n\n"
-                    "This and the risk-free rate below are read together, "
-                    "and what they come to is a ceiling on what you may pay "
-                    "for a dollar of typical earnings: at 2.0 against a "
-                    "rate of 4%, an earnings yield of 8% or better, which "
-                    "is 12.5 times earnings or less. That is the figure the "
-                    "test is shown against, because it is the one being "
-                    "compared.\n\n"
-                    "It is a bonus test: failing it never blocks a buy. "
-                    "Expect it to fail often at a high risk-free rate — "
-                    "that is the test working, and it is telling you the "
+                    "than lending the same money to a first-class borrower "
+                    "would. At 2.0 the stock's earnings yield is twice the "
+                    "bond yield; at 1.0 you are taking every risk of owning "
+                    "a business for a bond's return.\n\n"
+                    "Graham's Enterprising Investor test. It is what makes "
+                    "every absolute price level in this strategy aware of "
+                    "what interest rates are doing — a 6.7% earnings yield "
+                    "means something very different when a bond pays 1% "
+                    "than when it pays 5%.\n\n"
+                    "**This is no longer a test of its own. It is half of "
+                    "the price ceiling**, read together with the bond yield "
+                    "below: at 2.0 against a yield of 5%, the demand is an "
+                    "earnings yield of 10% or better, which is a price of "
+                    "at most ten times typical earnings. That is compared "
+                    "against the fixed fifteen and the stricter of the two "
+                    "is what this strategy will pay — so this rule now "
+                    "decides purchases in every environment where it is the "
+                    "binding one, which used to be exactly where it was "
+                    "being ignored.\n\n"
+                    "Expect it to bind at a high bond yield. That is the "
+                    "test working, and what it is telling you is that the "
                     "same money is being offered a competitive return with "
                     "none of the risk."},
 
-        {"id": "risk-free-rate", "label": "The risk-free rate",
+        {"id": "aaa-corporate-yield",
+         "label": "What a first-class corporate bond pays",
          "type": "number", "unit": "percent", "min": 0, "max": 100,
-         "source": {"name": "this strategy's author. The expert report names "
-                            "the comparison but not a rate, because a rate "
-                            "is not the kind of thing a report can fix — it "
-                            "is whatever the government is paying while you "
-                            "are reading this",
+         "source": {"name": "Graham for which rate, this strategy's author "
+                            "for the figure. Neither the expert report nor "
+                            "the review states a number, because a rate is "
+                            "not the kind of thing a document can fix — it "
+                            "is whatever the market is paying while you are "
+                            "reading this",
                     "reasoning": True},
-         "explain": "What lending money to the government pays right now: "
-                    "the yield on the ten-year US Treasury note, as an "
-                    "annual percentage. It is the return you can have "
-                    "without taking any business risk at all, so it is what "
-                    "owning a business has to beat before the risk is worth "
-                    "taking.\n\n"
+         "explain": "What lending money to the safest corporate borrowers "
+                    "pays right now: the yield on high-grade — Aaa-rated — "
+                    "corporate bonds, as an annual percentage. It is close "
+                    "to the return you can have without taking business "
+                    "risk, so it is what owning a business has to beat "
+                    "before the risk is worth taking.\n\n"
+                    "**Corporate and not government, and the difference is "
+                    "not cosmetic.** Graham's test was written against "
+                    "high-grade corporate bonds. This strategy used to use "
+                    "the ten-year Treasury instead, which typically pays "
+                    "somewhere around 0.7 to 1.0 points less — so twice a "
+                    "Treasury yield is materially looser than the twice a "
+                    "corporate yield he actually wrote, and the strategy "
+                    "was demanding less than it claimed. At a 5% corporate "
+                    "yield against a 4.2% Treasury, the price ceiling is 10 "
+                    "times earnings rather than 11.9, which is a real "
+                    "difference in what gets bought.\n\n"
+                    "Look up Moody's seasoned Aaa corporate bond yield — "
+                    "the Federal Reserve publishes it and it is easy to "
+                    "find — and put the figure here.\n\n"
                     "**This is the one number here you have to maintain, "
                     "and it is the only one that goes wrong just by sitting "
-                    "still.** Nothing in this program fetches it — it is in "
-                    "no filing and it is not price data — so the figure "
+                    "still.** Nothing in this program fetches it: it is in "
+                    "no filing and it is not price data, so the figure "
                     "shipped with the strategy is a starting point and "
-                    "nothing more. Look up the current ten-year Treasury "
-                    "yield and set it here; when rates move, come back. A "
-                    "rate left at 4% while the market pays 6% quietly makes "
-                    "this test easier than you agreed it should be.\n\n"
+                    "nothing more. When rates move, come back. A yield left "
+                    "at 5% while the market pays 7% quietly makes this "
+                    "strategy easier than you agreed it should be — and "
+                    "since this one number sets the price ceiling on every "
+                    "purchase, that is not a small quiet.\n\n"
                     "It is here as a setting rather than as a question at "
                     "setup so that changing it is recorded: the day you "
                     "moved it, what it was, and what it became go on this "
@@ -1278,10 +1676,21 @@ STRATEGY = {
          "explain": "The earnings multiple and the book multiple "
                     "multiplied together, so a security that has run hard "
                     "on one of them and only a little on the other is still "
-                    "caught. The same combined number the entry test uses, "
-                    "at the level where the discount has closed.\n\n"
+                    "caught. The same combined number the entry side "
+                    "reports, at the level where the discount has "
+                    "closed.\n\n"
                     "Roughly a doubling of the entry level, which is how "
-                    "the report derives it."},
+                    "the report derives it.\n\n"
+                    "**This is the one place the combined multiple decides "
+                    "anything, and it is why it is still here.** On the "
+                    "entry side the three price tests are all demanded at "
+                    "once, so a company passing the earnings ceiling and "
+                    "the book ceiling passes their product automatically — "
+                    "the row cannot fail and cannot be the reason for "
+                    "anything. On the way out they are alternatives, and a "
+                    "holding at twenty times earnings and 2.8 times book "
+                    "trips this at 56 while tripping neither of the "
+                    "others."},
 
         {"id": "exit-current-ratio",
          "label": "Exit level for the current ratio",
@@ -1309,10 +1718,18 @@ STRATEGY = {
 
         {"id": "exit-altman-z", "label": "Exit level for the bankruptcy score",
          "type": "number", "unit": "score",
-         "source": REPORT,
-         "explain": "Below 1.8 is the distress zone of the score described "
+         "source": REVIEW,
+         "explain": "Below 1.1 is the distress zone of the score described "
                     "in the entry test above — the range in which companies "
-                    "in the original study went broke.\n\n"
+                    "in the study went broke.\n\n"
+                    "1.1 rather than the 1.8 this used to be, and nothing "
+                    "about the demand changed: 1.8 is the distress band of "
+                    "the five-variable score and 1.1 is the distress band "
+                    "of the four-variable one this strategy now uses. "
+                    "Carrying the old number across would have been reading "
+                    "a level off one scale and applying it to another, "
+                    "which would have made this exit fire far earlier than "
+                    "intended on every company it evaluates.\n\n"
                     "A cheap stock that goes bankrupt is the characteristic "
                     "failure of this entire approach, and this is the "
                     "single test most directly aimed at it."},
@@ -1414,77 +1831,96 @@ def _drift(ctx, anchor, group):
 
 
 # ---------------------------------------------------------------------------
-# the earnings yield against the risk-free rate
+# the price ceiling, which is the stricter of two rules and not either of them
 #
-# Graham's Enterprising Investor test, and the one test here this strategy
-# works out for itself instead of naming a measure that already holds the
-# answer.
+# The only test here the strategy works out for itself rather than naming a
+# measure that already holds the answer, and the only limit it states rather
+# than cites. Both of those cost something, so both are argued for.
 #
-# There used to be a bank measure for it and it never ran. It needed a
-# risk-free rate; the rate is in no filing, it is not price data, and nothing
-# in the host could hand one over — so a row that looked like a test was
-# permanently absent, which is the worst state for a test to be in, because
-# it reads as a gap in the data rather than as a question nobody was ever
-# able to ask.
+# THERE USED TO BE TWO PRICE TESTS AND THEY CONTRADICTED EACH OTHER. A fixed
+# ceiling of fifteen times typical earnings sat among the knockouts; a rule
+# that the earnings yield must beat the bond yield several times over sat
+# among the rows that never block. Above a bond yield of about 3.3% the second
+# is the stricter of the two — so in every environment since, the strategy was
+# quietly running the looser rule, because of where the tiers happened to put
+# them. That is not a judgement anybody made. It is an accident of layout
+# deciding what a strategy demands.
 #
-# It moves here for a better reason than convenience. An earnings yield is a
-# fact. What you compare it against is an opinion, and this strategy is the
-# thing entitled to hold one — so the rate is a declared value like every
-# other limit in this file, retunable, with any change to it landing on the
-# journal's rule-change record with a before and an after.
+# So there is one test, and its limit is the stricter of the two rules:
+#
+#     min( the fixed ceiling, 100 ÷ (multiple × the bond yield) )
+#
+# An earnings yield of at least `multiple × yield` per cent is exactly a price
+# of at most `100 ÷ (multiple × yield)` times typical earnings, which is why
+# the second rule can be expressed as a ceiling on the same measure at all.
+# Graham stated one figure and one relationship; taking the stricter is what
+# holds both of the things he wrote at once, in every rate environment rather
+# than in the one his was written in.
 #
 # The measure is still cited and never quoted. Working out `1/PE ÷ rate` here
 # and stating the answer would be this strategy restating a figure the host
-# owns, and a restatement can be wrong. So the test is expressed as what it
-# actually constrains: an earnings yield of at least `multiple × rate` per
-# cent is exactly a price of at most `100 ÷ (multiple × rate)` times typical
-# earnings. The strategy owns the question and the limit; the host still owns
-# the figure, its unit, and whether the comparison was met.
+# owns, and a restatement can be wrong. The strategy owns the question and the
+# limit; the host owns the figure, its unit, and whether the comparison was
+# met.
 #
-# This is the one limit in this file the strategy states rather than names,
-# and it is the one case the evidence vocabulary cannot express: a row cites
-# ONE setting or states ONE number, and this limit is worked out from two
-# settings. So both are cited beside it as the observations they are. That is
-# the difference between a number a reader can check and a number they have
-# to accept — 12.5 with "twice" and "4%" underneath it is arithmetic anyone
-# can redo, and 12.5 on its own is this file asking to be trusted.
+# What this costs is the one thing the evidence vocabulary cannot express: a
+# row cites ONE setting or states ONE number, and this limit is worked out
+# from three. So all three are cited beside it as the observations they are.
+# That is the difference between a number a reader can check and a number they
+# have to accept — 12.5 with "fifteen", "twice" and "4%" underneath it is
+# arithmetic anyone can redo, and 12.5 on its own is this file asking to be
+# trusted.
 # ---------------------------------------------------------------------------
 
-_YIELD_SETTINGS = ("min-earnings-yield-multiple", "risk-free-rate")
+_PRICE_SETTINGS = ("max-pe-3y-avg", "min-earnings-yield-multiple",
+                   "aaa-corporate-yield")
 
 
-def _earnings_yield_cite(values):
-    """The earnings-yield test as the ceiling on the earnings multiple it
-    amounts to, or None where the two settings do not describe a limit.
+def _price_ceiling(values):
+    """The highest multiple of typical earnings this strategy will pay, and
+    which of the two rules set it — or (None, None) where the settings do not
+    describe a limit.
 
-    Both are declared values with defaults, so the arithmetic normally cannot
-    fail — but either can be overridden to nought in a journal, and dividing
-    by that would take the whole verdict down over a bonus test that blocks
-    nothing. None means the caller shows the settings and no comparison,
-    which is what a limit nobody could work out honestly looks like.
+    All three are declared values with defaults, so the arithmetic normally
+    cannot fail; but any of them can be overridden in a journal, and dividing
+    by a nought would take a whole verdict down over one row. None means the
+    caller shows the settings and no comparison, which is what a limit nobody
+    could work out honestly looks like.
     """
-    multiple, rate = (values.get(v) for v in _YIELD_SETTINGS)
+    fixed, multiple, yield_ = (values.get(v) for v in _PRICE_SETTINGS)
     if not all(isinstance(v, (int, float)) and not isinstance(v, bool)
-               and v > 0 for v in (multiple, rate)):
+               and v > 0 for v in (fixed, multiple, yield_)):
+        return None, None
+    against_bonds = round(100.0 / (multiple * yield_), 2)
+    if against_bonds < fixed:
+        return against_bonds, "bonds"
+    return fixed, "fixed"
+
+
+def _price_cite(values, group):
+    """The price test, or None where its limit could not be built."""
+    ceiling, _which = _price_ceiling(values)
+    if ceiling is None:
         return None
     return {"measure": "pe_3y_avg_eps", "comparator": "at_most",
-            "threshold": round(100.0 / (multiple * rate), 2),
-            "group": BONUS_GROUP["id"]}
+            "threshold": ceiling, "group": group}
 
 
-def _bonus_cites(ctx, values):
-    """The reported-never-blocking rows, and the two settings behind the one
-    row whose limit this strategy works out for itself.
+def _price_cites(values, group):
+    """The price test and the three settings behind it.
 
     The settings are cited whether or not the limit could be built. Where it
-    could, they are how the reader checks it; where it could not, they are
-    the only thing left saying a test exists at all.
+    could, they are how the reader checks it; where it could not, they are the
+    only thing left saying a test exists at all.
     """
-    cites, _outcomes = _screen(ctx, BONUS, BONUS_GROUP["id"])
-    derived = _earnings_yield_cite(values)
-    return (cites + ([derived] if derived is not None else [])
-            + [{"value": v, "group": BONUS_GROUP["id"]}
-               for v in _YIELD_SETTINGS])
+    cite = _price_cite(values, group)
+    return ([cite] if cite is not None else []) + [
+        {"value": v, "group": group} for v in _PRICE_SETTINGS]
+
+
+def _bonus_cites(ctx, group):
+    cites, _outcomes = _screen(ctx, BONUS, group)
+    return cites
 
 
 # ---------------------------------------------------------------------------
@@ -1516,9 +1952,9 @@ def _exit_state(ctx, group, measure_id, comparator, value_id):
                                        group))
 
 
-def _dividend_cut(ctx):
-    """The two period ends across which an unbroken dividend run reset since
-    this holding was opened, or None.
+def _capital_return_break(ctx):
+    """The two period ends across which an unbroken run of years returning
+    capital reset since this holding was opened, or None.
 
     Every readable pair is walked, not only the newest two. A run that goes
     from twelve years to nothing shows a drop on one filing and then climbs
@@ -1537,7 +1973,7 @@ def _dividend_cut(ctx):
     explicit that this should send the reader to read rather than to sell.
     """
     opened = str((ctx.get("position") or {}).get("opened") or "")
-    readable = [p for p in _points(ctx, DIVIDEND_RUN)
+    readable = [p for p in _points(ctx, CAPITAL_RUN)
                 if p.get("value") is not None]
     for before, after in zip(readable, readable[1:]):
         # The period the drop was REPORTED in decides whether it belongs to
@@ -1607,21 +2043,79 @@ ROOM_CITE = {"fact": "portfolio.slots_occupied", "comparator": "below",
              "threshold_from": "portfolio-slots", "group": SIZING_GROUP["id"]}
 
 
+def _dimension(ctx, group, rows):
+    """One question about the company: its citations, and whether the rows
+    under it answer it.
+
+    The three outcomes are the same three a single test has, reached the same
+    way. `met` is the requirement satisfied; `settled_no` is it out of reach
+    even if every unreadable row came back a pass; neither means undecided,
+    and undecided is neither a purchase nor a refusal.
+
+    How many rows a group needs is read from the group's own declaration, so
+    this cannot demand a number different from the one the host counts
+    against when it works out the rollup the reader sees.
+    """
+    cites, out = _screen(ctx, rows, group["id"])
+    passed, unknown = out.count(PASS), out.count(UNKNOWN)
+    if group["requires"] == "all":
+        need = len(rows)
+    else:
+        need = (ctx.get("values") or {}).get(group["threshold_from"])
+    ok = isinstance(need, int) and not isinstance(need, bool)
+    return {"group": group, "cites": cites, "passed": passed,
+            "unknown": unknown, "tested": len(rows),
+            "settled_no": ok and passed + unknown < need,
+            "met": ok and passed >= need}
+
+
+def _names_of(dims) -> str:
+    """The groups named in a sentence, lower-cased the way they read mid-line
+    rather than as headings."""
+    names = [d["group"]["name"][0].lower() + d["group"]["name"][1:]
+             for d in dims]
+    if len(names) == 1:
+        return names[0]
+    return ", ".join(names[:-1]) + " and " + names[-1]
+
+
+def _entry_screen(ctx):
+    """Every entry test, and what the host made of each."""
+    values = ctx.get("values") or {}
+    price_cites = _price_cites(values, KNOCKOUTS["id"])
+    price_cite = _price_cite(values, KNOCKOUTS["id"])
+    req_cites, req_out = _screen(ctx, REQUIRED, KNOCKOUTS["id"])
+    if price_cite is not None:
+        req_out = req_out + [contract.test(ctx, price_cite)]
+    else:
+        # A ceiling that could not be built is not a passing test. It is a
+        # knockout nobody could run, which is exactly what unknown is for.
+        req_out = req_out + [UNKNOWN]
+    dims = [_dimension(ctx, g, rows) for g, rows in DIMENSIONS]
+    short = [d for d in dims if d["settled_no"]]
+    return {
+        "req_fail": req_out.count(FAIL),
+        "req_unknown": req_out.count(UNKNOWN),
+        "req_tested": len(req_out),
+        "dims": dims, "short": short,
+        "passed": sum(d["passed"] for d in dims),
+        "tested": sum(d["tested"] for d in dims),
+        "unknown": sum(d["unknown"] for d in dims),
+        "settled_no": req_out.count(FAIL) > 0 or bool(short),
+        "met": req_out.count(UNKNOWN) == 0 and all(d["met"] for d in dims),
+        "evidence": (price_cites + req_cites
+                     + [c for d in dims for c in d["cites"]]
+                     + _bonus_cites(ctx, BONUS_GROUP["id"])),
+        "groups": [KNOCKOUTS] + [g for g, _ in DIMENSIONS] + [BONUS_GROUP],
+    }
+
+
 def _on_a_candidate(ctx):
     values = ctx.get("values") or {}
-    need = values.get("core-tests-required")
+    screen = _entry_screen(ctx)
 
-    req_cites, req_out = _screen(ctx, REQUIRED, KNOCKOUTS["id"])
-    core_cites, core_out = _screen(ctx, CORE, CORE_GROUP["id"])
-    bonus_cites = _bonus_cites(ctx, values)
-
-    req_fail = req_out.count(FAIL)
-    req_unknown = req_out.count(UNKNOWN)
-    core_pass, core_unknown = core_out.count(PASS), core_out.count(UNKNOWN)
-
-    could_still_reach = (core_pass + core_unknown >= need
-                         if isinstance(need, int) else None)
-    core_met = core_pass >= need if isinstance(need, int) else None
+    req_fail = screen["req_fail"]
+    req_unknown = screen["req_unknown"]
 
     # No tallies are cited. The counts used to be evidence items this
     # strategy worked out and stated — "Knockout tests passed, 3, at least
@@ -1632,31 +2126,40 @@ def _on_a_candidate(ctx):
     # are the host's now: it counts the outcomes it resolved, against the
     # bar the group names, and an unreadable row is neither a pass nor a
     # failure there for exactly the reason it is neither here.
-    groups = [KNOCKOUTS, CORE_GROUP, BONUS_GROUP]
-    evidence = req_cites + core_cites + bonus_cites
+    groups = screen["groups"]
+    evidence = screen["evidence"]
 
-    # A knockout that failed, or a core count that cannot be reached even if
-    # every unreadable test came back clear. Either is a settled no.
-    if req_fail or could_still_reach is False:
+    # A knockout that failed, or a question about the company that cannot be
+    # answered even if every unreadable row under it came back clear. Either
+    # is a settled no — and which question fell short is named rather than
+    # counted, because "four of eight passed" told a reader nothing about
+    # where to look.
+    if screen["settled_no"]:
         return {
             "state": "not-cheap-enough", "payload": {},
             "reason": {
-                "rule": "knockout-failed" if req_fail else "core-tests-short",
+                "rule": "knockout-failed" if req_fail else "dimension-short",
                 "summary": (
-                    f"{req_fail} of the {len(REQUIRED)} tests this strategy "
-                    "will not bend came back against it, and one is enough."
+                    f'{req_fail} of the {screen["req_tested"]} tests this '
+                    "strategy will not bend came back against it, and one is "
+                    "enough."
                     if req_fail else
-                    f"Only {core_pass} of the {len(CORE)} core tests passed "
-                    f"and {core_unknown} could not be worked out, so "
-                    f"{need} is out of reach."),
+                    "This strategy asks five separate questions about a "
+                    "company and needs every one of them answered. "
+                    + ("One is" if len(screen["short"]) == 1
+                       else f'{len(screen["short"])} are')
+                    + " not: " + _names_of(screen["short"])
+                    + f'. Across all five, {screen["passed"]} of the '
+                      f'{screen["tested"]} tests behind them passed, and no '
+                      "amount of passing elsewhere settles what is short."),
                 "evidence": evidence, "groups": groups,
             },
         }
 
     # Nothing has failed, but something that has not been read could still
     # decide it. Absence is not a pass, so nothing is claimed.
-    if req_unknown or core_met is not True:
-        missing = req_unknown + core_unknown
+    if not screen["met"]:
+        missing = req_unknown + screen["unknown"]
         return {
             "state": "cannot-screen", "payload": {},
             "reason": {
@@ -1712,9 +2215,11 @@ def _on_a_candidate(ctx):
         "reason": {
             "rule": "qualifies",
             "summary": (
-                f"Every knockout test passed and {core_pass} of "
-                f"{len(CORE)} core tests did, against a bar of {need}. "
-                f"The size is {size:g}% of the account, set by {bound}."),
+                "Every test this strategy will not bend passed, all five "
+                "questions about the company are answered — "
+                f'{screen["passed"]} of the {screen["tested"]} tests behind '
+                f"them did — and the size is {size:g}% of the account, set "
+                f"by {bound}."),
             "evidence": evidence, "groups": groups,
         },
     }
@@ -1795,20 +2300,22 @@ def _on_a_holding(ctx):
     evidence.append(CAP_CITE)
     groups = [SAFETY_GROUP, DISCOUNT_GROUP, CLOCK_GROUP, SIZE_GROUP]
 
-    cut = _dividend_cut(ctx)
+    cut = _capital_return_break(ctx)
     note = None
     if cut is not None:
         before, after = cut
-        evidence.append({"measure": DIVIDEND_RUN, "at": before,
+        evidence.append({"measure": CAPITAL_RUN, "at": before,
                          "group": DIVIDEND_GROUP["id"]})
-        evidence.append({"measure": DIVIDEND_RUN, "at": after,
+        evidence.append({"measure": CAPITAL_RUN, "at": after,
                          "group": DIVIDEND_GROUP["id"]})
         groups.append(DIVIDEND_GROUP)
-        note = ("The unbroken run of dividend years has reset since the "
-                f"filing for {before}. That is real information about "
-                "financial distress and it changes nothing here on its own "
-                "— by the time a dividend is cut the balance-sheet exits "
-                "are usually already talking. Go and read the filing.")
+        note = ("The unbroken run of years returning capital — by dividend "
+                "or by buying back shares — has reset since the filing for "
+                f"{before}. A company that has stopped doing both is real "
+                "information about financial distress, and it changes "
+                "nothing here on its own: by the time capital returns stop "
+                "the balance-sheet exits are usually already talking. Go "
+                "and read the filing.")
 
     def fired(states, rows):
         return [f for f in states if f["confirmation"] == CONFIRMED]
@@ -2098,17 +2605,9 @@ def _more_money(ctx, evidence, groups, note, clear):
     # strategy will not add to, and saying so is most of what this branch is
     # worth: it is the sentence that tells you your own rules would not buy
     # what you own.
-    req_cites, req_out = _screen(ctx, REQUIRED, KNOCKOUTS["id"])
-    core_cites, core_out = _screen(ctx, CORE, CORE_GROUP["id"])
-    bonus_cites = _bonus_cites(ctx, values)
-    need = values.get("core-tests-required")
-    screen = (req_cites + core_cites + bonus_cites,
-              [KNOCKOUTS, CORE_GROUP, BONUS_GROUP])
-    req_fail, req_unknown = req_out.count(FAIL), req_out.count(UNKNOWN)
-    core_pass, core_unknown = core_out.count(PASS), core_out.count(UNKNOWN)
-    could_still_reach = (core_pass + core_unknown >= need
-                         if isinstance(need, int) else None)
-    core_met = core_pass >= need if isinstance(need, int) else None
+    entry = _entry_screen(ctx)
+    screen = (entry["evidence"], entry["groups"])
+    req_fail, req_unknown = entry["req_fail"], entry["req_unknown"]
 
     # The clock and the cap are already cited above, and both sit in groups
     # demanding a pass. A commit beside a group the host resolves as anything
@@ -2134,18 +2633,21 @@ def _more_money(ctx, evidence, groups, note, clear):
     # arrangement exists to refuse, and the candidate path has always split
     # them (`not-cheap-enough` against `cannot-screen`); only this one did
     # not. Same split, same order, same reasoning.
-    if req_fail or could_still_reach is False:
+    if entry["settled_no"]:
         return held(
             "hold", "would-not-buy-it-today",
-            f"Your rules would not buy this today: {req_fail} of the "
-            f"{len(REQUIRED)} tests this strategy will not bend came back "
-            f"against it, and {core_pass} of {len(CORE)} core tests passed "
-            f"against a bar of {need}. Holding what you have is a different "
+            "Your rules would not buy this today: "
+            + (f'{req_fail} of the {entry["req_tested"]} tests this strategy '
+               "will not bend came back against it"
+               if req_fail else
+               "nothing here answers " + _names_of(entry["short"]))
+            + f', and {entry["passed"]} of the {entry["tested"]} tests behind '
+            "the five questions passed. Holding what you have is a different "
             "question, and every exit test above came back clear.",
             *body)
 
-    if not (core_met is True and not req_unknown and steady):
-        missing = req_unknown + core_unknown + (0 if steady else 1)
+    if not (entry["met"] and steady):
+        missing = req_unknown + entry["unknown"] + (0 if steady else 1)
         return held(
             "hold", "screen-unreadable",
             f"Whether your rules would buy this today could not be settled: "
@@ -2169,8 +2671,9 @@ def _more_money(ctx, evidence, groups, note, clear):
         "reason": {
             "rule": "qualifies-and-has-room",
             "summary": (
-                f"{clear} It still passes the tests that bought it — "
-                f"{core_pass} of {len(CORE)} core against a bar of {need} — "
+                f"{clear} It still passes the tests that bought it — all "
+                f'five questions answered, {entry["passed"]} of the '
+                f'{entry["tested"]} tests behind them — '
                 f"nothing has moved against you since either purchase, and "
                 f"it sits {room:g}% of the account below the {target:g}% "
                 f"target set by {bound}. That room is the whole of what may "

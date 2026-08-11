@@ -107,7 +107,7 @@ class TestAnAddIsTheEntryTestsUnchanged:
         exit firing."""
         result = verdict(graham, **{**ROOMY, "known": {
             **SCREENS, "profitable_years_10y": 2, "eps_growth_10y": 5.0,
-            "consecutive_dividend_years": 0}})
+            "consecutive_capital_return_years": 0}})
         assert result["state"]["id"] == "hold"
         assert rule(result) == "would-not-buy-it-today"
 
@@ -125,16 +125,16 @@ class TestAnAddIsTheEntryTestsUnchanged:
         this one did not.
         """
         result = verdict(graham, **{**ROOMY, "known": {
-            k: v for k, v in SCREENS.items() if k != "market_cap"}})
+            k: v for k, v in SCREENS.items() if k != "revenue_ttm"}})
         assert result["state"]["id"] == "hold"
         assert rule(result) == "screen-unreadable"
-        assert outcomes(result)["market_cap"] == "unknown"
+        assert outcomes(result)["revenue_ttm"] == "unknown"
 
     def test_no_refusal_ever_states_figures_that_contradict_it(self, graham):
         """The general form. Whatever the rule, a summary claiming a count of
         failures must not appear over a screen where nothing failed — and a
         reader must never have to reconcile the sentence with the rows."""
-        for dropped in ("market_cap", "price_to_book", "pe_3y_avg_eps",
+        for dropped in ("revenue_ttm", "price_to_book", "pe_3y_avg_eps",
                         "current_ratio"):
             result = verdict(graham, **{**ROOMY, "known": {
                 k: v for k, v in SCREENS.items() if k != dropped}})
@@ -149,7 +149,7 @@ class TestAnAddIsTheEntryTestsUnchanged:
         exits would be claiming the entry tests were re-run while showing
         none of them."""
         seen = outcomes(verdict(graham, **ROOMY))
-        for measure in ("price_to_book", "market_cap", "altman_z_score"):
+        for measure in ("price_to_book", "revenue_ttm", "altman_z_double_prime"):
             assert measure in seen
 
     def test_a_holding_that_only_clears_the_exits_does_not_add(self, graham):

@@ -6,28 +6,49 @@
 # — and so a change to one of them is a recordable event rather than a diff
 # in a source file nobody reads.
 #
-# Every number below except `portfolio-slots` and `position-weight-cap` is
-# the expert report's, at the level it states. Nothing is rounded or
-# converted. Those two are attributed to Buffett's own documented practice,
-# because the report was scoped to selection and to exits and was never
-# asked about how much to buy — the same gap Graham had.
+# THE PROVENANCE HERE IS NO LONGER ONE SOURCE, and that is the first thing to
+# know before checking any number below. There are four:
 #
-# One number is written in a form the report does not use, and it is the one
-# to check first: `exit-roic-fall` is the report's 33 with a minus sign in
-# front of it. The report states the level as a magnitude and puts the
-# direction in the sentence around it ("falls 33% below entry value"); the
-# host reads a limit as a signed number and compares it against a signed
-# change. The magnitude is untouched. See its `explain`.
+#   the report    the expert report commissioned for this strategy, by way of
+#                 the transcription at dev_reference_docs/legacy-profiles/
+#                 buffett.yaml. Most numbers here are still its, verbatim.
+#   the review    a second expert review of that report, held at
+#                 dev_reference_docs/ledger-default-profiles-addendum.md,
+#                 which disputes it. Seven values below take the review's
+#                 number against the report's, and each says so.
+#   Buffett       his own documented practice, for the two the report was
+#                 never asked about — how many names and how large one may get.
+#   this author   two values with no source at all: how many of each pair of
+#                 near-duplicate tests must pass, and the borrowing exit,
+#                 which had to move when the measure under it did.
+#
+# Every value's own `source` field says which, and that is where to look
+# rather than here.
+#
+# One number is written in a form no source uses, and it is the one to check
+# first: `exit-roic-fall` is 33 with a minus sign in front of it. The sources
+# state the level as a magnitude and put the direction in the sentence around
+# it ("falls 33% below entry value"); the host reads a limit as a signed
+# number and compares it against a signed change. The magnitude is untouched.
+# See its `explain`.
 #
 # Bump `version` whenever any number here moves. That is what makes the
 # change appear on the rule-change record of every journal running this
 # strategy, with a before and an after.
-version: 2
+version: 3
 
 values:
 
-  # How the fifteen entry tests roll up
-  core-tests-required: 7
+  # How the tests roll up.
+  #
+  # `core-tests-required: 7` used to sit here and no longer does. The nine
+  # second-tier tests are now six questions about the business, every one of
+  # which has to be answered — because a count assumed the nine were
+  # independent evidence and several of them are two readings of one number.
+  # Only the two groups whose members are near-duplicates of each other carry
+  # a count, and these are those two.
+  cash-tests-required: 1
+  growth-tests-required: 1
 
   # How much, and how many — Buffett's practice, not the report
   portfolio-slots: 10
@@ -40,29 +61,42 @@ values:
   # here and no longer do. How much evidence a breach needs is a property of
   # the measure — the host derives it from what the metric bank declares
   # about each — and neither setting could tell a five-year median from a
-  # trailing twelve months. See the changelog in strategy.py: the free cash
-  # flow window is the one that changed against its source.
+  # trailing twelve months.
 
-  # The three knockouts
+  # The three knockouts. Two of the three changed measure in version 5 while
+  # keeping or restating their demand: borrowing is now held against free
+  # cash flow rather than EBITDA, and the price test is held against what the
+  # whole business costs rather than what its shares cost.
   min-roic: 15
-  max-debt-to-ebitda: 2.5
+  max-debt-to-fcf: 3.0
   min-owner-earnings-yield: 5
 
-  # The nine core tests
+  # The ten tests behind the six questions.
+  #
+  # Returns on what it keeps
+  min-incremental-roic: 15
+  # What it owes, and what its returns rest on
   min-interest-coverage: 8
-  max-gross-margin-range: 6
+  max-roe-roic-gap: 10
+  # Whether the profits are cash — one of these two is enough
   min-fcf-margin: 10
   min-cash-conversion: 0.90
-  max-share-count-change: 0
-  min-roe: 15
+  # Whether it is still growing — one of these two is enough
   min-revenue-cagr: 4
   min-profit-growth-spread: -1
-  max-goodwill-to-assets: 40
+  # Whether it sets its own prices
+  max-gross-margin-swing: 15
+  # What management does with the money
+  max-share-count-change: 0
+  max-goodwill-written-off: 5
 
-  # The three bonus tests. The tax band is one test in the report and two
-  # numbers here, because a band is two comparisons.
-  min-effective-tax-rate: 10
-  max-effective-tax-rate: 35
+  # The five bonus tests. The tax band is one test in the sources and two
+  # numbers here, because a band is two comparisons. Debt against EBITDA is
+  # here rather than among the knockouts from version 5: the level is
+  # unchanged and the tier is not.
+  max-debt-to-ebitda: 2.5
+  min-effective-tax-rate: 12
+  max-effective-tax-rate: 28
   min-current-ratio: 1.0
   max-payout-to-fcf: 80
 
@@ -70,7 +104,7 @@ values:
   # whole character of this strategy rather than an omission.
   exit-roic-fall: -33
   exit-roic-level: 12
-  exit-debt-to-ebitda: 4.0
+  exit-debt-to-fcf: 5.0
   exit-interest-coverage: 4
   exit-fcf-margin: 0
   exit-share-count-change: 10

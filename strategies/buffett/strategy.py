@@ -59,23 +59,43 @@ Sources, and which is which, because a reader auditing a number later has to
 be able to tell. Every value carries its own `source` saying so, which is
 where to look rather than here.
 
-Twenty-three of the twenty-five thresholds below are the expert report's, at
-the level it states. Two — `portfolio-slots` and `position-weight-cap` — come
-from Buffett's own documented practice, because the report was scoped to
-selection and to exits and says nothing whatever about how much to buy. That
+There are now four of them, where there used to be two, and that is the
+first thing to know before checking any number here.
+
+Sixteen of the twenty-eight thresholds below are the expert report's, at the
+level it states.
+
+Seven are the second expert review's. That review read the report and
+disputed it in every profile, and where it did, this strategy follows the
+review and each of those values says so in its own words — what the level
+was, what it is, and what the argument was. None of them moved quietly, and
+the changelog for version 5 is the same account in one place. They are the
+most interesting numbers in this file to argue with, because they are the
+ones where two sources disagreed and this file picked.
+
+Two come from Buffett's own documented practice — `portfolio-slots` and
+`position-weight-cap` — because neither source was asked how much to buy. That
 is the same gap Graham had, and the answer is a genuinely different one: this
 strategy concentrates where Graham spreads, and the difference is the point
 rather than an accident of tuning.
 
+Three are nobody's but this file's author's, and they are the ones to look at
+hardest. Two are how many of a pair of near-duplicate tests must pass, which
+no source addresses because no source grouped the tests. The third is the
+borrowing exit, which had to be given a level when the measure under it
+changed and neither source states one for the replacement.
+
 **One thing a reader should know about the provenance of every number here.**
-The expert report itself is not in this repository. The levels below were
-taken from `dev_reference_docs/legacy-profiles/buffett.yaml`, which states in
-its own header that its values are written exactly as the report states them,
-and whose README records that it exists to be checked against. So the chain
-is one link longer than Graham's was, and it is a transcription rather than
-the document. Nothing here was rounded, converted or adjusted at either step,
-and the one value written in a different form from the report's says so in
-its own explanation.
+The expert report itself is not in this repository. Its levels were taken
+from `dev_reference_docs/legacy-profiles/buffett.yaml`, which states in its
+own header that its values are written exactly as the report states them, and
+whose README records that it exists to be checked against. So that chain is
+one link longer than Graham's was, and it is a transcription rather than the
+document. The review IS in this repository, at
+`dev_reference_docs/ledger-default-profiles-addendum.md`, so the seven values
+that follow it can be checked against the thing itself. Nothing here was
+rounded, converted or adjusted at any step, and the one value written in a
+different form from its source's says so in its own explanation.
 
 Nothing here computes a comparison. Every test is put to `contract.test` and
 then cited as the same item, so what a rule acted on and what the reader sees
@@ -96,27 +116,74 @@ from engine import contract
 # Knockout. One failure kills the buy regardless of everything else.
 #
 # Three, and the choice of which three is the whole thesis. Returns on
-# capital say the business is good. Leverage says it can survive being wrong.
-# Owner earnings yield says you did not pay anything for it. Every other test
-# here is evidence for one of those three.
+# capital say the business is good. Borrowing says it can survive being
+# wrong. Owner earnings yield says you did not pay anything for it. Every
+# other test here is evidence for one of those three.
 REQUIRED = (
     ("roic_median_5y", "at_least", "min-roic"),
-    ("total_debt_to_ebitda", "at_most", "max-debt-to-ebitda"),
-    ("owner_earnings_yield", "at_least", "min-owner-earnings-yield"),
+    ("total_debt_to_avg_fcf_5y", "at_most", "max-debt-to-fcf"),
+    ("owner_earnings_yield_on_ev", "at_least", "min-owner-earnings-yield"),
 )
 
-# Most of these must pass; how many is a declared value.
-CORE = (
+# ---------------------------------------------------------------------------
+# The rest of the entry tests, gathered by WHAT THEY MEASURE.
+#
+# This replaced a single list of nine where seven had to pass, and the
+# replacement is the most consequential change in this file. A count assumes
+# its members are independent evidence and these are nothing of the kind.
+# Cash flow margin and cash conversion are two readings of the same cash.
+# Revenue growth and the profit-growth spread share a numerator. Under one
+# quota a company cleared seven of nine by being superb at one thing measured
+# four ways while being weak on borrowing and on dilution — and the arithmetic
+# was biased that way systematically, in the direction of buying.
+#
+# So the demand is coverage rather than a total. Each group below is one
+# question about the business, every group has to be satisfied, and no
+# group's passes can be spent on another's. Being excellent at cash
+# generation no longer pays for a balance sheet nobody looked at.
+#
+# Within a group the rule follows from whether the members are substitutes:
+#
+#   all       the members measure genuinely different things, so passing one
+#             says little about the other and both are owed.
+#   at_least  the members are near-readings of one another. Requiring both
+#             double-counts and requiring one is the coverage statement. How
+#             many is a declared value, because loosening it is a real
+#             loosening and belongs on the rule-change record.
+#
+# The bar in total is eight of these ten rather than the seven of nine it
+# replaced — but the count is not the point and is very nearly a
+# coincidence. What changed is that the eight cannot all come from one
+# corner of the business.
+# ---------------------------------------------------------------------------
+
+RETURNS = (
+    ("incremental_roic_5y", "at_least", "min-incremental-roic"),
+)
+
+LEVERAGE = (
     ("interest_coverage", "at_least", "min-interest-coverage"),
-    ("gross_margin_range_5y", "at_most", "max-gross-margin-range"),
+    ("roe_minus_roic_gap_5y", "at_most", "max-roe-roic-gap"),
+)
+
+CASH = (
     ("fcf_margin_median_5y", "at_least", "min-fcf-margin"),
     ("cash_conversion_median_5y", "at_least", "min-cash-conversion"),
-    ("diluted_share_count_change_5y", "at_most", "max-share-count-change"),
-    ("roe_median_5y", "at_least", "min-roe"),
+)
+
+GROWTH = (
     ("revenue_cagr_5y", "at_least", "min-revenue-cagr"),
     ("ni_minus_revenue_cagr_spread_5y", "at_least",
      "min-profit-growth-spread"),
-    ("goodwill_intangibles_to_assets", "at_most", "max-goodwill-to-assets"),
+)
+
+PRICING = (
+    ("gross_margin_range_relative_5y", "at_most", "max-gross-margin-swing"),
+)
+
+ALLOCATION = (
+    ("diluted_share_count_change_5y", "at_most", "max-share-count-change"),
+    ("goodwill_impairment_to_equity_5y", "at_most", "max-goodwill-written-off"),
 )
 
 # Never block. They are reported so the reader can see them and stop there.
@@ -125,7 +192,18 @@ CORE = (
 # a band is two comparisons. There is no `between` in the host's comparison
 # vocabulary and this strategy does not want one — two rows say which end
 # was missed, and one row could only say that something was.
+#
+# Debt against EBITDA is here and is the one row worth explaining. It used to
+# be a knockout, and a knockout is the last place it belonged: Munger's
+# position on EBITDA is that the phrase should be read as a synonym for
+# fictitious earnings, and Buffett has written repeatedly that depreciation is
+# a real expense. A measure this strategy's own sources have attacked in
+# public cannot sit at the tier that overrules everything else in it. What it
+# is still good for is comparison — it is the number credit ratings speak, so
+# a reader who wants to know how a lender sees this balance sheet can look at
+# it here, where it decides nothing.
 BONUS = (
+    ("total_debt_to_ebitda", "at_most", "max-debt-to-ebitda"),
     ("effective_tax_rate_median_5y", "at_least", "min-effective-tax-rate"),
     ("effective_tax_rate_median_5y", "at_most", "max-effective-tax-rate"),
     ("current_ratio", "at_least", "min-current-ratio"),
@@ -164,9 +242,15 @@ QUALITATIVE = ("moat_durability", "management_integrity", "capital_allocation")
 #
 # Free cash flow is the one worth arguing with, and it is set out in the
 # changelog: the report gives it four quarters and it now takes two filings.
+#
+# The borrowing exit moved with the entry test it belongs to. A strategy that
+# refuses to BUY on debt against EBITDA, on the grounds that the measure adds
+# back a real expense, cannot coherently SELL on it — and selling is the more
+# consequential of the two. See `exit-debt-to-fcf`, which is the one level in
+# this file with no source behind it.
 EXITS = (
     ("roic_median_5y", "at_least", "exit-roic-level"),
-    ("total_debt_to_ebitda", "at_most", "exit-debt-to-ebitda"),
+    ("total_debt_to_avg_fcf_5y", "at_most", "exit-debt-to-fcf"),
     ("interest_coverage", "at_least", "exit-interest-coverage"),
     ("fcf_margin_ttm", "at_least", "exit-fcf-margin"),
     ("diluted_share_count_change_3y", "at_most", "exit-share-count-change"),
@@ -214,17 +298,53 @@ ROIC_DRIFT = {"measure": "roic_median_5y", "since": "first-purchase",
 # ---------------------------------------------------------------------------
 # The headings the evidence is gathered under, and what each demands.
 #
-# The grouping IS the rollup. Three knockouts where every one has to pass,
-# seven of nine core tests, four reported and never blocking, three questions
-# where every one has to come back a pass — that is the whole shape of the
-# entry rule, and the host counts it from the rows it resolved rather than
-# from a tally this file kept.
+# The grouping IS the rollup, and it is also the correction. Three knockouts
+# where every one has to pass, then six questions about the business where
+# every question has to be answered — some by all of their rows and some by
+# enough of them — then five reported and never blocking, then three the
+# reader answers themselves. The host counts every one of those from the rows
+# it resolved rather than from a tally this file kept.
+#
+# The reason a reader can trust that "each group must be satisfied" is a rule
+# and not a habit: the host refuses a state whose render is `commit` when any
+# group that stated a requirement did not come out passed. So there is no
+# path through this file that buys something with a dimension unmet, whatever
+# the ladder below does.
 # ---------------------------------------------------------------------------
 
 KNOCKOUTS = {"id": "knockouts", "name": "Tests this strategy will not bend",
              "requires": "all"}
-CORE_GROUP = {"id": "core", "name": "Core tests", "requires": "at_least",
-              "threshold_from": "core-tests-required"}
+
+RETURNS_GROUP = {"id": "returns", "name": "What the money it keeps earns",
+                 "requires": "all"}
+LEVERAGE_GROUP = {"id": "leverage",
+                  "name": "What it owes, and what its returns rest on",
+                  "requires": "all"}
+CASH_GROUP = {"id": "cash", "name": "Whether the profits are cash",
+              "requires": "at_least",
+              "threshold_from": "cash-tests-required"}
+GROWTH_GROUP = {"id": "growth", "name": "Whether it is still growing",
+                "requires": "at_least",
+                "threshold_from": "growth-tests-required"}
+PRICING_GROUP = {"id": "pricing", "name": "Whether it sets its own prices",
+                 "requires": "all"}
+ALLOCATION_GROUP = {"id": "allocation",
+                    "name": "What management does with the money",
+                    "requires": "all"}
+
+# In the order they are asked, which is the order they are cited and drawn.
+# Returns first because it is what this strategy is for; borrowing second
+# because it is what ends positions; allocation last because it is the
+# closest of them to the three questions no filing answers.
+DIMENSIONS = (
+    (RETURNS_GROUP, RETURNS),
+    (LEVERAGE_GROUP, LEVERAGE),
+    (CASH_GROUP, CASH),
+    (GROWTH_GROUP, GROWTH),
+    (PRICING_GROUP, PRICING),
+    (ALLOCATION_GROUP, ALLOCATION),
+)
+
 BONUS_GROUP = {"id": "bonus", "name": "Reported, never blocking",
                "requires": "noted"}
 
@@ -267,6 +387,27 @@ _REPORT = ("the expert report commissioned for this strategy, by way of the "
 
 REPORT = {"name": _REPORT, "reasoning": True}
 REPORT_LEVEL_ONLY = {"name": _REPORT, "reasoning": False}
+
+# The second expert review of the profile document, which disputes the first
+# report in every profile. Where a level below cites this rather than the
+# report, the report's own number was overruled and the value says why in its
+# own `explain`.
+REVIEW = {
+    "name": "the second expert review of the profile document, held at "
+            "dev_reference_docs/ledger-default-profiles-addendum.md, which "
+            "disputes this level in the report it reviewed",
+    "reasoning": True}
+REVIEW_LEVEL_ONLY = {"name": REVIEW["name"], "reasoning": False}
+
+# Nobody's but this file's. Neither source addresses how the tests should be
+# gathered, and one exit level had to move when the measure under it did.
+# These are the numbers here most worth arguing with, and the attribution is
+# what makes that visible.
+AUTHOR = {
+    "name": "this strategy's own author. Neither the expert report nor the "
+            "review that corrected it states this number, and none is "
+            "claimed for it",
+    "reasoning": True}
 
 BUFFETT_PRACTICE = {
     "name": "Buffett's own documented practice — the 1993 Berkshire "
@@ -348,6 +489,49 @@ DECLINES = [
 ]
 
 
+# What the METHOD asks for or admits to that this program does not do.
+#
+# Separate from DECLINES, which is about a kind of company these measures
+# cannot read. This is about the method itself, and it is here because the
+# alternative is silence — and silence on this particular point is not
+# neutral, it is a promise nobody made.
+LIMITS = [
+    {"title": "It is a portfolio method, and this is one security",
+     "body": "Everything in this strategy was worked out by somebody running "
+             "a portfolio, and it carries an expected rate of losers that "
+             "the good outcomes are meant to pay for. Buffett has been "
+             "explicit about it: the record includes purchases that went "
+             "nowhere and several he has named as mistakes, and the method "
+             "is sound because the winners were held long enough to "
+             "outweigh them — not because each judgement was right.\n\n"
+             "**A verdict on this page is about one security, and no method "
+             "here can tell you that one will work.** What a buy verdict "
+             "says is that this security meets the standard you set while "
+             "you were calm. It does not say the standard will be met by "
+             "the outcome, and a strategy that passed every test can still "
+             "be the one that costs you money.\n\n"
+             "That is not an argument against the rules — it is what the "
+             "rules are for. It is an argument against reading any one "
+             "verdict as a forecast, and against judging the method by "
+             "whichever position you happen to be looking at."},
+
+    {"title": "Most of what decides this is not in any filing",
+     "body": "Three of the tests here are questions you answer yourself, "
+             "and by the reckoning of the person this strategy is named "
+             "after they decide more than every ratio on the page put "
+             "together. Whether a moat holds for another decade, whether "
+             "management tells the truth when the news is bad, whether "
+             "spare cash went somewhere worth more than paying it out: "
+             "none of it is tagged in a filing and none of it is "
+             "computable.\n\n"
+             "So the numbers here are a filter and not a judgement. They "
+             "are strong enough to rule things out — most companies fail "
+             "them, and that is the intent — and they cannot rule anything "
+             "in on their own. That is why an unanswered question blocks a "
+             "purchase here rather than being read as agreement."},
+]
+
+
 STRATEGY = {
     "id": "buffett",
     "name": "Buffett",
@@ -355,10 +539,91 @@ STRATEGY = {
                "and only at a price that leaves something on the table. "
                "Sells when the business breaks — never when the price gets "
                "high, and never because time has passed.",
-    "version": 4,
+    "version": 5,
     "contract": 5,
     "declines": DECLINES,
+    "limits": LIMITS,
     "changelog": {
+        5: "A SECOND EXPERT REVIEW READ THE REPORT THIS STRATEGY WAS BUILT "
+           "FROM AND DISPUTED IT. This version is that review's corrections, "
+           "and it changes what this strategy will buy more than any version "
+           "before it.\n\n"
+           "THE NINE SECOND-TIER TESTS ARE NOW SIX QUESTIONS ABOUT THE "
+           "BUSINESS, AND EVERY ONE HAS TO BE ANSWERED. Seven of nine had to "
+           "pass before; the nine were treated as nine pieces of evidence and "
+           "they were nothing of the kind. Cash flow margin and cash "
+           "conversion are two readings of the same cash. Revenue growth and "
+           "the profit-growth spread share a numerator. Returns on equity and "
+           "returns on capital were both being tested as levels. So a company "
+           "could clear seven of nine by being superb at one thing measured "
+           "four ways while being weak on borrowing and on dilution — and the "
+           "arithmetic was biased that way every time, in the direction of "
+           "buying. Now each of returns, borrowing, cash, growth, pricing "
+           "power and capital allocation must be satisfied on its own, and no "
+           "group's passes can be spent on another's. Where two tests inside "
+           "a group are near-duplicates, one of them is enough and how many "
+           "is a setting. The bar in total is eight of ten rather than seven "
+           "of nine, but the count was never the point.\n\n"
+           "FIVE MEASURES CHANGED, EACH BECAUSE IT WAS MEASURING THE WRONG "
+           "THING.\n\n"
+           "Borrowing is held against five-year average free cash flow at "
+           "3.0x rather than against EBITDA at 2.5x. EBITDA adds back "
+           "depreciation, which is the cost of the equipment wearing out; "
+           "Munger has said the term should be read as a synonym for "
+           "fictitious earnings and Buffett has written repeatedly that "
+           "depreciation is a real expense. A measure they attacked in public "
+           "cannot sit at the tier that overrules everything else in their "
+           "own strategy. The EBITDA version stays, reported and never "
+           "blocking, at the level it always had, because it is what credit "
+           "ratings speak. The EXIT moved with it, to 5.0x of free cash flow "
+           "— and that level is this author's, with no source behind it, "
+           "because neither source states one.\n\n"
+           "Returns on equity is no longer tested as a level. What is tested "
+           "is the GAP between it and returns on capital, at 10 points, "
+           "because that gap is borrowing and the note beside the old test "
+           "always said the divergence was the informative part.\n\n"
+           "The gross margin swing is a share of the margin rather than a "
+           "number of points — at most 15% of it, where it used to be at most "
+           "six points. Six points on a 12% distributor is half its margin; "
+           "six points on an 81% software company is nothing. The old limit "
+           "called them identical.\n\n"
+           "Goodwill on the balance sheet is no longer tested at all. What is "
+           "tested is goodwill WRITTEN BACK OFF over five years, at 5% of the "
+           "equity that existed before them. Buffett's own 1983 letter argues "
+           "that the accounting entry measures economic goodwill badly, and "
+           "the old test punished one good acquisition fifteen years ago; the "
+           "new one asks whether the acquisitions worked.\n\n"
+           "And the price test is held against what the whole business costs "
+           "— shares and debts together — rather than against the shares "
+           "alone, with the maintenance-spending estimate no longer counting "
+           "the amortisation of acquired intangibles. Both make the figure "
+           "smaller for the companies it was flattering. The 5% level did NOT "
+           "move, so this test is now stricter for anything carrying net debt.\n\n"
+           "ONE TEST IS NEW AND THE REVIEW CALLS IT THE MOST MATERIAL "
+           "OMISSION: what the money the company KEEPS earns, at 15%. The "
+           "five-year median says what the existing base earns and can sit at "
+           "25% for years while every new dollar goes into something earning "
+           "six. The increment is what sets the rate of compounding from "
+           "here, and this strategy's whole thesis is that the compounding "
+           "continues.\n\n"
+           "The tax band moved from 10–35% to 12–28%. It was calibrated on a "
+           "35% US statutory rate; after the 2017 act cut that to 21% the old "
+           "ceiling sat a dozen points above anything it could ever have "
+           "flagged, so it was not a lenient test but an absent one wearing a "
+           "number.\n\n"
+           "WHAT DID NOT CHANGE, and the reason is written down beside it: "
+           "the 5% owner earnings yield does not move when interest rates do, "
+           "while every absolute price level in the Graham strategy does. "
+           "Coca-Cola was bought in 1988 at a 6.7% yield against a 9% "
+           "Treasury — a negative spread — and any rule expressing this as "
+           "\"beat the bond by so much\" would have refused it. See "
+           "`min-owner-earnings-yield`.\n\n"
+           "Expect more verdicts of \"not enough to go on\" than before. The "
+           "new tests need eight fiscal years, and a question answered by one "
+           "test is undecided the moment that test is unreadable, where a "
+           "count of nine could absorb it. That is absence behaving "
+           "correctly, and it is the price of asking each question "
+           "separately.",
         4: "HOW MUCH EVIDENCE AN EXIT NEEDS IS NO LONGER A SETTING, AND TWO "
            "OF THE FIVE EXITS NOW ACT SOONER. No level moved.\n\n"
            "`sell-confirmation-filings` and `fcf-exit-quarters` are gone. "
@@ -636,22 +901,62 @@ STRATEGY = {
     "values": [
 
         # -- how the tests roll up -----------------------------------------
-        {"id": "core-tests-required", "label": "Core tests that must pass",
-         "type": "integer", "unit": "count", "min": 0, "max": 9,
-         "source": REPORT_LEVEL_ONLY,
-         "explain": "There are nine second-tier tests, and this is how many "
-                    "of them have to come back clear before a buy is "
-                    "possible. Seven of nine is the report's figure.\n\n"
-                    "It is not nine of nine because no real company passes "
-                    "every test in a list this strict — the gross margin "
-                    "range alone rules out anything that buys a commodity, "
-                    "and plenty of businesses worth owning do. It is not "
-                    "five because at that point half the list can be wrong "
-                    "and the list has stopped being a standard.\n\n"
-                    "A test that could not be worked out counts as neither a "
-                    "pass nor a failure: if the ones that are missing could "
-                    "still have got you to seven, the verdict says it cannot "
-                    "tell rather than saying no."},
+        #
+        # Two settings where there used to be one, and the one they replaced
+        # was a single count over all nine second-tier tests. See the
+        # DIMENSIONS comment for why a count was the wrong instrument.
+        #
+        # There is deliberately no setting for the four groups that demand
+        # all of their rows. "Both of these must pass" is not a level anybody
+        # can retune to something else without changing what the group means,
+        # and a group that could be quietly set to nought is the quota
+        # arriving again by another door.
+        {"id": "cash-tests-required",
+         "label": "Cash tests that must pass, of two",
+         "type": "integer", "unit": "count", "min": 0, "max": 2,
+         "source": AUTHOR,
+         "explain": "This strategy asks two questions about whether the "
+                    "profits turn into money: how much cash each dollar of "
+                    "sales leaves behind, and how much of the reported "
+                    "profit arrives as cash at all. This is how many of the "
+                    "two have to come back clear.\n\n"
+                    "One, because the two are largely the same reading. Both "
+                    "are built on free cash flow, both move together, and a "
+                    "company that fails one usually fails the other for the "
+                    "same underlying reason. Demanding both would count one "
+                    "piece of evidence twice — which is precisely the fault "
+                    "the grouping here exists to correct. What is being "
+                    "asked is that the question be answered, not that it be "
+                    "answered twice.\n\n"
+                    "Set it to 2 if you want both, and understand what you "
+                    "have done: you have not added a second piece of "
+                    "evidence, you have made one piece of evidence harder to "
+                    "satisfy. Set it to 0 and this strategy stops asking "
+                    "whether the profits are real, which is most of what it "
+                    "means by a wonderful business."},
+
+        {"id": "growth-tests-required",
+         "label": "Growth tests that must pass, of two",
+         "type": "integer", "unit": "count", "min": 0, "max": 2,
+         "source": AUTHOR,
+         "explain": "This strategy asks two questions about growth: whether "
+                    "sales are growing at least as fast as the economy, and "
+                    "whether profits are keeping up with sales. This is how "
+                    "many of the two have to come back clear.\n\n"
+                    "One, because they share a number. Both are computed "
+                    "from the same revenue figure, so a company whose sales "
+                    "history is distorted — by a large disposal, by a change "
+                    "in how revenue is recognised — has both readings moved "
+                    "by the same event, in the same direction, at the same "
+                    "time. Two tests that fail together on one cause are one "
+                    "test, and counting them as two is what let a company "
+                    "look like it had cleared a broad standard when it had "
+                    "cleared a narrow one several times.\n\n"
+                    "Growth is also the dimension this strategy cares least "
+                    "about. A slow grower earning very high returns on "
+                    "capital is a fine thing to own, and requiring both "
+                    "readings here would weigh growth more heavily than any "
+                    "of the sources behind this file ever did."},
 
         # -- how much, and how many ----------------------------------------
         #
@@ -754,24 +1059,47 @@ STRATEGY = {
                     "and the journal marks it unreadable for them rather "
                     "than scoring them badly."},
 
-        {"id": "max-debt-to-ebitda", "label": "Highest debt against earnings",
+        {"id": "max-debt-to-fcf",
+         "label": "Highest debt against the cash it generates",
          "type": "number", "unit": "times", "min": 0,
-         "source": REPORT,
-         "explain": "How many years of the company's rough operating "
-                    "earnings it would take to pay off everything it has "
-                    "borrowed. At 2.5 it would take two and a half.\n\n"
+         "source": REVIEW,
+         "explain": "How many years of the spare cash the business actually "
+                    "produces it would take to pay off everything it has "
+                    "borrowed. At 3.0 it would take three.\n\n"
                     "The preference is a business that could clear its debts "
-                    "out of a couple of years of earnings. Three times is "
-                    "where credit rating agencies start marking down "
-                    "cyclical borrowers, so 2.5 leaves a full turn of "
-                    "cushion before anyone outside the company gets nervous. "
-                    "The point of intending to hold something forever is "
-                    "that it never has to renegotiate anything at a bad "
-                    "moment.\n\n"
+                    "out of a few years of earnings. The point of intending "
+                    "to hold something forever is that it never has to "
+                    "renegotiate anything at a bad moment.\n\n"
+                    "**This test used to be run against EBITDA and is the "
+                    "one place in this file where a source was overruled "
+                    "rather than followed.** EBITDA adds depreciation back "
+                    "to profit — the cost of the machinery wearing out — on "
+                    "the reasoning that it is not a cash payment this year. "
+                    "Munger's stated position is that the word should be "
+                    "read as a synonym for fictitious earnings, and Buffett "
+                    "has written repeatedly that depreciation is a real "
+                    "expense and that any measure ignoring it flatters "
+                    "exactly the capital-hungry businesses least able to "
+                    "carry debt. A measure they attacked in public cannot "
+                    "sit at the tier that overrules everything else in a "
+                    "strategy named after them. Free cash flow has already "
+                    "paid for the equipment, so it needs no such argument, "
+                    "and it is averaged over five years so that one heavy "
+                    "year of investment does not read as a balance-sheet "
+                    "problem.\n\n"
+                    "3.0 rather than the 2.5 the EBITDA version used, "
+                    "because the two are not the same scale: free cash flow "
+                    "is the smaller number for almost every company, so the "
+                    "same ratio against it is the stricter test. The level "
+                    "moved so that the demand did not.\n\n"
+                    "The EBITDA version is still reported below, among the "
+                    "tests that never block. It is the number credit ratings "
+                    "speak, so it is worth being able to see — and being "
+                    "able to see it is all it is worth.\n\n"
                     "This is a knockout and the exit on the other side of it "
                     "is the exception to everything else this strategy "
                     "believes. Overpaying for a great business costs you "
-                    "return. Leverage costs you the business. Every "
+                    "return. Borrowing costs you the business. Every "
                     "permanent-capital disaster in this tradition ran "
                     "through the balance sheet and not the income "
                     "statement.\n\n"
@@ -779,22 +1107,42 @@ STRATEGY = {
                     "own reports borrowings that are its stock in trade "
                     "rather than a risk, and the combined figure means very "
                     "little. The journal marks those unreadable rather than "
-                    "failing them."},
+                    "failing them. A company part-way through a deliberate "
+                    "building programme also reads as more indebted than it "
+                    "is, and five years of averaging absorbs one such year "
+                    "rather than a decade of them."},
 
         {"id": "min-owner-earnings-yield",
          "label": "Lowest owner earnings yield",
          "type": "number", "unit": "percent",
-         "source": REPORT,
+         # The level is the report's and the review agreed with it
+         # explicitly. What the level is measured against is the review's,
+         # and so is most of the account below, which is why this cites the
+         # report for the number and claims the reasoning for itself.
+         "source": REPORT_LEVEL_ONLY,
          "explain": "What the company's cash profits pay you each year, as a "
-                    "percentage of what the whole company costs at today's "
-                    "price. At 5 you are being paid five cents a year for "
-                    "every dollar of price — which is another way of saying "
-                    "you are paying twenty times earnings.\n\n"
+                    "percentage of what the whole business costs at today's "
+                    "price — the shares AND the debts that come with them. "
+                    "At 5 you are being paid five cents a year for every "
+                    "dollar of price, which is another way of saying you are "
+                    "paying twenty times earnings.\n\n"
                     "\"Owner earnings\" is the profit left after everything "
                     "the business must spend to stay as good as it is. It is "
                     "a stricter figure than reported profit and a more "
                     "honest one, because reported profit does not subtract "
                     "the machinery a company has to keep replacing.\n\n"
+                    "**The price it is measured against is the whole "
+                    "business and not just the shares, and that is a "
+                    "change.** Owner earnings is a figure about the "
+                    "business, so it belongs over what the business costs: "
+                    "buying a company with borrowings attached means taking "
+                    "the borrowings on. Measured against the shares alone, a "
+                    "heavily indebted company reads as cheap precisely for "
+                    "being indebted. The level stayed at 5 while the "
+                    "denominator changed, so this test is now stricter for "
+                    "companies carrying net debt and slightly looser for "
+                    "companies carrying net cash — which is the correction, "
+                    "not a side effect of it.\n\n"
                     "This is the only price test here and the only one that "
                     "will ever be. The reputation for ignoring price is "
                     "mostly myth — Coca-Cola was bought at roughly fifteen "
@@ -806,6 +1154,25 @@ STRATEGY = {
                     "discipline that will never buy anything wonderful; set "
                     "it to 3% and you have removed price discipline "
                     "entirely.\n\n"
+                    "**Why this level does not move when interest rates do, "
+                    "when every other absolute price level in this program "
+                    "does.** It is the obvious objection and it has a "
+                    "specific answer. Coca-Cola was bought in 1988 at "
+                    "roughly a 6.7% earnings yield when a ten-year Treasury "
+                    "paid around 9% — a negative spread to the risk-free "
+                    "rate. Any rule of the form \"yield must beat the bond "
+                    "by so much\" would have refused one of the best "
+                    "purchases on record, and refused it most firmly at the "
+                    "moment it was most right. The discipline being expressed "
+                    "here is a judgement about what a durable stream of owner "
+                    "earnings is worth to keep, not a spread against an "
+                    "alternative you would have to sell it to buy. A fixed "
+                    "5% is a crude stand-in for that and it is an honest "
+                    "one. This is a real disagreement with the Graham "
+                    "strategy, whose valuation levels are rate-aware by "
+                    "design and whose author would have argued the other "
+                    "side; the two are separate strategies and separate "
+                    "journals for exactly this class of reason.\n\n"
                     "**There is no exit on the other side of this, and that "
                     "is the most important empty field in the program.** A "
                     "business that compounds at 18% for twenty years will "
@@ -815,7 +1182,37 @@ STRATEGY = {
                     "and would be destroying your returns while appearing to "
                     "work correctly."},
 
-        # -- the nine core tests -------------------------------------------
+        # -- the ten tests behind the six questions -------------------------
+        {"id": "min-incremental-roic",
+         "label": "Lowest return on the money it keeps",
+         "type": "number", "unit": "percent",
+         "source": REVIEW,
+         "explain": "How much the profits the company retained over the last "
+                    "five years have earned. Not what the business as a "
+                    "whole earns — what the newly retained money "
+                    "earns.\n\n"
+                    "**This is the difference between a wonderful business "
+                    "and a wonderful business that has run out of things to "
+                    "do.** Return on invested capital, the first knockout "
+                    "above, describes everything built and bought over the "
+                    "company's whole life, taken together. It can stay at "
+                    "25% for years while every new dollar goes into "
+                    "something earning 6, because the old business is "
+                    "carrying the average. This measures only the new "
+                    "dollars — and the new dollars are what set the rate the "
+                    "company compounds at from here.\n\n"
+                    "Fifteen, matching the floor under the existing base, "
+                    "and deliberately so: a company reinvesting at less than "
+                    "it already earns is a company whose returns are on "
+                    "their way down, and this strategy's whole thesis is "
+                    "that the compounding continues.\n\n"
+                    "Where it misfires: it is a ratio of two differences, so "
+                    "it moves more than any level does. A large acquisition "
+                    "puts its whole price into the denominator at once and "
+                    "delivers its profits over years, so an acquisitive "
+                    "company reads low for a while and then recovers. And it "
+                    "needs eight fiscal years, so it is absent for anything "
+                    "listed recently — absent, not failed."},
         {"id": "min-interest-coverage", "label": "Lowest interest coverage",
          "type": "number", "unit": "times", "min": 0,
          "source": REPORT,
@@ -834,14 +1231,15 @@ STRATEGY = {
                     "opposite of a problem and reads oddly, since a company "
                     "with no debt is the ideal this test is reaching for."},
 
-        {"id": "max-gross-margin-range",
-         "label": "Widest the gross margin may swing",
-         "type": "number", "unit": "percentage_points", "min": 0,
-         "source": REPORT,
+        {"id": "max-gross-margin-swing",
+         "label": "Widest the gross margin may swing, against its own size",
+         "type": "number", "unit": "percent", "min": 0,
+         "source": REVIEW,
          "explain": "Gross margin is what is left of each sales dollar after "
                     "the direct cost of the thing sold. This measures how "
                     "far it has moved between its best and worst year over "
-                    "five — at 6 it has stayed inside a six-point band.\n\n"
+                    "five — as a share of the margin itself. At 15 the whole "
+                    "swing is a seventh of the typical margin.\n\n"
                     "The range rather than the level, on purpose, and this "
                     "is the most easily misread test here. Requiring a *high* "
                     "gross margin — say forty percent — would exclude "
@@ -850,12 +1248,29 @@ STRATEGY = {
                     "actual signal. Pricing power shows up as a flat line, "
                     "not a high one: a company that can pass its costs on "
                     "keeps the same margin whatever its inputs do.\n\n"
-                    "Six points is wide enough to absorb one bad "
-                    "input-cost year and narrow enough that commodity "
-                    "producers fail every time, which is the "
-                    "intent.\n\nWhere it misfires: a company that does not "
-                    "report its cost of sales separately cannot be measured "
-                    "at all, and many service businesses do not."},
+                    "**A share of the margin and not a number of points, and "
+                    "that is a change to what this test means.** It used to "
+                    "allow a six-point swing, full stop. A distributor "
+                    "earning 12% and moving between 9% and 15% swung six "
+                    "points and half its margin came and went; a software "
+                    "company earning 81% and moving between 78% and 84% swung "
+                    "six points and barely noticed. One is a commodity "
+                    "business and the other sets its own prices, and a limit "
+                    "in points calls them identical. Fifteen percent of the "
+                    "margin says the same thing to both.\n\n"
+                    "Where it misfires: a company whose margin is genuinely "
+                    "thin — a few points, as in wholesale distribution — has "
+                    "little to divide by, so ordinary movement reads as "
+                    "violent. That is arguably correct, since a point really "
+                    "does take a large share of such a company's margin, but "
+                    "it means this reads harshly at the bottom end. A "
+                    "company that does not report its cost of sales "
+                    "separately cannot be measured at all, and many service "
+                    "businesses do not. And the 2018 revenue-recognition "
+                    "change moved some shipping and fulfilment costs between "
+                    "cost of sales and operating expense, which puts a step "
+                    "in the margin of any window spanning it that is "
+                    "presentation rather than pricing."},
 
         {"id": "min-fcf-margin", "label": "Lowest free cash flow margin",
          "type": "number", "unit": "percent",
@@ -912,34 +1327,46 @@ STRATEGY = {
                     "something genuinely worth buying fails this, and "
                     "occasionally it should not have."},
 
-        {"id": "min-roe", "label": "Lowest return on equity",
-         "type": "number", "unit": "percent",
-         "source": REPORT,
-         "explain": "How much profit the company earns each year for every "
-                    "dollar its owners have in it — the same idea as return "
-                    "on invested capital, counting only the owners' money "
-                    "and not the borrowed part. Taken as the middle reading "
-                    "of five years.\n\n"
-                    "Set at the same 15 and for the same reason: below that, "
-                    "the spread over what the money costs is inside the "
-                    "error bars of the calculation.\n\n"
-                    "It is carried alongside return on invested capital "
-                    "deliberately, and the redundancy is only apparent. The "
-                    "two diverging is itself the information, because the "
-                    "gap between them is borrowing: a company whose return "
-                    "on equity is far above its return on capital is "
-                    "producing that difference with debt rather than with "
-                    "the business.\n\n"
-                    "There is no exit on the other side of it, and that is "
-                    "why. Return on equity is trivially inflated by "
-                    "borrowing money, so a company that levers up to defend "
-                    "a falling return will keep this test green right "
-                    "through the deterioration. Return on invested capital "
-                    "catches that; this does not.\n\n"
+        {"id": "max-roe-roic-gap",
+         "label": "Most of the return that may be borrowed",
+         "type": "number", "unit": "percentage_points", "min": 0,
+         "source": REVIEW,
+         "explain": "Return on equity counts only the owners' money. Return "
+                    "on invested capital counts the borrowed money as well. "
+                    "So the distance between them is borrowing, and nothing "
+                    "else. At 10 the company may earn ten points more on its "
+                    "owners' money than on all the money in the business, "
+                    "and no more.\n\n"
+                    "A company earning 30% on equity and 12% on capital is "
+                    "producing most of that 30% with debt rather than with "
+                    "the business. It is not a fraud and it is not always a "
+                    "mistake — but the returns being admired belong partly "
+                    "to the lenders, and they get thinner the moment "
+                    "borrowing gets dearer or harder to get.\n\n"
+                    "**This used to test the level of return on equity, at "
+                    "the same 15 the return on capital is held to, and that "
+                    "was two tests measuring one thing.** The reasoning "
+                    "beside it always said the informative part was the "
+                    "divergence — and then it tested the height. Testing the "
+                    "distance directly is what that sentence was describing, "
+                    "and it stops a leveraged company from banking two "
+                    "passes for one good business.\n\n"
+                    "There is no exit on the other side of it. Return on "
+                    "equity is trivially inflated by borrowing, so a company "
+                    "that levers up to defend a falling return keeps it "
+                    "looking well right through the deterioration — which is "
+                    "the reason this measures the gap, and also the reason "
+                    "the gap is a poor thing to sell on. Return on invested "
+                    "capital catches the decay, and that is where the exit "
+                    "is.\n\n"
                     "Where it misfires: a company that has bought back so "
-                    "much stock that its stated equity is near zero or "
-                    "negative produces a number with no meaning, and the "
-                    "journal marks it unreadable."},
+                    "much stock that its stated equity is near zero produces "
+                    "a very wide gap for a reason that is arithmetic rather "
+                    "than borrowing, and the journal marks the underlying "
+                    "figure unreadable where equity goes negative. A "
+                    "debt-free company shows a narrow gap, correctly, but "
+                    "then the two measures differ only by its cash and its "
+                    "tax, so the number stops carrying much."},
 
         {"id": "min-revenue-cagr", "label": "Lowest revenue growth",
          "type": "number", "unit": "percent",
@@ -973,33 +1400,90 @@ STRATEGY = {
                     "single-year noise. Wider than a point and it stops "
                     "detecting anything."},
 
-        {"id": "max-goodwill-to-assets",
-         "label": "Most of the company that may be goodwill",
+        {"id": "max-goodwill-written-off",
+         "label": "Most of the owners' money that may have been written off",
          "type": "number", "unit": "percent", "min": 0,
-         "source": REPORT,
-         "explain": "How much of everything the company owns is goodwill and "
-                    "other intangibles — the accounting entry created when a "
-                    "company pays more for a business than that business's "
-                    "identifiable assets are worth. At 40 it is two fifths "
-                    "of the balance sheet.\n\n"
-                    "Above roughly forty percent you are looking at a serial "
-                    "acquirer, and the historical return figures above "
-                    "reflect acquisition accounting more than they reflect "
-                    "operating skill. The returns you are being shown were "
-                    "partly bought.\n\n"
-                    "There is no exit on the other side of it. A goodwill "
-                    "write-off is an event rather than a level, and it is "
-                    "usually the market telling you something you already "
-                    "knew.\n\n"
-                    "Where it misfires: genuinely good acquisitive "
-                    "compounders fail this and should not. This strategy is "
-                    "not built for them, which is a limitation to state "
-                    "rather than to fix."},
+         "source": REVIEW,
+         "explain": "How much the company has written back off the "
+                    "acquisitions it made, added up over five years, against "
+                    "the owners' money that existed before those write-offs "
+                    "began. At 5 a twentieth of the equity base has been "
+                    "conceded.\n\n"
+                    "Goodwill is the premium an acquirer pays over what the "
+                    "acquired business's identifiable assets are worth. "
+                    "Writing it off is management admitting, in public and "
+                    "in the accounts, that the premium bought nothing. One "
+                    "such admission is a deal that went wrong. A run of them "
+                    "against a large share of the equity is a company whose "
+                    "growth has been bought at prices it could not "
+                    "justify.\n\n"
+                    "**This used to test how much goodwill sat on the "
+                    "balance sheet, and that test measured the wrong "
+                    "thing.** Buffett's own 1983 letter appendix argues that "
+                    "economic goodwill is the most valuable asset a business "
+                    "owns and that the accounting entry measures it badly — "
+                    "so a limit on the accounting entry is a limit his own "
+                    "writing argues against. It also punished a company "
+                    "permanently for one good acquisition fifteen years ago, "
+                    "and the note beside it conceded that it wrongly "
+                    "excluded some of the best acquisitive compounders "
+                    "there are. What survives that objection is the "
+                    "outcome: not that a company bought things, but that "
+                    "what it bought turned out not to be there.\n\n"
+                    "The denominator is the equity *before* the window and "
+                    "not after it. Write-offs reduce equity, so measuring "
+                    "against today's would divide a large charge by a base "
+                    "the same charge had already shrunk, and flatter the "
+                    "worst cases most.\n\n"
+                    "There is still no exit on the other side of it. A "
+                    "write-off is usually the market telling you something "
+                    "you already knew, and by the time it is in the accounts "
+                    "the returns test has had years to notice.\n\n"
+                    "Where it misfires: the timing of an impairment says as "
+                    "much about when management conceded as about when the "
+                    "value went, and a charge in a year interest rates moved "
+                    "sharply is weaker evidence than one in a quiet year, "
+                    "because rates feed the impairment test directly. A "
+                    "company that has never acquired anything reads zero, "
+                    "and so does one whose acquisitions all worked; this "
+                    "cannot tell those apart and is not trying to."},
 
-        # -- the three bonus tests -----------------------------------------
+        # -- the five bonus tests ------------------------------------------
+        {"id": "max-debt-to-ebitda",
+         "label": "Highest debt against earnings before depreciation",
+         "type": "number", "unit": "times", "min": 0,
+         "source": REPORT_LEVEL_ONLY,
+         "explain": "How many years of the company's operating earnings "
+                    "*before* the cost of its equipment wearing out it would "
+                    "take to repay everything it has borrowed. At 2.5 it "
+                    "would take two and a half.\n\n"
+                    "**This was a knockout and is now reported and never "
+                    "blocking, which is the largest single change in what "
+                    "this strategy demands.** The measure adds depreciation "
+                    "back to profit on the reasoning that it is not a cash "
+                    "payment this year. Munger's stated position is that the "
+                    "term should be read as a synonym for fictitious "
+                    "earnings; Buffett has written repeatedly that "
+                    "depreciation is a real expense and that ignoring it "
+                    "flatters exactly the capital-hungry businesses least "
+                    "able to carry debt. Leaving a measure they attacked at "
+                    "the tier that overrules everything else was attributing "
+                    "to them a test they would disown.\n\n"
+                    "It is kept because it is the number credit ratings "
+                    "speak. Three times is roughly where agencies begin "
+                    "marking down cyclical borrowers, so 2.5 shows whether "
+                    "this balance sheet has a turn of cushion by the "
+                    "convention the outside world uses. That is worth being "
+                    "able to see. It is not worth deciding on, and the "
+                    "knockout it used to be is now held against free cash "
+                    "flow instead.\n\n"
+                    "The level is the report's and is untouched. Only where "
+                    "it sits has moved, and that placement is this "
+                    "strategy's own."},
+
         {"id": "min-effective-tax-rate", "label": "Lowest effective tax rate",
          "type": "number", "unit": "percent", "min": 0, "max": 100,
-         "source": REPORT,
+         "source": REVIEW,
          "explain": "The share of profit the company actually pays in tax, "
                     "averaged over five years — the lower end of a band this "
                     "test expects it to sit inside.\n\n"
@@ -1011,24 +1495,38 @@ STRATEGY = {
                     "its earnings and will not repeat. Either way the profit "
                     "figure everything else here is built on is not what it "
                     "looks like.\n\n"
-                    "The report states this as one band. It is two settings "
+                    "Twelve rather than the ten this used to be. The band "
+                    "was set against a 35% US federal rate; the 2017 tax act "
+                    "cut that to 21%, and every rate in the distribution "
+                    "moved down with it. Holding the old floor while the "
+                    "world moved would quietly widen the band from below.\n\n"
+                    "The source states this as one band. It is two settings "
                     "here because a band is two comparisons, and two rows on "
                     "the screen can say which end was missed where one row "
                     "could only say that something was."},
 
         {"id": "max-effective-tax-rate", "label": "Highest effective tax rate",
          "type": "number", "unit": "percent", "min": 0, "max": 100,
-         "source": REPORT,
+         "source": REVIEW,
          "explain": "The upper end of the tax band described above. Above "
-                    "roughly thirty-five percent, either the company is "
+                    "roughly twenty-eight percent, either the company is "
                     "paying an unusual amount for a reason worth "
                     "understanding, or a one-off charge has landed in the "
                     "tax line and the profit figure is understated rather "
                     "than overstated.\n\n"
+                    "**Twenty-eight rather than the thirty-five this used to "
+                    "be, and the old figure had stopped doing anything at "
+                    "all.** It was set when the US federal statutory rate "
+                    "was 35%, so a ceiling at 35 caught only companies "
+                    "paying more than the full domestic rate. After the 2017 "
+                    "act cut the statutory rate to 21%, a US-centric company "
+                    "typically runs somewhere around 19 to 23 — so the old "
+                    "ceiling sat a dozen points above anything it could ever "
+                    "have flagged. A test that cannot fire is not a lenient "
+                    "test, it is an absent one wearing a number.\n\n"
                     "The band catches both ends of the same worry: that the "
                     "reported profit is not a repeatable profit. Like its "
                     "twin it never blocks a buy."},
-
         {"id": "min-current-ratio", "label": "Lowest current ratio",
          "type": "number", "unit": "ratio", "min": 0,
          "source": REPORT,
@@ -1138,24 +1636,40 @@ STRATEGY = {
                     "comparison to walk back through, so the confirmation "
                     "rule is applied where there is a series to apply it to."},
 
-        {"id": "exit-debt-to-ebitda",
-         "label": "Debt against earnings that ends the position",
+        {"id": "exit-debt-to-fcf",
+         "label": "Debt against cash generation that ends the position",
          "type": "number", "unit": "times", "min": 0,
-         "source": REPORT,
-         "explain": "At four years of earnings' worth of borrowings the "
-                    "balance sheet has stopped being the thing that lets you "
-                    "hold this calmly.\n\n"
+         "source": AUTHOR,
+         "explain": "At five years of spare cash owed, the balance sheet has "
+                    "stopped being the thing that lets you hold this "
+                    "calmly.\n\n"
                     "This is the exception to everything else here, and it "
                     "is deliberate. This strategy will not sell a wonderful "
                     "business for being expensive, for being slow, or for "
                     "having been owned a long time. It will sell one for "
                     "borrowing too much, because overpaying costs you return "
-                    "and leverage costs you the business.\n\n"
-                    "Note the distance from the 2.5 required to buy. That "
-                    "gap is deliberate: a company drifting from 2.5 to 2.8 "
-                    "is not the same event as one arriving at 4.0, and an "
+                    "and borrowing costs you the business.\n\n"
+                    "Note the distance from the 3.0 required to buy. That "
+                    "gap is deliberate: a company drifting from 3.0 to 3.3 "
+                    "is not the same event as one arriving at 5.0, and an "
                     "exit set at the entry level would fire on ordinary "
-                    "movement."},
+                    "movement.\n\n"
+                    "**This is the one level in this file with no source "
+                    "behind it, and it is the one to argue with.** The exit "
+                    "used to be held against debt over EBITDA at 4.0, and it "
+                    "had to move when the test it belongs to did: a strategy "
+                    "that refuses to *buy* on a measure — because it adds "
+                    "back the cost of the equipment wearing out — cannot "
+                    "coherently *sell* on the same measure, and selling is "
+                    "the more consequential of the two. Neither source "
+                    "states a level for the replacement. Five is chosen as "
+                    "five years of every spare dollar, which is a business "
+                    "whose future substantially belongs to its lenders; for "
+                    "what it is worth, keeping the entry-to-exit distance "
+                    "the report used on the pair it did state — 2.5 to 4.0, "
+                    "or one and three fifths — would put it at 4.8, and the "
+                    "difference between those two is not meaningful at this "
+                    "precision."},
 
         {"id": "exit-interest-coverage",
          "label": "Interest coverage that ends the position",
@@ -1453,67 +1967,128 @@ ROOM_CITE = {"fact": "portfolio.slots_occupied", "comparator": "below",
              "threshold_from": "portfolio-slots", "group": SIZING_GROUP["id"]}
 
 
-def _entry_screen(ctx):
-    """The fifteen entry tests, and what the host made of each.
+def _dimension(ctx, group, rows):
+    """One question about the business: its citations, and whether the rows
+    under it answer it.
 
-    Returned as one object because every caller wants the same four
-    questions answered — did a knockout fail, can the core count still be
-    reached, was anything unreadable, and what should be cited — and a
-    holding asks them in exactly the same way a candidate does. An add is
-    the same claim about the same business made again, and the only honest
-    way to make it is against the same bar.
+    The three outcomes are the same three a single test has, reached the same
+    way. `met` is the requirement satisfied. `settled_no` is the requirement
+    out of reach even if every unreadable row came back a pass. Neither means
+    undecided, and undecided is neither a purchase nor a refusal.
+
+    How many rows a group needs is read from the group's own declaration, so
+    this cannot demand a number different from the one the host will count
+    against — the host resolves the same `threshold_from` when it works out
+    the rollup the reader sees.
     """
-    values = ctx.get("values") or {}
-    need = values.get("core-tests-required")
-    req_cites, req_out = _screen(ctx, REQUIRED, KNOCKOUTS["id"])
-    core_cites, core_out = _screen(ctx, CORE, CORE_GROUP["id"])
-    bonus_cites, _bonus_out = _screen(ctx, BONUS, BONUS_GROUP["id"])
-    core_pass, core_unknown = core_out.count(PASS), core_out.count(UNKNOWN)
+    cites, out = _screen(ctx, rows, group["id"])
+    passed, unknown = out.count(PASS), out.count(UNKNOWN)
+    if group["requires"] == "all":
+        need = len(rows)
+    else:
+        need = (ctx.get("values") or {}).get(group["threshold_from"])
+    ok = isinstance(need, int) and not isinstance(need, bool)
     return {
-        "need": need,
+        "group": group, "cites": cites, "need": need,
+        "passed": passed, "unknown": unknown, "tested": len(rows),
+        "settled_no": ok and passed + unknown < need,
+        "met": ok and passed >= need,
+    }
+
+
+def _entry_screen(ctx):
+    """Every entry test, and what the host made of each.
+
+    Returned as one object because every caller wants the same questions
+    answered — did a knockout fail, is any dimension short, was anything
+    unreadable, and what should be cited — and a holding asks them in exactly
+    the same way a candidate does. An add is the same claim about the same
+    business made again, and the only honest way to make it is against the
+    same bar.
+    """
+    req_cites, req_out = _screen(ctx, REQUIRED, KNOCKOUTS["id"])
+    dims = [_dimension(ctx, g, rows) for g, rows in DIMENSIONS]
+    bonus_cites, _bonus_out = _screen(ctx, BONUS, BONUS_GROUP["id"])
+    short = [d for d in dims if d["settled_no"]]
+    return {
         "req_fail": req_out.count(FAIL),
         "req_unknown": req_out.count(UNKNOWN),
-        "core_pass": core_pass,
-        "core_unknown": core_unknown,
-        "settled_no": (req_out.count(FAIL) > 0
-                       or (isinstance(need, int)
-                           and core_pass + core_unknown < need)),
-        "met": (req_out.count(UNKNOWN) == 0 and isinstance(need, int)
-                and core_pass >= need),
-        "evidence": req_cites + core_cites + bonus_cites,
-        "groups": [KNOCKOUTS, CORE_GROUP, BONUS_GROUP],
+        "dims": dims,
+        "short": short,
+        "unmet": [d for d in dims if not d["met"]],
+        "passed": sum(d["passed"] for d in dims),
+        "tested": sum(d["tested"] for d in dims),
+        "unknown": sum(d["unknown"] for d in dims),
+        "settled_no": req_out.count(FAIL) > 0 or bool(short),
+        "met": (req_out.count(UNKNOWN) == 0 and all(d["met"] for d in dims)),
+        "evidence": (req_cites
+                     + [c for d in dims for c in d["cites"]] + bonus_cites),
+        "groups": ([KNOCKOUTS] + [g for g, _ in DIMENSIONS] + [BONUS_GROUP]),
     }
+
+
+def _names_of(dims) -> str:
+    """The groups named in a sentence, lower-cased the way they read mid-line
+    rather than as headings."""
+    names = [d["group"]["name"][0].lower() + d["group"]["name"][1:]
+             for d in dims]
+    if len(names) == 1:
+        return names[0]
+    return ", ".join(names[:-1]) + " and " + names[-1]
+
+
+def _covered(screen) -> str:
+    """How the dimensions came out, in a clause a verdict can carry.
+
+    It states the count AND that the count is not what was demanded, because
+    a reader who has been shown "eight of ten" will otherwise carry away the
+    quota this arrangement exists to replace.
+    """
+    return (f'{screen["passed"]} of the {screen["tested"]} tests behind them '
+            "passed")
 
 
 def _on_a_candidate(ctx):
     values = ctx.get("values") or {}
     screen = _entry_screen(ctx)
 
-    # A knockout that failed, or a core count that cannot be reached even if
-    # every unreadable test came back clear. Either is a settled no — and
-    # the three questions are deliberately NOT cited here, so nobody is
-    # asked to assess the durability of a business their own rules have
-    # already rejected.
+    # A knockout that failed, or a question about the business that cannot be
+    # answered even if every unreadable row under it came back clear. Either
+    # is a settled no — and the three questions are deliberately NOT cited
+    # here, so nobody is asked to assess the durability of a business their
+    # own rules have already rejected.
+    #
+    # Which dimension fell short is named rather than counted. "Six of ten
+    # passed" was true under the old quota and told a reader nothing about
+    # what to go and look at; "nothing here answers what it owes" tells them
+    # where the business failed, which is the whole point of grouping.
     if screen["settled_no"]:
         return {
             "state": "not-wonderful-enough", "payload": {},
             "reason": {
                 "rule": ("knockout-failed" if screen["req_fail"]
-                         else "core-tests-short"),
+                         else "dimension-short"),
                 "summary": (
                     f'{screen["req_fail"]} of the {len(REQUIRED)} tests this '
                     "strategy will not bend came back against it, and one is "
                     "enough."
                     if screen["req_fail"] else
-                    f'Only {screen["core_pass"]} of the {len(CORE)} core '
-                    f'tests passed and {screen["core_unknown"]} could not be '
-                    f'worked out, so {screen["need"]} is out of reach.'),
+                    "This strategy asks six separate questions about a "
+                    "business and needs every one of them answered. "
+                    + ("One is" if len(screen["short"]) == 1
+                       else f'{len(screen["short"])} are')
+                    + " not: " + _names_of(screen["short"])
+                    + f'. Across all six, {_covered(screen)}, and no amount '
+                      "of passing elsewhere settles the "
+                    + ("one that is short."
+                       if len(screen["short"]) == 1 else "ones that are "
+                       "short.")),
                 "evidence": screen["evidence"], "groups": screen["groups"],
             },
         }
 
     if not screen["met"]:
-        missing = screen["req_unknown"] + screen["core_unknown"]
+        missing = screen["req_unknown"] + screen["unknown"]
         return {
             "state": "cannot-screen", "payload": {},
             "reason": {
@@ -1539,9 +2114,10 @@ def _on_a_candidate(ctx):
             "reason": {
                 "rule": "you-answered-no",
                 "summary": (
-                    f"It passes {screen['core_pass']} of the {len(CORE)} "
-                    f"core tests and every test this strategy will not bend, "
-                    f"and you have marked "
+                    "It answers every question this strategy asks about "
+                    "the business and passes every test it will not bend — "
+                    f"{_covered(screen)} — "
+                    "and you have marked "
                     + ("one of the three questions" if len(said_no) == 1
                        else f"{len(said_no)} of the three questions")
                     + " a fail. Your assessment decides this, not the "
@@ -1566,10 +2142,10 @@ def _on_a_candidate(ctx):
             "reason": {
                 "rule": "questions-unanswered",
                 "summary": (
-                    f"Every number this strategy checks is in order — "
-                    f"{screen['core_pass']} of {len(CORE)} core tests and "
-                    f"all {len(REQUIRED)} it will not bend. What decides it "
-                    "now is "
+                    "Every number this strategy checks is in order — all "
+                    "six questions about the business answered, "
+                    f"{_covered(screen)}, and all {len(REQUIRED)} tests it "
+                    "will not bend. What decides it now is "
                     + ("a question" if len(owed) == 1 else f"{len(owed)} "
                        "questions")
                     + " no filing can answer, and only you can."),
@@ -1619,11 +2195,11 @@ def _on_a_candidate(ctx):
         "reason": {
             "rule": "worth-owning",
             "summary": (
-                f"Every test this strategy will not bend passed, "
-                f"{screen['core_pass']} of {len(CORE)} core tests did "
-                f"against a bar of {screen['need']}, and you have answered "
-                f"all three questions yes. The size is {size:g}% of the "
-                f"account, set by {bound}."),
+                "Every test this strategy will not bend passed, all six "
+                "questions about the business are answered — "
+                f"{_covered(screen)} — and you have answered all three "
+                "questions only you can. The size is "
+                f"{size:g}% of the account, set by {bound}."),
             "evidence": evidence, "groups": groups,
         },
     }
@@ -1900,17 +2476,19 @@ def _more_money(ctx, values, evidence, groups, clear, judged_out):
     if screen["settled_no"]:
         return held(
             "would-not-buy-it-today",
-            f"Your rules would not buy this today: {screen['req_fail']} of "
-            f"the {len(REQUIRED)} tests this strategy will not bend came back "
-            f"against it, and {screen['core_pass']} of {len(CORE)} core tests "
-            f"passed against a bar of {screen['need']}. Holding what you have "
-            "is a different question, and every exit test above came back "
-            "clear — a business that has stopped being cheap enough to buy "
-            "again is not a business that has stopped being worth owning.",
+            "Your rules would not buy this today: "
+            + (f"{screen['req_fail']} of the {len(REQUIRED)} tests this "
+               "strategy will not bend came back against it"
+               if screen["req_fail"] else
+               "nothing here answers " + _names_of(screen["short"]))
+            + f", and {_covered(screen)}. Holding what you have is a "
+            "different question, and every exit test above came back clear — "
+            "a business that has stopped being cheap enough to buy again is "
+            "not a business that has stopped being worth owning.",
             *body)
 
     if not screen["met"]:
-        missing = screen["req_unknown"] + screen["core_unknown"]
+        missing = screen["req_unknown"] + screen["unknown"]
         return held(
             "screen-unreadable",
             f"Whether your rules would buy this today could not be settled: "
@@ -1927,8 +2505,8 @@ def _more_money(ctx, values, evidence, groups, clear, judged_out):
             "rule": "still-worth-owning-and-has-room",
             "summary": (
                 f"{clear} It would still be bought at today's price — "
-                f"{screen['core_pass']} of {len(CORE)} core tests against a "
-                f"bar of {screen['need']} — your three answers still stand, "
+                "every question about the business answered, "
+                f"{_covered(screen)} — your three answers still stand, "
                 f"and it sits {room:.1f}% of the account below the {cap:g}% "
                 "most this strategy will take one name to. That room is the "
                 "whole of what may go in; where it goes is a question about "

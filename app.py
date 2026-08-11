@@ -196,6 +196,11 @@ class Api:
                     for k in ("label", "noun", "means", "explain")}}
                 for cid, because in
                 contract.declined_classes(record).items()],
+            # On the offer as well as the stamped strategy, for the same
+            # reason: what a method does not promise is knowable before a
+            # journal exists, and finding out afterwards is finding out too
+            # late to choose differently.
+            "limits": [dict(l) for l in (record.get("limits") or [])],
         }
 
     def _strategy_view(self, record, chain, journal):

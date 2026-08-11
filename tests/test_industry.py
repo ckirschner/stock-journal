@@ -52,6 +52,24 @@ def ctx_for(record, security, as_of=None):
 
 
 @pytest.fixture
+def indifferent(strategies):
+    """A fixture strategy that declines nothing, so the branch where the gate
+    does NOT fire stays exercised against real data.
+
+    It used to be `strategies/proof/`, which shipped. Nothing shipped holds
+    no view any more: both real strategies decline lenders, insurers and
+    property companies, and a scaffold kept in the picker so a test had
+    something neutral to point at was rendering verdicts that meant nothing
+    to anyone who chose it.
+    """
+    strategies("verdicts")
+    loaded, reports = strategy_loader.discover()
+    assert "verdicts" in loaded, [r["errors"] for r in reports
+                                  if not r["ok"]]
+    return loaded["verdicts"]
+
+
+@pytest.fixture
 def picky(strategies):
     """A fixture strategy declining lenders and property companies, and
     evaluating insurers and everything else."""
@@ -316,32 +334,30 @@ class TestAReclassificationIsVisible:
 
 
 class TestItReachesAStrategyAsAnOrdinaryFact:
-    def test_the_context_carries_both_nodes(self):
+    def test_the_context_carries_both_nodes(self, indifferent):
         filer(730, "Kingsbridge Savings", "6035",
               "Savings Institution, Federally Chartered")
-        loaded, _ = strategy_loader.discover()
-        record = loaded["contract-proof"]
+        record = indifferent
         ctx = ctx_for(record, sec(730))
         assert ctx["security"]["industry"]["class"] == DEPOSIT
         assert ctx["security"]["sic"]["value"].startswith("6035")
 
-    def test_a_strategy_can_test_it_and_the_host_answers(self):
+    def test_a_strategy_can_test_it_and_the_host_answers(self, indifferent):
         filer(731, "Kingsbridge Savings", "6035",
               "Savings Institution, Federally Chartered")
-        loaded, _ = strategy_loader.discover()
-        record = loaded["contract-proof"]
+        record = indifferent
         ctx = ctx_for(record, sec(731))
         item = {"fact": "security.industry", "comparator": "equals",
                 "threshold": "Depository and lending"}
         assert contract.test(ctx, item) == contract.PASS
 
-    def test_an_unclassifiable_filer_never_tests_as_a_pass(self):
+    def test_an_unclassifiable_filer_never_tests_as_a_pass(self,
+                                                           indifferent):
         """Absence resolves to unknown, here as everywhere. A rule reading
         "this is not a bank" must not come out true because nobody could
         say what it was."""
         filer(732, "Ambiguous Co", "6199", "Finance Services")
-        loaded, _ = strategy_loader.discover()
-        record = loaded["contract-proof"]
+        record = indifferent
         ctx = ctx_for(record, sec(732))
         item = {"fact": "security.industry", "comparator": "not_equals",
                 "threshold": "Depository and lending"}
@@ -399,6 +415,139 @@ class TestDeclaringWhatYouWillNotEvaluate:
         errors = contract.validate_declaration(decl(declines=[
             {"class": DEPOSIT, "because": "A reason.", "since": "2026"}]))
         assert any("must be exactly" in e for e in errors)
+
+
+class TestSayingWhatTheMethodDoesNotPromise:
+    """`limits` — prose the host renders and never reads.
+
+    It is checked as hard as anything else declared, for one reason: a
+    heading with nothing under it tells a reader there is something they are
+    not being told, which is worse than not raising the subject.
+    """
+
+    LIMIT = {"title": "It is a portfolio method",
+             "body": "An expected rate of losers is built in."}
+
+    def test_a_well_formed_list_passes(self):
+        assert contract.validate_declaration(decl(limits=[self.LIMIT])) == []
+
+    def test_leaving_it_out_is_fine(self):
+        assert contract.validate_declaration(decl()) == []
+
+    def test_an_empty_list_is_refused_rather_than_ignored(self):
+        errors = contract.validate_declaration(decl(limits=[]))
+        assert any("claims there is nothing" in e for e in errors)
+
+    def test_a_heading_with_nothing_under_it_is_refused(self):
+        errors = contract.validate_declaration(decl(
+            limits=[{"title": "Something you should know", "body": ""}]))
+        assert any("needs a `body`" in e for e in errors)
+
+    def test_a_body_with_no_heading_is_refused(self):
+        errors = contract.validate_declaration(decl(
+            limits=[{"title": "", "body": "Some prose."}]))
+        assert any("needs a `title`" in e for e in errors)
+
+    def test_extra_keys_are_refused(self):
+        errors = contract.validate_declaration(decl(
+            limits=[{**self.LIMIT, "severity": "high"}]))
+        assert any("must be exactly" in e for e in errors)
+
+    def test_the_same_heading_twice_is_refused(self):
+        errors = contract.validate_declaration(decl(
+            limits=[self.LIMIT, {**self.LIMIT, "body": "Different prose."}]))
+        assert any("declared twice" in e for e in errors)
+
+    def test_it_reaches_no_verdict_and_gates_nothing(self, indifferent):
+        """The guarantee that makes this safe to add: it is prose. A limit
+        that changed what a strategy did would be a rule nobody could test,
+        living in the one field written for things that cannot be rules."""
+        filer(760, "Ordinary Manufacturing", "3711", "Motor Vehicles")
+        plain = contract.evaluate(indifferent,
+                                  ctx_for(indifferent, sec(760)))
+        with_limits = dict(indifferent)
+        with_limits["limits"] = [self.LIMIT]
+        limited = contract.evaluate(with_limits,
+                                    ctx_for(with_limits, sec(760)))
+        assert limited["state"] == plain["state"]
+        assert limited["render"] == plain["render"]
+        assert limited["produced_by"] == plain["produced_by"]
+
+
+class TestBothShippedStrategiesSayWhatTheyDoNotPromise:
+    """Every method these strategies draw on is a portfolio method with an
+    expected rate of losers, and every one of their authors said so. A screen
+    rendering a verdict on ONE security is quietly promising something none
+    of them promised, and nothing contradicts it unless the strategy says so.
+
+    Pinned because it is the kind of claim that gets dropped by whoever adds
+    the third strategy, and nothing would notice.
+    """
+
+    @pytest.mark.parametrize("sid", ["graham", "buffett"])
+    def test_it_says_it_is_a_portfolio_method(self, sid):
+        loaded, _ = strategy_loader.discover()
+        limits = loaded[sid].get("limits") or []
+        assert limits, sid
+        assert any("portfolio method" in l["title"]
+                   or "portfolio method" in l["body"] for l in limits), sid
+        assert any("one security" in l["body"] for l in limits), sid
+
+    @pytest.mark.parametrize("sid", ["graham", "buffett"])
+    def test_every_limit_carries_enough_prose_to_be_worth_reading(self, sid):
+        loaded, _ = strategy_loader.discover()
+        for lim in loaded[sid]["limits"]:
+            assert len(lim["body"]) > 300, (sid, lim["title"])
+
+    def test_graham_says_an_empty_screen_is_the_method_working(self):
+        """The one most likely to be experienced as the tool being broken.
+        Graham's rules sat inside a bond allocation and he was explicit that
+        an expensive market should produce no candidates — the signal to hold
+        more bonds rather than to relax anything. This program does not
+        implement that allocation, so without it said, a strategy correctly
+        returning nothing for a year reads as broken. A reader who concludes
+        the tool is broken loosens the tool."""
+        loaded, _ = strategy_loader.discover()
+        body = " ".join(l["body"] for l in loaded["graham"]["limits"])
+        assert "bonds" in body
+        assert "years at a time" in body
+        assert "faithful" in body
+
+    def test_every_document_a_value_names_as_its_source_is_in_the_repo(self):
+        """A `source` exists so a reader can go and check the number against
+        the thing it came from. One naming a path that is not in a fresh
+        clone is worse than one naming nothing: it looks checkable.
+
+        This is not hypothetical. The two documents behind these strategies
+        sat under an ignore rule for the whole directory, and the moment
+        twelve declared values started citing one of them by path, that rule
+        made a claim in the repository that a fresh clone could not honour.
+        """
+        import re
+        from pathlib import Path
+        import subprocess
+        root = Path(__file__).resolve().parent.parent
+        tracked = set(subprocess.run(
+            ["git", "ls-files"], cwd=root, capture_output=True, text=True,
+            check=True).stdout.split())
+        loaded, _ = strategy_loader.discover()
+        named = set()
+        for record in loaded.values():
+            for v in record["values"]:
+                named |= set(re.findall(r"[\w./-]+\.(?:md|ya?ml)",
+                                        v["source"]["name"]))
+        assert named, "no value names a document at all"
+        missing = sorted(p for p in named if p not in tracked)
+        assert missing == [], missing
+
+    def test_it_reaches_the_screen_that_offers_a_strategy(self):
+        """On the offer and not only on the stamped strategy. What a method
+        does not promise is knowable before a journal exists, and finding out
+        afterwards is finding out too late to choose differently."""
+        from app import Api
+        offers = Api()._strategy_offer(strategy_loader.discover()[0]["graham"])
+        assert offers["limits"] == list(
+            strategy_loader.discover()[0]["graham"]["limits"])
 
 
 class TestOnlyTheHostSaysInapplicable:
@@ -471,11 +620,10 @@ class TestTheGate:
         result = contract.evaluate(picky, ctx_for(picky, sec(None)))
         assert result["produced_by"] == "strategy"
 
-    def test_a_strategy_that_declines_nothing_is_untouched(self):
+    def test_a_strategy_that_declines_nothing_is_untouched(self, indifferent):
         filer(745, "Kingsbridge Savings", "6035",
               "Savings Institution, Federally Chartered")
-        loaded, _ = strategy_loader.discover()
-        record = loaded["contract-proof"]
+        record = indifferent
         result = contract.evaluate(record, ctx_for(record, sec(745)))
         assert result["produced_by"] == "strategy"
 
@@ -536,13 +684,17 @@ class TestTheShippedStrategiesDecline:
         result = contract.evaluate(record, ctx_for(record, sec(751)))
         assert result["produced_by"] == "strategy"
 
-    def test_the_scaffold_declines_nothing_on_purpose(self):
-        """One bundle in the repository that declines nothing, so the branch
-        where the gate does NOT fire stays exercised against real data. A
-        scaffold that declined would also be the scaffold holding a view,
-        which is the one thing its own docstring refuses."""
+    def test_everything_shipped_declines_the_same_three(self):
+        """There is no longer a shipped bundle that declines nothing, and
+        that is deliberate: the scaffold that used to play that part was
+        offered in the create-journal picker and rendered verdicts that meant
+        nothing to whoever chose it. The branch where the gate does not fire
+        is exercised by a fixture bundle instead — see `indifferent`."""
         loaded, _ = strategy_loader.discover()
-        assert contract.declined_classes(loaded["contract-proof"]) == {}
+        assert sorted(loaded) == ["buffett", "graham"]
+        for record in loaded.values():
+            assert set(contract.declined_classes(record)) == {
+                DEPOSIT, INSURE, PROPERTY}
 
     def test_the_refusal_still_lets_a_purchase_be_recorded(self):
         """Principle 2. The tool records decisions and never blocks them,

@@ -206,12 +206,22 @@ def _window(ctx, input_id, n):
 # exists to prevent one level up.
 # --------------------------------------------------------------------------
 
-def _with_one_out(values, years, stat):
+def _with_one_out(values, years, stat, defined=None):
     """(the statistic, [{"dropped": year, "value": v}, ...]).
 
     One entry per fiscal year in the window. A window of two would leave one
     observation behind and there is no statistic of one worth reporting, so
     nothing is offered there.
+
+    `defined` is for a statistic with a denominator. A ratio guarded against
+    a non-positive denominator on the full window can still meet one when a
+    year is dropped — five years averaging positive free cash flow with one
+    very good year among them is the case — and what comes back is either a
+    crash or a NEGATIVE ratio, which on a lower-is-better measure reads as
+    the company being in wonderful shape. A wrong number arriving through the
+    door marked robustness, in the flattering direction, is worse than no
+    reading at all. So the year is skipped: dropping it leaves nothing to
+    compare against rather than something excellent.
     """
     full = stat(values)
     if len(values) < 3:
@@ -219,6 +229,8 @@ def _with_one_out(values, years, stat):
     outs = []
     for i, y in enumerate(years):
         rest = values[:i] + values[i + 1:]
+        if defined is not None and not defined(rest):
+            continue
         outs.append({"dropped": y, "value": stat(rest)})
     return full, outs
 
@@ -1814,10 +1826,26 @@ def profitable_years_10y(ctx):
 
 def _streak_backward(ctx, input_id, holds):
     """Length of the consecutive run of `holds(value)` counting back from the
-    most recent fiscal year. The streak may only be reported if every year it
-    covers — plus the year that breaks it — tiles, anchors on the company's
-    actual latest fiscal year, and does not span a restatement; otherwise
-    absent says why."""
+    most recent fiscal year, for a condition that reads one input."""
+    return _streak_backward_by_year(ctx, input_id,
+                                    lambda _year, value: holds(value))
+
+
+def _streak_backward_by_year(ctx, input_id, holds):
+    """The same walk, for a condition that needs to know WHICH year it is
+    standing in — so it can go and look at another input for that year.
+
+    `input_id` still sets the calendar: it is the series whose fiscal years
+    are walked, whose tiling is checked, and whose restatements break the
+    run. A condition reading a second input reads it for the year the walk
+    reached, and a year that input does not answer for simply does not hold.
+    That keeps one series responsible for the shape of the streak, which is
+    what makes a gap in it detectable at all.
+
+    The streak may only be reported if every year it covers — plus the year
+    that breaks it — tiles, anchors on the company's actual latest fiscal
+    year, and does not span a restatement; otherwise absent says why.
+    """
     by_end = ctx.sb.annual_points(input_id)
     if not by_end:
         return absent(f"no annual figure for {label(input_id)} could be "
@@ -1850,7 +1878,7 @@ def _streak_backward(ctx, input_id, holds):
                     f"year); a streak for {label(input_id)} cannot be "
                     "counted across it")
         traversed.append(p)
-        if holds(p["value"]):
+        if holds(e, p["value"]):
             streak += 1
         else:
             ran_out = False
@@ -2020,6 +2048,422 @@ def institutional_ownership_pct(ctx):
         "hundreds of filers, a source this pipeline does not read"))
 
 
+# --------------------------------------------------------------------------
+# measures added when quotas became coverage
+#
+# Six entries, and five of them replace something that was measuring the
+# wrong thing rather than adding a sixth question. What they have in common
+# is that each takes a LEVEL that was being tested and asks about the
+# relationship it sits inside instead: what newly retained capital earns
+# rather than what the existing base earns, how far a margin swings against
+# how wide it is, what the acquisitions did rather than how many there were.
+# --------------------------------------------------------------------------
+
+def total_debt_to_avg_fcf_5y(ctx):
+    """Years of typical free cash flow it would take to repay everything.
+
+    The same question `total_debt_to_ebitda` asks, put to a number that is
+    not EBITDA. Depreciation is a real expense and a measure that adds it
+    back flatters exactly the capital-hungry business that can least afford
+    the debt; free cash flow has already paid for the equipment.
+
+    Five years averaged rather than the last twelve months, because one
+    heavy investment year would otherwise read as a balance-sheet problem.
+    """
+    debt = _total_debt_with_leases(ctx)
+    if is_absent(debt):
+        return _absent_result(debt)
+    fcf = _fcf_per_year(ctx, 5)
+    if is_absent(fcf):
+        return _absent_result(fcf)
+
+    def ratio(values):
+        return debt["value"] / (sum(values) / len(values))
+
+    mean_fcf = sum(fcf["values"]) / len(fcf["values"])
+    if mean_fcf <= 0:
+        return _absent_result(absent(
+            "Not meaningful here: average free cash flow over the five years "
+            "is zero or negative, so there is no number of years of it that "
+            "repays the debt (the bank's own test)"))
+    value, outs = _with_one_out(fcf["values"], fcf["years"], ratio,
+                                lambda rest: sum(rest) / len(rest) > 0)
+    return computed(value,
+                    debt["provenance"]
+                    + [f"free cash flow for FY {fcf['years'][0]}.."
+                       f"{fcf['years'][-1]}, averaged"],
+                    sorted(set(debt["cautions"] + fcf["cautions"])), outs)
+
+
+def incremental_roic_5y(ctx):
+    """What the capital retained over the window earned, as opposed to what
+    the capital already in the business earns.
+
+    Change in after-tax operating profit divided by change in invested
+    capital, both measured between three-year averages at each end of a
+    five-year span — the same construction every growth rate in this bank
+    uses, and needed here more than anywhere else, because this is a ratio of
+    two differences and a one-off year moves both of them at once.
+
+    Eight fiscal years of income statements and eight year-end balance
+    sheets, so it is absent for exactly the companies the averaged CAGRs are
+    absent for.
+    """
+    span = 5
+    n = _growth_window(span)
+    wins = _aligned_windows(ctx, n, "ebit", "income_tax_expense",
+                            "pretax_income")
+    if is_absent(wins):
+        return _absent_result(wins)
+    ebit, tax, pretax = wins
+    years = [p["end"] for p in ebit["points"]]
+    debt = ctx.sb.instant_series_annual("total_debt", n)
+    eq = ctx.sb.instant_series_annual("total_equity", n)
+    cash = ctx.sb.instant_series_annual("cash_and_equivalents", n)
+    for w, what in ((debt, "total debt"), (eq, "total equity"),
+                    (cash, "cash")):
+        if is_absent(w):
+            return _absent_result(absent(
+                f"{what} for the {n} year-end balance sheets this needs: "
+                + w["reason"]))
+        if w["dates"] != years:
+            return _absent_result(absent(
+                f"{what} balance-sheet dates do not line up with the fiscal "
+                "years of EBIT; the window cannot be aligned"))
+    nopat, invested = [], []
+    for i, y in enumerate(years):
+        if pretax["values"][i] <= 0:
+            return _absent_result(absent(
+                f"pre-tax income for FY ending {y} is zero or negative, so "
+                "the effective tax rate that year has no meaning and "
+                "after-tax operating profit cannot be worked out for the "
+                "window"))
+        rate = tax["values"][i] / pretax["values"][i]
+        nopat.append(ebit["values"][i] * (1 - rate))
+        invested.append(debt["values"][i] + eq["values"][i]
+                        - cash["values"][i])
+
+    def rate_of(profit, capital):
+        base_p, end_p, _ = _averaged_ends(profit, years)
+        base_c, end_c, _ = _averaged_ends(capital, years)
+        return (end_p - base_p) / (end_c - base_c) * 100.0
+
+    base_c, end_c, _outs_c = _averaged_ends(invested, years)
+    if end_c - base_c <= 0:
+        return _absent_result(absent(
+            "Not meaningful here: invested capital did not grow across the "
+            "window, so no capital was retained for this to be the return "
+            "on. A business that grew without keeping any of its profits is "
+            "the case this ratio has no way to express, and reporting a "
+            "figure divided by nothing or by a negative would read as an "
+            "answer"))
+    # One-out by hand rather than through `_with_one_out`: the statistic
+    # needs both series, dropped at the same year on both sides, and a year
+    # in the gap between the two averages is in neither of them.
+    outs = []
+    for i, y in enumerate(years):
+        if not (i < GROWTH_ENDS or i >= len(years) - GROWTH_ENDS):
+            continue
+        p = nopat[:i] + nopat[i + 1:]
+        c = invested[:i] + invested[i + 1:]
+        ys = years[:i] + years[i + 1:]
+        bc, ec, _ = _averaged_ends(c, ys)
+        if ec - bc <= 0:
+            continue
+        bp, ep, _ = _averaged_ends(p, ys)
+        outs.append({"dropped": y, "value": (ep - bp) / (ec - bc) * 100.0})
+    return computed(rate_of(nopat, invested),
+                    [f"after-tax operating profit and invested capital for "
+                     f"FY {years[0]}..{years[-1]}, averaged three years at "
+                     f"each end of a {span}-year span"],
+                    _cautions_of(ebit, tax, pretax, debt, eq, cash), outs)
+
+
+def roe_minus_roic_gap_5y(ctx):
+    """How far return on equity sits above return on invested capital.
+
+    The gap between them is borrowing. Testing either level on its own says
+    how good the business is; testing the distance between them says how
+    much of that goodness is the balance sheet — which is the thing the two
+    measures were carried side by side to reveal, and which neither level
+    states.
+    """
+    a = ctx.entry("roe_median_5y")
+    b = ctx.entry("roic_median_5y")
+    for c in (a, b):
+        if c["status"] != "computed":
+            return _absent_result(absent(
+                "one side of the gap is not meaningful ("
+                + c.get("reason", "") + "), and the distance between a "
+                "number and a meaningless one is meaningless — the bank's "
+                "own test"))
+    return computed(a["value"] - b["value"],
+                    ["return on equity minus return on invested capital, "
+                     "both five-year medians computed above"],
+                    sorted(set(a["cautions"] + b["cautions"])),
+                    _spread_one_out(a, b))
+
+
+def gross_margin_range_relative_5y(ctx):
+    """How far the gross margin swings, as a share of how wide it is.
+
+    A distributor at 12% moving between 9% and 15% and a software company at
+    81% moving between 78% and 84% have the same six-point range and are not
+    remotely comparably stable. Dividing by the middle reading is what makes
+    one number say the same thing to both.
+    """
+    gm = _gross_margin_annual_pct(ctx, 5)
+    if is_absent(gm):
+        return _absent_result(gm)
+
+    def relative(values):
+        mid = median(values)
+        return (max(values) - min(values)) / mid * 100.0
+
+    if median(gm["values"]) <= 0:
+        return _absent_result(absent(
+            "Not meaningful here: the middle annual gross margin over the "
+            "window is zero or negative, so a swing measured against it has "
+            "no scale (the bank's own test)"))
+    value, outs = _with_one_out(gm["values"], gm["years"], relative,
+                                lambda rest: median(rest) > 0)
+    return computed(value,
+                    [f"annual gross margins for FY {gm['years'][0]}.."
+                     f"{gm['years'][-1]}, spread over the middle reading"],
+                    gm["cautions"], outs)
+
+
+def goodwill_impairment_to_equity_5y(ctx):
+    """What the acquisitions turned out to be worth, against the owners'
+    money that was there before them.
+
+    How much goodwill sits on a balance sheet is a level, and a level
+    punishes one good acquisition fifteen years ago. Goodwill written back
+    OFF is the acquirer conceding it paid for something that was not there,
+    which is the outcome rather than the activity.
+
+    Every year in the window must resolve. A missing impairment caption is
+    not read as a nil: a filer reporting one combined goodwill-and-
+    intangibles line and nothing else would have no figure here in a year it
+    wrote off billions, and a zero would be a large confident number in the
+    direction that flatters the company.
+    """
+    n = 5
+    w = _window(ctx, "goodwill_impairment", n)
+    if is_absent(w):
+        return _absent_result(absent(
+            "goodwill impairment for each of the five years: " + w["reason"]
+            + ". A year with no impairment caption is left absent rather "
+            "than counted as nil"))
+    years = [p["end"] for p in w["points"]]
+    eq = ctx.sb.instant_series_annual("total_equity", n + 1)
+    if is_absent(eq):
+        return _absent_result(absent(
+            "equity at the balance sheet before the window opened (six "
+            "year-end balance sheets in all): " + eq["reason"]))
+    if eq["dates"][1:] != years:
+        return _absent_result(absent(
+            "equity balance-sheet dates do not line up with the fiscal years "
+            "of the impairment window; it cannot be aligned"))
+    opening = eq["values"][0]
+    if opening <= 0:
+        return _absent_result(absent(
+            f"Not meaningful here: shareholders' equity at {eq['dates'][0]}, "
+            "before the window opened, is zero or negative, so there is no "
+            "base to measure the write-offs against (the bank's own test)"))
+
+    def share(values):
+        return sum(values) / opening * 100.0
+
+    value, outs = _with_one_out(w["values"], years, share)
+    return computed(value,
+                    [f"goodwill impairment charged in FY {years[0]}.."
+                     f"{years[-1]}, added up",
+                     f"shareholders' equity at {eq['dates'][0]}, the year "
+                     "end before the window"],
+                    _cautions_of(w, eq), outs)
+
+
+def owner_earnings_yield_on_ev(ctx):
+    """Owner earnings against what the whole business costs, debts included.
+
+    Two departures from the plainer version, and both push the figure DOWN
+    for the companies it was flattering.
+
+    The denominator is enterprise value rather than market capitalization.
+    Owner earnings is a figure about the business, and a business bought with
+    its debts attached costs what the shares cost plus what it owes — pricing
+    a business-level number against the equity alone makes a leveraged
+    company look cheap for being leveraged.
+
+    And maintenance capital spending is proxied against depreciation with the
+    amortization of intangibles taken out. The proxy works because a business
+    replacing its assets spends roughly what it writes them down by; a
+    customer list bought in an acquisition is written down over ten years and
+    is never replaced by spending at all — it is replaced by another
+    acquisition. Leaving it in raises the floor of the proxy, and so
+    overstates owner earnings most for the serial acquirers where the
+    overstatement matters most.
+    """
+    cfo = _ttm(ctx, "cfo")
+    if is_absent(cfo):
+        return _absent_result(cfo)
+    capex = _ttm(ctx, "capex")
+    if is_absent(capex):
+        return _absent_result(absent(
+            "capital expenditure could not be resolved: " + capex["reason"]))
+    dda = _ttm(ctx, "dda")
+    if is_absent(dda):
+        return _absent_result(absent(
+            "depreciation & amortization could not be resolved (needed for "
+            "the maintenance-capex proxy): " + dda["reason"]))
+    amort = _ttm(ctx, "intangible_amortisation")
+    if is_absent(amort):
+        return _absent_result(absent(
+            "the amortization of intangible assets could not be resolved on "
+            "its own (" + amort["reason"] + "), and it has to come out of "
+            "depreciation before the maintenance-capex proxy means "
+            "anything. Leaving it in would raise owner earnings rather than "
+            "lower them, so it is not a gap this fills in with the whole "
+            "figure"))
+    ev = ctx.entry("enterprise_value")
+    if ev["status"] != "computed":
+        return ev
+    if ev["value"] <= 0:
+        return _absent_result(absent(
+            "Not meaningful here: enterprise value is zero or negative — the "
+            "company holds more cash than the shares and the debt together "
+            "are worth (the bank's own test)"))
+    depreciation = dda["value"] - amort["value"]
+    if depreciation < 0:
+        return _absent_result(absent(
+            "the amortization of intangibles resolves larger than total "
+            "depreciation and amortization, so the two figures are not on "
+            "the same basis and subtracting one from the other would invent "
+            "a negative depreciation charge"))
+    maint = min(capex["value"], depreciation)
+    return computed((cfo["value"] - maint) / ev["value"] * 100.0,
+                    [_prov_point(cfo),
+                     f"maintenance capex proxied as min(capex, D&A less "
+                     f"intangible amortization) = {maint:,.0f}"]
+                    + ev["provenance"],
+                    sorted(set(_cautions_of(cfo, capex, dda, amort)
+                               + ev["cautions"])))
+
+
+def revenue_ttm(ctx):
+    """Sales over the last twelve months.
+
+    Here because a size test has to be on a size. Market capitalization
+    measures what the market currently thinks a company is worth, which is
+    the thing a value strategy is claiming to disagree with — so a floor
+    under it rejects a company for being cheap, which is the opposite of the
+    intent.
+    """
+    return ttm_flow_result(ctx, "revenue")
+
+
+def consecutive_capital_return_years(ctx):
+    """Consecutive fiscal years in which the company returned cash to its
+    owners by either route, counting back from the most recent.
+
+    Dividends alone stopped being the whole question in 1982, when SEC Rule
+    10b-18 made repurchases a safe and routine alternative. A company that
+    has bought back stock every year for fifteen years and never paid a
+    dividend has returned capital every one of those years; a dividend
+    count reads it as never having done so.
+
+    Buybacks count NET of issuance. A company handing out more stock than it
+    buys back is not returning capital, it is mopping up after itself, and
+    counting the gross repurchase line would let that read as a capital
+    return in the year it is least true.
+    """
+    buy = ctx.sb.annual_points("buybacks")
+    iss = ctx.sb.annual_points("stock_issuance")
+    # A year the walk reached where the dividend is nil and the repurchase
+    # lines will not resolve. Nothing about that year is known either way, so
+    # neither continuing the streak nor stopping it at that year is an
+    # answer — both would be this measure asserting something it did not
+    # read. Recorded as it happens and turned into an absence below.
+    unreadable = []
+
+    def returned(year_end, dividends):
+        if dividends > 0:
+            return True
+        b = buy.get(year_end)
+        if not b:
+            unreadable.append(year_end)
+            return False
+        s = iss.get(year_end)
+        return b[0]["value"] - (s[0]["value"] if s else 0.0) > 0
+
+    r = _streak_backward_by_year(ctx, "dividends_paid", returned)
+    if is_absent(r):
+        return _absent_result(r)
+    if unreadable:
+        return _absent_result(absent(
+            f"no dividend was paid in FY ending {unreadable[0]} and the "
+            "share repurchase line for that year could not be resolved, so "
+            "whether capital was returned that year is unknown. A streak "
+            "either side of a year nobody can read is not a streak"))
+    return computed(r["value"],
+                    ["consecutive fiscal years with dividends paid or net "
+                     "shares repurchased, newest backward"],
+                    r["cautions"])
+
+
+def altman_z_double_prime(ctx):
+    """Altman's four-variable score, the one built for companies that do not
+    manufacture anything.
+
+    The original score was fitted on public manufacturers and carries a sales
+    to assets term, which reads an asset-light company as distressed for
+    reasons that have nothing to do with distress. Altman published this
+    variant to drop that term and rescale the rest, and it is the one he
+    intended for service and non-manufacturing businesses — which is most of
+    what any screen meets now.
+
+    The other difference matters as much: the fourth term takes the book
+    value of equity against total liabilities rather than the market's. The
+    score stops moving with the share price, which is what a solvency measure
+    inside a valuation rule set should have been doing all along — otherwise
+    a stock falling because it is cheap reads as a stock falling because it
+    is failing.
+    """
+    ta = _instant(ctx, "total_assets")
+    if is_absent(ta):
+        return _absent_result(ta)
+    if ta["value"] <= 0:
+        return _absent_result(absent("total assets are zero or negative"))
+    ca = _instant(ctx, "current_assets")
+    cl = _instant(ctx, "current_liabilities")
+    re = _instant(ctx, "retained_earnings")
+    tl = _instant(ctx, "total_liabilities")
+    eq = _instant(ctx, "total_equity")
+    for w, what in ((ca, "current assets"), (cl, "current liabilities"),
+                    (re, "retained earnings"), (tl, "total liabilities"),
+                    (eq, "total equity")):
+        if is_absent(w):
+            return _absent_result(absent(f"{what}: " + w["reason"]))
+    if tl["value"] <= 0:
+        return _absent_result(absent(
+            "total liabilities are zero or negative, so the equity-to-"
+            "liabilities term has no denominator"))
+    ebit = _ttm(ctx, "ebit")
+    if is_absent(ebit):
+        return _absent_result(ebit)
+    x1 = (ca["value"] - cl["value"]) / ta["value"]
+    x2 = re["value"] / ta["value"]
+    x3 = ebit["value"] / ta["value"]
+    x4 = eq["value"] / tl["value"]
+    return computed(6.56 * x1 + 3.26 * x2 + 6.72 * x3 + 1.05 * x4,
+                    ["working capital, retained earnings and EBIT against "
+                     "total assets, and book equity against total "
+                     "liabilities",
+                     "Altman's four-variable weights: 6.56, 3.26, 6.72, 1.05"],
+                    _cautions_of(ta, ca, cl, re, tl, eq, ebit))
+
+
 REGISTRY = {fn.__name__: fn for fn in (
     roic_median_5y, roe_median_5y, total_debt_to_ebitda, net_debt_to_ebitda,
     debt_to_equity, interest_coverage, ltd_to_working_capital, current_ratio,
@@ -2041,6 +2485,10 @@ REGISTRY = {fn.__name__: fn for fn in (
     diluted_share_count_change_3y, diluted_share_count_change_ttm,
     goodwill_intangibles_to_assets, insider_net_buying_6m,
     institutional_ownership_pct,
+    total_debt_to_avg_fcf_5y, incremental_roic_5y, roe_minus_roic_gap_5y,
+    gross_margin_range_relative_5y, goodwill_impairment_to_equity_5y,
+    owner_earnings_yield_on_ev, revenue_ttm,
+    consecutive_capital_return_years, altman_z_double_prime,
 )}
 
 
@@ -2100,6 +2548,11 @@ CADENCE = {
     "consecutive_dividend_years": "annual",
     "diluted_share_count_change_5y": "annual",
     "diluted_share_count_change_3y": "annual",
+    "incremental_roic_5y": "annual",
+    "roe_minus_roic_gap_5y": "annual",
+    "gross_margin_range_relative_5y": "annual",
+    "goodwill_impairment_to_equity_5y": "annual",
+    "consecutive_capital_return_years": "annual",
     # anything touching TTM, instants, cover shares or the latest filing
     "total_debt_to_ebitda": "quarterly", "net_debt_to_ebitda": "quarterly",
     "debt_to_equity": "quarterly", "interest_coverage": "quarterly",
@@ -2123,6 +2576,14 @@ CADENCE = {
     "receivables_minus_revenue_growth_yoy": "quarterly",
     "diluted_share_count_change_ttm": "quarterly",
     "goodwill_intangibles_to_assets": "quarterly",
+    # The debt is a balance-sheet instant and the enterprise value carries a
+    # price, so both refresh on a 10-Q even though the window under each is
+    # annual. The noisiest leg names the cadence, the same rule the bank's
+    # estimator kinds follow.
+    "total_debt_to_avg_fcf_5y": "quarterly",
+    "owner_earnings_yield_on_ev": "quarterly",
+    "revenue_ttm": "quarterly",
+    "altman_z_double_prime": "quarterly",
     # never computed here (separate ingestion paths); cadence is nominal
     "insider_net_buying_6m": "quarterly",
     "institutional_ownership_pct": "quarterly",

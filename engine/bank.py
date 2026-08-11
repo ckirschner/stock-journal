@@ -54,7 +54,7 @@ _bank_cache: dict = {}
 # `observations` says something and its absence is a hole. A streak has no
 # fixed window and may leave it out; a reading at one date or over a trailing
 # window has no annual observations to count, and stating one would be noise.
-_WINDOWED = ("averaged", "median", "range")
+_WINDOWED = ("averaged", "median", "range", "cumulative")
 _UNWINDOWED = ("instant", "trailing", "assessed")
 
 

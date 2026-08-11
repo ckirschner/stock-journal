@@ -759,6 +759,15 @@ ESTIMATORS = MappingProxyType({
         "top of it single-handed, and that year stays in the window for as "
         "long as the window is long. Waiting cannot help; dropping the year "
         "and asking again is the only test that means anything."),
+    "cumulative": _est(
+        "added up across a window", "every annual observation in the window "
+        "summed, rather than a typical one picked out of it", 0, "always",
+        "A total across years is not an average of them: one year can be the "
+        "whole of it, and a single write-off larger than the other four "
+        "combined is exactly the case a cumulative measure exists to catch. "
+        "So there is nothing to wait for — the year that produced the answer "
+        "stays in the window until it ages out — and the only question worth "
+        "asking is whether the total survives dropping it."),
     "count": _est(
         "a count of annual reports", "how many years met a condition", 0,
         "no",
@@ -1264,8 +1273,10 @@ def check_typed_value(spec: dict, value) -> str | None:
 # ---------------------------------------------------------------------------
 
 _DECL_KEYS = {"id", "name", "summary", "version", "contract", "changelog",
-              "states", "inputs", "values", "reference", "declines"}
+              "states", "inputs", "values", "reference", "declines",
+              "limits"}
 _DECLINE_KEYS = {"class", "because"}
+_LIMIT_KEYS = {"title", "body"}
 _STATE_KEYS = {"id", "name", "description", "render", "fix"}
 _FIELD_KEYS = {"id", "label", "type", "unit", "required", "min", "max",
                "explain", "options", "role", "when", "min_from", "max_from",
@@ -1680,6 +1691,63 @@ def _check_declines(decl: dict, errors: list) -> None:
                 "a considered boundary from a gap nobody has got to yet.")
 
 
+def _check_limits(decl: dict, errors: list) -> None:
+    """What the method demands or delivers that this program does not, and
+    every way the list goes wrong.
+
+    A separate thing from `declines`, and the difference is worth holding on
+    to. `declines` is about a kind of COMPANY these rules cannot read.
+    This is about the METHOD: something its own authors said was part of it
+    which a journal evaluating one security at a time does not do.
+
+    It exists because the alternative is silence, and silence here is a
+    promise. Every method these strategies are drawn from is a portfolio
+    method with an expected rate of losers built in, and every one of their
+    authors said so. A tool that renders a verdict on one security is
+    quietly offering something none of them offered — that this particular
+    one will work — and nothing on the screen contradicts it unless the
+    strategy is given somewhere to say so.
+
+    It is prose the host renders and never reads. There is deliberately no
+    machinery behind it: nothing here gates a verdict, changes a state, or
+    reaches `decide`. A limit that altered behaviour would be a rule, and
+    rules belong in the tests and the levels where they can be checked. What
+    this is for is the part of a method that cannot be expressed as a rule
+    at all, which is exactly the part that otherwise goes unsaid.
+    """
+    limits = decl.get("limits")
+    if limits is None:
+        return
+    if not isinstance(limits, list) or not limits:
+        errors.append(
+            "`limits` must be a non-empty list of what this method demands "
+            "or delivers that this program does not, or be left out "
+            "entirely. An empty list claims there is nothing, which is what "
+            "leaving it out already says.")
+        return
+    seen = set()
+    for i, lim in enumerate(limits):
+        where = f"limits {i + 1}"
+        if not isinstance(lim, dict) or set(lim) != _LIMIT_KEYS:
+            errors.append(
+                f"{where} must be exactly {{title: the heading a reader "
+                "sees, body: plain language saying what the method asks for "
+                "or admits to that this program does not do}.")
+            continue
+        if not _is_text(lim.get("title")):
+            errors.append(f"{where} needs a `title` — the heading, short "
+                          "enough to scan a list of them.")
+        elif lim["title"] in seen:
+            errors.append(f'{where}: "{lim["title"]}" is declared twice.')
+        else:
+            seen.add(lim["title"])
+        if not _is_text(lim.get("body")):
+            errors.append(
+                f"{where} needs a `body`. A heading with nothing under it "
+                "tells a reader there is something they are not being told, "
+                "which is worse than not raising it.")
+
+
 def declined_classes(record: dict) -> dict:
     """{class id: why} for a loaded strategy. The one reader of `declines`,
     so a screen that wants to say what a strategy covers and the gate in
@@ -1815,6 +1883,7 @@ def validate_declaration(decl) -> list[str]:
         _check_state_fix(where, s, errors)
 
     _check_declines(decl, errors)
+    _check_limits(decl, errors)
     _check_fields("input", decl.get("inputs", []), errors)
     _check_fields("value", decl.get("values", []), errors)
     if isinstance(decl.get("inputs", []), list) \

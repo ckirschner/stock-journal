@@ -6,60 +6,95 @@
 # — and so a change to one of them is a recordable event rather than a diff
 # in a source file nobody reads.
 #
-# Every number below except `portfolio-slots`, `position-weight-cap` and the
-# five `drift-` tolerances is stated in the expert report, verbatim. Nothing
-# is rounded or converted. The first two are attributed to Graham's own
-# documented practice; the report was never asked about position sizing. The
-# drift tolerances are attributed to nobody but this strategy's author,
-# because neither source addresses adding to a position already held.
+# THE PROVENANCE HERE IS NO LONGER ONE SOURCE, and that is the first thing to
+# know before checking any number below. There are four:
+#
+#   the report    the expert report commissioned for this strategy. Most
+#                 numbers here are still its, verbatim.
+#   the review    a second expert review of that report, held at
+#                 dev_reference_docs/ledger-default-profiles-addendum.md,
+#                 which disputes it. Five values below take the review's
+#                 number against the report's, and each says so.
+#   Graham        his own documented practice, for the two the report was
+#                 never asked about — how many names and how large one may
+#                 get.
+#   this author   the five drift tolerances, which no source addresses
+#                 because neither addresses adding to a position already
+#                 held; the two counts saying how many of a group of
+#                 near-duplicate tests must pass; and the bond yield, which
+#                 is a market observation rather than an opinion.
+#
+# Every value's own `source` field says which, and that is where to look
+# rather than here.
 #
 # Bump `version` whenever any number here moves. That is what makes the
 # change appear on the rule-change record of every journal running this
 # strategy, with a before and an after.
-version: 4
+version: 5
 
 values:
 
-  # How the fifteen entry tests roll up
-  core-tests-required: 6
+  # How the tests roll up.
+  #
+  # `core-tests-required: 6` used to sit here and no longer does. The eight
+  # second-tier tests are now five questions about the company, every one of
+  # which has to be answered — because a count assumed the eight were
+  # independent evidence, and three of them are three readings of one balance
+  # sheet while two more read one decade of earnings. Only the two groups
+  # whose members are near-duplicates of each other carry a count.
+  safety-tests-required: 2
+  record-tests-required: 1
 
   # How much, and how many — Graham's practice, not the report
   portfolio-slots: 20
   position-weight-cap: 10
 
-  # The discipline that is not a measure.
-  #
-  # `sell-confirmation-filings: 2` used to sit here and no longer does. How
-  # many readings it takes to believe one is a property of the measure — the
-  # host derives it from what the metric bank declares about each — and the
-  # report's "two consecutive filings" survives unchanged wherever the measure
-  # is one a second filing tells you anything new about. See the exits in
-  # strategy.py.
+  # The discipline that is not a measure. Twenty-four months, and the
+  # attribution is not what it was: this comes from Graham's net-net work
+  # rather than from the defensive programme the rest of this file
+  # implements, and its companion leg — sell at roughly +50% — cannot be
+  # built here at all. See its `explain`.
   holding-period-months: 24
 
-  # The five knockouts
-  max-pe-3y-avg: 15
+  # The three knockouts.
+  #
+  # There were five. The price ceiling is now ONE test built from the
+  # stricter of two rules rather than two tests at two tiers contradicting
+  # each other; the combined multiple moved to the rows that never block,
+  # because under `all` it cannot fail when the other two pass; and the size
+  # floor is on sales rather than on market value, which is the quantity
+  # Graham stated it in.
   max-price-to-book: 1.5
-  max-combined-multiple: 22.5
   min-current-ratio: 2.0
-  min-market-cap: 300000000
+  min-revenue: 750000000
 
-  # The eight core tests
+  # The price ceiling: the stricter of a fixed multiple and what the bond
+  # market is paying. The yield is the one number in this file that nothing
+  # fetches and that goes wrong by sitting still — set it to the current
+  # high-grade corporate bond yield and revisit it when rates move.
+  max-pe-3y-avg: 15
+  min-earnings-yield-multiple: 2
+  aaa-corporate-yield: 5.0
+
+  # The eight tests behind the five questions.
+  #
+  # What the balance sheet can carry — two of these three is enough
   max-ltd-to-working-capital: 1.0
-  min-profitable-years: 10
-  min-altman-z: 3.0
-  min-eps-growth-10y: 33
-  min-dividend-years: 10
+  min-altman-z: 2.6
   max-debt-to-equity: 1.0
+  # The ten-year earnings record — one of these two is enough
+  min-profitable-years: 10
+  min-eps-growth-10y: 33
+  # Whether it has paid its owners, and for how long
+  min-capital-return-years: 20
+  # What you pay per dollar of real assets
   max-price-to-tangible: 2.0
+  # Whether the reported profit is cash
   max-accruals-ratio: 0.10
 
-  # The two bonus tests. The rate is the one number in this file that
-  # nothing fetches and that goes wrong by sitting still — set it to the
-  # current ten-year Treasury yield and revisit it when rates move.
+  # The two bonus tests
+  max-combined-multiple: 22.5
   min-ncav-to-market-cap: 0.50
-  min-earnings-yield-multiple: 2
-  risk-free-rate: 4.0
 
   # The eight exits
   exit-pe-3y-avg: 25
@@ -67,7 +102,7 @@ values:
   exit-combined-multiple: 50
   exit-current-ratio: 1.2
   exit-ltd-to-working-capital: 2.0
-  exit-altman-z: 1.8
+  exit-altman-z: 1.1
   exit-debt-to-equity: 2.0
   exit-loss-years: 2
 
@@ -78,6 +113,6 @@ values:
   # requires to buy and what it requires to sell.
   drift-current-ratio: -0.4
   drift-ltd-to-working-capital: 0.5
-  drift-altman-z: -0.6
+  drift-altman-z: -0.75
   drift-debt-to-equity: 0.5
   drift-loss-years: 0
