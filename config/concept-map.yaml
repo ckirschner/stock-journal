@@ -156,6 +156,77 @@ inputs:
           flow statement face; excludes other amortization lines a filer may
           split out.
 
+  # The amortization of intangible assets alone, separately from the
+  # depreciation it is usually reported beside.
+  #
+  # It exists so that maintenance capital spending can be estimated without
+  # it. The usual proxy is the smaller of capital spending and D&A, on the
+  # reasoning that a business replacing its assets spends roughly what it
+  # writes them down by. Amortization of acquired intangibles breaks that
+  # reasoning: a customer list bought in an acquisition is written down over
+  # ten years and is never "replaced" by spending — it is replaced by another
+  # acquisition, which is not capital spending at all. Leaving it in D&A
+  # raises the floor of the proxy and so overstates owner earnings, and it
+  # overstates them most for the serial acquirers where the error matters
+  # most.
+  #
+  # NO `absent_means_zero`, and it is an income-statement/cash-flow input so
+  # the rule above forbids it anyway. A filer who never separates the two
+  # lines reports nothing here, and the measure that consumes this says so
+  # rather than treating "not split out" as "nil".
+  #
+  # Note where it is tagged: measured across the recorded extractions, this
+  # concept appears under Disclosures as often as on the cash flow face
+  # (Kraft Heinz tags all three years of it in the intangibles note). Which
+  # statement a fact was presented on is not part of resolution, so that
+  # costs nothing — it is recorded here because it is the first thing anyone
+  # checking this entry will wonder about.
+  intangible_amortisation:
+    label: Amortization of intangible assets
+    period: duration
+    candidates:
+      - concept: us-gaap:AmortizationOfIntangibleAssets
+      - concept: us-gaap:FiniteLivedIntangibleAssetsAmortizationExpense
+        caution: >
+          Amortization expense for finite-lived intangibles taken from the
+          intangibles note rather than a cash-flow line; excludes any other
+          amortization a filer reports separately.
+    refused:
+      - concept: us-gaap:AmortizationOfIntangibleAssetsAndDeferredCharges
+        because: >
+          Combines intangible amortization with deferred financing costs and
+          similar charges. Subtracting it from D&A would remove more than
+          acquired intangibles and quietly raise owner earnings for any filer
+          who happens to use it — the wrong direction, and invisible.
+
+  # What was written off goodwill in the period, as a charge against profit.
+  #
+  # A level test on how much goodwill sits on the balance sheet punishes one
+  # good acquisition fifteen years ago. What a level cannot say and this can
+  # is whether the acquisitions WORKED: goodwill written back off is the
+  # acquirer conceding it paid for something that was not there.
+  #
+  # NO `absent_means_zero`, under the income-statement rule above, and the
+  # reason is not theoretical. A filer reporting one combined goodwill-and-
+  # intangibles impairment caption and nothing else would have no fact here
+  # in a year it wrote off billions, and a zero would be a large confident
+  # wrong number in the one direction that flatters the company. Measured
+  # against the recorded extractions the concept is present in every one of
+  # the thirteen filings held, and filers who carry goodwill commonly tag an
+  # explicit 0.0 in years with no charge — so the honest arrangement is to
+  # take the zero where it is stated and report absent where it is not.
+  goodwill_impairment:
+    label: Goodwill impairment charge
+    period: duration
+    candidates:
+      - concept: us-gaap:GoodwillImpairmentLoss
+      - concept: us-gaap:GoodwillAndIntangibleAssetImpairment
+        caution: >
+          Goodwill and other intangible write-offs reported as one caption;
+          the figure is at or above the goodwill charge alone, so a test
+          against it reads at least as harshly as intended and never more
+          leniently.
+
   ebitda:
     label: EBITDA (EBIT + D&A)
     period: duration

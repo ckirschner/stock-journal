@@ -1,124 +1,193 @@
 {
-  "ticker": "KHC",
-  "company": "The Kraft Heinz Company",
-  "cik": "1637459",
-  "case": "restatement",
-  "method": "Hand-read from primary HTML documents on SEC EDGAR. No XBRL APIs, no R*.htm renderings, no FilingSummary.xml, no third-party sources.",
-  "filings": [
-    {
-      "id": "10K-FY2017-original",
-      "form": "10-K",
-      "accession": "0001637459-18-000015",
-      "filing_date": "2018-02-16",
-      "period_of_report": "2017-12-30",
-      "primary_document": "form10-k2017.htm",
-      "url": "https://www.sec.gov/Archives/edgar/data/1637459/000163745918000015/form10-k2017.htm",
-      "amendments": "No 10-K/A exists for this period in the EDGAR submissions index (checked all forms beginning with 10-K for CIK 1637459)."
-    },
-    {
-      "id": "10K-FY2018",
-      "form": "10-K",
-      "accession": "0001637459-19-000049",
-      "filing_date": "2019-06-07",
-      "period_of_report": "2018-12-29",
-      "primary_document": "form10-k2018.htm",
-      "url": "https://www.sec.gov/Archives/edgar/data/1637459/000163745919000049/form10-k2018.htm",
-      "notes": "Filed late (June 2019) because of the restatement. FY2017 and FY2016 comparative columns in the Consolidated Statements of Income are jointly headed 'As Restated & Recast' (the spanning header covers only the 2017 and 2016 columns, not 2018). Cash-flow-statement comparatives are headed 'As Restated'."
-    }
-  ],
-  "values": [
-    {
-      "metric": "net_sales",
-      "fiscal_year": "FY2017-original",
-      "as_printed": "26,232",
-      "stated_scale": "in millions, except per share data",
-      "value_usd": 26232000000,
-      "caption": "Net sales",
-      "statement": "Consolidated Statements of Income",
-      "accession": "0001637459-18-000015",
-      "column": "December 30, 2017 (52 weeks) — original filing, current-year column"
-    },
-    {
-      "metric": "operating_income",
-      "fiscal_year": "FY2017-original",
-      "as_printed": "6,773",
-      "stated_scale": "in millions, except per share data",
-      "value_usd": 6773000000,
-      "caption": "Operating income",
-      "statement": "Consolidated Statements of Income",
-      "accession": "0001637459-18-000015",
-      "column": "December 30, 2017 (52 weeks) — original filing, current-year column",
-      "note": "An 'Operating income' subtotal IS printed in the original FY2017 income statement."
-    },
-    {
-      "metric": "net_sales",
-      "fiscal_year": "FY2018",
-      "as_printed": "26,268",
-      "stated_scale": "in millions, except per share data",
-      "value_usd": 26268000000,
-      "caption": "Net sales",
-      "statement": "Consolidated Statements of Income",
-      "accession": "0001637459-19-000049",
-      "column": "December 29, 2018 — current-year column (not under the 'As Restated & Recast' header)"
-    },
-    {
-      "metric": "operating_income",
-      "fiscal_year": "FY2018",
-      "as_printed": "(10,220)",
-      "stated_scale": "in millions, except per share data",
-      "value_usd": -10220000000,
-      "caption": "Operating income/(loss)",
-      "statement": "Consolidated Statements of Income",
-      "accession": "0001637459-19-000049",
-      "column": "December 29, 2018 — current-year column",
-      "note": "An 'Operating income/(loss)' subtotal IS printed. FY2018 is a large operating loss driven by $7,008M goodwill and $8,928M intangible asset impairment losses."
-    },
-    {
-      "metric": "net_sales",
-      "fiscal_year": "FY2017-restated",
-      "as_printed": "26,076",
-      "stated_scale": "in millions, except per share data",
-      "value_usd": 26076000000,
-      "caption": "Net sales",
-      "statement": "Consolidated Statements of Income",
-      "accession": "0001637459-19-000049",
-      "column": "December 30, 2017 comparative column, under spanning header 'As Restated & Recast'",
-      "note": "Restatement note reconciliation: 26,232 as previously reported, (156) restatement impacts (refs (c)(g)), 26,076 as restated; ASU 2017-07 recast impact on net sales was $— (none). So the entire net sales change is restatement, not recast."
-    },
-    {
-      "metric": "operating_income",
-      "fiscal_year": "FY2017-restated",
-      "as_printed": "6,057",
-      "stated_scale": "in millions, except per share data",
-      "value_usd": 6057000000,
-      "caption": "Operating income/(loss)",
-      "statement": "Consolidated Statements of Income",
-      "accession": "0001637459-19-000049",
-      "column": "December 30, 2017 comparative column, under spanning header 'As Restated & Recast'",
-      "note": "Restatement note reconciliation: 6,773 as previously reported, (80) restatement impacts = 6,693 'As Restated', then (636) ASU 2017-07 adoption (pension recast, offset in Other expense/(income), net) = 6,057 'As Restated & Recast'. The printed comparative column reflects BOTH restatement and recast."
-    },
-    {
-      "metric": "operating_income",
-      "fiscal_year": "FY2017-restated-before-recast",
-      "as_printed": "6,693",
-      "stated_scale": "in millions, except per share data",
-      "value_usd": 6693000000,
-      "caption": "Operating income/(loss)",
-      "statement": "Note — reconciliation table 'Consolidated Statement of Income, For the Year Ended December 30, 2017' (restatement note), 'As Restated' column before ASU adoption impacts",
-      "accession": "0001637459-19-000049",
-      "column": "'As Restated' (pre-recast) column of the reconciliation table",
-      "note": "Included for disambiguation: restatement-only operating income. Not the figure printed in the face income statement comparative column."
-    },
-    {
-      "metric": "net_cash_provided_by_operating_activities",
-      "fiscal_year": "FY2018",
-      "as_printed": "2,574",
-      "stated_scale": "in millions",
-      "value_usd": 2574000000,
-      "caption": "Net cash provided by/(used for) operating activities",
-      "statement": "Consolidated Statements of Cash Flows",
-      "accession": "0001637459-19-000049",
-      "column": "December 29, 2018 — current-year column (the 'As Restated' spanning header covers only the 2017 and 2016 columns)"
-    }
-  ]
+ "ticker": "KHC",
+ "company": "The Kraft Heinz Company",
+ "cik": "1637459",
+ "case": "restatement",
+ "method": "Hand-read from primary HTML documents on SEC EDGAR. No XBRL APIs, no R*.htm renderings, no FilingSummary.xml, no third-party sources.",
+ "filings": [
+  {
+   "id": "10K-FY2017-original",
+   "form": "10-K",
+   "accession": "0001637459-18-000015",
+   "filing_date": "2018-02-16",
+   "period_of_report": "2017-12-30",
+   "primary_document": "form10-k2017.htm",
+   "url": "https://www.sec.gov/Archives/edgar/data/1637459/000163745918000015/form10-k2017.htm",
+   "amendments": "No 10-K/A exists for this period in the EDGAR submissions index (checked all forms beginning with 10-K for CIK 1637459)."
+  },
+  {
+   "id": "10K-FY2018",
+   "form": "10-K",
+   "accession": "0001637459-19-000049",
+   "filing_date": "2019-06-07",
+   "period_of_report": "2018-12-29",
+   "primary_document": "form10-k2018.htm",
+   "url": "https://www.sec.gov/Archives/edgar/data/1637459/000163745919000049/form10-k2018.htm",
+   "notes": "Filed late (June 2019) because of the restatement. FY2017 and FY2016 comparative columns in the Consolidated Statements of Income are jointly headed 'As Restated & Recast' (the spanning header covers only the 2017 and 2016 columns, not 2018). Cash-flow-statement comparatives are headed 'As Restated'."
+  }
+ ],
+ "values": [
+  {
+   "metric": "net_sales",
+   "fiscal_year": "FY2017-original",
+   "as_printed": "26,232",
+   "stated_scale": "in millions, except per share data",
+   "value_usd": 26232000000,
+   "caption": "Net sales",
+   "statement": "Consolidated Statements of Income",
+   "accession": "0001637459-18-000015",
+   "column": "December 30, 2017 (52 weeks) — original filing, current-year column"
+  },
+  {
+   "metric": "operating_income",
+   "fiscal_year": "FY2017-original",
+   "as_printed": "6,773",
+   "stated_scale": "in millions, except per share data",
+   "value_usd": 6773000000,
+   "caption": "Operating income",
+   "statement": "Consolidated Statements of Income",
+   "accession": "0001637459-18-000015",
+   "column": "December 30, 2017 (52 weeks) — original filing, current-year column",
+   "note": "An 'Operating income' subtotal IS printed in the original FY2017 income statement."
+  },
+  {
+   "metric": "net_sales",
+   "fiscal_year": "FY2018",
+   "as_printed": "26,268",
+   "stated_scale": "in millions, except per share data",
+   "value_usd": 26268000000,
+   "caption": "Net sales",
+   "statement": "Consolidated Statements of Income",
+   "accession": "0001637459-19-000049",
+   "column": "December 29, 2018 — current-year column (not under the 'As Restated & Recast' header)"
+  },
+  {
+   "metric": "operating_income",
+   "fiscal_year": "FY2018",
+   "as_printed": "(10,220)",
+   "stated_scale": "in millions, except per share data",
+   "value_usd": -10220000000,
+   "caption": "Operating income/(loss)",
+   "statement": "Consolidated Statements of Income",
+   "accession": "0001637459-19-000049",
+   "column": "December 29, 2018 — current-year column",
+   "note": "An 'Operating income/(loss)' subtotal IS printed. FY2018 is a large operating loss driven by $7,008M goodwill and $8,928M intangible asset impairment losses."
+  },
+  {
+   "metric": "net_sales",
+   "fiscal_year": "FY2017-restated",
+   "as_printed": "26,076",
+   "stated_scale": "in millions, except per share data",
+   "value_usd": 26076000000,
+   "caption": "Net sales",
+   "statement": "Consolidated Statements of Income",
+   "accession": "0001637459-19-000049",
+   "column": "December 30, 2017 comparative column, under spanning header 'As Restated & Recast'",
+   "note": "Restatement note reconciliation: 26,232 as previously reported, (156) restatement impacts (refs (c)(g)), 26,076 as restated; ASU 2017-07 recast impact on net sales was $— (none). So the entire net sales change is restatement, not recast."
+  },
+  {
+   "metric": "operating_income",
+   "fiscal_year": "FY2017-restated",
+   "as_printed": "6,057",
+   "stated_scale": "in millions, except per share data",
+   "value_usd": 6057000000,
+   "caption": "Operating income/(loss)",
+   "statement": "Consolidated Statements of Income",
+   "accession": "0001637459-19-000049",
+   "column": "December 30, 2017 comparative column, under spanning header 'As Restated & Recast'",
+   "note": "Restatement note reconciliation: 6,773 as previously reported, (80) restatement impacts = 6,693 'As Restated', then (636) ASU 2017-07 adoption (pension recast, offset in Other expense/(income), net) = 6,057 'As Restated & Recast'. The printed comparative column reflects BOTH restatement and recast."
+  },
+  {
+   "metric": "operating_income",
+   "fiscal_year": "FY2017-restated-before-recast",
+   "as_printed": "6,693",
+   "stated_scale": "in millions, except per share data",
+   "value_usd": 6693000000,
+   "caption": "Operating income/(loss)",
+   "statement": "Note — reconciliation table 'Consolidated Statement of Income, For the Year Ended December 30, 2017' (restatement note), 'As Restated' column before ASU adoption impacts",
+   "accession": "0001637459-19-000049",
+   "column": "'As Restated' (pre-recast) column of the reconciliation table",
+   "note": "Included for disambiguation: restatement-only operating income. Not the figure printed in the face income statement comparative column."
+  },
+  {
+   "metric": "net_cash_provided_by_operating_activities",
+   "fiscal_year": "FY2018",
+   "as_printed": "2,574",
+   "stated_scale": "in millions",
+   "value_usd": 2574000000,
+   "caption": "Net cash provided by/(used for) operating activities",
+   "statement": "Consolidated Statements of Cash Flows",
+   "accession": "0001637459-19-000049",
+   "column": "December 29, 2018 — current-year column (the 'As Restated' spanning header covers only the 2017 and 2016 columns)"
+  },
+  {
+   "metric": "goodwill_impairment",
+   "fiscal_year": "FY2018",
+   "as_printed": "7,008",
+   "stated_scale": "in millions, except per share data",
+   "value_usd": 7008000000,
+   "caption": "Goodwill impairment losses",
+   "statement": "Consolidated Statements of Income",
+   "accession": "0001637459-19-000049",
+   "column": "December 29, 2018 — current-year column (the 'As Restated & Recast' spanning header covers only the 2017 and 2016 columns)",
+   "note": "The largest write-off in this fixture set and the case the measure exists for. It sits as its own caption on the face of the income statement, between 'Selling, general and administrative expenses, excluding impairment losses' and 'Intangible asset impairment losses' — so goodwill is separable from other intangibles here, which it is not in the Target filing."
+  },
+  {
+   "metric": "goodwill_impairment",
+   "fiscal_year": "FY2017-restated-and-recast",
+   "as_printed": "—",
+   "stated_scale": "in millions, except per share data",
+   "value_usd": 0,
+   "caption": "Goodwill impairment losses",
+   "statement": "Consolidated Statements of Income",
+   "accession": "0001637459-19-000049",
+   "column": "December 30, 2017 — comparative column under the 'As Restated & Recast' spanning header",
+   "note": "An em-dash in the printed statement, which is this filer's nil. Recorded because a five-year window over this company runs across both a stated nil and the largest charge in the set, and the measure has to read them as 0 and 7,008 rather than as absent and 7,008."
+  },
+  {
+   "metric": "intangible_asset_impairment",
+   "fiscal_year": "FY2018",
+   "as_printed": "8,928",
+   "stated_scale": "in millions, except per share data",
+   "value_usd": 8928000000,
+   "caption": "Intangible asset impairment losses",
+   "statement": "Consolidated Statements of Income",
+   "accession": "0001637459-19-000049",
+   "column": "December 29, 2018 — current-year column (the 'As Restated & Recast' spanning header covers only the 2017 and 2016 columns)",
+   "note": "NOT what goodwill_impairment resolves to, and recorded so that a wrong resolution is detectable rather than plausible. Kraft Heinz wrote off 7,008 of goodwill and 8,928 of other intangibles in the same year, on adjacent lines of the same statement. Any mapping that reached for the larger or the combined figure would produce a number that looks entirely reasonable."
+  },
+  {
+   "metric": "intangible_amortisation",
+   "fiscal_year": "FY2018",
+   "as_printed": "$290 million",
+   "stated_scale": "stated inline in the note text",
+   "value_usd": 290000000,
+   "caption": "Amortization expense for definite-lived intangible assets was $290 million in 2018, $278 million in 2017, and $267 million in 2016.",
+   "statement": "Notes to Consolidated Financial Statements — Goodwill and Intangible Assets",
+   "accession": "0001637459-19-000049",
+   "note": "Against the 983 of 'Depreciation and amortization' on the cash flow statement, this leaves 693 of depreciation — which is the figure the maintenance-capex proxy should be comparing capital spending against. The segment note prints the same 983 as 'Total depreciation and amortization expense', so the two agree."
+  },
+  {
+   "metric": "intangible_amortisation",
+   "fiscal_year": "FY2017-restated",
+   "as_printed": "$278 million",
+   "stated_scale": "stated inline in the note text",
+   "value_usd": 278000000,
+   "caption": "Amortization expense for definite-lived intangible assets was $290 million in 2018, $278 million in 2017, and $267 million in 2016.",
+   "statement": "Notes to Consolidated Financial Statements — Goodwill and Intangible Assets",
+   "accession": "0001637459-19-000049"
+  },
+  {
+   "metric": "dda",
+   "fiscal_year": "FY2018",
+   "as_printed": "983",
+   "stated_scale": "in millions",
+   "value_usd": 983000000,
+   "caption": "Depreciation and amortization",
+   "statement": "Consolidated Statements of Cash Flows (Adjustments to reconcile net income/(loss) to operating cash flows)",
+   "accession": "0001637459-19-000049",
+   "column": "December 29, 2018 — current-year column (the 'As Restated & Recast' spanning header covers only the 2017 and 2016 columns)",
+   "note": "Cross-checked against 'Total depreciation and amortization expense' of 983 in the segment note, where it is built up from the five segment figures 626 + 39 + 102 + 119 + 97."
+  }
+ ]
 }

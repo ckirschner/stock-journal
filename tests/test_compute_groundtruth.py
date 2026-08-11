@@ -128,6 +128,101 @@ class TestKHC:
                    and e["newer_value"] == 26076 * M for e in events)
 
 
+class TestGoodwillWrittenOff:
+    """What an acquirer later admitted it had not bought.
+
+    Two filings, because the concept resolves two different ways and the
+    difference decides what a threshold means. Kraft Heinz carries goodwill as
+    its own caption on the face of the income statement, beside a separate and
+    larger charge against other intangibles. Target reports one combined
+    figure and states the goodwill component only in prose.
+
+    Expected values are hand-read from the primary documents; see
+    fixtures/groundtruth/khc-notes.md and tgt-notes.md.
+    """
+
+    def test_khc_fy2018_is_the_goodwill_line_and_not_its_neighbour(self):
+        """7,008 of goodwill and 8,928 of other intangibles were written off
+        in the same year on adjacent lines. Either figure reads as plausible;
+        only one is this concept."""
+        x = fi(1637459, "0001637459-19-000049")
+        assert dur(x, "goodwill_impairment",
+                   "2017-12-31", "2018-12-29") == 7008 * M
+
+    def test_khc_prints_an_em_dash_and_it_means_nought(self):
+        """A five-year window over this company spans a stated nil and the
+        largest charge in the fixture set. Reading the nil as absent would
+        drop the year out of a window that has to cover it."""
+        x = fi(1637459, "0001637459-19-000049")
+        assert dur(x, "goodwill_impairment",
+                   "2017-01-01", "2017-12-30") == 0.0
+
+    def test_tgt_combined_caption_resolves_with_its_caution(self):
+        """Target's fiscal 2015 charge is 35 combined, of which 12 is
+        goodwill. The 35 is what any tagged fact offers, so the 35 is served —
+        with the caution saying so, because a reader has to know the figure is
+        above the goodwill charge rather than equal to it."""
+        x = fi(27419, "0000027419-17-000008")
+        r = cm.resolve_duration(x, "goodwill_impairment",
+                                "2015-02-01", "2016-01-30")
+        assert r["value"] == 35 * M
+        assert r["concept"] == "us-gaap:GoodwillAndIntangibleAssetImpairment"
+        assert any("at or above the goodwill charge alone" in c
+                   for c in r["cautions"])
+
+    def test_tgt_a_year_it_says_had_none(self):
+        """"No impairments were recorded in 2016" — stated in the note and
+        tagged as a zero, so it is a zero and not a gap."""
+        x = fi(27419, "0000027419-17-000008")
+        assert dur(x, "goodwill_impairment",
+                   "2016-01-31", "2017-01-28") == 0.0
+
+
+class TestIntangibleAmortisationComesOutOfDandA:
+    """The maintenance-capex proxy compares capital spending against what the
+    company wrote its assets down by — and acquired intangibles are written
+    down without ever being replaced by spending.
+
+    The figures below are hand-read. What makes them worth having is the
+    reconciliation in the third test: it is evidence from the printed document
+    that the two lines overlap, and subtracting one from the other would be
+    wrong if they did not.
+    """
+
+    def test_khc_fy2018_amortisation_alone(self):
+        x = fi(1637459, "0001637459-19-000049")
+        assert dur(x, "intangible_amortisation",
+                   "2017-12-31", "2018-12-29") == 290 * M
+        assert dur(x, "dda", "2017-12-31", "2018-12-29") == 983 * M
+
+    def test_tgt_three_years_of_it(self):
+        x = fi(27419, "0000027419-17-000008")
+        assert dur(x, "intangible_amortisation",
+                   "2016-01-31", "2017-01-28") == 18 * M
+        assert dur(x, "intangible_amortisation",
+                   "2015-02-01", "2016-01-30") == 23 * M
+        assert dur(x, "intangible_amortisation",
+                   "2014-02-02", "2015-01-31") == 22 * M
+
+    def test_tgt_depreciation_plus_amortisation_is_the_dda_line(self):
+        """The property note prints depreciation and capital lease
+        amortization of 2,280 for fiscal 2016; the intangibles note prints 18;
+        the cash flow statement prints 2,298. Read off three separate parts of
+        one filing, they reconcile exactly — which is what establishes that
+        D&A includes the amortization, and so that D&A less amortization is
+        depreciation.
+
+        If they did not overlap, subtracting would understate depreciation,
+        which lowers the maintenance-capex floor and RAISES owner earnings.
+        The error would flatter, and nothing on screen would say so.
+        """
+        x = fi(27419, "0000027419-17-000008")
+        dda_line = dur(x, "dda", "2016-01-31", "2017-01-28")
+        amort = dur(x, "intangible_amortisation", "2016-01-31", "2017-01-28")
+        assert dda_line == 2298 * M
+        assert dda_line - amort == 2280 * M
+
+
 class TestPRGO:
     """Fiscal-year-end change; the 10-KT transition stub."""
 

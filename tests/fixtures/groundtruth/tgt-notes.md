@@ -79,3 +79,62 @@ Consolidated Statements of Cash Flows, 2016 column:
    `value_usd` recorded as negative per instructions.
 4. FY2016 net earnings context (not requested, for reference): Net earnings 2,737 =
    continuing 2,669 + discontinued 68.
+
+---
+
+## Added for the maintenance-capex and goodwill-outcome measures
+
+Same method: the FY2016 10-K primary document (`tgt-20170128x10k.htm`,
+accession 0000027419-17-000008) read by hand. Both figures live in the notes as
+prose rather than as statement lines, which is worth knowing before looking for
+them: neither has a caption to grep for.
+
+**Amortization of intangibles.** From the Goodwill and Intangible Assets note:
+"Amortization expense was $18 million, $23 million, and $22 million in 2016,
+2015, and 2014, respectively." So fiscal 2016 (ended January 28, 2017) is 18,
+fiscal 2015 is 23, fiscal 2014 is 22.
+
+**And the arithmetic that makes it useful,** which is the reason this filing was
+chosen for the figure rather than any other. The property note states
+"Depreciation and capital lease amortization expense for 2016, 2015, and 2014
+was $2,280 million, $2,191 million, and $2,108 million". The Consolidated
+Statements of Cash Flows prints "Depreciation and amortization" of 2,298, 2,213
+and 2,129 for the same three years.
+
+| Year | Depreciation, per the property note | Intangible amortization | Sum | D&A on the cash flow statement |
+|---|---|---|---|---|
+| 2016 | 2,280 | 18 | 2,298 | 2,298 |
+| 2015 | 2,191 | 23 | 2,214 | 2,213 |
+| 2014 | 2,108 | 22 | 2,130 | 2,129 |
+
+2016 reconciles exactly; 2015 and 2014 are one million out, which is rounding
+in figures printed to the million. That is the evidence — read off the printed
+document rather than assumed — that the cash-flow D&A line **includes**
+intangible amortization, and therefore that subtracting one from the other
+leaves depreciation. A measure that subtracts the two when they do not overlap
+would understate depreciation and so overstate owner earnings, silently.
+
+**Goodwill impairment, and the combined-caption problem.** From the same note:
+"Goodwill totaled $133 million at January 28, 2017 and January 30, 2016. During
+2015, we announced our decision to wind down certain noncore operations. As a
+result, we recorded a $35 million pretax impairment loss, which included
+approximately $23 million of intangible assets and $12 million of goodwill.
+These costs were included in SG&A on our Consolidated Statements of Operations,
+but were not included in our segment results. No impairments were recorded in
+2016 or 2014 as a result of the annual goodwill impairment tests performed."
+
+Two separate things follow.
+
+Fiscal 2015 is the **combined-caption case**. The goodwill charge alone is 12;
+the only figure this filer tags is the combined 35. The concept map resolves
+the 35 and attaches a caution saying the figure is at or above the goodwill
+charge alone — this filing is the evidence for that claim rather than a guess
+at it, and a threshold tested against 35 therefore reads more harshly than
+intended and never more leniently. The 12 is recoverable by a person reading
+the sentence and is not recoverable from any tagged fact.
+
+Fiscal 2016 is the **stated-nil case**: the company says in words that nothing
+was written off, and tags the zero. A measure summing five years of write-offs
+needs that to be a zero rather than an absence, and needs a year with no figure
+at all to stay absent. Both behaviours are pinned in
+`test_compute_groundtruth.py`.

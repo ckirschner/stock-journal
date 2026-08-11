@@ -84,3 +84,55 @@ ASU Adoption Impacts / As Restated & Recast), in $ millions:
    and the reconciliation's "As Restated" column (recast impact nil).
 3. The FY2018 auditor's report is adverse on ICFR (material weaknesses) —
    context only, no figures taken from it.
+
+---
+
+## Added for the goodwill-outcome and maintenance-capex measures
+
+Same method and the same two filings. Everything below is from the FY2018 10-K
+(`form10-k2018.htm`, accession 0001637459-19-000049).
+
+**Goodwill impairment.** The Consolidated Statements of Income carry it as its
+own caption on the face of the statement, which is what makes this company the
+counterpart to Target's combined caption:
+
+| Caption | Dec 29 2018 | Dec 30 2017 | Dec 31 2016 |
+|---|---|---|---|
+| Selling, general and administrative expenses, excluding impairment losses | 3,205 | 2,927 | 3,527 |
+| **Goodwill impairment losses** | **7,008** | **—** | **—** |
+| Intangible asset impairment losses | 8,928 | 49 | 18 |
+| Selling, general and administrative expenses | 19,141 | 2,976 | 3,545 |
+
+(The 2017 and 2016 columns sit under the "As Restated & Recast" spanning
+header, as everywhere else in this filing.)
+
+Three things this case pins:
+
+1. **The write-off itself**, 7,008 in $ millions, the largest figure in this
+   fixture set and the shape the measure exists to catch.
+2. **That goodwill is separable here.** 8,928 of other intangibles was written
+   off in the same year, on the adjacent line. A mapping that reached for the
+   larger figure, or for a combined one, would produce a perfectly plausible
+   number — so the intangible charge is recorded in `khc.json` as well,
+   precisely so that a wrong answer is recognisable rather than reasonable.
+3. **The em-dash is a nil.** FY2017 and FY2016 print "—" and tag zero. A
+   five-year window over this company therefore spans a stated nil and the
+   largest charge in the set, and has to read them as 0 and 7,008 rather than
+   as absent and 7,008.
+
+**Amortization of intangibles.** From the Goodwill and Intangible Assets note:
+"Amortization expense for definite-lived intangible assets was $290 million in
+2018, $278 million in 2017, and $267 million in 2016."
+
+Against the 983 of "Depreciation and amortization" on the Consolidated
+Statements of Cash Flows, that leaves 693 of depreciation — which is the figure
+the maintenance-capex proxy should be comparing capital spending against, and
+not the 983. The segment note prints the same 983 as "Total depreciation and
+amortization expense", built up from 626 + 39 + 102 + 119 + 97, so the two
+presentations agree.
+
+Note where the amortization figure is tagged rather than merely printed: in
+this filer it is in the intangibles note, not on the cash flow face. Which
+statement a fact was presented on plays no part in resolution, so it costs
+nothing — but it is the first thing anyone auditing the mapping will wonder
+about, and Target tags it the same way.

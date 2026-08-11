@@ -759,6 +759,15 @@ ESTIMATORS = MappingProxyType({
         "top of it single-handed, and that year stays in the window for as "
         "long as the window is long. Waiting cannot help; dropping the year "
         "and asking again is the only test that means anything."),
+    "cumulative": _est(
+        "added up across a window", "every annual observation in the window "
+        "summed, rather than a typical one picked out of it", 0, "always",
+        "A total across years is not an average of them: one year can be the "
+        "whole of it, and a single write-off larger than the other four "
+        "combined is exactly the case a cumulative measure exists to catch. "
+        "So there is nothing to wait for — the year that produced the answer "
+        "stays in the window until it ages out — and the only question worth "
+        "asking is whether the total survives dropping it."),
     "count": _est(
         "a count of annual reports", "how many years met a condition", 0,
         "no",

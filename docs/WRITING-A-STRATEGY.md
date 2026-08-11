@@ -1034,6 +1034,7 @@ for more repetitions, which is a claim about the data that is not true.
 | `averaged` | means at both ends | 0 | yes |
 | `median` | the middle of a window | 0 | under 5 observations |
 | `range` | the spread across a window | 0 | yes |
+| `cumulative` | added up across a window | 0 | yes |
 | `count` | a count of annual reports | 0 | — |
 | `assessed` | assessed, not measured | 0 | — |
 <!-- end: estimators -->
