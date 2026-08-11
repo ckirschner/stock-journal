@@ -68,13 +68,13 @@ journal("Sample — Graham", "graham", {"free-cash": FREE_CASH})
 
 security(
     "HARW", "Harwick Paper Mills", 34.10,
-    dict(pe_3y_avg_eps=10.4, price_to_book=0.96,
-         graham_combined_multiple=9.98, current_ratio=2.6,
+    dict(pe_3y_avg_eps=8.4, price_to_book=0.96,
+         graham_combined_multiple=8.06, current_ratio=2.6,
          ltd_to_working_capital=0.35, profitable_years_10y=10,
-         altman_z_score=3.9, eps_growth_10y=41.0,
-         consecutive_dividend_years=22, debt_to_equity=0.48,
+         altman_z_double_prime=3.4, eps_growth_10y=41.0,
+         consecutive_capital_return_years=22, debt_to_equity=0.48,
          price_to_net_tangible_assets=1.15, accruals_ratio=0.02,
-         market_cap=610_000_000, ncav_to_market_cap=0.71,
+         revenue_ttm=1_210_000_000, ncav_to_market_cap=0.71,
          consecutive_annual_loss_years=0),
     on="2025-11-01",
     thesis=("A regional paper mill trading below its own book value with "
@@ -98,20 +98,20 @@ security(
     dict(pe_3y_avg_eps=19.2, price_to_book=3.28,
          graham_combined_multiple=62.98, current_ratio=2.1,
          ltd_to_working_capital=0.55, profitable_years_10y=10,
-         altman_z_score=4.4, eps_growth_10y=63.0,
-         consecutive_dividend_years=11, debt_to_equity=0.35,
+         altman_z_double_prime=3.8, eps_growth_10y=63.0,
+         consecutive_capital_return_years=21, debt_to_equity=0.35,
          price_to_net_tangible_assets=2.9, accruals_ratio=0.05,
-         market_cap=488_000_000, ncav_to_market_cap=0.34,
+         revenue_ttm=940_000_000, ncav_to_market_cap=0.34,
          consecutive_annual_loss_years=0),
     on="2026-08-02",
     earlier=("2025-06-08",
-             dict(pe_3y_avg_eps=11.0, price_to_book=1.31,
-                  graham_combined_multiple=14.41, current_ratio=2.3,
+             dict(pe_3y_avg_eps=8.8, price_to_book=1.02,
+                  graham_combined_multiple=8.98, current_ratio=2.3,
                   ltd_to_working_capital=0.51, profitable_years_10y=10,
-                  altman_z_score=3.6, eps_growth_10y=58.0,
-                  consecutive_dividend_years=10, debt_to_equity=0.38,
+                  altman_z_double_prime=3.1, eps_growth_10y=58.0,
+                  consecutive_capital_return_years=20, debt_to_equity=0.38,
                   price_to_net_tangible_assets=1.5, accruals_ratio=0.04,
-                  market_cap=278_000_000, ncav_to_market_cap=0.61,
+                  revenue_ttm=880_000_000, ncav_to_market_cap=0.61,
                   consecutive_annual_loss_years=0), 12.40),
     thesis=("Bought at a third of what the tubes and the plant are worth on "
             "the books, after a customer cancelled a contract that was 8% of "
@@ -159,23 +159,23 @@ security(
          eps_growth_10y=None,
          price_to_book=0.62, current_ratio=1.6,
          ltd_to_working_capital=1.4, profitable_years_10y=8,
-         altman_z_score=1.55, consecutive_dividend_years=0,
+         altman_z_double_prime=0.95, consecutive_capital_return_years=0,
          debt_to_equity=1.7, price_to_net_tangible_assets=0.9,
-         accruals_ratio=0.14, market_cap=141_000_000,
+         accruals_ratio=0.14, revenue_ttm=760_000_000,
          ncav_to_market_cap=0.44, consecutive_annual_loss_years=2),
     on="2026-07-28",
     earlier=("2025-02-05",
-             dict(pe_3y_avg_eps=8.9, price_to_book=0.71,
-                  graham_combined_multiple=6.32, current_ratio=2.4,
+             dict(pe_3y_avg_eps=7.9, price_to_book=0.71,
+                  graham_combined_multiple=5.61, current_ratio=2.4,
                   ltd_to_working_capital=0.7, profitable_years_10y=10,
-                  altman_z_score=3.1, eps_growth_10y=36.0,
-                  consecutive_dividend_years=13, debt_to_equity=0.8,
+                  altman_z_double_prime=2.9, eps_growth_10y=36.0,
+                  consecutive_capital_return_years=23, debt_to_equity=0.8,
                   price_to_net_tangible_assets=1.1, accruals_ratio=0.06,
                   # Comfortably over the size floor when it was bought. This
                   # security is here to show a balance sheet coming apart,
                   # and a purchase that also had to override the size test
                   # would have two stories in it and teach neither.
-                  market_cap=460_000_000, ncav_to_market_cap=0.66,
+                  revenue_ttm=1_060_000_000, ncav_to_market_cap=0.66,
                   consecutive_annual_loss_years=0), 15.85),
     thesis=("Speciality chemicals at 0.7 times book with thirteen years of "
             "dividends. The plant is worth more than the whole company.",
@@ -198,13 +198,13 @@ buy("BRENT", 520, 15.85, "2025-02-10")
 
 security(
     "MERIDN", "Meridian Casting", 27.55,
-    dict(pe_3y_avg_eps=13.1, price_to_book=1.28,
-         graham_combined_multiple=16.77, current_ratio=2.35,
+    dict(pe_3y_avg_eps=9.1, price_to_book=1.28,
+         graham_combined_multiple=11.65, current_ratio=2.35,
          ltd_to_working_capital=0.6, profitable_years_10y=10,
-         altman_z_score=3.2, eps_growth_10y=39.0,
-         consecutive_dividend_years=17, debt_to_equity=0.7,
+         altman_z_double_prime=2.9, eps_growth_10y=39.0,
+         consecutive_capital_return_years=27, debt_to_equity=0.7,
          price_to_net_tangible_assets=1.6, accruals_ratio=0.03,
-         market_cap=372_000_000, ncav_to_market_cap=0.55,
+         revenue_ttm=1_072_000_000, ncav_to_market_cap=0.55,
          consecutive_annual_loss_years=0),
     on="2024-03-04",
     thesis=("Foundry work for rail and marine, priced at 1.3 times book "
@@ -233,20 +233,20 @@ security(
     dict(pe_3y_avg_eps=18.2, price_to_book=2.35,
          graham_combined_multiple=42.77, current_ratio=2.2,
          ltd_to_working_capital=0.3, profitable_years_10y=10,
-         altman_z_score=4.8, eps_growth_10y=71.0,
-         consecutive_dividend_years=12, debt_to_equity=0.4,
+         altman_z_double_prime=4.1, eps_growth_10y=71.0,
+         consecutive_capital_return_years=22, debt_to_equity=0.4,
          price_to_net_tangible_assets=3.1, accruals_ratio=0.02,
-         market_cap=980_000_000, ncav_to_market_cap=0.21,
+         revenue_ttm=1_980_000_000, ncav_to_market_cap=0.21,
          consecutive_annual_loss_years=0),
     on="2026-08-02",
     earlier=("2024-11-15",
              dict(pe_3y_avg_eps=14.1, price_to_book=1.94,
                   graham_combined_multiple=27.35, current_ratio=2.1,
                   ltd_to_working_capital=0.34, profitable_years_10y=10,
-                  altman_z_score=4.1, eps_growth_10y=64.0,
-                  consecutive_dividend_years=10, debt_to_equity=0.45,
+                  altman_z_double_prime=3.6, eps_growth_10y=64.0,
+                  consecutive_capital_return_years=20, debt_to_equity=0.45,
                   price_to_net_tangible_assets=2.4, accruals_ratio=0.03,
-                  market_cap=478_000_000, ncav_to_market_cap=0.4), 20.10),
+                  revenue_ttm=1_478_000_000, ncav_to_market_cap=0.4), 20.10),
     thesis=("Marine fittings, family controlled, no debt to speak of. Book "
             "value is understated because the yard was bought in 1974 and "
             "sits at cost.",
@@ -294,26 +294,30 @@ buy("THRAP", 190, 15.10, "2025-08-20",
 
 security(
     "PELHAM", "Pelham Bindery", 18.45,
-    dict(pe_3y_avg_eps=12.8, price_to_book=1.05,
-         graham_combined_multiple=13.44, current_ratio=2.7,
+    dict(pe_3y_avg_eps=9.2, price_to_book=1.05,
+         graham_combined_multiple=9.66, current_ratio=2.7,
          ltd_to_working_capital=0.3, profitable_years_10y=10,
-         altman_z_score=3.8, eps_growth_10y=52.0,
-         consecutive_dividend_years=18, debt_to_equity=0.44,
+         altman_z_double_prime=3.3, eps_growth_10y=52.0,
+         consecutive_capital_return_years=28, debt_to_equity=0.44,
          price_to_net_tangible_assets=1.3, accruals_ratio=0.01,
-         market_cap=420_000_000, ncav_to_market_cap=0.58,
+         revenue_ttm=1_020_000_000, ncav_to_market_cap=0.58,
          consecutive_annual_loss_years=0),
     on="2026-08-05",
     notes=[("2026-08-05",
-            "Clears every test that can stop it. The one showing red is the "
-            "earnings yield against the risk-free rate: at 12.8 times "
-            "typical earnings this yields 7.8% a year, and against a "
-            "risk-free rate of 4% the strategy wants twice that — 8%, which "
-            "is 12.5 times earnings or less. It misses by two tenths of a "
-            "percentage point of yield, which is three tenths of a turn on "
-            "the multiple. That test never blocks a buy, and what it is "
-            "telling me is worth reading anyway: the government is paying "
-            "enough that "
-            "this discount is thinner than it looks.")])
+            "Clears every test that can stop it, and the one worth reading "
+            "is the price. The ceiling here is not the flat fifteen times "
+            "typical earnings I expected: it is the stricter of that and "
+            "what the bond market is paying. High-grade corporate bonds are "
+            "set at 5% in my settings and the strategy wants twice that as "
+            "an earnings yield — 10%, which is ten times earnings or less. "
+            "So the bar is 10 and this is at 9.2.\n\n"
+            "Worth knowing what that means when rates move. If I set the "
+            "bond yield to 6%, the ceiling drops to 8.3 and this same "
+            "company is refused outright on a number that did not change. "
+            "That is the point of the rule rather than a defect in it — a "
+            "9.2 multiple is a different proposition when safe money pays "
+            "6% than when it pays 3% — but it does mean the one figure I "
+            "have to maintain by hand is the one that decides the most.")])
 
 
 # -- a candidate the strategy is built to reject -----------------------------
@@ -323,10 +327,10 @@ security(
     dict(pe_3y_avg_eps=41.5, price_to_book=8.1,
          graham_combined_multiple=336.15, current_ratio=3.4,
          ltd_to_working_capital=0.0, profitable_years_10y=7,
-         altman_z_score=5.6, eps_growth_10y=210.0,
-         consecutive_dividend_years=0, debt_to_equity=0.1,
+         altman_z_double_prime=4.9, eps_growth_10y=210.0,
+         consecutive_capital_return_years=0, debt_to_equity=0.1,
          price_to_net_tangible_assets=9.4, accruals_ratio=0.08,
-         market_cap=2_400_000_000, ncav_to_market_cap=0.09,
+         revenue_ttm=2_400_000_000, ncav_to_market_cap=0.09,
          consecutive_annual_loss_years=0),
     on="2026-08-05",
     notes=[("2026-08-05",
@@ -344,9 +348,9 @@ security(
     "STANM", "Stanmore Regional Bank", 32.80,
     dict(pe_3y_avg_eps=9.2, price_to_book=0.88,
          graham_combined_multiple=8.10, profitable_years_10y=10,
-         eps_growth_10y=38.0, consecutive_dividend_years=16,
+         eps_growth_10y=38.0, consecutive_capital_return_years=24,
          debt_to_equity=1.9, price_to_net_tangible_assets=0.95,
-         accruals_ratio=0.04, market_cap=880_000_000,
+         accruals_ratio=0.04, revenue_ttm=880_000_000,
          consecutive_annual_loss_years=0),
     on="2026-08-05",
     notes=[("2026-08-05",
@@ -367,10 +371,10 @@ security(
     dict(pe_3y_avg_eps=26.4, price_to_book=3.15,
          graham_combined_multiple=83.16, current_ratio=2.2,
          ltd_to_working_capital=0.4, profitable_years_10y=10,
-         altman_z_score=4.0, eps_growth_10y=44.0,
-         consecutive_dividend_years=14, debt_to_equity=0.5,
+         altman_z_double_prime=4.0, eps_growth_10y=44.0,
+         consecutive_capital_return_years=14, debt_to_equity=0.5,
          price_to_net_tangible_assets=3.6, accruals_ratio=0.03,
-         market_cap=690_000_000, ncav_to_market_cap=0.18,
+         revenue_ttm=690_000_000, ncav_to_market_cap=0.18,
          consecutive_annual_loss_years=0),
     on="2024-06-01",
     thesis=("Tableware and industrial ceramics at 0.8 times book. The "
