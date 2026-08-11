@@ -890,10 +890,22 @@ You find this by looking at the output, not by reading anything.
   evidence list in group order and only append a group when you appended its
   rows.
 - **The `at_least` threshold on a group is a count of rows**, so it has to be a
-  whole number. Stated outright, a non-integer is refused at load. Read out of a
-  setting with `threshold_from`, nothing checks it until evaluation — and there
-  it does not fail loudly, it makes the group `unknown`, which then refuses any
-  commit beside it. Point a group's count at an integer value.
+  whole number. Stated outright, it must be one. Read out of a setting with
+  `threshold_from`, the setting itself must be a declared **value** of `type:
+  integer` with `min: 0` or higher, and the decision is refused if it is not.
+  The check is on the declaration and not on the number, because the number is
+  resolved out of a chain the user edits afterwards — a value's type holds for
+  the shipped default, for a journal's override, and for anything added to the
+  chain later. It must be a value rather than an input for the same reason: a
+  value always resolves, and an unanswered input would leave the group with no
+  count, which reads as `unknown` and quietly refuses every commit beside it.
+- **A citation is answerable however you cite it.** The screens that let a user
+  supply a figure, ask a judgement, or clear a blocked verdict are built from
+  which *bank entry* each citation reads — never from the shape it renders in.
+  So a measure you only ever cite as a change since a purchase still reaches
+  the dialog that lets someone type it in. What you cannot do is `confirm` a
+  drift: a confirmation counts filings that each carry the failure on their own
+  reading, and a baseline is frozen at the purchase rather than re-read.
 - **A judgement is a judgement because the bank says so.** You cite it exactly
   as you cite a computed measure; the host decides from the bank that it renders
   as an assessment. You could not disguise one as a measurement if you tried.
@@ -984,7 +996,7 @@ the host produces it, from `declines`.
 | `fix` | button | where it goes | must cite |
 |---|---|---|---|
 | `settings` | Fix this journal's settings | this journal's setup screen | — |
-| `judgement` | Answer these questions | "Your judgement" on this security's page | a `judgement` citation |
+| `judgement` | Answer these questions | "Your judgement" on this security's page | a bank entry of kind `qualitative`, however it is cited |
 | `thesis` | Write down what you think now | this security's thesis record | — |
 <!-- end: state-fixes -->
 
