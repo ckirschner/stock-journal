@@ -224,7 +224,7 @@ import copy
 from datetime import date
 
 from . import bank as bank_mod
-from . import compute, contract, dataview, facts_store, hand_entered
+from . import compute, contract, dataview, facts_store
 from . import industry as industry_mod
 from . import instruments, judgements, portfolio, price_store, tickermap
 
@@ -260,48 +260,13 @@ def _tickers_of(security: dict) -> list:
     return [ticker] if ticker else []
 
 
-def _known(value, source, cautions=None, provenance=None,
-           leave_one_out=None) -> dict:
-    """One measure as a strategy reads it.
-
-    `leave_one_out` travels beside the value because it is part of the same
-    answer: for a measure read over a window of fiscal years, "and what does
-    it say without its most flattering year?" is not a second measure, it is
-    the only robustness test available — waiting for another filing re-reads
-    the same years. Present only where the estimator reads a window; absent,
-    never a copy of the value, so a check that cannot be made comes back
-    unmade rather than passing itself.
-    """
-    out = {"status": "known", "value": value, "source": source,
-           "cautions": list(cautions or []),
-           "provenance": list(provenance or [])}
-    if leave_one_out:
-        out["leave_one_out"] = [dict(o) for o in leave_one_out]
-    return out
-
-
-def _absent(reason: str) -> dict:
-    return {"status": "absent", "reason": reason}
-
-
-def _inapplicable(reason: str, cls: str | None = None) -> dict:
-    """A measure that will never describe this filer.
-
-    The third status a measure can reach, and the one that must not read as
-    the second. `absent` is a gap: something is missing and a fetch, a filing
-    or an answer may close it, so it belongs among the things to go and do.
-    This is a boundary: it was knowable before anything was computed, and it
-    holds for as long as the company is the kind of company it is.
-
-    Nothing that consumes a measure has to learn the word. Every reader asks
-    whether the status is "known", so this can never be mistaken for a value
-    and can never come out of a test as a pass. What the word buys is that a
-    reader is told which of the two they are looking at.
-    """
-    node = {"status": "inapplicable", "reason": reason}
-    if cls:
-        node["industry"] = cls
-    return node
+# The three nodes a measure can arrive as, built where the resolution rule
+# that produces them lives. They were defined here and the rule was written
+# out twice — once here for a strategy, once in `dataview.merged_values` for a
+# screen — and the two had already drifted before anyone joined them. One
+# definition, two projections; see engine/dataview.resolve.
+_known, _absent, _inapplicable = (dataview.known, dataview.absent,
+                                  dataview.inapplicable)
 
 
 # -- measures ----------------------------------------------------------------
@@ -327,41 +292,20 @@ def _current_values(security, cik, tickers, registry_ids, as_of):
     judgement must never be. Judgements are served from their own dated
     record, in `_measures`; the hand-entered write refuses the id, and this
     read refuses it again.
+
+    The rule itself is `dataview.resolve`, because this was the second copy
+    of it. What a strategy gets that a screen does not is every measure,
+    including the ones that did not resolve, each with its reason — and that
+    difference is now a filter in `dataview.merged_values` rather than a
+    second implementation that agrees today.
     """
-    out = {}
     if cik:
-        if as_of:
-            results = dataview.asof_results(cik, tickers, registry_ids, as_of)
-        else:
-            results = dataview.computed_results(cik, tickers, registry_ids)
-        for eid, r in results.items():
-            if r.get("status") == "computed":
-                out[eid] = _known(r["value"], "computed",
-                                  r.get("cautions"), r.get("provenance"),
-                                  r.get("leave_one_out"))
-            elif r.get("status") == "inapplicable":
-                out[eid] = _inapplicable(r["reason"], r.get("industry"))
-            else:
-                out[eid] = _absent(r.get("reason")
-                                   or "the value could not be computed")
-    for eid in hand_entered.ids(security):
-        # A measure that cannot describe this filer is not made applicable by
-        # somebody typing a number into it. Whatever they typed is a different
-        # quantity wearing this measure's name, unit and explanation, and it
-        # would feed a verdict — which is the one place principle 4 says a
-        # qualification is read by a person and ignored by the arithmetic. The
-        # figure stays on the record, dated, and becomes readable again if the
-        # SEC ever reclassifies the filer; it is the serving that is refused,
-        # not the recording.
-        if (out.get(eid) or {}).get("status") == "inapplicable":
-            continue
-        r = hand_entered.reading(security, eid, as_of)
-        if r["status"] == "known":
-            out[eid] = _known(r["value"], "manual", r["cautions"],
-                              r["provenance"])
-        elif (out.get(eid) or {}).get("status") != "known":
-            out[eid] = _absent(r["reason"])
-    return out
+        results = (dataview.asof_results(cik, tickers, registry_ids, as_of)
+                   if as_of
+                   else dataview.computed_results(cik, tickers, registry_ids))
+    else:
+        results = {}
+    return dataview.resolve(security, results, as_of)
 
 
 def _series_for(filings, prices, symbols, today, ind=None):
