@@ -267,3 +267,95 @@ class TestAPaymentsLineTaggedNegativeIsRefused:
             cm._cache.pop("mtime", None)
             cm.load_map()
         assert cm.load_map()["inputs"]["capex"]["sign"] == "outflow_positive"
+
+
+# ---------------------------------------------------------------------------
+# a ratio whose NUMERATOR is not a quantity
+# ---------------------------------------------------------------------------
+
+class TestEVOverEBITWillNotDivideANegativePrice:
+    """Only the denominator was guarded.
+
+    Enterprise value is market cap plus debt minus cash, so a company holding
+    more cash than its shares and its borrowings are worth together prices at
+    less than nothing. Dividing that by a real profit gives a negative
+    multiple, which sorts below every genuine reading on a measure where lower
+    is better — the worst case reading as the best bargain, which is the same
+    fault the EBIT guard beside it was written for, arriving through the other
+    end of the ratio.
+
+    It compounds one level up, and that is what made it worth a refusal rather
+    than a caution: `ev_ebit_to_own_5y_median` divides the current multiple by
+    the median of twenty quarterly ones, and two negatives make a positive. A
+    company whose enterprise value moved from −10× profit to −7× — the price
+    going UP — came back at 0.70×, under a sentence saying it sits 30% below
+    its own normal.
+    """
+
+    def _priced(self, close, shares=100.0):
+        from engine import price_store
+        doc = price_store.load(9101)
+        price_store.merge_series(doc, "SYN", "test",
+                                 [["2023-12-29", close, 1000]], [])
+        return doc
+
+    def _filings(self, cash):
+        """Five ordinary years, the last one holding `cash` on its face and
+        naming a cover share count so a market cap can be struck."""
+        out = five(per_year={"2023-12-31": {"cash": cash}})
+        out[-1]["facts"].append(
+            {**inst("dei:EntityCommonStockSharesOutstanding", "2024-02-20",
+                    100.0, stmt=None), "unit": "shares", "currency": None})
+        return out
+
+    def _entry(self, filings, prices, eid):
+        return compute_all(filings, prices, symbols("SYN"),
+                           industry=no_filer(), entry_ids=[eid])[eid]
+
+    def test_an_ordinary_enterprise_value_still_computes(self):
+        """The control. A refusal that fired on everything would look exactly
+        like one that fires on the right thing."""
+        r = self._entry(self._filings(cash=50.0), self._priced(10.0),
+                        "ev_to_ebit")
+        assert r["status"] == "computed"
+        # 100 shares × $10 = 1,000 market cap, + 100 debt − 50 cash = 1,050,
+        # over EBIT of 130.
+        assert r["value"] == pytest.approx(1050.0 / 130.0)
+
+    def test_more_cash_than_the_company_is_worth_refuses(self):
+        """Market cap 1,000 + debt 100 − cash 3,000 = −1,900. Positive EBIT
+        of 130 underneath, so nothing else in the formula objects: without
+        the guard this returns −14.6× and reads as the cheapest company on
+        the screen."""
+        r = self._entry(self._filings(cash=3000.0), self._priced(10.0),
+                        "ev_to_ebit")
+        assert r["status"] == "absent"
+        assert r.get("value") is None
+        assert "enterprise value is zero or negative" in r["reason"]
+
+    def test_the_reason_is_the_banks_sentence_and_not_a_copy(self):
+        from engine import bank
+        r = self._entry(self._filings(cash=3000.0), self._priced(10.0),
+                        "ev_to_ebit")
+        assert "enterprise value is zero or negative" in \
+            bank.data_conditions()["ev_to_ebit"]
+        assert "-1,900" in r["reason"]
+
+    def test_the_median_relative_measure_refuses_with_it(self):
+        """The consumer, and the reason the guard is here rather than in the
+        view. It cites ev_to_ebit's own refusal rather than restating it, so
+        the whole chain is readable from the one sentence: this measure needs
+        a current value, the current value is not meaningful, and the figure
+        that made it not meaningful is −1,900.
+
+        Asserted on the CAUSE and not only on the status. Absent for the
+        wrong reason is what this test would otherwise report as a pass —
+        without the guard the current period computes, the twenty-quarter
+        window fails to assemble, and the measure is absent anyway."""
+        r = self._entry(self._filings(cash=3000.0), self._priced(10.0),
+                        "ev_ebit_to_own_5y_median")
+        assert r["status"] == "absent"
+        assert r.get("value") is None
+        assert "EV/EBIT is not meaningful in the current period" in r["reason"]
+        assert "enterprise value is zero or negative" in r["reason"]
+        assert "-1,900" in r["reason"]

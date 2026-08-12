@@ -421,6 +421,44 @@ ENFORCED_BY_SHARED_MACHINERY = {
 }
 
 
+# Every way a formula can attribute a sentence to the metric bank. Matched
+# case-insensitively against the string constants in engine/compute.py that a
+# reader could be shown. Widening this list is cheap and narrowing it is not:
+# each phrase names the bank as the authority for a claim, in a sentence
+# written where the bank cannot correct it.
+#
+# What is deliberately NOT here is the bare phrase "not meaningful for". A
+# `data` condition's own text is passed to compute.not_meaningful as the thing
+# being cited — "either side is not meaningful for this company" is the
+# citation key, not a restatement of it — and a scan that caught those would
+# be refusing the very mechanism it exists to require.
+_CLAIMS_THE_BANK = ("the bank's own test", "the bank marks", "the bank says",
+                    "the bank calls", "the bank states", "the bank declares",
+                    "the bank considers", "the bank treats")
+
+
+def _docstrings(tree) -> set:
+    """Every docstring node in a module, by identity.
+
+    Excluded from the scan below because a docstring is prose about the code,
+    addressed to whoever edits it. This file's own explanation of how the bank
+    is consulted says "a measure the bank says cannot describe this filer" —
+    which is a true sentence in the right place, and would be a defect in a
+    reason string."""
+    out = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef,
+                             ast.AsyncFunctionDef)):
+            doc = ast.get_docstring(node, clean=False)
+            if doc is None:
+                continue
+            first = node.body[0]
+            if isinstance(first, ast.Expr) and isinstance(first.value,
+                                                          ast.Constant):
+                out.add(id(first.value))
+    return out
+
+
 class TestADataConditionAndItsEnforcementAreTheSameThing:
 
     def declared(self):
@@ -430,20 +468,31 @@ class TestADataConditionAndItsEnforcementAreTheSameThing:
     def test_nothing_claims_the_banks_authority_without_citing_it(self):
         """The phrase is the claim, so the phrase has one home. A formula
         writing it into a sentence of its own is a citation nothing checked —
-        which is how two of them came to name a test that did not exist."""
+        which is how two of them came to name a test that did not exist.
+
+        Every way of saying it, not only the one phrase that was caught the
+        first time. `altman_z_score` narrated the bank's applicability in
+        words of its own — "the bank marks this not meaningful for financial
+        companies; whether this company is one is a judgement the data cannot
+        make" — and sat outside a scan looking for six particular words while
+        the host had long since started making exactly that judgement. A
+        formula speaking for the bank is the defect; which synonym it reaches
+        for is not the test."""
         tree = ast.parse(pathlib.Path(compute.__file__).read_text(
             encoding="utf-8"))
         helper = next(n for n in ast.walk(tree)
                       if isinstance(n, ast.FunctionDef)
                       and n.name == "not_meaningful")
-        mine = {id(n) for n in ast.walk(helper)}
-        stray = [n.value[:50] for n in ast.walk(tree)
+        mine = {id(n) for n in ast.walk(helper)} | _docstrings(tree)
+        stray = [n.value[:60] for n in ast.walk(tree)
                  if isinstance(n, ast.Constant) and isinstance(n.value, str)
-                 and "the bank's own test" in n.value and id(n) not in mine]
+                 and any(p in n.value.lower() for p in _CLAIMS_THE_BANK)
+                 and id(n) not in mine]
         assert stray == [], (
-            "engine/compute.py claims the bank's own test in a sentence of "
-            "its own: " + str(stray) + ". Cite the condition; the sentence "
-            "has one home.")
+            "engine/compute.py speaks for the metric bank in a sentence of "
+            "its own: " + str(stray) + ". Cite the condition through "
+            "compute.not_meaningful; the sentence has one home, and an "
+            "applicability rule the host now enforces needs no narration.")
 
     def test_every_refusal_names_a_condition_the_bank_states(self):
         assert _cited_conditions() - self.declared() == set()

@@ -1162,10 +1162,14 @@ def altman_z_score(ctx):
     prov = ([_prov_point(parts[i]) for i in parts]
             + [_prov_point(ebit), _prov_point(rev),
                "market cap from the market_cap entry"])
+    # No caution about financial companies. There was one, asking the reader
+    # to decide whether this filer was a bank — and the host now decides it,
+    # from the code the SEC publishes, before this function is entered at all
+    # (Ctx.entry, and the industry conditions the bank declares for this
+    # entry). A caution that asks for a judgement already made is worse than
+    # none: it tells a reader the program could not settle something it did,
+    # and it invites them to discount a number that is fine.
     cautions = _cautions_of(ebit, rev, *parts.values()) + mc.get("cautions", [])
-    cautions.append("The bank marks this not meaningful for financial "
-                    "companies; whether this company is one is a judgement "
-                    "the data cannot make — check before relying on it.")
     return computed(z, prov, cautions)
 
 
@@ -1596,6 +1600,16 @@ def ev_to_ebit(ctx):
     ev = ctx.entry("enterprise_value")
     if ev["status"] != "computed":
         return ev
+    # The numerator, in the order the formula reads: EV ÷ EBIT. Only the
+    # denominator was guarded, so a company holding more cash than its shares
+    # and debt are worth together produced a negative multiple that sorted
+    # below every real reading on a measure where lower is better — and then
+    # ev_ebit_to_own_5y_median divided one negative by another and reported
+    # the price going UP as 30% below its own normal.
+    if ev["value"] <= 0:
+        return not_meaningful(
+            "ev_to_ebit", "enterprise value is zero or negative",
+            f"enterprise value is {ev['value']:,.0f}")
     ebit = _ttm(ctx, "ebit")
     if is_absent(ebit):
         return _absent_result(ebit)
@@ -1661,7 +1675,15 @@ def _quarterly_ratio_series(ctx, kind):
             if ebit["value"] <= 0:
                 misses.append(f"{q}: EBIT TTM not positive")
                 continue
-            values.append((mcap + debt["value"] - cash["value"]) / ebit["value"])
+            # Both ends of the ratio, on the same terms the current period is
+            # refused on. A quarter priced at a negative enterprise value is
+            # not a cheap quarter, and letting one into the median moves the
+            # thing every later reading is measured against.
+            ev = mcap + debt["value"] - cash["value"]
+            if ev <= 0:
+                misses.append(f"{q}: enterprise value not positive")
+                continue
+            values.append(ev / ebit["value"])
         else:
             eps = ctx.sb.ttm_at("diluted_eps", fi)
             if is_absent(eps) or eps["value"] <= 0:

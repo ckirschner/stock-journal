@@ -2222,6 +2222,24 @@ entries:
 
           The formula has always refused on this and cited "the bank's own
           test" for it. The test was not here; it is now.
+      - data: enterprise value is zero or negative
+        because: |
+          Enterprise value is what the whole business costs with its debts
+          added and its cash taken off, and a company holding more cash than
+          its shares and its borrowings are worth together prices at nothing
+          or less. A multiple built on that is not a multiple: a negative
+          price over a positive profit is a negative number, which sorts
+          below every real reading on a measure where lower is better. It is
+          the same fault as the condition above, arriving through the
+          numerator instead of the denominator.
+
+          It compounds one level up, which is why it is worth refusing
+          rather than cautioning. EV/EBIT against its own five-year median
+          divides one of these by another, and two negatives make a
+          positive: a company whose enterprise value moved from −10× profit
+          to −7× — which is the price going UP — came back at 0.70× its own
+          median, under a sentence saying that means 30% below its own
+          normal.
 
   - id: ev_ebit_to_own_5y_median
     kind: computed
