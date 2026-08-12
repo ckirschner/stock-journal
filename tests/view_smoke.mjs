@@ -142,6 +142,48 @@ run('tab = "holdings";');
 for (const s of state.securities) {
   check(`detail:${s.ticker}`, `detailView(find(${JSON.stringify(s.ticker)}))`);
 }
+/* The detail page describes ONE holding period, and which one is now carried
+   by the click rather than assumed to be the newest. Rendered per period on
+   any security that has more than one, and the two renderings are compared:
+   a page that draws the same thing whichever row you came from is the defect
+   this exists to catch, and it is invisible to a smoke test that only asks
+   whether something rendered.
+
+   The bucket used to decide it, so a name closed and bought back showed its
+   open position however you arrived — including from the closed round trip
+   under Previous holdings, which is the row that was clicked. */
+for (const s of state.securities) {
+  const cycles = s._cycles || [];
+  if (cycles.length < 2) continue;
+  const drawn = new Map();
+  for (const c of cycles) {
+    const html = String(check(
+      `detail:${s.ticker}:period:${c.seq}`,
+      `(() => { const was = openPeriodBuy;`
+      + ` openPeriodBuy = ${JSON.stringify(c.buys[0])};`
+      + ` const h = detailView(find(${JSON.stringify(s.ticker)}));`
+      + ` openPeriodBuy = was; return h; })()`));
+    drawn.set(c.seq, html);
+    // Each period's page has to be about that period. An open one is priced
+    // and marked to market; a closed one has an exit price and a return over
+    // its life, and neither sentence is true of the other.
+    const wants = c.open ? "Since buy" : "Exit price";
+    if (html && !html.includes(wants)) {
+      problems.push(`detail:${s.ticker}:period:${c.seq}: `
+        + `${c.open ? "an open" : "a closed"} holding rendered without `
+        + `"${wants}"`);
+    }
+    if (html && !html.includes(c.open ? c.opened : c.closed)) {
+      problems.push(`detail:${s.ticker}:period:${c.seq}: the page does not `
+        + "name the day this holding " + (c.open ? "opened" : "closed"));
+    }
+  }
+  const seen = [...drawn.values()].filter(Boolean);
+  if (seen.length > 1 && new Set(seen).size === 1) {
+    problems.push(`detail:${s.ticker}: every holding period renders the same `
+      + "page, so the period the reader clicked is not reaching it");
+  }
+}
 /* The data-coverage panel with its payload already in hand.
    The detail page above loads it asynchronously, so a synchronous render
    only ever draws the "reading the stored filings" placeholder — which
