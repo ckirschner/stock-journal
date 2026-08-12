@@ -948,7 +948,8 @@ def _check_allocation(security: dict, shares: float, against: list) -> None:
 
 
 def sell_lots(security: dict, decision: dict | None, reason: str,
-              shares: float, exit_price: float, exited: str | None = None,
+              shares: float | None, exit_price: float,
+              exited: str | None = None,
               against: list | None = None,
               values: dict | None = None,
               price_seen: dict | None = None,
@@ -959,6 +960,18 @@ def sell_lots(security: dict, decision: dict | None, reason: str,
     A partial sale leaves the position open and the remaining lots intact; a
     sale of everything leaves a security with closed lots, which is what
     makes it a previous holding and what a re-entry later reads against.
+
+    **`shares` None means everything held on the sale's own date**, and the
+    resolution is here rather than at the caller for the reason every other
+    rule about a dated entry is here. "Sell everything" is a question about a
+    day, and the only clock a caller reaching for it has to hand is today's:
+    the screen said sixty shares, so sixty is what went into an exit dated
+    two years back that ended a hundred. Nothing about that write is loud —
+    the sale is smaller than the bound, so it records, and the holding period
+    it was supposed to close stays open with a forty-share residue nobody
+    ever owned. The date is worked out in this function; so, now, is the
+    count, and a caller cannot hand over the wrong clock because it no longer
+    hands over one at all.
 
     The decision frozen here is the one the journal's own strategy produced
     for the day the sale is dated — there is only ever one, because a journal
@@ -988,14 +1001,39 @@ def sell_lots(security: dict, decision: dict | None, reason: str,
     frozen here — a claim is the case for a purchase, and attaching one to an
     exit would invent a number the sale was never justified by.
     """
-    shares, exit_price = float(shares), float(exit_price)
-    if shares <= 0:
-        raise ValueError("A sale has to be more than zero shares.")
+    exit_price = float(exit_price)
     when = recorded_date(exited, "sale")
     held = shares_held(security)
     if held <= 0:
         raise ValueError(f"No shares of {security['ticker']} are recorded as "
                          "held, so none can be sold.")
+    then = shares_held(security, when)
+    if shares is None:
+        if then <= 0:
+            raise ValueError(
+                f"No shares of {security['ticker']} were held on {when}, so "
+                "a sale dated then cannot be for everything held — there was "
+                "nothing to sell. Check the date, or say how many shares "
+                "went.")
+        if then > held + 1e-9:
+            # The day's own count, against shares a later entry has already
+            # sold. Refused with its own sentence rather than falling through
+            # to the bound below, whose message tells the user to record the
+            # purchase the extra shares came from — advice that is right when
+            # somebody typed a number too large and nonsense here, where the
+            # purchase is on the record and a later sale is what spent it.
+            # The two entries cannot both be true, and which of them is wrong
+            # is not the host's to guess.
+            raise ValueError(
+                f"On {when} this journal held {then:g} shares of "
+                f"{security['ticker']} and {held:g} are left now, because "
+                "entries dated later have already sold some of them. Selling "
+                "everything held that day would sell the same shares twice — "
+                "say how many shares this sale was for, or check the date.")
+        shares = then
+    shares = float(shares)
+    if shares <= 0:
+        raise ValueError("A sale has to be more than zero shares.")
     # Both bounds, in this order, because they answer different questions and
     # the first one is the fix more often. What is *left* counts every sale
     # ever recorded, so nothing can be sold twice. What was *held on the day*
@@ -1013,7 +1051,6 @@ def sell_lots(security: dict, decision: dict | None, reason: str,
             f"the sale is for {shares:g}. Record the purchase the extra "
             "shares came from first — the journal cannot sell shares it was "
             "never told about.")
-    then = shares_held(security, when)
     if shares > then + 1e-9:
         raise ValueError(
             f"This journal held {then:g} shares of {security['ticker']} on "

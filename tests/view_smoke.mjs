@@ -57,8 +57,8 @@ run("S = __state;");
 run(`window.pywebview = { api: {
   preview_purchase: async (t) => (__state.__previews || {})[t]
     || { ok: false, error: "no preview captured for " + t },
-  preview_sale: async (t) => (__state.__sale_previews || {})[t]
-    || { ok: false, error: "no sale preview captured for " + t },
+  preview_sale: async (t, when) => (__state.__sale_previews || {})[t + "@" + when]
+    || { ok: false, error: "no sale preview captured for " + t + " on " + when },
   preview_backfill: async () => __state.__backfill
     || { ok: false, error: "no backfill preview captured" },
   get_coverage: async (t) => (__state.__coverage || {})[t]
@@ -240,6 +240,21 @@ if (holding) {
   await run(`dlgSell(find(${JSON.stringify(holding.ticker)}), "2026-03-02")`);
   check("dlg:sell-from-history",
         `document.getElementById("dlgbody").innerHTML`);
+  // The preview not answering must not stop a sale being recorded. Today's
+  // dialog falls back to the live payload, which for today IS the same
+  // figures — a screen that refuses to appear is a gate however it is
+  // described, and the sale has already happened.
+  //
+  // The body is emptied first, so what is checked is what THIS render put
+  // there. The stub's elements persist between runs, and a dialog that never
+  // opened would otherwise be asserted against the markup of the one before
+  // it — a check that passes precisely when the screen is missing.
+  run("__saved = __state.__sale_previews; __state.__sale_previews = {};"
+      + ' document.getElementById("dlgbody").innerHTML = "";');
+  await run(`dlgSell(find(${JSON.stringify(holding.ticker)}))`);
+  check("dlg:sell-no-preview",
+        `document.getElementById("dlgbody").innerHTML`);
+  run("__state.__sale_previews = __saved;");
 }
 
 // Entering a position out of your own records: the empty form, and the form
@@ -565,7 +580,24 @@ if (remembered) {
 }
 if (state.__sale_previews) {
   must.push(["dlg:sell-from-history", "not seen at the time",
-             "a backdated sale says what it is about to freeze was rebuilt"]);
+             "a backdated sale says what it is about to freeze was rebuilt"],
+            // Everything this dialog states about the position is a fact
+            // about the day in its own date field. It used to read the share
+            // count, the lot note and the reference close off the live
+            // payload — three sentences about today, against a picker set to
+            // 2026-03-02, the last of them a price it was inviting into a
+            // record that can never be corrected.
+            ["dlg:sell-from-history", "You held",
+             "a backdated sale says what was held on the day it is dated"],
+            ["dlg:sell-from-history", "2026-03-02",
+             "the count and the close it shows name the day they belong to"]);
+  mustNot.push(["dlg:sell-from-history", "You hold ",
+                "the live share count has no business on a backdated sale"]);
+  must.push(["dlg:sell", "You hold ",
+             "a sale recorded today says what is held today"],
+            ["dlg:sell-no-preview", "Shares sold",
+             "a preview that did not answer does not stop a sale being "
+             + "recorded"]);
 }
 if (state.__backfill) {
   must.push(

@@ -375,6 +375,47 @@ class TestLotsAreTheposition:
             portfolio.sell_lots(s, decision("close"), "Panic", 10, 15.0,
                                 "2024-02-01")
 
+    def test_everything_held_is_resolved_on_the_sales_own_date(self):
+        """"Sell everything" is a question about a day, so the day works it
+        out. A caller reaching for a default has only today's count to hand,
+        and this position was bought into after the exit being recorded: ten
+        shares were held in March and a hundred and ten are held now, so a
+        default from today asks for a sale of a hundred and ten and the March
+        exit cannot be recorded at all."""
+        s = bought(shares=10, price=40.0, when="2026-01-01")
+        portfolio.add_lot(s, decision("commit"), 100, 50.0, "2026-06-01")
+        lot = portfolio.sell_lots(s, decision("close"), "Panic", None, 90.0,
+                                  "2026-03-01")
+        assert lot["shares"] == 10.0
+        assert lot["against"] == [{"lot": "l1", "shares": 10.0}]
+        assert portfolio.shares_held(s) == 100.0    # the June lot, untouched
+
+    def test_everything_held_today_is_still_what_a_sale_today_means(self):
+        s = bought(shares=10, price=40.0, when="2026-01-01")
+        lot = portfolio.sell_lots(s, decision("close"), "Panic", None, 90.0)
+        assert lot["shares"] == 10.0
+        assert portfolio.shares_held(s) == 0.0
+
+    def test_everything_held_on_a_day_nothing_was_held_is_refused(self):
+        s = bought(shares=10, price=40.0, when="2026-01-01")
+        with pytest.raises(ValueError, match="nothing to sell"):
+            portfolio.sell_lots(s, decision("close"), "Panic", None, 90.0,
+                                "2025-06-01")
+
+    def test_everything_held_then_that_a_later_sale_spent_is_refused(self):
+        """The two entries cannot both be true, and which of them is wrong is
+        not the host's to guess. Refused in its own words rather than through
+        the oversell bound, whose message says to record the purchase the
+        extra shares came from — the purchase is on the record, and a later
+        sale is what spent it."""
+        s = bought(shares=10, price=40.0, when="2026-01-01")
+        portfolio.sell_lots(s, decision("reduce"), "Risk limit", 6, 90.0,
+                            "2026-06-01")
+        with pytest.raises(ValueError, match="sell the same shares twice"):
+            portfolio.sell_lots(s, decision("close"), "Panic", None, 90.0,
+                                "2026-03-01")
+        assert portfolio.shares_held(s) == 4.0
+
     def test_a_backdated_sale_still_cannot_oversell_across_time(self):
         """Shares already sold in June are gone whatever a March entry
         says, or a lot goes negative and every figure below it is wrong."""

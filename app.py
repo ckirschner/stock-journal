@@ -1389,6 +1389,16 @@ class Api:
         brokerage statement freezes a verdict, and the person entering it
         should see which one — and see it named as a reconstruction — rather
         than find out from a toast afterwards.
+
+        **Everything the sale dialog states about the position comes from
+        here**, on the sale's own clock: how many shares were held that day,
+        which purchases they were, and what the security closed at. The dialog
+        used to read all three off the live payload — today's share count as
+        the default for "sell everything", today's open lots as the note about
+        which ones go first, today's close as the reference beside the price
+        field — beside a date picker set to 2019. Every one of those is a
+        sentence about the wrong day, and the last one is a number the reader
+        was being invited to type into a record that can never be corrected.
         """
         journal, record, chain, _ = self._open()
         if journal is None:
@@ -1406,7 +1416,25 @@ class Api:
                   # signal — never "no rule triggered this exit", which
                   # claims a signal was read and came back clear.
                   verdict=portfolio.is_verdict(at["decision"]),
+                  # What "everything" means for a sale dated this day. The
+                  # write resolves it again from the same reader, so the
+                  # number on the screen and the number recorded are one
+                  # answer rather than two that agree on a position nobody
+                  # has added to.
                   held=portfolio.shares_held(s, exited_iso),
+                  # The purchases a sale dated this day can draw on, oldest
+                  # first — what the allocation will actually spend.
+                  lots=[{"date": l["date"], "remaining": l["remaining"]}
+                        for l in portfolio.open_lots(s, exited_iso)
+                        if l["open"]],
+                  # The close that belonged to that day, offered as a
+                  # reference and never prefilled. Nothing here is what the
+                  # user got; what it must not be is a price from a different
+                  # year presented beside the field.
+                  price=self._price_known(at["price"]) | {
+                      "date": at["price"].get("date"),
+                      "source": at["price"].get("source"),
+                      "terminal": at["price"].get("terminal")},
                   thesis=thesis_mod.standing(s, as_of=pin, today=clock))
 
     @guarded
@@ -1414,10 +1442,12 @@ class Api:
     def sell_shares(self, ticker, reason, price, exited, shares=None):
         """Record a sale, whole or partial.
 
-        `shares` left out sells everything still open, which is what closing
-        a position means. A partial sale leaves the remaining lots exactly
-        as they are — nothing is rewritten, a sale is one more appended
-        entry naming what it drew on.
+        `shares` left out sells everything held **on the day the sale is
+        dated**, which is what closing a position means. That resolution
+        belongs to the write and is left to it: this method knows the count on
+        the screen, and the screen is standing in today. A partial sale leaves
+        the remaining lots exactly as they are — nothing is rewritten, a sale
+        is one more appended entry naming what it drew on.
 
         A sale dated in the past is judged with the data of that day, exactly
         as a purchase is — see `_evaluated_for`. It used to be judged with
@@ -1429,9 +1459,15 @@ class Api:
         if journal is None:
             return err("No journal is open.")
         s = self._find(journal, ticker)
-        held = portfolio.shares_held(s)
+        # None all the way to the write, where the sale's own date is known.
+        # It used to be resolved here, against `shares_held(s)` — today's
+        # count — so closing out an exit dated two years back recorded
+        # whatever is held now: too many, and the write refused a sale that
+        # genuinely happened; too few, and it wrote a smaller exit than the
+        # one that happened, leaving the holding period it should have closed
+        # open with a residue nobody ever owned. Neither is loud.
         try:
-            n = float(shares) if shares not in (None, "") else held
+            n = None if shares in (None, "") else float(shares)
         except (TypeError, ValueError):
             return err("The number of shares sold must be a number.")
         # Before anything is evaluated, on the same rule the purchase screen

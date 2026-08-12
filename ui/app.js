@@ -3160,8 +3160,14 @@ async function dlgBuy(s, dateChosen, keep, fallbackDate) {
 /* A sale is one more appended entry, not an edit. Selling part of a position
    leaves the remaining lots exactly as they were bought — which is what makes
    a trim recordable at all, and what a `reduce` verdict has been asking for
-   with nowhere to go. Shares default to everything held, so closing out is
-   still one field away. */
+   with nowhere to go. Shares default to everything held on the day the sale is
+   dated, so closing out is still one field away.
+
+   Every figure here about the position is read off the chosen date and none of
+   it off the live payload. This dialog has a date picker in it, so "what you
+   hold" is a question with two answers the moment somebody changes the date —
+   and the live one was being shown against a day years in the past, all the
+   way down to the reference close beside the price field. */
 async function dlgSell(s, dateChosen, keep, fallbackDate) {
   const today = localToday();
   const when = dateChosen || today;
@@ -3172,17 +3178,37 @@ async function dlgSell(s, dateChosen, keep, fallbackDate) {
      preview exists so the person entering it sees which verdict is about to
      go on the record, and sees it named as a reconstruction.
 
-     Only fetched when the date is in the past. A sale being recorded as it
-     happens is the ordinary case and the screen stays exactly as it was: a
-     verdict box on it would be the tool asking you to reconsider a trade you
-     have already made, which is a gate wearing a preview's clothes. */
+     Asked for on every date, not only a past one. The verdict box is still
+     shown only on a backdated sale — a verdict box on a trade already made
+     would be the tool asking you to reconsider it, which is a gate wearing a
+     preview's clothes — but the share count, the lots and the close have to
+     come from the same clock whichever day is chosen, or the dialog holds one
+     figure from the picker and three from today. */
   const past = when < today;
-  const p = past ? await api("preview_sale", s.ticker, when) : null;
-  if (past && !p) {
+  const reply = await api("preview_sale", s.ticker, when);
+  if (!reply && past) {
+    /* A past date has nowhere honest to fall back to: showing today's figures
+       against it is the exact reading this dialog exists to stop. So it
+       reopens on the date that last worked. */
     if (fallbackDate) dlgSell(s, fallbackDate, keep);
     return;
   }
-  const reconBox = p
+  /* Today's can fall back, and must. The live payload *is* today, so the
+     figures are the same figures — and a dialog that refuses to open because
+     a preview did not answer is a gate on recording a sale that has already
+     happened. The tool records decisions and never blocks them, and a screen
+     that will not appear is a block however it is described. */
+  const p = reply || {
+    held: s._shares,
+    lots: buyLots(s).filter((l) => l.open)
+      .map((l) => ({ date: l.date, remaining: l.remaining })),
+    price: (s._price || {}).value != null
+      ? { status: "known", value: s._price.value, date: s._price.date,
+          source: s._price.source, terminal: s._price.terminal }
+      : { status: "absent",
+          reason: (s._price || {}).reason || "no price is on record" },
+  };
+  const reconBox = past
     ? `<div class="notice quiet" style="margin:0 0 12px"><h4>From history — not seen at the time</h4>
        <p>${esc(when)} is in the past, so what gets frozen beside this sale is rebuilt from what was
        observable then: ${esc(p.note || "")}.
@@ -3209,18 +3235,29 @@ async function dlgSell(s, dateChosen, keep, fallbackDate) {
      close was under seven days old — a rule the browser applied itself, in a
      second copy of a judgement the engine was making too, and neither of
      them was the host's to make. The honest field is an empty one with the
-     close shown beside it as a reference. */
-  const quote = s._price || {};
-  const closeNote = quote.source === "fetched" && quote.date
-    ? ` For reference, the last fetched close was ${money(quote.value)} on ${quote.date}${
+     close shown beside it as a reference.
+
+     The close that belonged to the chosen day, from the preview, not the one
+     on the live payload. A sale dated 2019 was shown last week's close as its
+     reference, beside an empty field it was inviting a number into — the
+     nearest thing this dialog can do to prefilling the wrong price. */
+  const quote = p.price || {};
+  const closeNote = quote.status === "known" && quote.source === "fetched" && quote.date
+    ? ` For reference, the close on record for ${quote.date} was ${money(quote.value)}${
         quote.terminal ? " — the last this security ever traded at" : ""}.`
-    : "";
+    : past ? ` No close is on record for ${when}: ${quote.reason || "none was stored for that day"}.` : "";
   const priceHelp = "The price you actually sold at, per share. Nothing is "
     + "filled in for you: this goes on the record permanently, and a number "
     + "off the tape is not the number you got." + closeNote;
-  const lots = buyLots(s).filter((l) => l.open);
+  /* The purchases a sale dated this day can draw on, and what each had left
+     then. Read off the preview for the same reason the share count is: the
+     allocation stops at the sale's own date, so a lot bought after it cannot
+     supply anything — and listing it here promised shares the write would
+     refuse. */
+  const lots = p.lots || [];
+  const asOfThen = past ? ` as they stood on ${esc(when)}` : "";
   const lotHelp = lots.length > 1
-    ? `Oldest shares go first, across ${lots.length} open lots (${lots.map((l) => `${l.remaining} from ${l.date}`).join(", ")}).`
+    ? `Oldest shares go first, across ${lots.length} open lots${asOfThen} (${lots.map((l) => `${l.remaining} from ${l.date}`).join(", ")}).`
     : "";
   dialog({
     title: `Record a sale · ${s.ticker}`,
@@ -3228,8 +3265,8 @@ async function dlgSell(s, dateChosen, keep, fallbackDate) {
     body: reconBox + `<div class="field"><label for="f_reason">Why are you selling?</label>
         <select id="f_reason" name="reason">${opts}</select>
         <div class="help">Answer honestly. The Previous holdings tab groups outcomes by this, and it is the only way to find out whether your sell rules work.</div></div>`
-      + field("shares", "Shares sold", (keep && keep.shares) || s._shares,
-        `You hold ${s._shares}. Sell fewer to trim; the rest stays open, priced from what it actually cost. ${lotHelp}`, "number")
+      + field("shares", "Shares sold", (keep && keep.shares) || p.held,
+        `${past ? `You held ${p.held} on ${esc(when)}` : `You hold ${p.held}`}. Sell fewer to trim; the rest stays open, priced from what it actually cost. ${lotHelp}`, "number")
       + field("price", "Sale price per share", (keep && keep.price) || "", priceHelp, "number")
       /* Same bound as the purchase date, and for the same reason. A sale
          dated ahead has not happened: it reports the position closed to
@@ -3260,7 +3297,15 @@ async function dlgSell(s, dateChosen, keep, fallbackDate) {
   const dateEl = $("f_exited");
   if (dateEl) dateEl.onchange = () => {
     if ((dateEl.value || today) === when) return;
-    const keepNow = { shares: $("f_shares").value, price: $("f_price").value };
+    const typed = $("f_shares").value;
+    /* What the user typed is theirs and survives the date change. The default
+       does not: it is the answer to "how many were held" for the day that was
+       chosen before, and carrying it across would put the old day's count in
+       front of the new day's label — the same wrong-clock reading this dialog
+       just stopped making, reintroduced at the one seam where the clock
+       moves. */
+    const keepNow = { price: $("f_price").value,
+      shares: String(typed) === String(p.held) ? "" : typed };
     $("dlg").close();
     dlgSell(s, dateEl.value, keepNow, when);
   };
