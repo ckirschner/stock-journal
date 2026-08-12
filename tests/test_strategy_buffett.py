@@ -568,9 +568,33 @@ class TestABlockedVerdictIsNeverADeadEnd:
         for row in rows:
             assert row["subject"]["kind"] == "judgement"
             assert row["subject"]["unit"] == "yes_no"
-            # The bank's own question, so the row can explain itself.
+            # Both, and in this order. `explain` is the plain-language
+            # definition on every kind of subject, and a judgement is not the
+            # exception it was: it carried the question here, so the one row
+            # where somebody is deciding whether a moat is durable answered
+            # "what is this?" by asking them again, and the definition every
+            # other row shows was a tab away. The question is what to answer;
+            # the explanation is what the words mean.
             assert row["subject"]["explain"]
-            assert "?" in row["subject"]["explain"]
+            assert "?" not in row["subject"]["explain"]
+            assert row["subject"]["asks"]
+            assert "?" in row["subject"]["asks"]
+
+    def test_the_definition_a_judgement_row_shows_is_the_banks_own(
+            self, buffett):
+        """One copy. The row that has to teach a novice what a moat is must
+        not be able to teach them something the Metrics tab contradicts."""
+        from engine import bank
+        idx = {e["id"]: e for e in bank.to_plain(bank.load_bank())["entries"]}
+        out = verdict(buffett, known=CLEARS_ENTRY, judged=SAID_YES)
+        rows = [i for i in out["reason"]["evidence"]
+                if i["subject"].get("id") in QUALITATIVE]
+        assert rows
+        for row in rows:
+            entry = idx[row["subject"]["id"]]
+            assert row["subject"]["explain"] == \
+                entry["explanation"]["plain"].strip()
+            assert row["subject"]["asks"] == entry["question"].strip()
 
 
 class TestABusinessThatStoppedBeingWonderful:

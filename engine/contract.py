@@ -3464,12 +3464,23 @@ def resolve_evidence(record: dict, ctx: dict, items: list):
                     unit=_bank_unit(item["measure"]),
                     without=item["without"], explain=form.get("explain"))
             else:
+                # `explain` is the plain-language definition on every kind of
+                # subject, and a judgement is not the exception it was. It
+                # carried the QUESTION here, so the one row on the screen
+                # where somebody is deciding whether a moat is durable
+                # answered "what is this?" by asking them again — and the
+                # definition, which the bank holds and every other row shows,
+                # was a tab away. The question is what to answer and the
+                # explanation is what the words mean; a reader wanting the
+                # second gets the second, with the first beneath it.
                 view = _subject(
                     "judgement" if judged else "measure", item["measure"],
                     reads=item["measure"],
                     label=_bank_label(item["measure"]),
                     unit=_bank_unit(item["measure"]),
-                    explain=meta.get("question") if judged else None)
+                    explain=meta.get("plain") if judged else None)
+                if judged and meta.get("question"):
+                    view["asks"] = meta["question"]
                 if "at" in item:
                     view["at"] = item["at"]
                     view["cadence"] = _read(entry.get("series"), "cadence")

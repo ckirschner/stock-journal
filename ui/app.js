@@ -901,8 +901,15 @@ function evidenceRow(item, i) {
   const tip = explain
     ? `<button class="tip" data-tip="${esc(tipId)}" aria-expanded="${tipOpen === tipId}"
         aria-label="What is ${esc(subj.label)}?">?</button>` : "";
+  /* The definition first, then the question it is asked through. A judgement
+     row used to open with the question alone, which answers "what is this?"
+     by asking it again — at the exact moment somebody is deciding whether a
+     moat is durable. The whole argument that a novice can answer these rests
+     on the explanation being right here. */
+  const asks = subj.asks
+    ? `<div class="pe-sub" style="margin-top:6px"><b>What you are asked:</b> ${prose(subj.asks)}</div>` : "";
   const tipBox = (explain && tipOpen === tipId)
-    ? `<div class="tipbox">${prose(explain)}
+    ? `<div class="tipbox">${prose(explain)}${asks}
        <span class="who">${subj.kind === "measure" ? `Bank entry <code>${esc(subj.id)}</code> — full definition on the Metrics tab`
          : subj.kind === "judgement" ? `Your own assessment, not a figure the journal worked out — bank entry <code>${esc(subj.id)}</code>`
          : subj.kind === "value" ? "A setting this strategy ships and you can change"
