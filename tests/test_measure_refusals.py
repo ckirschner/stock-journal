@@ -406,3 +406,63 @@ class TestEVOverEBITWillNotDivideANegativePrice:
         assert "EV/EBIT is not meaningful in the current period" in r["reason"]
         assert "enterprise value is zero or negative" in r["reason"]
         assert "-1,900" in r["reason"]
+
+
+class TestAMarginOverANegativeRevenueInverts:
+    """The zero guard was the wrong guard.
+
+    A margin's denominator has to be a quantity a share of can be expressed
+    as, and `== 0` lets every negative through. A contra-revenue restatement
+    tags `us-gaap:Revenues` negative, and free cash flow of −200 over revenue
+    of −50 is +400.0% — rendered "0.0%", `polarity: higher_is_better`, no
+    caution. The worst facts a company can report produce the most favourable
+    answer the measure can give.
+
+    Found by the adversarial re-review of the free cash flow family, and it is
+    the same defect as EV/EBIT over a negative enterprise value: two negatives
+    make a positive, and the sign of the result says nothing about the sign of
+    either input. It matters more here because Buffett cites `fcf_margin_ttm`
+    on an exit, so this is a false clear on the rule that sells.
+    """
+
+    def _contra(self, revenue=-50.0, cfo=50.0, capex=250.0):
+        s, e = "2023-01-01", "2023-12-31"
+        facts = [
+            dur("us-gaap:Revenues", s, e, revenue),
+            dur("us-gaap:CostOfRevenue", s, e, 20.0),
+            dur("us-gaap:NetCashProvidedByUsedInOperatingActivities", s, e,
+                cfo, stmt="CashFlowStatement"),
+            dur("us-gaap:PaymentsToAcquirePropertyPlantAndEquipment", s, e,
+                capex, stmt="CashFlowStatement"),
+            dur("us-gaap:NetIncomeLoss", s, e, -10.0),
+        ] + balance_face(e, assets=800.0)
+        return [filing("C-1", "10-K", "2024-02-20", e, facts)]
+
+    def test_an_ordinary_year_still_computes(self):
+        """The control."""
+        r = entry(self._contra(revenue=1000.0, cfo=200.0, capex=50.0),
+                  "fcf_margin_ttm")
+        assert r["status"] == "computed"
+        assert r["value"] == pytest.approx(15.0)      # 150 ÷ 1000
+
+    def test_free_cash_flow_margin_refuses_a_negative_revenue(self):
+        r = entry(self._contra(), "fcf_margin_ttm")
+        assert r["status"] == "absent"
+        assert r.get("value") is None
+        assert "-50" in r["reason"]
+
+    def test_gross_margin_refuses_it_too(self):
+        """Every margin over the same denominator, not the one that was
+        found. A guard inside one formula is a guard the next one lacks."""
+        r = entry(self._contra(), "gross_margin_ttm")
+        assert r["status"] == "absent"
+        assert r.get("value") is None
+
+    def test_the_five_year_median_refuses_the_year_by_name(self):
+        """One bad year is enough: it enters the median as a large positive
+        and can be the middle one."""
+        r = entry(five(per_year={"2021-12-31": {"revenue": -50.0,
+                                                "cfo": 50.0, "capex": 250.0}}),
+                  "fcf_margin_median_5y")
+        assert r["status"] == "absent"
+        assert "2021-12-31" in r["reason"]

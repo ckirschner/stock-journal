@@ -571,8 +571,10 @@ def _gross_margin_ttm_pct(ctx):
         num = {"value": rev["value"] - cor["value"],
                "cautions": _cautions_of(rev, cor)}
         how = "revenue − cost of revenue"
-    if rev["value"] == 0:
-        return absent("revenue for the trailing window is zero")
+    if not (rev["value"] > 0):
+        return absent(f"revenue for the trailing window is "
+                      f"{rev['value']:,.0f}; a gross margin over a revenue "
+                      "that is not positive inverts its sign")
     return {"value": num["value"] / rev["value"] * 100.0,
             "how": how, "cautions": _cautions_of(num, rev)}
 
@@ -599,7 +601,7 @@ def _gross_margin_annual_pct(ctx, n):
                           "fiscal years; the margin series cannot be aligned")
         gp_vals = [r - c for r, c in zip(rev["values"], cor["values"])]
         cautions = _cautions_of(cor, rev)
-    if any(r == 0 for r in rev["values"]):
+    if any(not (r > 0) for r in rev["values"]):
         return absent("a fiscal year in the window has zero revenue")
     return {"values": [g / r * 100.0 for g, r in zip(gp_vals, rev["values"])],
             "years": [p["end"] for p in rev["points"]], "cautions": cautions}
@@ -1243,8 +1245,16 @@ def fcf_margin_ttm(ctx):
     rev = _ttm(ctx, "revenue")
     if is_absent(rev):
         return _absent_result(rev)
-    if rev["value"] == 0:
-        return _absent_result(absent("revenue for the trailing window is zero"))
+    # Positive, not merely non-zero. A contra-revenue restatement year tags
+    # `us-gaap:Revenues` negative, and a negative free cash flow over it is a
+    # large POSITIVE margin — the maximum-favourable answer to the worst
+    # facts, with `higher_is_better` beside it and no caution. Buffett cites
+    # this on an exit, so it is a false clear on the rule that sells.
+    if not (rev["value"] > 0):
+        return _absent_result(absent(
+            f"revenue for the trailing window is {rev['value']:,.0f}, which "
+            "is not a quantity a share of can be expressed as — a margin "
+            "over it inverts, so a loss reads as a high margin"))
     return computed(f["value"] / rev["value"] * 100.0,
                     f["provenance"] + [_prov_point(rev)],
                     sorted(set(f["cautions"] + _cautions_of(rev))))
@@ -1260,8 +1270,13 @@ def fcf_margin_median_5y(ctx):
     if fcf["years"] != [p["end"] for p in rev["points"]]:
         return _absent_result(absent("free cash flow and revenue resolve over "
                                      "different fiscal years"))
-    if any(r == 0 for r in rev["values"]):
-        return _absent_result(absent("a fiscal year in the window has zero revenue"))
+    bad = [(y, r) for y, r in zip(fcf["years"], rev["values"])
+           if not (r > 0)]
+    if bad:
+        return _absent_result(absent(
+            f"revenue for FY ending {bad[0][0]} is {bad[0][1]:,.0f}; a margin "
+            "over a revenue that is not positive inverts, so a loss year "
+            "would enter the median as a high margin"))
     vals = [f / r * 100.0 for f, r in zip(fcf["values"], rev["values"])]
     value, outs = _median_of(vals, fcf["years"])
     return computed(value,
