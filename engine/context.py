@@ -224,9 +224,9 @@ import copy
 from datetime import date
 
 from . import bank as bank_mod
-from . import compute, contract, dataview, facts_store
+from . import compute, contract, dataview
 from . import industry as industry_mod
-from . import instruments, judgements, portfolio, price_store, tickermap
+from . import judgements, portfolio, tickermap
 
 # Series stop at the same number of filing boundaries the sell-confirmation
 # view uses; the truncated flag says when older boundaries exist.
@@ -271,7 +271,7 @@ _known, _absent, _inapplicable = (dataview.known, dataview.absent,
 
 # -- measures ----------------------------------------------------------------
 
-def _current_values(security, cik, tickers, registry_ids, as_of):
+def _current_values(security, cik, tickers, registry_ids, as_of, snap=None):
     """{entry id: current dict} for every computable entry, hand-entered
     values winning over computed ones exactly as the journal shows them.
 
@@ -300,9 +300,10 @@ def _current_values(security, cik, tickers, registry_ids, as_of):
     second implementation that agrees today.
     """
     if cik:
-        results = (dataview.asof_results(cik, tickers, registry_ids, as_of)
-                   if as_of
-                   else dataview.computed_results(cik, tickers, registry_ids))
+        results = (
+            dataview.asof_results(cik, tickers, registry_ids, as_of, snap)
+            if as_of
+            else dataview.computed_results(cik, tickers, registry_ids, snap))
     else:
         results = {}
     return dataview.resolve(security, results, as_of)
@@ -382,12 +383,13 @@ def _no_series(note: str) -> dict:
     return {"cadence": None, "points": [], "note": note, "truncated": False}
 
 
-def _measures(security, cik, tickers, as_of, today) -> dict:
+def _measures(security, cik, tickers, as_of, today, snap=None) -> dict:
     bank = bank_mod.load_bank()
     entries = [(str(e.get("id")), e) for e in (bank.get("entries") or [])]
     registry_ids = [eid for eid, _ in entries if eid in compute.REGISTRY]
 
-    current = _current_values(security, cik, tickers, registry_ids, as_of)
+    current = _current_values(security, cik, tickers, registry_ids, as_of,
+                              snap)
     # Answered by the user, per security, from their own dated record. The
     # clock governs them as it governs everything else: a reconstruction
     # sees the assessment that stood on its day, and where none did the
@@ -395,16 +397,22 @@ def _measures(security, cik, tickers, as_of, today) -> dict:
     # formed afterwards.
     assessed = judgements.observations(security, as_of=as_of, today=today)
     if cik:
-        filings = facts_store.load_all_filings(cik)
-        prices = price_store.load(cik)
-        # Which symbol is the common stock, resolved off the whole filing set
-        # rather than per boundary. A boundary in 2017 predates the cover-page
-        # tagging that answers the question, and refusing a 2017 reading
-        # because a preferred series first listed in 2024 shares the CIK would
-        # be a sentence about the wrong year. See engine/instruments.py.
-        series = _series_for(filings, prices,
-                             instruments.company_symbols(filings, tickers),
-                             today, industry_mod.history(security))
+        # Off the snapshot, never a second reading of the stores. The filings,
+        # the prices, the common-symbol resolution and the industry history
+        # are all already in it — read there by `dataview._bundle` — and
+        # reading them again here is what let one context hold current values
+        # from one instant and a per-filing series from another. That context
+        # is frozen onto a purchase and never recomputed, so the two halves
+        # disagreeing is permanent.
+        #
+        # The symbol resolution is off the whole filing set rather than per
+        # boundary. A boundary in 2017 predates the cover-page tagging that
+        # answers the question, and refusing a 2017 reading because a
+        # preferred series first listed in 2024 shares the CIK would be a
+        # sentence about the wrong year. See engine/instruments.py.
+        b = snap if snap is not None else dataview.snapshot(cik, tickers)
+        series = _series_for(b["filings"], b["prices"], b["symbols"],
+                             today, b["industry"])
     else:
         series = {}
 
@@ -943,7 +951,8 @@ def portfolio_view(journal_securities: list, roles: dict,
 
 def build_context(security: dict, journal_securities: list | None,
                   values: dict, inputs: dict,
-                  as_of: str | None = None, record: dict | None = None) -> dict:
+                  as_of: str | None = None, record: dict | None = None,
+                  snap: dict | None = None) -> dict:
     """The context for one security, live or pinned.
 
     With `as_of`, everything is reconstructed from what was observable on
@@ -960,6 +969,15 @@ def build_context(security: dict, journal_securities: list | None,
     today = str(as_of)[:10] if as_of else date.today().isoformat()
     cik = security.get("cik")
     tickers = _tickers_of(security)
+    # One reading of this company's stores for the whole build. Without it,
+    # the current values, the per-filing series and the industry node were
+    # three independent reads, and a fetch landing between any two of them
+    # produced a context internally inconsistent about which filings exist —
+    # then froze it onto a purchase, where principle 3 says nothing may
+    # recompute it. A caller assembling several contexts in one request can
+    # pass its own and get the same guarantee across all of them.
+    if snap is None and cik:
+        snap = dataview.snapshot(cik, tickers)
 
     effective, roles = dict(inputs or {}), {}
     if record is not None:
@@ -982,11 +1000,18 @@ def build_context(security: dict, journal_securities: list | None,
                      # has anything to say about a lender belongs to the rule
                      # set, and the same host serves strategies that would
                      # answer that differently.
-                     **industry_mod.report(security, as_of)},
+                     # Off the same snapshot as everything else. `report`
+                     # re-read the identity record, so the classification a
+                     # reader sees and the one that decided whether a measure
+                     # applies could come from two different readings of the
+                     # same file. `industry.at` resolves an already-read
+                     # history, which is what dataview._bundle holds.
+                     **(industry_mod.at(snap["industry"], as_of) if snap
+                        else industry_mod.report(security, as_of))},
         # Two symbol scopes, deliberately. `tickers` is every class the SEC
         # maps to the company, which is what a whole-company measure needs.
         # The price is the security's own instrument and never sees that list.
-        "measures": _measures(security, cik, tickers, as_of, today),
+        "measures": _measures(security, cik, tickers, as_of, today, snap),
         "price": _price(security, cik, str(security.get("ticker") or ""),
                         as_of, today),
         "position": _position(security, today, as_of,

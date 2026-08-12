@@ -83,6 +83,25 @@ def _bundle(cik: int, tickers: list[str]):
     return held
 
 
+def snapshot(cik: int, tickers: list[str]) -> dict:
+    """One reading of one company's stores, held by whoever asked for it.
+
+    Everything a screen shows and everything a decision consumes should come
+    off the same one. Each public function here used to call `_bundle` for
+    itself, so a single context build checked the fingerprint three times and
+    read the filings three times — and a fetch landing between two of those
+    reads produced a context whose series were one filing newer than its
+    current values, in a record that is frozen onto a purchase and never
+    recomputed.
+
+    Handing the bundle out is what makes "one instant" expressible at all.
+    Nothing about the caching changes: this is the same cached object, and a
+    caller that does not ask for one still gets a correct reading — just not
+    a guaranteed-consistent set of several.
+    """
+    return _bundle(cik, tickers)
+
+
 def invalidate(cik: int | None = None) -> None:
     if cik is None:
         _cache.clear()
@@ -134,11 +153,11 @@ def _asof_slot(b: dict, as_of: str) -> dict:
 
 
 def asof_results(cik: int, tickers: list[str], entry_ids,
-                 as_of: str) -> dict:
+                 as_of: str, snap: dict | None = None) -> dict:
     """{entry_id: result} recomputed from only what was observable on
     `as_of`: filings filed by then, the close on or shortly before it.
     Later restatements are invisible, exactly as in confirmation readings."""
-    b = _bundle(cik, tickers)
+    b = snap or _bundle(cik, tickers)
     slot = _asof_slot(b, as_of)
     out = {}
     for eid in entry_ids:
@@ -156,7 +175,7 @@ def asof_results(cik: int, tickers: list[str], entry_ids,
 
 
 def asof_availability(cik: int, tickers: list[str], ticker: str,
-                      as_of: str) -> dict:
+                      as_of: str, snap: dict | None = None) -> dict:
     """What the stores can honestly say about `as_of`: how many stored
     filings had been filed by then (and the newest), and whether a close
     exists on or shortly before that day. The reconstruction's basis, for
@@ -168,7 +187,7 @@ def asof_availability(cik: int, tickers: list[str], ticker: str,
     so it reads one — a purchase reconstructed at a sibling class's price
     would freeze that price into an append-only record.
     """
-    b = _bundle(cik, tickers)
+    b = snap or _bundle(cik, tickers)
     slot = _asof_slot(b, as_of)
     newest = max((str(f.get("filed") or "")[:10] for f in slot["filings"]),
                  default=None)
@@ -256,9 +275,14 @@ def price_view_asof(cik: int, ticker: str, as_of: str) -> dict:
 
 # -- the public joins --------------------------------------------------------
 
-def computed_results(cik: int, tickers: list[str], entry_ids) -> dict:
-    """{entry_id: result} for the requested entries, cached."""
-    b = _bundle(cik, tickers)
+def computed_results(cik: int, tickers: list[str], entry_ids,
+                     snap: dict | None = None) -> dict:
+    """{entry_id: result} for the requested entries, cached.
+
+    `snap` is a bundle a caller is already holding — see `snapshot`. Given
+    one, this reads it instead of checking the fingerprint again, so a caller
+    assembling several answers gets all of them from one instant."""
+    b = snap or _bundle(cik, tickers)
     out = {}
     for eid in entry_ids:
         if eid not in compute.REGISTRY:

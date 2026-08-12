@@ -135,7 +135,24 @@ class Api:
                 return mapped
         return [s["ticker"]]
 
-    def _computed_layer(self, s, entry_ids):
+    def _snapshot_for(self, s):
+        """One reading of one company's stores, to be shared by everything
+        assembled from it — or None where there is nothing to read.
+
+        Never raises. A snapshot is an optimisation for consistency, not a
+        precondition for recording: every caller still works without one, and
+        a data layer that cannot be read must not stop a decision being
+        written down.
+        """
+        cik = s.get("cik")
+        if not cik:
+            return None
+        try:
+            return dataview.snapshot(cik, self._tickers_of(s))
+        except Exception:                               # noqa: BLE001
+            return None
+
+    def _computed_layer(self, s, entry_ids, snap=None, with_status=True):
         """The security's computed values and status, or empty layers when
         nothing has been fetched. Never raises — a broken data layer must not
         take the journal down with it, and must never block recording."""
@@ -148,9 +165,15 @@ class Api:
         # one instrument and is priced from its own symbol alone.
         tickers = self._tickers_of(s)
         try:
-            computed = dataview.computed_results(cik, tickers, entry_ids)
+            computed = dataview.computed_results(cik, tickers, entry_ids,
+                                                 snap)
             price = dataview.price_view(s, cik, s["ticker"])
-            status = dataview.data_status(cik)
+            # Only where a screen is going to show it. It is a second reading
+            # of the same stores — the company record, the filings, the price
+            # document and the identity history again — and the callers that
+            # freeze an entry discard it, so computing it there both cost a
+            # read and put the entry's two halves an instant apart.
+            status = dataview.data_status(cik) if with_status else None
         except Exception as e:                          # noqa: BLE001
             traceback.print_exc()
             return {}, dataview.price_view(s, None, s["ticker"]), \
@@ -298,7 +321,7 @@ class Api:
 
     # -- deciding ---------------------------------------------------------
     def _decide(self, security, securities, journal, record, chain,
-                as_of=None):
+                as_of=None, snap=None):
         """One state for one security, always. Every way this can fail comes
         back in the same envelope, produced by the host and saying so."""
         stamp = journal.get("strategy") or {}
@@ -338,7 +361,8 @@ class Api:
         try:
             ctx = context.build_context(security, securities,
                                         chain["values"], supplied,
-                                        as_of=as_of, record=record)
+                                        as_of=as_of, record=record,
+                                        snap=snap)
         except Exception as e:                          # noqa: BLE001
             traceback.print_exc()
             return contract.host_result(
@@ -1041,14 +1065,15 @@ class Api:
         iso = portfolio.recorded_date(when, what)
         return iso, iso < date.today().isoformat()
 
-    def _values_live(self, s):
+    def _values_live(self, s, snap=None):
         """(values, price) — merged qualified values, hand-entered on top."""
         entry_ids = list(bank.meta())
-        computed, price, _, _ = self._computed_layer(s, entry_ids)
+        computed, price, _, _ = self._computed_layer(s, entry_ids, snap,
+                                                    with_status=False)
         return (dataview.merged_values(s, computed,
                                        today=date.today().isoformat()), price)
 
-    def _values_asof(self, s, as_of):
+    def _values_asof(self, s, as_of, snap=None):
         """(values, price, evaluation record) rebuilt from what was
         observable on `as_of`: filings filed by then, the close on or shortly
         before it — the same as-of rule the strategy's own context obeys.
@@ -1073,9 +1098,9 @@ class Api:
             # enter it.
             try:
                 computed = dataview.asof_results(cik, tickers, entry_ids,
-                                                 as_of)
+                                                 as_of, snap)
                 avail = dataview.asof_availability(cik, tickers,
-                                                   s["ticker"], as_of)
+                                                   s["ticker"], as_of, snap)
                 price = avail["price"]
                 if avail["filings_by_then"]:
                     parts.append(f'{avail["filings_by_then"]} of the '
@@ -1252,15 +1277,24 @@ class Api:
         """
         securities = journal.get("securities", [])
         pin = when_iso if is_past else None
+        # One reading of this company's stores for the whole entry. The
+        # values and the verdict below are two passes over the same data and
+        # each used to read it for itself, so a fetch landing between them
+        # froze a record whose decision saw one filing more than the figures
+        # recorded beside it as the reason for it. On a screen that heals on
+        # the next render; here it does not — principle 3 says what was
+        # captured at this moment is written once and never recomputed, so
+        # the two halves disagreeing is permanent and uncorrectable.
+        snap = self._snapshot_for(s)
         if is_past:
-            values, price, evaluation = self._values_asof(s, when_iso)
+            values, price, evaluation = self._values_asof(s, when_iso, snap)
             self._note_what_cannot_be_rebuilt(journal, record, when_iso,
                                               evaluation)
         else:
-            values, price = self._values_live(s)
+            values, price = self._values_live(s, snap)
             evaluation = {"basis": "live", "as_of": date.today().isoformat()}
         decision = self._decide(s, securities, journal, record, chain,
-                                as_of=pin) if ask else None
+                                as_of=pin, snap=snap) if ask else None
         return {
             "decision": decision,
             "values": values,

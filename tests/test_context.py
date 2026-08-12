@@ -2,6 +2,8 @@
 absence with reasons and never an invented value, series that obey the
 clock, and a boundary the strategy cannot mutate anything through."""
 
+from datetime import date
+
 import conftest
 from conftest import (balance_face, dur, filing, inst,
                       multiclass_company)
@@ -660,3 +662,185 @@ class TestTheEnvelope:
     def test_the_context_declares_the_contract_version_it_speaks(self):
         assert context.build_context(security(), [], {}, {})["contract"] \
             == contract.CONTRACT_VERSION
+
+
+class TestOneContextComesFromOneReadingOfTheStores:
+    """A context that is internally inconsistent gets frozen that way.
+
+    Building one used to read the company's stores three separate times: the
+    current values through `dataview._bundle`, the per-filing series through
+    its own `facts_store.load_all_filings`, and the industry node through its
+    own `industry.report`. Each read checked the fingerprint again, so a fetch
+    landing between any two of them produced a context whose series were one
+    filing newer than its current values, or whose classification came from a
+    different reading of the identity record than the one that decided whether
+    a measure applies.
+
+    On a screen that self-heals on the next render. On a purchase it does not:
+    principle 3 says what was frozen at that moment is never recomputed, so a
+    context assembled from two instants is a permanent record of a day that
+    never existed.
+
+    Counted rather than described, because the window is a race and a race is
+    exactly what a "check it carefully" rule fails to hold.
+    """
+
+    def _counted(self, fn):
+        from engine import dataview
+        from engine import industry as industry_mod
+        calls = {"fingerprint": 0, "filings": 0, "identity": 0}
+        real = (dataview._fingerprint, facts_store.load_all_filings,
+                industry_mod.history)
+
+        def wrap(key, f):
+            def inner(*a, **kw):
+                calls[key] += 1
+                return f(*a, **kw)
+            return inner
+
+        dataview._fingerprint = wrap("fingerprint", real[0])
+        facts_store.load_all_filings = wrap("filings", real[1])
+        industry_mod.history = wrap("identity", real[2])
+        try:
+            dataview.invalidate()
+            fn()
+        finally:
+            (dataview._fingerprint, facts_store.load_all_filings,
+             industry_mod.history) = real
+        return calls
+
+    def test_a_live_build_reads_each_store_once(self):
+        store_two_years(940)
+        calls = self._counted(lambda: build(security(940)))
+        assert calls == {"fingerprint": 1, "filings": 1, "identity": 1}, calls
+
+    def test_a_reconstruction_reads_each_store_once(self):
+        """The pinned build matters more, not less: this is the one whose
+        output is written onto a lot and never touched again."""
+        store_two_years(941)
+        calls = self._counted(
+            lambda: build(security(941), as_of="2024-06-30"))
+        assert calls == {"fingerprint": 1, "filings": 1, "identity": 1}, calls
+
+    def test_a_caller_holding_one_snapshot_spends_no_reads_at_all(self):
+        """What the handle is for. A request assembling several contexts —
+        the values a screen shows and the decision frozen beside them — takes
+        one snapshot and hands it to each, so every one of them describes the
+        same instant rather than each being separately correct."""
+        from engine import dataview
+        store_two_years(942)
+        sec = security(942)
+        snap = dataview.snapshot(942, ["SYN"])
+        calls = self._counted(lambda: [
+            context.build_context(sec, [sec], {}, {}, snap=snap),
+            context.build_context(sec, [sec], {}, {}, as_of="2024-06-30",
+                                  snap=snap)])
+        assert calls == {"fingerprint": 0, "filings": 0, "identity": 0}, calls
+
+    def test_the_series_and_the_current_value_agree_about_the_filings(self):
+        """The observable half. Both halves of `measures` come off one
+        reading, so the newest series point is computed from the same filing
+        set the current value was."""
+        store_two_years(943)
+        m = build(security(943))["measures"]["fcf_ttm"]
+        assert m["current"]["status"] == "known"
+        assert m["current"]["value"] == 240.0        # cfo 300 − capex 60
+        assert [p["value"] for p in m["series"]["points"]] == [150.0, 240.0]
+
+    def test_the_context_never_reaches_a_store_itself(self):
+        """The structural half, and the reason the counts above stay true.
+        Building a context goes through `dataview` for everything; a direct
+        store import here is how a fourth independent read gets added by
+        somebody who did not know there was a rule."""
+        import ast
+        import pathlib
+        tree = ast.parse(pathlib.Path(context.__file__).read_text(
+            encoding="utf-8"))
+        # Every import anywhere in the file, not only the ones at the top: a
+        # function-local `from . import facts_store` is the version of this
+        # somebody reaches for precisely because it looks smaller.
+        named = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                named.update(a.name for a in node.names)
+            elif isinstance(node, ast.Import):
+                named.update(a.name.split(".")[-1] for a in node.names)
+        reaching = named & {"facts_store", "price_store", "instruments",
+                            "store"}
+        assert reaching == set(), (
+            f"engine/context.py imports {', '.join(sorted(reaching))} — read "
+            "the stores through dataview.snapshot, so one build is one "
+            "instant rather than several that each happen to be correct")
+
+    def test_the_values_and_the_verdict_frozen_together_see_one_instant(self):
+        """The pair that matters, because this one is written once.
+
+        `_evaluated_for` assembles what a purchase freezes: the figures behind
+        the decision, and the decision. They are two passes over the same
+        stores and each used to read for itself, so a fetch landing between
+        them froze a record whose verdict saw one filing more than the numbers
+        recorded beside it as the reason for it. A screen heals on the next
+        render; an append-only entry does not, and nothing may recompute it.
+
+        Driven with a real strategy, so `_decide` genuinely builds a context.
+        Without one it returns host:strategy-missing before reading anything,
+        and the second pass this is counting never happens.
+        """
+        import app as app_mod
+
+        store_two_years(944)
+        api = app_mod.Api()
+        sec = security(944)
+        record = {
+            "id": "counter", "name": "Counter", "summary": "s", "version": 1,
+            "contract": contract.CONTRACT_VERSION, "changelog": {1: "f"},
+            "states": [{"id": "sit", "name": "Sit", "render": "hold",
+                        "description": "Do nothing."}],
+            "inputs": [], "values": [], "defaults": {}, "values_version": 1,
+            "decide": lambda ctx: {
+                "state": "sit", "payload": {},
+                "reason": {"rule": "always", "summary": "By design.",
+                           "evidence": [{"label": "A stated figure",
+                                         "unit": "count", "actual": 1}]}},
+        }
+        journal = {"securities": [sec], "strategy": {
+            "id": "counter", "name": "Counter", "version": 1,
+            "values_version": 1, "contract": contract.CONTRACT_VERSION}}
+
+        for label, when, is_past in (("live", date.today().isoformat(), False),
+                                     ("pinned", "2024-06-30", True)):
+            calls = self._counted(lambda: api._evaluated_for(
+                journal, record, {"values": {}, "errors": []}, sec,
+                when, is_past))
+            assert calls == {"fingerprint": 1, "filings": 1,
+                             "identity": 1}, (label, calls)
+
+    def test_that_entry_really_did_reach_a_verdict(self):
+        """The guard on the test above. Counting reads proves nothing if the
+        second pass returned early — a record with no strategy never builds a
+        context at all, and the count would be 1 for the wrong reason."""
+        import app as app_mod
+
+        store_two_years(945)
+        api = app_mod.Api()
+        sec = security(945)
+        record = {
+            "id": "counter", "name": "Counter", "summary": "s", "version": 1,
+            "contract": contract.CONTRACT_VERSION, "changelog": {1: "f"},
+            "states": [{"id": "sit", "name": "Sit", "render": "hold",
+                        "description": "Do nothing."}],
+            "inputs": [], "values": [], "defaults": {}, "values_version": 1,
+            "decide": lambda ctx: {
+                "state": "sit", "payload": {},
+                "reason": {"rule": "always", "summary": "By design.",
+                           "evidence": [{"label": "A stated figure",
+                                         "unit": "count", "actual": 1}]}},
+        }
+        journal = {"securities": [sec], "strategy": {
+            "id": "counter", "name": "Counter", "version": 1,
+            "values_version": 1, "contract": contract.CONTRACT_VERSION}}
+        at = api._evaluated_for(journal, record, {"values": {}, "errors": []},
+                                sec, date.today().isoformat(), False)
+        assert at["decision"]["state"]["id"] == "sit"
+        assert at["decision"]["produced_by"] == "strategy"
+        assert at["values"]["fcf_ttm"]["value"] == 240.0
