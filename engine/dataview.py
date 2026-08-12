@@ -615,6 +615,16 @@ def data_status(cik: int | None) -> dict | None:
         if s.get("terminal"):
             terminal.append({"ticker": t,
                              "reason": s["terminal"].get("reason")})
+    # Symbols the price source does not carry. A standing fact about the
+    # symbol rather than an event in the last fetch, so it is read off the
+    # price document and not off the fetch record — and reported apart from
+    # the errors, because it is a boundary of the source and not a problem to
+    # go and fix. It sat in the red panel forever on companies where nothing
+    # was wrong, which is how a panel of problems stops being read.
+    unquoted = sorted(
+        ({"ticker": t, "reason": m.get("reason"), "source": m.get("source")}
+         for t, m in (prices.get("unquoted") or {}).items()),
+        key=lambda r: r["ticker"])
     # Extraction failures must be readable, not just countable: an entry
     # absent because three 10-Ks failed to extract is a data problem, and
     # rendering it like a fact about the company would mislead. Pre-XBRL
@@ -635,6 +645,7 @@ def data_status(cik: int | None) -> dict | None:
         "pre_xbrl_filings": pre_xbrl,
         "price_through": price_through,
         "terminal_series": terminal,
+        "unquoted_symbols": unquoted,
         "identity": (doc.get("identity") or {}).get("name"),
         # What the SEC says this filer is, and what the host makes of it.
         # Reported here rather than only handed to a strategy: it decides

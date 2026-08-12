@@ -131,6 +131,41 @@ def mark_terminal(doc: dict, ticker: str, reason: str) -> dict:
     return doc
 
 
+def mark_unquoted(doc: dict, ticker: str, source: str, reason: str) -> dict:
+    """This source has never quoted this symbol, and no rows are held for it.
+
+    A different fact from `terminal`, and kept apart from the series for that
+    reason. Terminal says a series ENDED: there are closes, and the last of
+    them has stopped being a price. This says there was never a series — the
+    SEC maps the symbol to the company and the price source does not carry
+    it, which is what a preferred series, a warrant or a listed note looks
+    like from here.
+
+    Recorded per (symbol, source), so changing price source does not inherit
+    the last one's coverage gaps. Stored outside `series` on purpose: an empty
+    entry there would appear in `other_series`, so the sentence explaining why
+    a holding has no close would start listing symbols that have never had
+    one.
+    """
+    doc.setdefault("unquoted", {})[str(ticker).upper()] = {
+        "reason": str(reason), "source": str(source), "at": _stamp()}
+    return doc
+
+
+def unquoted_of(doc: dict, ticker: str, source: str):
+    """The record that this source does not carry this symbol, or None.
+
+    Resolves punctuation the way `series_key` and `terminal_of` do, and is
+    scoped to the source that said so — a symbol one source has never heard
+    of is not a fact about the next one.
+    """
+    for form in symbol_forms(ticker):
+        m = (doc.get("unquoted") or {}).get(form)
+        if m and m.get("source") == source:
+            return dict(m)
+    return None
+
+
 # -- reads -------------------------------------------------------------------
 
 def symbol_forms(ticker) -> list[str]:

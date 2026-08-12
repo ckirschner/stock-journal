@@ -1752,6 +1752,23 @@ function coverageSection(s) {
     (st.terminal_series || []).forEach((t) => {
       inner += `<div class="notice quiet"><h4>${esc(t.ticker)} price series is terminal</h4><p>${esc(t.reason)}</p></div>`;
     });
+    /* Quiet, and one box for all of them. These are the symbols the SEC maps
+       to the company that the price source does not quote — preferred series,
+       warrants, listed notes. They used to arrive one per fetch in "Problems
+       from fetching" and stay there permanently, on companies where nothing
+       was wrong: Synchrony showed two, Bank of America would show sixteen. A
+       red panel that is always right and never actionable teaches the reader
+       to skip the panel, which is the one place real problems appear. */
+    const unquoted = st.unquoted_symbols || [];
+    if (unquoted.length) {
+      inner += `<div class="notice quiet"><h4>${unquoted.length}
+        ${unquoted.length === 1 ? "symbol has" : "symbols have"} no price history</h4>
+        <p>${unquoted.map((u) => `<b>${esc(u.ticker)}</b>`).join(", ")} —
+        ${esc(unquoted[0].reason)}. Nothing on this page needs
+        ${unquoted.length === 1 ? "it" : "them"}: a company's worth is priced
+        in its common stock. ${unquoted.length === 1 ? "It is" : "They are"} no
+        longer asked for on each fetch.</p></div>`;
+    }
     inner += industryLine(st.industry);
     /* The one inventory screen. Thirty-odd rows, and cautions propagate
        through derivation — one borrowed price lands on every measure built
