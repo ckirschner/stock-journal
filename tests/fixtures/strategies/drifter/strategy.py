@@ -18,7 +18,7 @@ STRATEGY = {
     "summary": "A test fixture that only ever asks how far something has "
                "moved. It is not investment logic.",
     "version": 1,
-    "contract": 5,
+    "contract": 6,
     "changelog": {
         1: "First version.",
     },

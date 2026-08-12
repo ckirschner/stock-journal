@@ -355,6 +355,33 @@ def purchases_in_holding(security: dict, on_or_before=None) -> list[dict]:
     return list(period["buys"]) if period else []
 
 
+def disposals_in_holding(security: dict, on_or_before=None) -> list[dict]:
+    """Every sale that reduced the holding you have now, oldest first.
+
+    The period's sells, not the security's, and off the same period
+    `purchases_in_holding` reads — so what this holding has bought and what it
+    has sold are two answers about one thing rather than two scopes that
+    happen to sit beside each other.
+
+    The pairing is the whole reason this exists rather than a filter applied
+    by whoever asks. A sale carries a date and a share count and neither of
+    them says which holding it ended, so a list spanning every period cannot
+    be narrowed afterwards by anyone. Two securities can arrive with identical
+    purchases, identical sales and identical share counts and differ only in
+    where the position touched nothing — one closed out and bought back the
+    same day, one added to and trimmed the same day — and the boundary that
+    tells them apart is in the period walk, never on the entries. Scoping it
+    here is what makes "what has this holding sold" answerable at all.
+
+    Empty where nothing is held: there is no period, so there is no sale that
+    reduced one. What the *security* has ever sold is a different question at
+    a different scope, and `lots(security, "sell")` is where it is asked by
+    name.
+    """
+    period = open_cycle(security, on_or_before)
+    return list(period["sells"]) if period else []
+
+
 def bucket_of(security: dict) -> str:
     """Derived, never stored. No lots is an idea; open lots is a holding;
     lots that are all closed is a previous holding."""

@@ -461,6 +461,113 @@ class TestPositionAndPortfolio:
             == [("2025-01-01", 0.0, False), ("2025-03-01", 6.0, True)]
         assert pos["disposals"] == [{"date": "2025-06-01", "shares": 14.0}]
 
+    def test_disposals_are_this_holdings_sales_and_no_others(self):
+        """The case that put this on the board, as the two securities it is
+        actually about.
+
+        Both were bought a hundred on 1 January and forty on 1 June, and both
+        sold a hundred on 1 June. Their purchases are identical, their sales
+        are identical, and both hold forty shares now. What differs is the
+        order the June entries were recorded in, and therefore whether the
+        position ever touched nothing: one closed out and bought back the same
+        day, the other added and trimmed the same day.
+
+        `disposals` spanned every period, so both reported the hundred-share
+        sale — beside `held`, `shares`, `opened`, `market_value` and `weight`,
+        every one of which is about the run you are in now. A rule asking what
+        this holding had sold got a sale belonging to a holding that ended, and
+        the entries carry a date and a share count and nothing that could have
+        been filtered on.
+        """
+        def built(*entries):
+            return build(security(lots=list(entries)))["position"]
+
+        closed_and_back = built(
+            lot("l1", "buy", "2025-01-01", 100),
+            lot("l2", "sell", "2025-06-01", 100,
+                against=[{"lot": "l1", "shares": 100}]),
+            lot("l3", "buy", "2025-06-01", 40))
+        added_and_trimmed = built(
+            lot("l1", "buy", "2025-01-01", 100),
+            lot("l2", "buy", "2025-06-01", 40),
+            lot("l3", "sell", "2025-06-01", 100,
+                against=[{"lot": "l1", "shares": 100}]))
+
+        # Identical in every other respect, which is what made the old scope
+        # unnarrowable rather than merely inconvenient.
+        for pos in (closed_and_back, added_and_trimmed):
+            assert pos["shares"] == 40.0
+            assert [(l["date"], l["shares"]) for l in pos["lots"]] \
+                == [("2025-01-01", 100.0), ("2025-06-01", 40.0)]
+
+        # The holding that is in progress now has sold nothing: the
+        # hundred-share sale ended the holding before it.
+        assert closed_and_back["opened"] == "2025-06-01"
+        assert closed_and_back["disposals"] == []
+        # The holding that is in progress now is the one that was trimmed.
+        assert added_and_trimmed["opened"] == "2025-01-01"
+        assert added_and_trimmed["disposals"] == \
+            [{"date": "2025-06-01", "shares": 100.0}]
+
+    def test_owning_it_before_is_still_answerable_from_the_lots(self):
+        """Narrowing `disposals` must not take away the question it was the
+        only home for. "Have I owned this before" is answered from `lots`,
+        which is the security's whole record and stays that way — the closed
+        purchase is there, marked closed, with its own date."""
+        pos = build(security(lots=[
+            lot("l1", "buy", "2025-01-01", 100),
+            lot("l2", "sell", "2025-06-01", 100,
+                against=[{"lot": "l1", "shares": 100}]),
+            lot("l3", "buy", "2025-09-01", 40)]))["position"]
+        assert [(l["date"], l["open"]) for l in pos["lots"]] \
+            == [("2025-01-01", False), ("2025-09-01", True)]
+        assert pos["disposals"] == []
+
+    def test_nothing_held_means_no_holding_for_a_sale_to_have_reduced(self):
+        """Not "this security has never sold anything" — there is no holding,
+        so there is nothing for a disposal to belong to, and `held` says so
+        beside it. The security's own sales are still on the record; asking
+        for them means asking at that scope by name."""
+        sec = security(lots=[
+            lot("l1", "buy", "2025-01-01", 100),
+            lot("l2", "sell", "2025-06-01", 100,
+                against=[{"lot": "l1", "shares": 100}])])
+        pos = build(sec)["position"]
+        assert pos["held"] is False
+        assert pos["disposals"] == []
+        from engine import portfolio
+        assert [l["shares"] for l in portfolio.lots(sec, "sell")] == [100.0]
+
+    def test_the_clock_governs_which_holding_the_disposals_belong_to(self):
+        """A pinned reading sees the period that was in progress then. The
+        sale that closed it had not happened yet on the earlier day, so it is
+        the current holding's on one clock and a previous holding's on the
+        other — the same entry, two honest answers, decided by the pin."""
+        sec = security(lots=[
+            lot("l1", "buy", "2025-01-01", 100),
+            lot("l2", "sell", "2025-03-01", 40,
+                against=[{"lot": "l1", "shares": 40}]),
+            lot("l3", "sell", "2025-06-01", 60,
+                against=[{"lot": "l1", "shares": 60}]),
+            lot("l4", "buy", "2025-09-01", 25)])
+        assert build(sec, as_of="2025-04-01")["position"]["disposals"] == \
+            [{"date": "2025-03-01", "shares": 40.0}]
+        assert build(sec)["position"]["disposals"] == []
+
+    def test_the_contract_version_moved_with_the_meaning(self):
+        """The declaration and the refusal are one change. A bundle written
+        against the old scope read `disposals` as the security's whole record
+        — the contract said so in as many words — and under the new one the
+        same key answers a narrower question with nothing raising. So the
+        number that refuses the old bundle moves with it, and this is where
+        the two are pinned together."""
+        assert contract.CONTRACT_VERSION == 6
+        errors = contract.validate_declaration(
+            {**cash_strategy(), "contract": 5, "states": [
+                {"id": "hold", "name": "Hold", "render": "hold",
+                 "means": "keep it"}]})
+        assert any("`contract` must be 6" in e for e in errors), errors
+
     def test_a_position_opened_after_the_pin_did_not_exist_yet(self):
         ctx = build(holding(), as_of="2024-06-30")
         assert ctx["position"]["held"] is False

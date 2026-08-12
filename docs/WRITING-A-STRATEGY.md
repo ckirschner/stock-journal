@@ -426,7 +426,7 @@ top-level keys:
 
 ```python
 {
-  "contract": 5,
+  "contract": 6,
   "today": "YYYY-MM-DD",        # the clock; everything below obeys it
   "security":  {"ticker", "name", "cik"},
   "measures":  {bank id: {"current": known-or-absent,
@@ -487,9 +487,12 @@ for as long as the company is the kind of company it is.
   `position.market_value`, `position.weight` and every holding in `portfolio`
   are about the *instrument this journal holds*, priced from its own symbol
   alone. `measures` are about the *company* and read every class.
-- **`position` is the holding you have now** — except `lots` and `disposals`,
-  which are the security's whole record including holdings that closed. A rule
-  counting current entries wants `[l for l in lots if l["open"]]`.
+- **`position` is the holding you have now** — including `disposals`, which is
+  what *this* holding has sold and never a sale belonging to a holding that
+  closed before it opened. `lots` is the one exception: it is the security's
+  whole record, including purchases from holdings that closed, which is where
+  "have I owned this before" is answered. A rule counting what is held now
+  wants `[l for l in lots if l["open"]]`.
 - **`baselines` are what you were shown**, frozen onto each purchase and never
   recomputed. A company restating two years of accounts cannot move them.
 - **Nothing here says what a position cost.** Cost basis is kept out of the
@@ -1167,7 +1170,7 @@ against the SEC's published list in
 ### The rest of the vocabulary
 
 <!-- generated: vocabulary -->
-- **Contract version** — `5`. A declaration naming any other is refused at load.
+- **Contract version** — `6`. A declaration naming any other is refused at load.
 - **Most states one strategy may declare** — `16`.
 - **Declared field types** — `number`, `integer`, `boolean`, `text`.
 - **Units a `size` may be in** — `weight`, `usd`, `shares` (`weight` is a percent number).

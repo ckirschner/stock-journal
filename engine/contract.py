@@ -123,6 +123,22 @@ from types import MappingProxyType
 #    value must now say where its number came from, the context is handed
 #    over frozen rather than copied, `position.months_held` joins HOST_FACTS,
 #    and the state cap moves to 16.
+# 6: `position.disposals` is the current holding's sales, not the security's
+#    whole record. It used to span every holding period while sitting beside
+#    `held`, `shares`, `opened`, `market_value` and `weight`, all of which are
+#    about the run you are in now — and the contract said so in as many words,
+#    so a v5 strategy asking "have I sold this before" was reading exactly
+#    what it was told to read. Under v6 the same key, the same type and the
+#    same entries answer a narrower question: a name closed out and bought
+#    back comes back empty where it used to come back with the sale that
+#    closed it. Nothing raises and nothing looks wrong. That is the quietest
+#    break there is, which is what this number is for.
+#
+#    The old scope is not replaced by a filter, because the entries could
+#    never carry one: a disposal has a date and a share count, and neither
+#    says which holding it ended. What the security has sold across every
+#    period is an analytics question and will arrive, if a strategy ever
+#    needs it, under a name that says so.
 #
 # Deliberately NOT bumped for what a position's baselines and a staged commit
 # added. A strategy may now cite how a measure has moved since a purchase
@@ -150,7 +166,7 @@ from types import MappingProxyType
 # existed cannot ask for the other form and cannot be handed it by accident,
 # so the meaning that moved is reachable only from a citation that names it,
 # and a strategy that names nothing is owed no version.
-CONTRACT_VERSION = 5
+CONTRACT_VERSION = 6
 
 # A strategy may declare at most this many states. The cap is deliberate:
 # states are user-facing vocabulary, and complexity must not creep back in

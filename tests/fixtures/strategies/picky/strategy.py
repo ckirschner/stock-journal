@@ -18,7 +18,7 @@ STRATEGY = {
                "kinds of company it says it does not evaluate. It is not "
                "investment logic.",
     "version": 1,
-    "contract": 5,
+    "contract": 6,
     "changelog": {
         1: "First version. Declines lenders and property companies; "
            "evaluates insurers and everything else, and always holds.",

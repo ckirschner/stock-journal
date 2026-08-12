@@ -12,7 +12,10 @@ sold down to nothing would forget a day somebody looked at this business and
 said yes. None of those crash; all of them produce a confident wrong verdict.
 
 `purchases_in_holding` is the one reader underneath all of it, so it is
-pinned here too rather than only through what the context makes of it.
+pinned here too rather than only through what the context makes of it — and
+`disposals_in_holding` beside it, because the two are one period read twice
+and a boundary that held for the buys and not for the sells would be the
+quietest version of this failure there is.
 """
 
 import pytest
@@ -444,6 +447,68 @@ class TestPurchasesInHolding:
         sell(s, "2025-04-01", 4, render="reduce")
         assert {l["kind"] for l in portfolio.purchases_in_holding(s)} == \
             {"buy"}
+
+
+class TestDisposalsInHolding:
+    """The other half of the same reader, and the pairing is the point: what
+    this holding has bought and what it has sold come off one period, so the
+    two cannot answer at different scopes."""
+
+    def test_it_returns_the_open_periods_sells_oldest_first(self):
+        s = security()
+        buy(s, "2025-03-01", shares=30)
+        sell(s, "2025-09-01", 5, render="reduce")
+        sell(s, "2025-06-01", 4, render="reduce")   # recorded later, earlier
+        assert [(l["date"], l["shares"]) for l in
+                portfolio.disposals_in_holding(s)] == \
+            [("2025-06-01", 4.0), ("2025-09-01", 5.0)]
+
+    def test_a_sale_from_a_holding_that_ended_is_not_one_of_them(self):
+        """The scope this exists to draw. The 2025 exit ended a holding; the
+        one in progress now was opened by a later purchase and has sold
+        nothing. Both sales are still on the security's record."""
+        s = security()
+        buy(s, "2025-03-01")
+        sell(s, "2025-04-01", 10)
+        buy(s, "2025-06-01")
+        assert portfolio.disposals_in_holding(s) == []
+        assert len(portfolio.lots(s, "sell")) == 1
+
+    def test_nothing_held_is_empty_because_there_is_no_holding(self):
+        s = security()
+        assert portfolio.disposals_in_holding(s) == []
+        buy(s, "2025-03-01")
+        sell(s, "2025-04-01", 10)
+        assert portfolio.disposals_in_holding(s) == []
+
+    def test_it_stops_at_the_clock(self):
+        s = security()
+        buy(s, "2025-03-01", shares=30)
+        sell(s, "2025-06-01", 4, render="reduce")
+        sell(s, "2026-01-15", 5, render="reduce")
+        assert [l["date"] for l in
+                portfolio.disposals_in_holding(s, "2025-09-01")] == \
+            ["2025-06-01"]
+        assert portfolio.disposals_in_holding(s, "2025-05-01") == []
+
+    def test_it_reads_the_same_period_the_purchases_do(self):
+        """One period, two projections of it. Two readers walking the lot list
+        for themselves would agree until a same-day exit-and-re-entry, which
+        is exactly the case the boundary exists for."""
+        s = security()
+        buy(s, "2025-03-01")
+        sell(s, "2025-06-01", 10)
+        buy(s, "2025-06-01")
+        period = portfolio.open_cycle(s)
+        assert portfolio.purchases_in_holding(s) == list(period["buys"])
+        assert portfolio.disposals_in_holding(s) == list(period["sells"])
+
+    def test_a_purchase_is_never_one_of_them(self):
+        s = security()
+        buy(s, "2025-03-01", shares=30)
+        sell(s, "2025-04-01", 4, render="reduce")
+        assert {l["kind"] for l in portfolio.disposals_in_holding(s)} == \
+            {"sell"}
 
 
 class TestTheContextCannotBeMutatedThroughABaseline:

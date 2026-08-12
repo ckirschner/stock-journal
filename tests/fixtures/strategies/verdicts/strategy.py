@@ -14,7 +14,7 @@ STRATEGY = {
                "reaches a different state either side of it. It is not "
                "investment logic.",
     "version": 1,
-    "contract": 5,
+    "contract": 6,
     "changelog": {1: "First version: reads free cash flow against a floor."},
     "states": [
         {"id": "say-yes", "name": "Commit", "render": "commit",
