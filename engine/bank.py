@@ -58,6 +58,96 @@ _WINDOWED = ("averaged", "median", "range", "cumulative")
 _UNWINDOWED = ("instant", "trailing", "assessed")
 
 
+# ---------------------------------------------------------------------------
+# What answers a measure, and how the answer renders.
+#
+# `kind` says which of two surfaces an entry belongs to: a formula in
+# engine/compute.py, or a question the user answers on their own security's
+# page. Everything downstream branches on it — engine/context.py serves a
+# qualitative entry from the dated judgement record and never from the
+# computed layer, engine/judgements.py decides what is even storable from it,
+# and the interface asks the question. It was the one word in an entry that
+# nothing checked, while `estimator.kind` beside it was checked by name: a
+# typo made a judgement look computable, and the measure came back "this host
+# has no computation for it" — an absence pointing at a missing formula for a
+# question nobody was ever asked.
+#
+# The two surfaces, and the estimator each one can be read by — because
+# `qualitative` and `estimator: assessed` are the same fact said twice, and
+# two ways of saying one thing is how they come apart. Declaring one without
+# the other now fails to load.
+#
+# `assessed` is the reserved word and the rest is derived, so a kind of
+# estimator added to engine/contract.py is available to a computed measure
+# without being listed again here. A second copy of that list is the thing
+# this check exists to refuse.
+_ASSESSED = "assessed"
+_KINDS = ("computed", "qualitative")
+
+
+def _reads(kind: str) -> frozenset:
+    """The estimator kinds one sort of entry can honestly be read by."""
+    from .contract import ESTIMATORS               # local: bank loads first
+    if kind == "qualitative":
+        return frozenset({_ASSESSED})
+    return frozenset(ESTIMATORS) - {_ASSESSED}
+
+
+def _check_rendering(entry) -> list:
+    """Everything wrong with one entry's `kind`, `unit` and `format`.
+
+    Three words that decide what a reader is shown, none of which was read at
+    load. The bank states the rule for the third of them in its own header —
+    a qualitative entry carries a yes/no — and nothing enforced it, so a
+    fourth judgement declaring `unit: percent` would have rendered a moat
+    assessment as "100.0%" and a `format` over it would have printed a 1.
+    That is the failure this file exists to refuse, sitting in this file.
+    """
+    from .contract import EVIDENCE_UNITS           # local: bank loads first
+    from . import judgements                       # local: reads the bank
+    eid = str(entry.get("id"))
+    kind = str(entry.get("kind") or "")
+    problems = []
+
+    if kind not in _KINDS:
+        return [f'{eid} declares kind "{kind or "nothing"}", which is not one '
+                f'of {", ".join(_KINDS)}. A measure is worked out from the '
+                "filings or it is a question you answer; there is no third "
+                "surface, and adding one is a host change in engine/bank.py."]
+    est = str((entry.get("estimator") or {}).get("kind") or "")
+    if est and est not in _reads(kind):
+        problems.append(
+            f'{eid} is declared `{kind}` and read by a "{est}" estimator, '
+            "which cannot answer it. "
+            + (f'A judgement is `{_ASSESSED}` — nothing here reads a window '
+               "of one." if kind == "qualitative" else
+               f'`{_ASSESSED}` means the reader recorded it, which is what '
+               "`kind: qualitative` says. One of the two is wrong."))
+
+    unit = entry.get("unit")
+    if unit is None:
+        problems.append(
+            f"{eid} declares no `unit`. A unit is how a screen renders the "
+            "figure, and without one it falls back to printing the raw "
+            "value — which reads `True` for an assessment and a bare number "
+            "for everything else.")
+        return problems
+    if str(unit) not in EVIDENCE_UNITS:
+        return problems + [
+            f'{eid} declares unit "{unit}", which is not one of '
+            + ", ".join(EVIDENCE_UNITS) + ". Adding a unit is a host change "
+            "in engine/contract.py, never a new word here."]
+    if kind == "qualitative" and str(unit) != judgements.UNIT:
+        problems.append(
+            f"{eid} is answered rather than computed, so what it carries is "
+            f'a mark — unit `{judgements.UNIT}`, never "{unit}".')
+    if str(unit) == judgements.UNIT and entry.get("format") is not None:
+        problems.append(
+            f"{eid}: a format is for numbers, and running a yes/no through "
+            "one prints a 1.")
+    return problems
+
+
 def _check_estimator(entry) -> list:
     """Everything wrong with one entry's estimator declaration.
 
@@ -147,7 +237,33 @@ def _check_estimator(entry) -> list:
 # the check nobody performs on the day they add the fifty-ninth measure.
 # ---------------------------------------------------------------------------
 
-_NMW_FORMS = ("industry", "data", "undetected")
+# The three forms, and what each one MEANS to a reader — one table, because
+# the sentence and the word have to move together. They did not: the loader
+# accepted three forms and the Metrics page held a two-way branch, so an
+# `undetected` condition rendered as "refused by the calculation itself, from
+# the figures", which is the exact inverse of what the form is for. Nothing
+# refuses these and nothing can; that is the whole of why they are unpleasant
+# to declare. A reader was being told the program had checked.
+#
+# Keeping the sentence here rather than in the view is the same argument
+# `bank_view` already makes about industry class names: those words are the
+# host's, a second copy in the interface is a copy that drifts, and a view
+# holding a table of forms is a view that has to be edited when a form is
+# added. Now a fourth form cannot be added without its sentence, because the
+# thing the loader accepts and the thing the reader is shown are one object.
+_NMW_FORMS = {
+    "industry":
+        "Settled from the industry code the SEC publishes, before anything "
+        "is computed. This measure reports not applicable for such a filer "
+        "rather than a number.",
+    "data":
+        "Refused by the calculation itself, from the figures. This measure "
+        "reports absent for a filer whose figures read this way.",
+    "undetected":
+        "Nothing refuses this one. Neither this program nor the figures it "
+        "reads can tell whether it holds, so the measure reports a number "
+        "either way — this one is yours to check in the filing.",
+}
 
 # The nouns that name a kind of company this host can settle from a published
 # industry code. Written out rather than derived from INDUSTRY_CLASSES,
@@ -214,6 +330,19 @@ def _check_applicability(entry) -> list:
                 f"{where}: `because` says, in plain language, why the measure "
                 "means nothing here. A refusal a reader cannot understand "
                 "teaches them that the tool is broken.")
+        # `needs` says what it would take to settle a condition nobody can
+        # settle, so it belongs to `undetected` and to nothing else. Checked
+        # here rather than inside the else-branch below, where it caught
+        # `data` and let `industry` through — the view renders `needs`
+        # wherever it appears, so one on a refused condition would print a
+        # standing request against the host for a question the host answers.
+        if forms[0] != "undetected" and "needs" in item:
+            problems.append(
+                f"{where}: `needs` belongs to an undetected condition, which "
+                "is the only kind nobody can settle. This one is refused by "
+                + ("the host, before the formula runs"
+                   if forms[0] == "industry" else "the formula itself")
+                + ", so nothing is owed.")
         if forms[0] == "industry":
             cls = item["industry"]
             if not isinstance(cls, list) or not cls:
@@ -253,10 +382,6 @@ def _check_applicability(entry) -> list:
                     "saying what it would take to settle it. A gap with no "
                     "sentence about closing it is a shrug, and a shrug is "
                     "not a request against anything.")
-            if form == "data" and "needs" in item:
-                problems.append(
-                    f"{where}: `needs` belongs to an undetected condition. "
-                    "This one is enforced, so nothing is owed.")
             hit = [w for w in _CLASSIFIABLE_WORDS
                    if _names_a_kind(prose.lower(), w)]
             if hit and form == "data":
@@ -330,7 +455,8 @@ def load_bank(name: str = "metric-bank"):
             f'(found "{schema or "nothing"}").')
     entries = list(doc.get("entries") or [])
     problems = [p for e in entries
-                for p in _check_estimator(e) + _check_applicability(e)]
+                for p in _check_estimator(e) + _check_applicability(e)
+                + _check_rendering(e)]
     problems += _check_propagation(entries)
     if problems:
         raise ValueError(f"{path.name} cannot be loaded:\n  "
@@ -352,6 +478,14 @@ def bank_view(name: str = "metric-bank") -> dict:
     interface is a copy that drifts — and because a view holding a table of
     class names is a view that has to be edited when a class is added, which
     is the wrong turn principle 9 names.
+
+    Which FORM a condition is resolves here for exactly the same reason, and
+    it is the same argument one step up. The view held its own table of forms,
+    it knew about two of the three, and the third — the one where nothing
+    refuses and nothing can — rendered as "refused by the calculation itself".
+    A reader was told the program had checked. So each condition leaves here
+    already carrying `form: {id, means}` and its own text under `states`, and
+    the view renders what it is given rather than deciding what a form is.
     """
     from .contract import INDUSTRY_CLASSES         # local: bank loads first
     doc = load_bank(name)
@@ -359,12 +493,17 @@ def bank_view(name: str = "metric-bank") -> dict:
     for e in (doc.get("entries") or []):
         plain = to_plain(e)
         for item in (plain.get("not_meaningful_when") or []):
-            named = item.get("industry")
-            if isinstance(named, list):
+            form = next((k for k in _NMW_FORMS if k in item), None)
+            if form is None:
+                continue                  # unreachable: load_bank refuses it
+            item["form"] = {"id": form, "means": _NMW_FORMS[form]}
+            if form == "industry":
                 item["industry"] = [
                     {"id": c, "label": INDUSTRY_CLASSES[c]["label"],
                      "means": INDUSTRY_CLASSES[c]["means"]}
-                    for c in named if c in INDUSTRY_CLASSES]
+                    for c in item["industry"] if c in INDUSTRY_CLASSES]
+            else:
+                item["states"] = " ".join(str(item[form]).split())
         out.append(plain)
     return {"name": name, "schema": to_plain(doc.get("schema")),
             "entries": out}

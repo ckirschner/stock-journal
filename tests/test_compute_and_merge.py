@@ -136,6 +136,65 @@ class TestManualOverFetched:
         for key in ("value", "source", "cautions", "provenance"):
             assert merged[key] == served[key], key
 
+    def test_they_cannot_disagree_because_there_is_one_rule(self):
+        """The version of the test above that does not depend on picking a
+        case where they would differ.
+
+        Agreeing was the whole problem: two implementations of one rule
+        agreed, so nothing failed, and the inapplicable bar had to be written
+        into both files in the same change to keep it that way. Now
+        `merged_values` IS `resolve` with judgements laid over it and
+        everything that did not resolve dropped, and this asserts exactly
+        that — so a change to the rule that only reaches one consumer is a
+        change that cannot be made.
+        """
+        s = {"ticker": "SYN", "name": "Synthetic Co", "lots": []}
+        entered(s, "2026-03-04", fcf_ttm=149.0, price_to_book=1.4)
+        computed = {
+            "pe_ttm": {"status": "computed", "value": 18.2,
+                       "cautions": ["a caution"], "provenance": ["a source"]},
+            "roic_median_5y": {"status": "inapplicable",
+                               "reason": "a lender has no invested capital",
+                               "industry": "depository-lending"},
+            "fcf_yield_on_ev": {"status": "absent", "reason": "no price"},
+        }
+        nodes = dataview.resolve(s, computed)
+        merged = dataview.merged_values(s, computed)
+
+        # Every projection of one rule: the same ids, the same figures.
+        assert set(merged) == {eid for eid, n in nodes.items()
+                               if n["status"] == "known"}
+        for eid, q in merged.items():
+            for key in ("value", "source", "cautions", "provenance"):
+                assert q[key] == nodes[eid][key], (eid, key)
+
+        # And the rule itself still holds through the projection.
+        assert nodes["roic_median_5y"]["status"] == "inapplicable"
+        assert "roic_median_5y" not in merged
+        assert nodes["fcf_yield_on_ev"]["status"] == "absent"
+        assert merged["fcf_ttm"]["source"] == "manual"
+        assert merged["pe_ttm"]["source"] == "computed"
+
+    def test_a_typed_figure_never_revives_a_measure_the_bank_refused(self):
+        """Refused before the overlay, on both projections, from one place.
+
+        Whatever was typed is a different quantity wearing this measure's
+        name, unit and explanation, and it would feed a verdict — the one
+        place principle 4 says a qualification is read by a person and
+        ignored by the arithmetic. The figure stays on the dated record; it
+        is the serving that is refused.
+        """
+        s = {"ticker": "SYN", "name": "Synthetic Co", "lots": []}
+        entered(s, "2026-03-04", roic_median_5y=22.0)
+        computed = {"roic_median_5y": {
+            "status": "inapplicable",
+            "reason": "a lender has no invested capital in that sense",
+            "industry": "depository-lending"}}
+        assert "roic_median_5y" not in dataview.merged_values(s, computed)
+        node = dataview.resolve(s, computed)["roic_median_5y"]
+        assert node["status"] == "inapplicable"
+        assert node.get("value") is None
+
 
 class TestCrosscheck:
     def _filing_with_float(self, float_usd, shares):

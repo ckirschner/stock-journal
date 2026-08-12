@@ -251,7 +251,54 @@ class TestAPaymentsLineTaggedNegativeIsRefused:
         fi = cm.FilingIndex(filing("N-1", "10-K", "2024-02-20", d, [
             dur("us-gaap:PaymentsOfDividendsCommonStock", s, d, -40.0,
                 stmt="CashFlowStatement")]))
-        assert cm.resolve_duration(fi, "dividends_paid", s, d) is None
+        r = cm.resolve_duration(fi, "dividends_paid", s, d)
+        assert cm.is_absent(r)
+        assert "value" not in r
+
+    def test_the_refusal_says_it_was_the_sign_and_not_a_missing_line(self):
+        """The absence that could not say why.
+
+        Every way a resolution could fail came back as None, so the sentence
+        a reader finally saw was assembled from the only fact left — that
+        nothing arrived. "Capital expenditure did not resolve in the newest
+        annual report" is true of a filer that tags no such caption, and it
+        is what was shown for a filer whose caption is right there tagged
+        negative. The reader was sent to look for a line that is in the
+        filing, and the two point at completely different things: one is a
+        gap in the data, the other is this program refusing a number it
+        cannot interpret.
+        """
+        d, s = "2023-12-31", "2023-01-01"
+        fi = cm.FilingIndex(filing("N-2", "10-K", "2024-02-20", d, [
+            dur("us-gaap:PaymentsToAcquirePropertyPlantAndEquipment", s, d,
+                -50.0, stmt="CashFlowStatement")]))
+        r = cm.resolve_duration(fi, "capex", s, d)
+        assert cm.is_absent(r)
+        why = r["reason"]
+        assert "-50" in why                     # the figure that is there
+        assert "payments line" in why           # the convention that fired
+        assert "opposite convention or a real reversal" in why
+        assert "did not resolve" not in why
+
+    def test_a_line_that_is_genuinely_missing_says_that_instead(self):
+        """The other half, so the sentence above is not simply what every
+        absence now says."""
+        d, s = "2023-12-31", "2023-01-01"
+        fi = cm.FilingIndex(filing("N-3", "10-K", "2024-02-20", d, [
+            dur("us-gaap:Revenues", s, d, 1000.0)]))
+        r = cm.resolve_duration(fi, "capex", s, d)
+        assert cm.is_absent(r)
+        assert "no concept this program maps to" in r["reason"]
+        assert "payments line" not in r["reason"]
+
+    def test_the_reason_reaches_the_measure_a_reader_is_looking_at(self):
+        """The whole point of the channel. It has to survive the trip from
+        the resolver, through period assembly, to the sentence on the entry
+        the reader clicked — otherwise it is a better message nobody sees."""
+        r = entry(five(cfo=200.0, capex=-50.0), "fcf_ttm")
+        assert r["status"] == "absent"
+        assert "payments line" in r["reason"]
+        assert "-50" in r["reason"]
 
     def test_a_sign_convention_the_host_cannot_perform_refuses_the_map(self):
         """`sign` sat in the map unread for as long as it existed. A word
@@ -267,3 +314,155 @@ class TestAPaymentsLineTaggedNegativeIsRefused:
             cm._cache.pop("mtime", None)
             cm.load_map()
         assert cm.load_map()["inputs"]["capex"]["sign"] == "outflow_positive"
+
+
+# ---------------------------------------------------------------------------
+# a ratio whose NUMERATOR is not a quantity
+# ---------------------------------------------------------------------------
+
+class TestEVOverEBITWillNotDivideANegativePrice:
+    """Only the denominator was guarded.
+
+    Enterprise value is market cap plus debt minus cash, so a company holding
+    more cash than its shares and its borrowings are worth together prices at
+    less than nothing. Dividing that by a real profit gives a negative
+    multiple, which sorts below every genuine reading on a measure where lower
+    is better — the worst case reading as the best bargain, which is the same
+    fault the EBIT guard beside it was written for, arriving through the other
+    end of the ratio.
+
+    It compounds one level up, and that is what made it worth a refusal rather
+    than a caution: `ev_ebit_to_own_5y_median` divides the current multiple by
+    the median of twenty quarterly ones, and two negatives make a positive. A
+    company whose enterprise value moved from −10× profit to −7× — the price
+    going UP — came back at 0.70×, under a sentence saying it sits 30% below
+    its own normal.
+    """
+
+    def _priced(self, close, shares=100.0):
+        from engine import price_store
+        doc = price_store.load(9101)
+        price_store.merge_series(doc, "SYN", "test",
+                                 [["2023-12-29", close, 1000]], [])
+        return doc
+
+    def _filings(self, cash):
+        """Five ordinary years, the last one holding `cash` on its face and
+        naming a cover share count so a market cap can be struck."""
+        out = five(per_year={"2023-12-31": {"cash": cash}})
+        out[-1]["facts"].append(
+            {**inst("dei:EntityCommonStockSharesOutstanding", "2024-02-20",
+                    100.0, stmt=None), "unit": "shares", "currency": None})
+        return out
+
+    def _entry(self, filings, prices, eid):
+        return compute_all(filings, prices, symbols("SYN"),
+                           industry=no_filer(), entry_ids=[eid])[eid]
+
+    def test_an_ordinary_enterprise_value_still_computes(self):
+        """The control. A refusal that fired on everything would look exactly
+        like one that fires on the right thing."""
+        r = self._entry(self._filings(cash=50.0), self._priced(10.0),
+                        "ev_to_ebit")
+        assert r["status"] == "computed"
+        # 100 shares × $10 = 1,000 market cap, + 100 debt − 50 cash = 1,050,
+        # over EBIT of 130.
+        assert r["value"] == pytest.approx(1050.0 / 130.0)
+
+    def test_more_cash_than_the_company_is_worth_refuses(self):
+        """Market cap 1,000 + debt 100 − cash 3,000 = −1,900. Positive EBIT
+        of 130 underneath, so nothing else in the formula objects: without
+        the guard this returns −14.6× and reads as the cheapest company on
+        the screen."""
+        r = self._entry(self._filings(cash=3000.0), self._priced(10.0),
+                        "ev_to_ebit")
+        assert r["status"] == "absent"
+        assert r.get("value") is None
+        assert "enterprise value is zero or negative" in r["reason"]
+
+    def test_the_reason_is_the_banks_sentence_and_not_a_copy(self):
+        from engine import bank
+        r = self._entry(self._filings(cash=3000.0), self._priced(10.0),
+                        "ev_to_ebit")
+        assert "enterprise value is zero or negative" in \
+            bank.data_conditions()["ev_to_ebit"]
+        assert "-1,900" in r["reason"]
+
+    def test_the_median_relative_measure_refuses_with_it(self):
+        """The consumer, and the reason the guard is here rather than in the
+        view. It cites ev_to_ebit's own refusal rather than restating it, so
+        the whole chain is readable from the one sentence: this measure needs
+        a current value, the current value is not meaningful, and the figure
+        that made it not meaningful is −1,900.
+
+        Asserted on the CAUSE and not only on the status. Absent for the
+        wrong reason is what this test would otherwise report as a pass —
+        without the guard the current period computes, the twenty-quarter
+        window fails to assemble, and the measure is absent anyway."""
+        r = self._entry(self._filings(cash=3000.0), self._priced(10.0),
+                        "ev_ebit_to_own_5y_median")
+        assert r["status"] == "absent"
+        assert r.get("value") is None
+        assert "EV/EBIT is not meaningful in the current period" in r["reason"]
+        assert "enterprise value is zero or negative" in r["reason"]
+        assert "-1,900" in r["reason"]
+
+
+class TestAMarginOverANegativeRevenueInverts:
+    """The zero guard was the wrong guard.
+
+    A margin's denominator has to be a quantity a share of can be expressed
+    as, and `== 0` lets every negative through. A contra-revenue restatement
+    tags `us-gaap:Revenues` negative, and free cash flow of −200 over revenue
+    of −50 is +400.0% — rendered "0.0%", `polarity: higher_is_better`, no
+    caution. The worst facts a company can report produce the most favourable
+    answer the measure can give.
+
+    Found by the adversarial re-review of the free cash flow family, and it is
+    the same defect as EV/EBIT over a negative enterprise value: two negatives
+    make a positive, and the sign of the result says nothing about the sign of
+    either input. It matters more here because Buffett cites `fcf_margin_ttm`
+    on an exit, so this is a false clear on the rule that sells.
+    """
+
+    def _contra(self, revenue=-50.0, cfo=50.0, capex=250.0):
+        s, e = "2023-01-01", "2023-12-31"
+        facts = [
+            dur("us-gaap:Revenues", s, e, revenue),
+            dur("us-gaap:CostOfRevenue", s, e, 20.0),
+            dur("us-gaap:NetCashProvidedByUsedInOperatingActivities", s, e,
+                cfo, stmt="CashFlowStatement"),
+            dur("us-gaap:PaymentsToAcquirePropertyPlantAndEquipment", s, e,
+                capex, stmt="CashFlowStatement"),
+            dur("us-gaap:NetIncomeLoss", s, e, -10.0),
+        ] + balance_face(e, assets=800.0)
+        return [filing("C-1", "10-K", "2024-02-20", e, facts)]
+
+    def test_an_ordinary_year_still_computes(self):
+        """The control."""
+        r = entry(self._contra(revenue=1000.0, cfo=200.0, capex=50.0),
+                  "fcf_margin_ttm")
+        assert r["status"] == "computed"
+        assert r["value"] == pytest.approx(15.0)      # 150 ÷ 1000
+
+    def test_free_cash_flow_margin_refuses_a_negative_revenue(self):
+        r = entry(self._contra(), "fcf_margin_ttm")
+        assert r["status"] == "absent"
+        assert r.get("value") is None
+        assert "-50" in r["reason"]
+
+    def test_gross_margin_refuses_it_too(self):
+        """Every margin over the same denominator, not the one that was
+        found. A guard inside one formula is a guard the next one lacks."""
+        r = entry(self._contra(), "gross_margin_ttm")
+        assert r["status"] == "absent"
+        assert r.get("value") is None
+
+    def test_the_five_year_median_refuses_the_year_by_name(self):
+        """One bad year is enough: it enters the median as a large positive
+        and can be the middle one."""
+        r = entry(five(per_year={"2021-12-31": {"revenue": -50.0,
+                                                "cfo": 50.0, "capex": 250.0}}),
+                  "fcf_margin_median_5y")
+        assert r["status"] == "absent"
+        assert "2021-12-31" in r["reason"]

@@ -74,10 +74,14 @@ def _get(url: str, token: str, timeout: int = 60) -> object:
             return json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         if e.code == 404:
+            # What the source said, and not what happens next. The sentence
+            # used to promise the series would be kept and marked terminal,
+            # which is true only where a series exists — and for a preferred
+            # series or a warrant the source has never quoted, there is no
+            # series and never was. Only the fetcher knows which case this is.
             raise PriceSourceError(
-                "Tiingo does not know this symbol. Delisted or renamed "
-                "tickers drop out of free sources; the series already held "
-                "is kept and marked terminal.", kind="unknown-symbol") from e
+                "Tiingo does not know this symbol.",
+                kind="unknown-symbol") from e
         if e.code in (401, 403):
             raise PriceSourceError(
                 "Tiingo rejected the API key. Test or replace it on the "

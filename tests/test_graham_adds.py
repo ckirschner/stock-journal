@@ -205,6 +205,25 @@ class TestRoomIsTheNewGate:
         assert result["state"]["id"] == "hold"
         assert rule(result) == "no-room-to-add"
 
+    def test_the_weight_reads_as_a_share_of_an_account_not_a_measurement(
+            self, graham):
+        """It read "48.9887%".
+
+        A weight is this holding's price over an account priced from every
+        other holding's, and it moves every time the market opens — printed
+        at full precision it reads as a measured quantity, and it disagreed
+        with the evidence row directly beneath it, which renders one decimal.
+        Two renderings of one figure in one verdict, and the reader has no
+        way to tell which is the number.
+
+        A format specifier regresses silently, which is why this is a test
+        and not a comment."""
+        result = verdict(graham, **{**ROOMY, "weight": 7.98871234})
+        assert rule(result) == "no-room-to-add"
+        summary = result["reason"]["summary"]
+        assert "8.0% of the account" in summary
+        assert "7.988" not in summary
+
     def test_a_position_over_the_cap_is_trimmed_and_not_merely_held(self,
                                                                    graham):
         result = verdict(graham, **{**ROOMY, "weight": 18.2})

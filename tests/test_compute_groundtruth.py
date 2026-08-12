@@ -35,14 +35,20 @@ def fi(cik, accession):
     return cm.FilingIndex(load_filing(cik, accession))
 
 
+# These helpers exist to compare a resolved figure against one read by hand
+# from the filing, so absence is None here whatever shape the resolver uses to
+# express it. The reason a resolution was refused is a different question and
+# has its own tests; every one of these cases is a real filing whose numbers
+# were read off the document.
+
 def dur(index, iid, s, e):
     r = cm.resolve_duration(index, iid, s, e)
-    return None if r is None else r["value"]
+    return None if cm.is_absent(r) else r["value"]
 
 
 def inst(index, iid, d):
     r = cm.resolve_instant(index, iid, d)
-    return None if r is None else r["value"]
+    return None if cm.is_absent(r) else r["value"]
 
 
 class TestMSFT:

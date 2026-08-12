@@ -83,6 +83,25 @@ def _bundle(cik: int, tickers: list[str]):
     return held
 
 
+def snapshot(cik: int, tickers: list[str]) -> dict:
+    """One reading of one company's stores, held by whoever asked for it.
+
+    Everything a screen shows and everything a decision consumes should come
+    off the same one. Each public function here used to call `_bundle` for
+    itself, so a single context build checked the fingerprint three times and
+    read the filings three times — and a fetch landing between two of those
+    reads produced a context whose series were one filing newer than its
+    current values, in a record that is frozen onto a purchase and never
+    recomputed.
+
+    Handing the bundle out is what makes "one instant" expressible at all.
+    Nothing about the caching changes: this is the same cached object, and a
+    caller that does not ask for one still gets a correct reading — just not
+    a guaranteed-consistent set of several.
+    """
+    return _bundle(cik, tickers)
+
+
 def invalidate(cik: int | None = None) -> None:
     if cik is None:
         _cache.clear()
@@ -134,11 +153,11 @@ def _asof_slot(b: dict, as_of: str) -> dict:
 
 
 def asof_results(cik: int, tickers: list[str], entry_ids,
-                 as_of: str) -> dict:
+                 as_of: str, snap: dict | None = None) -> dict:
     """{entry_id: result} recomputed from only what was observable on
     `as_of`: filings filed by then, the close on or shortly before it.
     Later restatements are invisible, exactly as in confirmation readings."""
-    b = _bundle(cik, tickers)
+    b = snap or _bundle(cik, tickers)
     slot = _asof_slot(b, as_of)
     out = {}
     for eid in entry_ids:
@@ -156,7 +175,7 @@ def asof_results(cik: int, tickers: list[str], entry_ids,
 
 
 def asof_availability(cik: int, tickers: list[str], ticker: str,
-                      as_of: str) -> dict:
+                      as_of: str, snap: dict | None = None) -> dict:
     """What the stores can honestly say about `as_of`: how many stored
     filings had been filed by then (and the newest), and whether a close
     exists on or shortly before that day. The reconstruction's basis, for
@@ -168,7 +187,7 @@ def asof_availability(cik: int, tickers: list[str], ticker: str,
     so it reads one — a purchase reconstructed at a sibling class's price
     would freeze that price into an append-only record.
     """
-    b = _bundle(cik, tickers)
+    b = snap or _bundle(cik, tickers)
     slot = _asof_slot(b, as_of)
     newest = max((str(f.get("filed") or "")[:10] for f in slot["filings"]),
                  default=None)
@@ -256,9 +275,14 @@ def price_view_asof(cik: int, ticker: str, as_of: str) -> dict:
 
 # -- the public joins --------------------------------------------------------
 
-def computed_results(cik: int, tickers: list[str], entry_ids) -> dict:
-    """{entry_id: result} for the requested entries, cached."""
-    b = _bundle(cik, tickers)
+def computed_results(cik: int, tickers: list[str], entry_ids,
+                     snap: dict | None = None) -> dict:
+    """{entry_id: result} for the requested entries, cached.
+
+    `snap` is a bundle a caller is already holding — see `snapshot`. Given
+    one, this reads it instead of checking the fingerprint again, so a caller
+    assembling several answers gets all of them from one instant."""
+    b = snap or _bundle(cik, tickers)
     out = {}
     for eid in entry_ids:
         if eid not in compute.REGISTRY:
@@ -295,6 +319,116 @@ def confirmation_history(cik: int, tickers: list[str],
                                "note": f"the filing history could not be "
                                        f"read: {type(e).__name__}: {e}"}
     return cache[entry_id]
+
+
+# -- the resolution rule, in one place ---------------------------------------
+#
+# Computed values, hand-entered on top, and a measure the bank says cannot
+# describe this filer refused before either. It was written out twice — here
+# and in engine/context.py — for two consumers that want different shapes: a
+# screen wants the figures that resolved, a strategy wants every measure
+# including the ones that did not and why. They agreed, and they had already
+# drifted once (one supplied a provenance sentence the other did not, and read
+# the holding history on a different clock), and the inapplicable bar had to be
+# written into both files in one change to keep them agreeing.
+#
+# So the rule is stated once and the two shapes are projections of it. The
+# difference between them stops being prose in two docstrings and becomes a
+# filter you can read.
+
+def known(value, source, cautions=None, provenance=None,
+          leave_one_out=None) -> dict:
+    """One measure as a strategy reads it.
+
+    `leave_one_out` travels beside the value because it is part of the same
+    answer: for a measure read over a window of fiscal years, "and what does
+    it say without its most flattering year?" is not a second measure, it is
+    the only robustness test available — waiting for another filing re-reads
+    the same years. Present only where the estimator reads a window; absent,
+    never a copy of the value, so a check that cannot be made comes back
+    unmade rather than passing itself.
+    """
+    out = {"status": "known", "value": value, "source": source,
+           "cautions": list(cautions or []),
+           "provenance": list(provenance or [])}
+    if leave_one_out:
+        out["leave_one_out"] = [dict(o) for o in leave_one_out]
+    return out
+
+
+def absent(reason: str) -> dict:
+    return {"status": "absent", "reason": reason}
+
+
+def inapplicable(reason: str, cls: str | None = None) -> dict:
+    """A measure that will never describe this filer.
+
+    The third status a measure can reach, and the one that must not read as
+    the second. `absent` is a gap: something is missing and a fetch, a filing
+    or an answer may close it, so it belongs among the things to go and do.
+    This is a boundary: it was knowable before anything was computed, and it
+    holds for as long as the company is the kind of company it is.
+
+    Nothing that consumes a measure has to learn the word. Every reader asks
+    whether the status is "known", so this can never be mistaken for a value
+    and can never come out of a test as a pass. What the word buys is that a
+    reader is told which of the two they are looking at.
+    """
+    node = {"status": "inapplicable", "reason": reason}
+    if cls:
+        node["industry"] = cls
+    return node
+
+
+def resolve(security: dict, computed: dict,
+            as_of: str | None = None) -> dict:
+    """{entry id: node} — the one resolution rule, status and all.
+
+    A hand-entered value is dated, so a pinned reading serves the figure that
+    was on record on its day and nothing entered afterwards. Where none was —
+    the figure was typed later, or withdrawn — the measure is absent with the
+    reason, and nothing is ever told a present-day number was known on a past
+    day.
+
+    That absence only shows through where the computed layer has nothing
+    known to offer. A user who typed a figure today and then withdrew it has
+    not made the filings unreadable, and "you cleared this" is a worse answer
+    than the number that was there all along.
+
+    A measure the bank says cannot describe this filer is refused BEFORE the
+    overlay. Whatever was typed is a different quantity wearing this
+    measure's name, unit and explanation, and it would feed a verdict — the
+    one place principle 4 says a qualification is read by a person and ignored
+    by the arithmetic. The figure stays on the dated record and becomes
+    readable again if the SEC ever reclassifies the filer; it is the serving
+    that is refused, not the recording.
+
+    Judgements are not here. Hand-entered values are numbers, and a number
+    laid over a question about a moat would be an assessment presented as a
+    measurement. They are served from their own dated record by whoever wants
+    them — see `merged_values` and engine/context._measures — because the two
+    consumers want them at different points and on different clocks.
+    """
+    out = {}
+    for eid, r in (computed or {}).items():
+        if r.get("status") == "computed":
+            out[eid] = known(r["value"], "computed", r.get("cautions"),
+                             r.get("provenance"), r.get("leave_one_out"))
+        elif r.get("status") == "inapplicable":
+            out[eid] = inapplicable(r["reason"], r.get("industry"))
+        else:
+            out[eid] = absent(r.get("reason")
+                              or "the value could not be computed")
+    for eid in hand_entered.ids(security):
+        if (out.get(eid) or {}).get("status") == "inapplicable":
+            continue
+        r = hand_entered.reading(security, eid, as_of)
+        if r["status"] == "known":
+            out[eid] = known(r["value"], "manual", r["cautions"],
+                             r["provenance"])
+        elif (out.get(eid) or {}).get("status") != "known":
+            out[eid] = absent(r["reason"])
+    return out
 
 
 def qualified(value, source, cautions=None, provenance=None) -> dict:
@@ -344,31 +478,28 @@ def merged_values(security: dict, computed: dict,
     A hand-entered number can never land on a qualitative id — the write
     refuses it and the read refuses it again — so a journal written before
     that refusal existed cannot still read as an assessment.
+
+    This is `resolve` with the judgements laid over it and everything that
+    did not resolve dropped — the projection a screen and a frozen snapshot
+    want. It is deliberately narrower than what a strategy is handed: a
+    snapshot holds only figures that were known, because an absence frozen
+    into an append-only record is a permanent statement that something could
+    not be read on a day when it may only have been unfetched.
     """
-    values = {}
-    for eid, r in computed.items():
-        if r.get("status") == "computed":
-            values[eid] = qualified(r["value"], "computed",
-                                    r.get("cautions"), r.get("provenance"))
-    # A measure the bank says cannot describe this filer is refused here as it
-    # is refused everywhere, and it is refused *before* the overlays, because
-    # this is what a purchase freezes as "every value behind the decision". A
-    # figure typed over a category error would be frozen into an append-only
-    # record that can never be corrected afterwards, wearing the label, unit
-    # and explanation of a measure that does not apply to the company.
-    barred = {eid for eid, r in computed.items()
-              if r.get("status") == "inapplicable"}
-    for eid, r in hand_entered.values(security, as_of).items():
-        if eid in barred:
-            continue
-        values[eid] = qualified(r["value"], "manual", r["cautions"],
-                                r["provenance"])
+    nodes = resolve(security, computed, as_of)
+    # Judgements last, and only here. A purchase freezes this as "every value
+    # behind the decision", and an assessment the strategy did not happen to
+    # cite is still one of them — but it is read on the HOLDING's clock
+    # (`today`) rather than the pin's, because a judgement is stale when a
+    # holding closed and whether it had closed is a question about the
+    # calendar, not about the day being reconstructed.
     for eid, a in judgements.observations(security, as_of=as_of,
                                           today=today).items():
         if a["status"] == "known":
-            values[eid] = qualified(a["value"], "judgement",
-                                    a.get("cautions"), a.get("provenance"))
-    return values
+            nodes[eid] = a
+    return {eid: qualified(n["value"], n["source"], n.get("cautions"),
+                           n.get("provenance"))
+            for eid, n in nodes.items() if n["status"] == "known"}
 
 
 # Said in one place, because it is said in several: on the price itself, and
@@ -508,6 +639,16 @@ def data_status(cik: int | None) -> dict | None:
         if s.get("terminal"):
             terminal.append({"ticker": t,
                              "reason": s["terminal"].get("reason")})
+    # Symbols the price source does not carry. A standing fact about the
+    # symbol rather than an event in the last fetch, so it is read off the
+    # price document and not off the fetch record — and reported apart from
+    # the errors, because it is a boundary of the source and not a problem to
+    # go and fix. It sat in the red panel forever on companies where nothing
+    # was wrong, which is how a panel of problems stops being read.
+    unquoted = sorted(
+        ({"ticker": t, "reason": m.get("reason"), "source": m.get("source")}
+         for t, m in (prices.get("unquoted") or {}).items()),
+        key=lambda r: r["ticker"])
     # Extraction failures must be readable, not just countable: an entry
     # absent because three 10-Ks failed to extract is a data problem, and
     # rendering it like a fact about the company would mislead. Pre-XBRL
@@ -528,6 +669,7 @@ def data_status(cik: int | None) -> dict | None:
         "pre_xbrl_filings": pre_xbrl,
         "price_through": price_through,
         "terminal_series": terminal,
+        "unquoted_symbols": unquoted,
         "identity": (doc.get("identity") or {}).get("name"),
         # What the SEC says this filer is, and what the host makes of it.
         # Reported here rather than only handed to a strategy: it decides

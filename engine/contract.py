@@ -1447,6 +1447,20 @@ def _check_fields(kind: str, fields, errors: list) -> None:
         if f.get("type") not in VALUE_TYPES:
             errors.append(f"{where} needs a `type` from: "
                           f"{', '.join(VALUE_TYPES)}.")
+        # Optional, because a boolean or a text setting has nothing to name —
+        # but checked where it is stated. It was accepted as a key and read
+        # nowhere: `_declared_unit` silently dropped anything it did not
+        # recognise and rendered the figure bare, so a threshold declared in
+        # `dollars` or `bps` loaded clean and went on screen as a naked
+        # number beside every other one that carried its unit. A setting that
+        # silently does nothing is worse than one that refuses to load.
+        if "unit" in f and f["unit"] not in EVIDENCE_UNITS:
+            errors.append(
+                f"{where}: `unit` must be one of {', '.join(EVIDENCE_UNITS)} "
+                "— how the host renders this figure. A strategy chooses from "
+                "the host's list and never invents a rendering. (`weight` is "
+                "a size unit for a decision's payload; a setting measured as "
+                "a share of the account is `percent`.)")
         if not _is_text(f.get("explain")):
             errors.append(f"{where} needs an `explain` — plain language for "
                           "someone who has never valued a company. A field "
@@ -2977,9 +2991,18 @@ def _observation(ctx, item, subject):
 
 
 def _declared_unit(spec) -> str:
-    """How a declared setting renders. Its own `unit` where it named one from
-    the host's list, and otherwise whatever its type can honestly claim."""
-    if spec.get("unit") in EVIDENCE_UNITS:
+    """How a declared setting renders. Its own `unit` where it named one, and
+    otherwise whatever its type can honestly claim.
+
+    No membership test here. `validate_declaration` refuses a unit that is not
+    the host's, and `strategy_loader` refuses any bundle it rejects, so by the
+    time a spec reaches this line there is no such thing as a unit this host
+    does not hold. There used to be a test, and it was the quiet half of one
+    rule enforced in two places: the declaration accepted the word and this
+    line dropped it, so the failure surfaced as a figure rendering bare
+    rather than as a bundle refusing to load.
+    """
+    if "unit" in spec:
         return spec["unit"]
     return ("yes_no" if spec["type"] == "boolean"
             else "text" if spec["type"] == "text" else "none")
@@ -3441,12 +3464,23 @@ def resolve_evidence(record: dict, ctx: dict, items: list):
                     unit=_bank_unit(item["measure"]),
                     without=item["without"], explain=form.get("explain"))
             else:
+                # `explain` is the plain-language definition on every kind of
+                # subject, and a judgement is not the exception it was. It
+                # carried the QUESTION here, so the one row on the screen
+                # where somebody is deciding whether a moat is durable
+                # answered "what is this?" by asking them again — and the
+                # definition, which the bank holds and every other row shows,
+                # was a tab away. The question is what to answer and the
+                # explanation is what the words mean; a reader wanting the
+                # second gets the second, with the first beneath it.
                 view = _subject(
                     "judgement" if judged else "measure", item["measure"],
                     reads=item["measure"],
                     label=_bank_label(item["measure"]),
                     unit=_bank_unit(item["measure"]),
-                    explain=meta.get("question") if judged else None)
+                    explain=meta.get("plain") if judged else None)
+                if judged and meta.get("question"):
+                    view["asks"] = meta["question"]
                 if "at" in item:
                     view["at"] = item["at"]
                     view["cadence"] = _read(entry.get("series"), "cadence")
@@ -3729,9 +3763,19 @@ def _bank_label(measure_id):
 
 
 def _bank_unit(measure_id):
+    """How a bank measure renders.
+
+    Its own declared unit, with no second opinion here about whether that
+    unit is one the host holds. There was one — `unit if unit in
+    EVIDENCE_UNITS else "none"` — and it was the quiet half of a rule stated
+    in two places: the bank never checked a unit at load, so a mistyped one
+    silently degraded to unformatted text here and the entry loaded fine.
+    engine/bank._check_rendering refuses it at the declaration now, which
+    means there is no such thing at this line, and a fallback that cannot
+    fire is a fallback that hides the next one.
+    """
     entry = _bank_entry(measure_id)
-    unit = entry["unit"] if entry else "none"
-    return unit if unit in EVIDENCE_UNITS else "none"
+    return entry["unit"] if entry else "none"
 
 
 def _change_unit(measure_id, form="distance"):

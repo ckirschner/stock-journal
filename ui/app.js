@@ -8,7 +8,38 @@
 let S = null;                 // last state from Python
 let tab = "holdings";
 let openTicker = null;
+let openPeriodBuy = null;     // id of the purchase that opened the holding shown
 let tipOpen = null;
+
+/* Which security page is open, and which of its holding periods the figures
+   above the lot history describe. Written together because they are one fact:
+   Previous holdings has a row per closed period, and clicking an older one
+   used to land on a page whose facts strip described the most recent holding
+   instead — the header named which, so nothing was ambiguous, but the click
+   did not go where it looked like it should.
+
+   Named by the id of the purchase that opened the period, which is the one
+   thing about a period that is recorded rather than derived. `seq` renumbers
+   when a backdated purchase merges two periods, and `opened` is not unique
+   when a name is bought, closed and bought again on one day.
+
+   The setter is what makes this hold. A second free-floating variable would
+   be the procedural version — a stale period surviving a ticker change, and
+   the first person to reach the same name through `opensec` from the
+   allocation screen would see the wrong holding. One function writes both, so
+   the period cannot outlive the ticker it was clicked with, and any caller
+   that does not name one gets the ordinary default. */
+function openSecurity(ticker, periodBuy = null) {
+  openTicker = ticker;
+  openPeriodBuy = periodBuy || null;
+  tipOpen = null;
+}
+
+function closeSecurity() {
+  openTicker = null;
+  openPeriodBuy = null;
+  tipOpen = null;
+}
 
 const TABS = [
   ["holdings", "Current holdings"],
@@ -298,6 +329,17 @@ const RECON_CHIP = '<span class="chip s-recon" title="Entered from history. '
 const periods = (s) => s._cycles || [];
 const openPeriod = (s) => periods(s).find((c) => c.open) || null;
 const closedPeriods = (s) => periods(s).filter((c) => !c.open);
+/* Which holding period this page's figures are about: the one clicked in from,
+   else the one still open, else the one that ended most recently.
+
+   Resolved against THIS security's own periods, so an id belonging to another
+   name selects nothing and falls through to the default rather than describing
+   somebody else's holding. That is the half of the guarantee the setter cannot
+   give: `openSecurity` stops a period outliving its ticker, and this stops one
+   that does not belong from being believed. */
+const subjectPeriod = (s) => (openPeriodBuy
+  && periods(s).find((c) => c.buys[0] === openPeriodBuy))
+  || openPeriod(s) || closedPeriods(s).slice(-1)[0] || null;
 const lotById = (s) => {
   const m = {};
   buyLots(s).concat(sales(s)).forEach((l) => { m[l.id] = l; });
@@ -461,7 +503,7 @@ function dlgDeleteJournal() {
     onConfirm: async (d) => {
       const r = await apiRaw("delete_journal", j.id, d.confirm_name || "");
       if (!r.ok) return r.error;
-      openTicker = null; tab = "holdings";
+      closeSecurity(); tab = "holdings";
     },
   });
 }
@@ -580,7 +622,7 @@ function listView() {
     /* One row per closed holding period, newest first. A name held twice is
        two round trips, and one row averaging them would describe neither. */
     head = '<th class="l">Holding</th><th>Return held</th><th>Since exit</th><th class="hide-sm">Exit reason</th><th>Today</th>';
-    body = rows.map(({ s, c }) => `<tr data-t="${s.ticker}"><td class="l"><span class="tick">${esc(s.ticker)}</span>
+    body = rows.map(({ s, c }) => `<tr data-t="${s.ticker}" data-p="${esc(c.buys[0])}"><td class="l"><span class="tick">${esc(s.ticker)}</span>
         ${openPeriod(s) ? '<span class="chip s-none" title="This name is held again — the open position is under Current holdings.">held again</span>' : ""}
         ${periodLots(s, c).some(reconstructed) ? RECON_CHIP : ""}
         <div class="coname">${esc(s.name)}</div>
@@ -901,8 +943,15 @@ function evidenceRow(item, i) {
   const tip = explain
     ? `<button class="tip" data-tip="${esc(tipId)}" aria-expanded="${tipOpen === tipId}"
         aria-label="What is ${esc(subj.label)}?">?</button>` : "";
+  /* The definition first, then the question it is asked through. A judgement
+     row used to open with the question alone, which answers "what is this?"
+     by asking it again — at the exact moment somebody is deciding whether a
+     moat is durable. The whole argument that a novice can answer these rests
+     on the explanation being right here. */
+  const asks = subj.asks
+    ? `<div class="pe-sub" style="margin-top:6px"><b>What you are asked:</b> ${prose(subj.asks)}</div>` : "";
   const tipBox = (explain && tipOpen === tipId)
-    ? `<div class="tipbox">${prose(explain)}
+    ? `<div class="tipbox">${prose(explain)}${asks}
        <span class="who">${subj.kind === "measure" ? `Bank entry <code>${esc(subj.id)}</code> — full definition on the Metrics tab`
          : subj.kind === "judgement" ? `Your own assessment, not a figure the journal worked out — bank entry <code>${esc(subj.id)}</code>`
          : subj.kind === "value" ? "A setting this strategy ships and you can change"
@@ -1123,8 +1172,25 @@ function detailView(s) {
   const isHold = s.bucket === "holdings", isPrev = s.bucket === "previous";
   const d = decisionOf(s);
   const open = openPeriod(s), closed = closedPeriods(s);
-  const last = closed[closed.length - 1] || null;   // the holding that ended
+  /* The closed holding this page is about — the one clicked in from, and only
+     otherwise the one that ended most recently. It was always the most recent:
+     clicking the second of three rows under Previous holdings opened a page
+     whose exit price, return and since-exit all described the third. The
+     header named which holding it was showing, so nothing was ambiguous — but
+     the click did not go where it looked like it should, and every figure on
+     the strip was about a round trip the reader had not asked for. */
+  const subject = subjectPeriod(s);
+  const last = (subject && !subject.open ? subject : null)
+    || closed[closed.length - 1] || null;
   const many = periods(s).length > 1;
+  /* What the strip and the header describe is the PERIOD in front of you;
+     what the toolbar offers is about the security as it stands now. Those are
+     two different questions and they were one, read off the bucket — so a name
+     you closed and bought back showed its open position however you arrived,
+     including from the closed round trip you clicked. Buying and selling stay
+     on the bucket, because you cannot sell a holding that ended. */
+  const showsOpen = subject ? subject.open : isHold;
+  const showsClosed = subject ? !subject.open : isPrev;
   let h = missingStrategyBanner() + pendingBanner();
   h += `<button class="backlink" data-act="back">← ${TABS.find((t) => t[0] === tab)[1]}</button>`;
 
@@ -1134,10 +1200,10 @@ function detailView(s) {
      the Previous holdings tab has a row per period, so a reader arriving
      from the older row must be told at once which one they are reading.
      "Held since" or "Closed" alone reads as the whole story of the ticker. */
-  const meta = isHold
-    ? (many ? `${esc(periodName(s, open))} · held since ` : "Held since ")
-      + esc(open.opened)
-    : isPrev
+  const meta = showsOpen
+    ? (many ? `${esc(periodName(s, subject || open))} · held since ` : "Held since ")
+      + esc((subject || open).opened)
+    : showsClosed
     ? (many ? `${esc(periodName(s, last))} of ${closed.length} · closed `
         : "Closed ") + esc(last.closed)
       + " · " + esc(((last.exit || {}).reasons || [])
@@ -1259,13 +1325,13 @@ function detailView(s) {
     + (many ? " This holding only; the earlier one is its own row under Previous holdings." : "");
   const unpriced = s._price && s._price.value == null && px(s) == null;
   let facts = [];
-  if (isHold) {
+  if (showsOpen) {
     facts = [[priceLabel, money(px(s)), priceWhy], ["Average cost", money(s._cost_basis)],
       ["Shares", s._shares],
       ["Since buy", pctText(s._return), pctWhyOr(s._return, sinceBuyWhy)],
       ["Value", px(s) ? "$" + (px(s) * s._shares).toLocaleString(undefined, { maximumFractionDigits: 0 }) : "—",
         unpriced && s._price.reason ? `Not known: ${s._price.reason}.` : ""]];
-  } else if (isPrev) {
+  } else if (showsClosed) {
     const ex = last.exit || {};
     const exPrice = ex.price || {};
     facts = [["Exit price",
@@ -1745,6 +1811,23 @@ function coverageSection(s) {
     (st.terminal_series || []).forEach((t) => {
       inner += `<div class="notice quiet"><h4>${esc(t.ticker)} price series is terminal</h4><p>${esc(t.reason)}</p></div>`;
     });
+    /* Quiet, and one box for all of them. These are the symbols the SEC maps
+       to the company that the price source does not quote — preferred series,
+       warrants, listed notes. They used to arrive one per fetch in "Problems
+       from fetching" and stay there permanently, on companies where nothing
+       was wrong: Synchrony showed two, Bank of America would show sixteen. A
+       red panel that is always right and never actionable teaches the reader
+       to skip the panel, which is the one place real problems appear. */
+    const unquoted = st.unquoted_symbols || [];
+    if (unquoted.length) {
+      inner += `<div class="notice quiet"><h4>${unquoted.length}
+        ${unquoted.length === 1 ? "symbol has" : "symbols have"} no price history</h4>
+        <p>${unquoted.map((u) => `<b>${esc(u.ticker)}</b>`).join(", ")} —
+        ${esc(unquoted[0].reason)}. Nothing on this page needs
+        ${unquoted.length === 1 ? "it" : "them"}: a company's worth is priced
+        in its common stock. ${unquoted.length === 1 ? "It is" : "They are"} no
+        longer asked for on each fetch.</p></div>`;
+    }
     inner += industryLine(st.industry);
     /* The one inventory screen. Thirty-odd rows, and cautions propagate
        through derivation — one borrowed price lands on every measure built
@@ -2199,21 +2282,29 @@ function bankCard(e) {
       <p class="hint">This measure reports absent everywhere until the contract gains a way to hand one in.</p></div>`;
   }
   if (e.not_meaningful_when && e.not_meaningful_when.length) {
-    /* Two kinds of condition and they are refused by different things, so
-       each says which. An industry condition is settled from the SEC's own
-       code before anything is computed; a data condition is the formula
-       refusing its own arithmetic. A reader who cannot tell them apart
-       cannot tell "this will never apply to this company" from "this one
-       quarter came out unreadable". */
+    /* Three kinds of condition, refused by three different things — and one
+       of them refused by nothing at all, which is the whole reason the host
+       hands the sentence over rather than letting this decide. There was a
+       two-way ternary here: an industry condition got its own paragraph and
+       everything else got "refused by the calculation itself, from the
+       figures". That is true of a `data` condition and the exact inverse of
+       an `undetected` one, where neither this program nor the figures can
+       tell — so the reader was told the program had checked something it
+       cannot check, with the condition's own text rendering blank beside it.
+
+       `t.form.means` is the host's sentence for whichever form this is, and
+       `t.needs` is what it would take to settle one nobody can. The view
+       knows the shape and never the vocabulary. */
     h += `<div class="pe-block"><i>Not meaningful when</i><ul class="pe-nmw">${
       e.not_meaningful_when.map((t) => {
-        const what = t.industry
-          ? `the company is ${t.industry.map((c) => `<b>${esc(c.label)}</b> <span class="dim">(${esc(c.means)})</span>`).join(", or ")}
-             <div class="pe-sub">Settled from the industry code the SEC publishes, before anything is
-             computed. This measure reports <i>not applicable</i> for such a filer rather than a number.</div>`
-          : `${oneline(t.data)} <span class="dim">— refused by the calculation itself, from the figures</span>`;
-        return `<li>${what}${
-          t.because ? `<div class="pe-why" style="margin-top:4px">${prose(t.because)}</div>` : ""}</li>`;
+        const form = t.form || {};
+        const what = form.id === "industry"
+          ? `the company is ${(t.industry || []).map((c) => `<b>${esc(c.label)}</b> <span class="dim">(${esc(c.means)})</span>`).join(", or ")}`
+          : oneline(t.states);
+        return `<li>${what}
+          <div class="pe-sub">${esc(form.means || "")}</div>${
+          t.because ? `<div class="pe-why" style="margin-top:4px">${prose(t.because)}</div>` : ""}${
+          t.needs ? `<div class="pe-sub" style="margin-top:4px"><b>What would settle it:</b> ${prose(t.needs)}</div>` : ""}</li>`;
       }).join("")}</ul></div>`;
   }
   if (x.misfires || x.attribution) {
@@ -2495,7 +2586,7 @@ function render() {
   if (!S.journal) { v.innerHTML = welcomeView(); return; }
   if (openTicker) {
     const s = find(openTicker);
-    if (!s) { openTicker = null; return render(); }
+    if (!s) { closeSecurity(); return render(); }
     v.innerHTML = detailView(s);
     if ((s._valuation || {}).status === "known") paintEV(s.ticker);
   } else if (tab === "strategy") v.innerHTML = strategyView();
@@ -2696,7 +2787,7 @@ function dlgNewJournal(chosenId) {
       Object.keys(d).forEach((k) => { if (k.startsWith("in_")) inputs[k.slice(3)] = d[k]; });
       const r = await api("create_journal", d.name, d.strategy, inputs);
       if (!r) return " ";
-      tab = "holdings"; openTicker = null;
+      tab = "holdings"; closeSecurity();
       toast(`${r.name} created. Every decision in it will be judged by ${cur.name}.`);
     },
   });
@@ -2723,7 +2814,7 @@ function dlgAdd() {
     onConfirm: async (d) => {
       const r = await api("add_security", d.ticker, d.name);
       if (!r) return " ";
-      tab = "ideas"; openTicker = r.ticker;
+      tab = "ideas"; openSecurity(r.ticker);
     },
   });
 }
@@ -3481,13 +3572,13 @@ document.addEventListener("click", async (ev) => {
   if (tip) { const id = tip.dataset.tip; tipOpen = tipOpen === id ? null : id; return render(); }
 
   const tb = t.closest("[data-tab]");
-  if (tb) { tab = tb.dataset.tab; openTicker = null; tipOpen = null; return render(); }
+  if (tb) { tab = tb.dataset.tab; closeSecurity(); return render(); }
 
   const jb = t.closest("[data-journal]");
   if (jb) {
     if (!S.journal || jb.dataset.journal !== S.journal.id) {
       const r = await api("open_journal", jb.dataset.journal);
-      if (r) { openTicker = null; tipOpen = null; tab = "holdings"; await refresh(); }
+      if (r) { closeSecurity(); tab = "holdings"; await refresh(); }
     }
     return;
   }
@@ -3495,7 +3586,7 @@ document.addEventListener("click", async (ev) => {
   const act = t.closest("[data-act]");
   if (!act) {
     const row = t.closest("tbody tr");
-    if (row) { openTicker = row.dataset.t; tipOpen = null; render(); window.scrollTo({ top: 0 }); }
+    if (row) { openSecurity(row.dataset.t, row.dataset.p); render(); window.scrollTo({ top: 0 }); }
     return;
   }
 
@@ -3506,10 +3597,10 @@ document.addEventListener("click", async (ev) => {
   const s = act.dataset.t ? find(act.dataset.t)
     : openTicker ? find(openTicker) : null;
   switch (act.dataset.act) {
-    case "back": openTicker = null; tipOpen = null; return render();
+    case "back": closeSecurity(); return render();
     case "opensec":
       if (!s) return;
-      openTicker = s.ticker; tipOpen = null; render();
+      openSecurity(s.ticker); render();
       return window.scrollTo({ top: 0 });
     case "newjournal": return dlgNewJournal();
     case "renamejournal": return dlgRenameJournal();
@@ -3544,7 +3635,7 @@ document.addEventListener("click", async (ev) => {
         onConfirm: async () => {
           const r = await api("remove_security", s.ticker);
           if (!r) return " ";
-          openTicker = null;
+          closeSecurity();
           tab = "ideas";
           toast(`${r.removed} removed from this journal.`);
         },
@@ -3646,7 +3737,7 @@ document.addEventListener("click", async (ev) => {
             ? ` ${s.kept_unreadable.length} unreadable journal${s.kept_unreadable.length === 1 ? " was" : "s were"} left untouched.` : "";
           toast(`Imported ${s.journals} journal${s.journals === 1 ? "" : "s"}, `
             + `${s.securities} securities.${gone}${kept}`);
-          openTicker = null;
+          closeSecurity();
         },
       });
       return;
@@ -3665,7 +3756,7 @@ document.addEventListener("click", async (ev) => {
         onConfirm: async () => {
           const r = await api("load_sample");
           if (!r) return " ";
-          openTicker = null;
+          closeSecurity();
           const missed = (r.skipped || []).length
             ? ` ${r.skipped.length} could not be loaded.` : "";
           toast(`Created ${r.journals} journal${r.journals === 1 ? "" : "s"} `
@@ -3680,7 +3771,7 @@ document.addEventListener("click", async (ev) => {
         blurb: `This removes every security from ${S.journal.name}. Its strategy, its settings and its rule-change record stay.`,
         body: '<p class="hint">Export first if you might want any of it back. Other journals are untouched.</p>',
         confirm: "Empty it", danger: true,
-        onConfirm: async () => { if (!(await api("clear_all"))) return " "; openTicker = null; },
+        onConfirm: async () => { if (!(await api("clear_all"))) return " "; closeSecurity(); },
       });
       return;
     }
@@ -3697,7 +3788,7 @@ document.addEventListener("input", (ev) => {
 });
 
 document.addEventListener("keydown", (ev) => {
-  if (ev.key === "Escape" && openTicker && !$("dlg").open) { openTicker = null; render(); }
+  if (ev.key === "Escape" && openTicker && !$("dlg").open) { closeSecurity(); render(); }
 });
 
 window.addEventListener("pywebviewready", refresh);

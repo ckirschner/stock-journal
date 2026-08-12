@@ -279,16 +279,48 @@ def _fetch_company(ticker, identity, cik, tmap, resolved_cik,
         symbols = tickermap.tickers_for(tmap, cik)
     if ticker not in symbols and resolved_cik:
         symbols.append(ticker)
-    prices_ok, price_notes = [], []
+    prices_ok, price_notes, unquoted = [], [], []
     if symbols:
         pdoc = price_store.load(cik)
         for sym in symbols:
+            # A symbol this source has already said it does not carry is not
+            # asked about again. The SEC maps every registered symbol to the
+            # company — Synchrony's two preferred series, eleven of Bank of
+            # America's — and a price source carries none of them, so every
+            # fetch spent a request per symbol to be told the same thing and
+            # filed it under "problems from fetching", where it sat forever
+            # on a company where nothing was wrong. A permanent red panel
+            # about a non-problem teaches the reader to ignore the panel.
+            #
+            # Except the journal's own symbol, which is always retried. That
+            # is the instrument the user holds and prices it directly; a
+            # source that has started carrying it must be able to say so, and
+            # the tool never refuses to look for the thing in front of you.
+            was = price_store.unquoted_of(pdoc, sym, "tiingo")
+            if was and sym.upper() != str(ticker).upper():
+                unquoted.append(f"{sym}: {was['reason']}")
+                continue
             try:
                 got = tiingo.fetch_daily(sym, token)
                 price_store.merge_series(pdoc, sym, "tiingo",
                                          got["rows"], got["events"])
                 prices_ok.append(sym)
             except (tiingo.PriceSourceError, ValueError) as e:
+                # A symbol the source has never quoted and holds no rows for
+                # is a boundary of the source, recorded once — the same shape
+                # stage 3 uses for a pre-XBRL filing, and counted apart from
+                # real failures for the same reason.
+                if getattr(e, "kind", None) == "unknown-symbol" \
+                        and not price_store.series_key(pdoc, sym):
+                    reason = ("the price source does not carry this symbol. "
+                              "The SEC maps every security a company "
+                              "registers, and a price source quotes its "
+                              "common stock — a preferred series, a warrant "
+                              "or a listed note is mapped here and quoted "
+                              "nowhere")
+                    price_store.mark_unquoted(pdoc, sym, "tiingo", reason)
+                    unquoted.append(f"{sym}: {reason}")
+                    continue
                 price_notes.append(f"{sym}: {e}")
                 errors.append(f"prices {sym}: {e}")
                 # The source having never heard of a symbol we already hold
@@ -308,6 +340,10 @@ def _fetch_company(ticker, identity, cik, tmap, resolved_cik,
                 # fetches would be silently thrown away — a company with two
                 # listed classes losing the good class's prices because the
                 # dead one 404'd.
+                #
+                # Reached only where rows ARE held — the branch above takes
+                # the symbol that never had any, which is not a series that
+                # ended but one that never began.
                 if getattr(e, "kind", None) == "unknown-symbol":
                     _mark_prices_terminal(
                         cik, sym,
@@ -320,6 +356,11 @@ def _fetch_company(ticker, identity, cik, tmap, resolved_cik,
                            "series stays as retrieved")
     report["prices_fetched"] = prices_ok
     report["price_notes"] = price_notes
+    # Reported apart from `errors`, exactly as pre-XBRL filings are reported
+    # apart from extraction failures: a boundary of the source is not a
+    # problem to go and fix, and listing one among the problems is how the
+    # list of problems stops being read.
+    report["prices_unquoted"] = unquoted
 
     facts_store.record_fetch(doc, {
         "ticker": ticker,

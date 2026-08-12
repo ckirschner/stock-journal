@@ -954,12 +954,32 @@ their place:
   hand-built shape cannot drift from the one a real journal serves. Without it
   the whole suite can pass against a context shape that no longer exists.
 
-Two assertions are worth writing whatever else you do. Assert that no case
-returns `host:invalid-decision` — every contract refusal lands there, so one
-check catches contradicted commits, dead-end blocks, malformed payloads and
-scattered groups at once. And assert that **every declared state is reached** by
-some case: a state nothing returns is vocabulary on the Strategy tab telling the
-reader the tool can say something it cannot.
+Two assertions are worth writing whatever else you do. That no case returns
+`host:invalid-decision` — every contract refusal lands there, so one check
+catches contradicted commits, dead-end blocks, malformed payloads and scattered
+groups at once. And that **every declared state is reached** by some case: a
+state nothing returns is vocabulary on the Strategy tab telling the reader the
+tool can say something it cannot.
+
+`engine/strategy_floor.py` writes both. Keep every result your cases produced
+and end with one line:
+
+```python
+from engine import strategy_floor
+
+assert strategy_floor.unmet(record, results) == []
+```
+
+It reads nothing but your declaration and those decisions, so it is the same
+floor for every bundle rather than one each author reimplements — and it cannot
+pass on a suite that drove no cases at all, because a declaration with no states
+is refused at load, so every state is unreached.
+
+It is deliberately the documented pair and nothing more. The shipped suites also
+assert `result["produced_by"] == "strategy"` on each case as it is produced,
+which is stronger — it catches `host:strategy-error` and `host:inputs-missing`
+too, and it fails at the case rather than at the end. Write both; the helper
+does not replace that one.
 
 ---
 

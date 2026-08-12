@@ -141,6 +141,55 @@ def field(fid="f", **over):
     return f
 
 
+class TestADeclaredUnitIsCheckedWhereItIsDeclared:
+    """`unit` was an accepted key that nothing read.
+
+    It reached `_declared_unit`, which tested it against the host's list and
+    silently returned "none" for anything else — so a threshold declared in
+    `dollars` or `bps` loaded clean and went on screen as a bare number
+    beside every other setting that carried its unit. One rule, enforced in
+    two places, and the quiet half won: the failure surfaced as a rendering
+    rather than as a bundle refusing to load, which is the shape CLAUDE.md
+    names when it says an unrecognised or mistyped key must fail loudly.
+
+    Now the declaration is the only thing that decides, and the renderer has
+    no opinion left to disagree with.
+    """
+
+    def test_a_unit_the_host_does_not_hold_is_refused(self):
+        errors = contract.validate_declaration(
+            decl(values=[field("cap", unit="dollars", source={
+                "name": "This strategy's own", "reasoning": "own"})]))
+        assert any("`unit` must be one of" in e for e in errors)
+
+    def test_the_size_unit_is_named_because_it_is_the_likely_mistake(self):
+        """`weight` is a size unit for a decision's payload and not a way to
+        render a setting. An author reaching for it is making the one error
+        worth answering in the message rather than with a list."""
+        errors = contract.validate_declaration(
+            decl(inputs=[field("target", unit="weight")]))
+        assert any("`weight` is a size unit" in e for e in errors)
+
+    def test_a_unit_from_the_hosts_list_passes(self):
+        assert contract.validate_declaration(
+            decl(inputs=[field("target", unit="percent")])) == []
+
+    def test_it_stays_optional_because_a_boolean_names_nothing(self):
+        assert contract.validate_declaration(
+            decl(inputs=[field("on", type="boolean")])) == []
+
+    def test_the_renderer_holds_no_second_opinion(self):
+        """The whole point of checking at the declaration: there is now no
+        such thing at the rendering line as a unit the host does not hold, so
+        it does not test for one. A fallback that cannot fire is a fallback
+        that hides the next one."""
+        assert contract._declared_unit(
+            {"type": "number", "unit": "percent"}) == "percent"
+        assert contract._declared_unit({"type": "boolean"}) == "yes_no"
+        assert contract._declared_unit({"type": "text"}) == "text"
+        assert contract._declared_unit({"type": "number"}) == "none"
+
+
 class TestInputRoles:
     """A role is how a declared input becomes a figure the host reports. The
     host has no journal-level fields of its own — deciding which ones a

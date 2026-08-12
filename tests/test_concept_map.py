@@ -30,7 +30,13 @@ class TestCandidates:
         # PaymentsForCapitalImprovements is a measured wrong answer for capex
         fi = _fi([dur("us-gaap:PaymentsForCapitalImprovements",
                       "2023-01-01", "2023-12-31", 121, stmt="CashFlowStatement")])
-        assert cm.resolve_duration(fi, "capex", "2023-01-01", "2023-12-31") is None
+        r = cm.resolve_duration(fi, "capex", "2023-01-01", "2023-12-31")
+        assert cm.is_absent(r)
+        assert "value" not in r
+        # And says which way it failed. A concept the map deliberately does
+        # not accept is a different fact from a filer that tagged nothing —
+        # the first is a decision this program made, the second is a gap.
+        assert "no concept this program maps to" in r["reason"]
 
 
 class TestAggregates:

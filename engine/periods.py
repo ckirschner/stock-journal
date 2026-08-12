@@ -60,6 +60,19 @@ def absent(reason: str) -> dict:
     return {"absent": True, "reason": reason}
 
 
+def _why(a, fallback: str) -> dict:
+    """A resolver's own reason where it gave one, else the caller's sentence.
+
+    The point of the channel: "did not resolve on the balance sheet dated
+    2023-12-31" is what a reader was told when the line was there and refused
+    on its sign. Where the resolver knows which way it failed, that is what
+    they get.
+    """
+    if isinstance(a, dict) and a.get("reason"):
+        return absent(str(a["reason"]))
+    return absent(fallback)
+
+
 def is_absent(x) -> bool:
     return x is None or (isinstance(x, dict) and x.get("absent"))
 
@@ -146,7 +159,7 @@ class SeriesBuilder:
                         periods.add((s, e))
             for (s, e) in periods:
                 r = cm.resolve_duration(fi, input_id, s, e)
-                if r is not None:
+                if not cm.is_absent(r):
                     by_end.setdefault(e, []).append(r)
         for e in by_end:
             by_end[e].sort(key=lambda r: (r["filed"], r["accession"]),
@@ -258,9 +271,14 @@ class SeriesBuilder:
                           f"twelve months of {label(input_id)} cannot start")
         fy_end = annual_fi.period_of_report
         fy_res = self._own_annual(annual_fi, input_id)
-        if fy_res is None:
-            return absent(f"{label(input_id)} did not resolve in the newest "
-                          f"annual report (period {fy_end})")
+        if cm.is_absent(fy_res):
+            # The resolver's own reason where it has one. "Did not resolve"
+            # was said of a filer that tags no such caption AND of one whose
+            # caption is right there tagged with the wrong sign — and only
+            # the first of those is something to go and look for.
+            return _why(fy_res,
+                        f"{label(input_id)} did not resolve in the newest "
+                        f"annual report (period {fy_end})")
         d_fy = _days(fy_res["start"], fy_res["end"])
         if not (ANNUAL_DAYS[0] <= d_fy <= ANNUAL_DAYS[1]):
             # A 10-KT's own period is a transition stub. Serving it as "the
@@ -279,12 +297,14 @@ class SeriesBuilder:
 
         q_end = q_fi.period_of_report
         cur = self._ytd_resolution(q_fi, input_id, q_end)
-        if cur is None:
-            return absent(f"the year-to-date {label(input_id)} did not "
-                          f"resolve in the newest quarterly report ({q_end})")
+        if cm.is_absent(cur):
+            return _why(cur,
+                        f"the year-to-date {label(input_id)} did not resolve "
+                        f"in the newest quarterly report ({q_end})")
         prior = self._matching_prior_ytd(q_fi, input_id, cur)
-        if prior is None:
-            return absent(
+        if cm.is_absent(prior):
+            return _why(
+                prior,
                 f"the prior-year comparative for {label(input_id)} did not "
                 f"resolve in the quarterly report ({q_end}), so the trailing "
                 "twelve months cannot be assembled without mixing filings")
@@ -347,19 +367,28 @@ class SeriesBuilder:
             d = _days(s, e)
             if fi.form.startswith("10-KT") or ANNUAL_DAYS[0] <= d <= ANNUAL_DAYS[1]:
                 best = cm.resolve_duration(fi, input_id, s, e)
-                if best is not None:
+                if not cm.is_absent(best):
                     break
-        return best
+        # The last refusal is kept and handed back, so a caller reporting
+        # "did not resolve in the newest annual report" can say WHY instead.
+        # A period band that proposed no candidate at all has nothing to
+        # report and says that.
+        return best if best is not None else cm.absent(
+            f"no period in {fi.form} {fi.accession} proposes an annual "
+            f"duration for {label(input_id)}")
 
     def _ytd_resolution(self, fi, input_id, q_end):
         """The longest duration ending at the quarter end — the YTD column."""
         cands = {(s, e) for (s, e) in self._period_candidates(fi, input_id)
                  if e == q_end}
+        last = None
         for (s, e) in sorted(cands, key=lambda p: _days(*p), reverse=True):
-            r = cm.resolve_duration(fi, input_id, s, e)
-            if r is not None:
+            last = r = cm.resolve_duration(fi, input_id, s, e)
+            if not cm.is_absent(r):
                 return r
-        return None
+        return last if last is not None else cm.absent(
+            f"no year-to-date period for {label(input_id)} ends at {q_end} "
+            f"in {fi.form} {fi.accession}")
 
     def _matching_prior_ytd(self, fi, input_id, cur):
         """The comparative column: same filing, same length (±10 days), ending
@@ -370,11 +399,14 @@ class SeriesBuilder:
             if 340 <= _days(e, cur["end"]) <= 385 \
                     and abs(_days(s, e) - cur_days) <= 10:
                 cands.add((s, e))
+        last = None
         for (s, e) in sorted(cands):
-            r = cm.resolve_duration(fi, input_id, s, e)
-            if r is not None:
+            last = r = cm.resolve_duration(fi, input_id, s, e)
+            if not cm.is_absent(r):
                 return r
-        return None
+        return last if last is not None else cm.absent(
+            f"no prior-year comparative column for {label(input_id)} is in "
+            f"{fi.form} {fi.accession}")
 
     # -- instants -----------------------------------------------------------
 
@@ -391,9 +423,9 @@ class SeriesBuilder:
         dates = fi.balance_dates()
         at = fi.period_of_report if fi.period_of_report in dates else dates[-1]
         r = cm.resolve_instant(fi, input_id, at)
-        if r is None:
-            return absent(f"{label(input_id)} did not resolve on the balance "
-                          f"sheet dated {at} (filing {fi.accession})")
+        if cm.is_absent(r):
+            return _why(r, f"{label(input_id)} did not resolve on the balance "
+                           f"sheet dated {at} (filing {fi.accession})")
         return r
 
     def instant_pair_yoy(self, input_id: str) -> dict:
@@ -406,9 +438,9 @@ class SeriesBuilder:
         dates = fi.balance_dates()
         at = fi.period_of_report if fi.period_of_report in dates else dates[-1]
         now = cm.resolve_instant(fi, input_id, at)
-        if now is None:
-            return absent(f"{label(input_id)} did not resolve on the balance "
-                          f"sheet dated {at}")
+        if cm.is_absent(now):
+            return _why(now, f"{label(input_id)} did not resolve on the "
+                             f"balance sheet dated {at}")
         ago_dates = [d for d in dates if 340 <= _days(d, at) <= 385]
         if not ago_dates:
             return absent(
@@ -416,9 +448,10 @@ class SeriesBuilder:
                 "about a year earlier, so a year-over-year comparison of "
                 f"{label(input_id)} cannot be made on one basis")
         ago = cm.resolve_instant(fi, input_id, ago_dates[-1])
-        if ago is None:
-            return absent(f"{label(input_id)} did not resolve on the "
-                          f"comparative balance sheet dated {ago_dates[-1]}")
+        if cm.is_absent(ago):
+            return _why(ago, f"{label(input_id)} did not resolve on the "
+                             f"comparative balance sheet dated "
+                             f"{ago_dates[-1]}")
         return {"now": now, "ago": ago}
 
     def instant_series_annual(self, input_id: str, n: int) -> dict:
@@ -429,7 +462,7 @@ class SeriesBuilder:
         for fi in self.indices:
             for d in fi.balance_dates():
                 r = cm.resolve_instant(fi, input_id, d)
-                if r is not None:
+                if not cm.is_absent(r):
                     by_date.setdefault(d, []).append(r)
         if not by_date:
             return absent(f"{label(input_id)} did not resolve on any stored "
@@ -493,9 +526,9 @@ class SeriesBuilder:
         annual leg from the newest 10-K filed before this filing."""
         if fi.form in ANNUAL_FORMS:
             r = self._own_annual(fi, input_id)
-            if r is None:
-                return absent(f"{label(input_id)} did not resolve in "
-                              f"{fi.accession}")
+            if cm.is_absent(r):
+                return _why(r, f"{label(input_id)} did not resolve in "
+                               f"{fi.accession}")
             d = _days(r["start"], r["end"])
             if not (ANNUAL_DAYS[0] <= d <= ANNUAL_DAYS[1]):
                 return absent(
@@ -509,8 +542,6 @@ class SeriesBuilder:
         return self.ttm(input_id, annual_fi=prior_annuals[-1], quarter_fi=fi)
 
 
-def label(input_id: str) -> str:
-    try:
-        return str(cm.input_spec(input_id).get("label") or input_id)
-    except KeyError:
-        return input_id
+# Re-exported from engine/concept_map, which is where an input's declaration
+# lives and where the refusals that name one are raised.
+label = cm.label

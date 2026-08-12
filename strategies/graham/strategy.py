@@ -2538,7 +2538,14 @@ def _more_money(ctx, evidence, groups, note, clear):
     if room <= 0:
         return held(
             "hold", "no-room-to-add",
-            f"It is already at {float(weight['value']):g}% of the account "
+            # One decimal, matching how the same figure renders in the row
+            # below it. A weight printed at full precision reads as a measured
+            # quantity rather than a share of an account that moves every time
+            # the market opens — "48.9887%" is a number nobody could act on a
+            # change in. The target beside it is this strategy's own
+            # arithmetic over its own declared values and keeps its own
+            # rendering.
+            f"It is already at {float(weight['value']):.1f}% of the account "
             f"against a target of {target:g}%, set by {bound}, so no more "
             "money goes into it here.", sizing, [SIZING_GROUP])
 
@@ -2675,7 +2682,7 @@ def _more_money(ctx, evidence, groups, note, clear):
                 f'five questions answered, {entry["passed"]} of the '
                 f'{entry["tested"]} tests behind them — '
                 f"nothing has moved against you since either purchase, and "
-                f"it sits {room:g}% of the account below the {target:g}% "
+                f"it sits {room:.1f}% of the account below the {target:g}% "
                 f"target set by {bound}. That room is the whole of what may "
                 "go in; where it goes is a question about your other "
                 "holdings, not about this one."),

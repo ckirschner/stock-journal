@@ -322,3 +322,105 @@ def _context_for(api, ticker):
                 if k in declared}
     return context.build_context(security, journal["securities"],
                                  chain["values"], supplied, record=record)
+
+
+class TestADeadSeriesReachesEveryFigureBuiltOnIt:
+    """A terminal mark that reaches some price measures and not others.
+
+    It was logged against `pe_ttm` and `pe_3y_avg_eps`, which dropped a mark
+    `market_cap` carried, so one dead series read as current in two places and
+    not in a third. That is closed — the pricing rework routed every
+    whole-company figure through one blend, and the caution comes off it — but
+    only by construction of the call graph, and nothing asserted the general
+    property. A price measure added tomorrow that reads a close its own way
+    would drop the mark again, silently, and the first sign of it would be a
+    P/E on a delisted company reading like a live quote.
+
+    So the property is the test: every entry the bank says reads a price, that
+    computes at all against an ended series, says so. It cannot grow quietly —
+    a new price-declaring entry is in the list the moment it declares one.
+    """
+
+    def _company(self, cik):
+        from conftest import balance_face, dur, filing, inst
+        from engine import price_store
+
+        years = [(f"{y}-01-01", f"{y}-12-31") for y in range(2019, 2024)]
+        out = []
+        for i, (s, e) in enumerate(years):
+            facts = [
+                dur("us-gaap:Revenues", s, e, 1000.0),
+                dur("us-gaap:NetIncomeLoss", s, e, 120.0),
+                dur("us-gaap:OperatingIncomeLoss", s, e, 130.0),
+                dur("us-gaap:EarningsPerShareDiluted", s, e, 1.2),
+                dur("us-gaap:NetCashProvidedByUsedInOperatingActivities",
+                    s, e, 200.0, stmt="CashFlowStatement"),
+                dur("us-gaap:PaymentsToAcquirePropertyPlantAndEquipment",
+                    s, e, 50.0, stmt="CashFlowStatement"),
+                dur("us-gaap:PaymentsOfDividendsCommonStock", s, e, 30.0,
+                    stmt="CashFlowStatement"),
+                {**inst("dei:EntityCommonStockSharesOutstanding",
+                        e[:4] + "-02-20", 100.0, stmt=None),
+                 "unit": "shares", "currency": None},
+            ] + balance_face(e, assets=2000.0, extra=[
+                inst("us-gaap:StockholdersEquity", e, 800.0),
+                inst("us-gaap:LongTermDebtNoncurrent", e, 100.0),
+                inst("us-gaap:CashAndCashEquivalentsAtCarryingValue", e, 50.0),
+                inst("us-gaap:RetainedEarningsAccumulatedDeficit", e, 400.0),
+                inst("us-gaap:AssetsCurrent", e, 600.0),
+                inst("us-gaap:LiabilitiesCurrent", e, 300.0),
+            ])
+            out.append(filing(f"D-{i}", "10-K", e[:4] + "-02-20", e, facts))
+
+        doc = price_store.load(cik)
+        price_store.merge_series(
+            doc, "SYN", "test",
+            [[f"{y}-02-20", 10.0, 100] for y in range(2019, 2025)], [])
+        price_store.mark_terminal(doc, "SYN", "delisted in the ticker map")
+        return out, doc
+
+    def test_every_price_measure_that_computes_says_the_series_ended(self):
+        from conftest import no_filer, symbols
+        from engine import bank
+        from engine.compute import compute_all
+
+        filings, prices = self._company(9310)
+        declares_a_price = [str(e.get("id"))
+                            for e in bank.load_bank()["entries"]
+                            if (e.get("inputs") or {}).get("prices")]
+        assert len(declares_a_price) > 10, "the bank stopped declaring prices"
+
+        results = compute_all(filings, prices, symbols("SYN"),
+                              industry=no_filer(),
+                              entry_ids=declares_a_price)
+        computed = {eid: r for eid, r in results.items()
+                    if r.get("status") == "computed"}
+        # The control. A fixture that computed nothing would pass the
+        # assertion below without exercising a single measure.
+        assert len(computed) >= 10, sorted(computed)
+        assert "pe_ttm" in computed and "market_cap" in computed
+
+        silent = [eid for eid, r in computed.items()
+                  if not any("series has ended" in c
+                             for c in (r.get("cautions") or []))]
+        assert silent == [], (
+            "these price measures compute against an ended series and do not "
+            "say so, so a delisted company's last close renders as a live "
+            "quote in them: " + ", ".join(sorted(silent)))
+
+    def test_the_mark_is_absent_when_the_series_is_alive(self):
+        """The other direction, so the test above cannot pass by a caution
+        that is always attached."""
+        from conftest import no_filer, symbols
+        from engine.compute import compute_all
+        from engine import price_store
+
+        filings, prices = self._company(9311)
+        (prices.get("series") or {})["SYN"].pop("terminal", None)
+        price_store.save(9311, prices)
+        r = compute_all(filings, prices, symbols("SYN"), industry=no_filer(),
+                        entry_ids=["pe_ttm", "market_cap"])
+        for eid in ("pe_ttm", "market_cap"):
+            assert r[eid]["status"] == "computed"
+            assert not any("series has ended" in c
+                           for c in r[eid]["cautions"]), eid

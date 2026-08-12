@@ -571,8 +571,10 @@ def _gross_margin_ttm_pct(ctx):
         num = {"value": rev["value"] - cor["value"],
                "cautions": _cautions_of(rev, cor)}
         how = "revenue − cost of revenue"
-    if rev["value"] == 0:
-        return absent("revenue for the trailing window is zero")
+    if not (rev["value"] > 0):
+        return absent(f"revenue for the trailing window is "
+                      f"{rev['value']:,.0f}; a gross margin over a revenue "
+                      "that is not positive inverts its sign")
     return {"value": num["value"] / rev["value"] * 100.0,
             "how": how, "cautions": _cautions_of(num, rev)}
 
@@ -599,7 +601,7 @@ def _gross_margin_annual_pct(ctx, n):
                           "fiscal years; the margin series cannot be aligned")
         gp_vals = [r - c for r, c in zip(rev["values"], cor["values"])]
         cautions = _cautions_of(cor, rev)
-    if any(r == 0 for r in rev["values"]):
+    if any(not (r > 0) for r in rev["values"]):
         return absent("a fiscal year in the window has zero revenue")
     return {"values": [g / r * 100.0 for g, r in zip(gp_vals, rev["values"])],
             "years": [p["end"] for p in rev["points"]], "cautions": cautions}
@@ -1162,10 +1164,14 @@ def altman_z_score(ctx):
     prov = ([_prov_point(parts[i]) for i in parts]
             + [_prov_point(ebit), _prov_point(rev),
                "market cap from the market_cap entry"])
+    # No caution about financial companies. There was one, asking the reader
+    # to decide whether this filer was a bank — and the host now decides it,
+    # from the code the SEC publishes, before this function is entered at all
+    # (Ctx.entry, and the industry conditions the bank declares for this
+    # entry). A caution that asks for a judgement already made is worse than
+    # none: it tells a reader the program could not settle something it did,
+    # and it invites them to discount a number that is fine.
     cautions = _cautions_of(ebit, rev, *parts.values()) + mc.get("cautions", [])
-    cautions.append("The bank marks this not meaningful for financial "
-                    "companies; whether this company is one is a judgement "
-                    "the data cannot make — check before relying on it.")
     return computed(z, prov, cautions)
 
 
@@ -1239,8 +1245,16 @@ def fcf_margin_ttm(ctx):
     rev = _ttm(ctx, "revenue")
     if is_absent(rev):
         return _absent_result(rev)
-    if rev["value"] == 0:
-        return _absent_result(absent("revenue for the trailing window is zero"))
+    # Positive, not merely non-zero. A contra-revenue restatement year tags
+    # `us-gaap:Revenues` negative, and a negative free cash flow over it is a
+    # large POSITIVE margin — the maximum-favourable answer to the worst
+    # facts, with `higher_is_better` beside it and no caution. Buffett cites
+    # this on an exit, so it is a false clear on the rule that sells.
+    if not (rev["value"] > 0):
+        return _absent_result(absent(
+            f"revenue for the trailing window is {rev['value']:,.0f}, which "
+            "is not a quantity a share of can be expressed as — a margin "
+            "over it inverts, so a loss reads as a high margin"))
     return computed(f["value"] / rev["value"] * 100.0,
                     f["provenance"] + [_prov_point(rev)],
                     sorted(set(f["cautions"] + _cautions_of(rev))))
@@ -1256,8 +1270,13 @@ def fcf_margin_median_5y(ctx):
     if fcf["years"] != [p["end"] for p in rev["points"]]:
         return _absent_result(absent("free cash flow and revenue resolve over "
                                      "different fiscal years"))
-    if any(r == 0 for r in rev["values"]):
-        return _absent_result(absent("a fiscal year in the window has zero revenue"))
+    bad = [(y, r) for y, r in zip(fcf["years"], rev["values"])
+           if not (r > 0)]
+    if bad:
+        return _absent_result(absent(
+            f"revenue for FY ending {bad[0][0]} is {bad[0][1]:,.0f}; a margin "
+            "over a revenue that is not positive inverts, so a loss year "
+            "would enter the median as a high margin"))
     vals = [f / r * 100.0 for f, r in zip(fcf["values"], rev["values"])]
     value, outs = _median_of(vals, fcf["years"])
     return computed(value,
@@ -1596,6 +1615,16 @@ def ev_to_ebit(ctx):
     ev = ctx.entry("enterprise_value")
     if ev["status"] != "computed":
         return ev
+    # The numerator, in the order the formula reads: EV ÷ EBIT. Only the
+    # denominator was guarded, so a company holding more cash than its shares
+    # and debt are worth together produced a negative multiple that sorted
+    # below every real reading on a measure where lower is better — and then
+    # ev_ebit_to_own_5y_median divided one negative by another and reported
+    # the price going UP as 30% below its own normal.
+    if ev["value"] <= 0:
+        return not_meaningful(
+            "ev_to_ebit", "enterprise value is zero or negative",
+            f"enterprise value is {ev['value']:,.0f}")
     ebit = _ttm(ctx, "ebit")
     if is_absent(ebit):
         return _absent_result(ebit)
@@ -1661,7 +1690,15 @@ def _quarterly_ratio_series(ctx, kind):
             if ebit["value"] <= 0:
                 misses.append(f"{q}: EBIT TTM not positive")
                 continue
-            values.append((mcap + debt["value"] - cash["value"]) / ebit["value"])
+            # Both ends of the ratio, on the same terms the current period is
+            # refused on. A quarter priced at a negative enterprise value is
+            # not a cheap quarter, and letting one into the median moves the
+            # thing every later reading is measured against.
+            ev = mcap + debt["value"] - cash["value"]
+            if ev <= 0:
+                misses.append(f"{q}: enterprise value not positive")
+                continue
+            values.append(ev / ebit["value"])
         else:
             eps = ctx.sb.ttm_at("diluted_eps", fi)
             if is_absent(eps) or eps["value"] <= 0:
