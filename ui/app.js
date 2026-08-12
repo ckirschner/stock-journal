@@ -2199,21 +2199,29 @@ function bankCard(e) {
       <p class="hint">This measure reports absent everywhere until the contract gains a way to hand one in.</p></div>`;
   }
   if (e.not_meaningful_when && e.not_meaningful_when.length) {
-    /* Two kinds of condition and they are refused by different things, so
-       each says which. An industry condition is settled from the SEC's own
-       code before anything is computed; a data condition is the formula
-       refusing its own arithmetic. A reader who cannot tell them apart
-       cannot tell "this will never apply to this company" from "this one
-       quarter came out unreadable". */
+    /* Three kinds of condition, refused by three different things — and one
+       of them refused by nothing at all, which is the whole reason the host
+       hands the sentence over rather than letting this decide. There was a
+       two-way ternary here: an industry condition got its own paragraph and
+       everything else got "refused by the calculation itself, from the
+       figures". That is true of a `data` condition and the exact inverse of
+       an `undetected` one, where neither this program nor the figures can
+       tell — so the reader was told the program had checked something it
+       cannot check, with the condition's own text rendering blank beside it.
+
+       `t.form.means` is the host's sentence for whichever form this is, and
+       `t.needs` is what it would take to settle one nobody can. The view
+       knows the shape and never the vocabulary. */
     h += `<div class="pe-block"><i>Not meaningful when</i><ul class="pe-nmw">${
       e.not_meaningful_when.map((t) => {
-        const what = t.industry
-          ? `the company is ${t.industry.map((c) => `<b>${esc(c.label)}</b> <span class="dim">(${esc(c.means)})</span>`).join(", or ")}
-             <div class="pe-sub">Settled from the industry code the SEC publishes, before anything is
-             computed. This measure reports <i>not applicable</i> for such a filer rather than a number.</div>`
-          : `${oneline(t.data)} <span class="dim">— refused by the calculation itself, from the figures</span>`;
-        return `<li>${what}${
-          t.because ? `<div class="pe-why" style="margin-top:4px">${prose(t.because)}</div>` : ""}</li>`;
+        const form = t.form || {};
+        const what = form.id === "industry"
+          ? `the company is ${(t.industry || []).map((c) => `<b>${esc(c.label)}</b> <span class="dim">(${esc(c.means)})</span>`).join(", or ")}`
+          : oneline(t.states);
+        return `<li>${what}
+          <div class="pe-sub">${esc(form.means || "")}</div>${
+          t.because ? `<div class="pe-why" style="margin-top:4px">${prose(t.because)}</div>` : ""}${
+          t.needs ? `<div class="pe-sub" style="margin-top:4px"><b>What would settle it:</b> ${prose(t.needs)}</div>` : ""}</li>`;
       }).join("")}</ul></div>`;
   }
   if (x.misfires || x.attribution) {

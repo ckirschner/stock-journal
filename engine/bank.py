@@ -147,7 +147,33 @@ def _check_estimator(entry) -> list:
 # the check nobody performs on the day they add the fifty-ninth measure.
 # ---------------------------------------------------------------------------
 
-_NMW_FORMS = ("industry", "data", "undetected")
+# The three forms, and what each one MEANS to a reader — one table, because
+# the sentence and the word have to move together. They did not: the loader
+# accepted three forms and the Metrics page held a two-way branch, so an
+# `undetected` condition rendered as "refused by the calculation itself, from
+# the figures", which is the exact inverse of what the form is for. Nothing
+# refuses these and nothing can; that is the whole of why they are unpleasant
+# to declare. A reader was being told the program had checked.
+#
+# Keeping the sentence here rather than in the view is the same argument
+# `bank_view` already makes about industry class names: those words are the
+# host's, a second copy in the interface is a copy that drifts, and a view
+# holding a table of forms is a view that has to be edited when a form is
+# added. Now a fourth form cannot be added without its sentence, because the
+# thing the loader accepts and the thing the reader is shown are one object.
+_NMW_FORMS = {
+    "industry":
+        "Settled from the industry code the SEC publishes, before anything "
+        "is computed. This measure reports not applicable for such a filer "
+        "rather than a number.",
+    "data":
+        "Refused by the calculation itself, from the figures. This measure "
+        "reports absent for a filer whose figures read this way.",
+    "undetected":
+        "Nothing refuses this one. Neither this program nor the figures it "
+        "reads can tell whether it holds, so the measure reports a number "
+        "either way — this one is yours to check in the filing.",
+}
 
 # The nouns that name a kind of company this host can settle from a published
 # industry code. Written out rather than derived from INDUSTRY_CLASSES,
@@ -214,6 +240,19 @@ def _check_applicability(entry) -> list:
                 f"{where}: `because` says, in plain language, why the measure "
                 "means nothing here. A refusal a reader cannot understand "
                 "teaches them that the tool is broken.")
+        # `needs` says what it would take to settle a condition nobody can
+        # settle, so it belongs to `undetected` and to nothing else. Checked
+        # here rather than inside the else-branch below, where it caught
+        # `data` and let `industry` through — the view renders `needs`
+        # wherever it appears, so one on a refused condition would print a
+        # standing request against the host for a question the host answers.
+        if forms[0] != "undetected" and "needs" in item:
+            problems.append(
+                f"{where}: `needs` belongs to an undetected condition, which "
+                "is the only kind nobody can settle. This one is refused by "
+                + ("the host, before the formula runs"
+                   if forms[0] == "industry" else "the formula itself")
+                + ", so nothing is owed.")
         if forms[0] == "industry":
             cls = item["industry"]
             if not isinstance(cls, list) or not cls:
@@ -253,10 +292,6 @@ def _check_applicability(entry) -> list:
                     "saying what it would take to settle it. A gap with no "
                     "sentence about closing it is a shrug, and a shrug is "
                     "not a request against anything.")
-            if form == "data" and "needs" in item:
-                problems.append(
-                    f"{where}: `needs` belongs to an undetected condition. "
-                    "This one is enforced, so nothing is owed.")
             hit = [w for w in _CLASSIFIABLE_WORDS
                    if _names_a_kind(prose.lower(), w)]
             if hit and form == "data":
@@ -352,6 +387,14 @@ def bank_view(name: str = "metric-bank") -> dict:
     interface is a copy that drifts — and because a view holding a table of
     class names is a view that has to be edited when a class is added, which
     is the wrong turn principle 9 names.
+
+    Which FORM a condition is resolves here for exactly the same reason, and
+    it is the same argument one step up. The view held its own table of forms,
+    it knew about two of the three, and the third — the one where nothing
+    refuses and nothing can — rendered as "refused by the calculation itself".
+    A reader was told the program had checked. So each condition leaves here
+    already carrying `form: {id, means}` and its own text under `states`, and
+    the view renders what it is given rather than deciding what a form is.
     """
     from .contract import INDUSTRY_CLASSES         # local: bank loads first
     doc = load_bank(name)
@@ -359,12 +402,17 @@ def bank_view(name: str = "metric-bank") -> dict:
     for e in (doc.get("entries") or []):
         plain = to_plain(e)
         for item in (plain.get("not_meaningful_when") or []):
-            named = item.get("industry")
-            if isinstance(named, list):
+            form = next((k for k in _NMW_FORMS if k in item), None)
+            if form is None:
+                continue                  # unreachable: load_bank refuses it
+            item["form"] = {"id": form, "means": _NMW_FORMS[form]}
+            if form == "industry":
                 item["industry"] = [
                     {"id": c, "label": INDUSTRY_CLASSES[c]["label"],
                      "means": INDUSTRY_CLASSES[c]["means"]}
-                    for c in named if c in INDUSTRY_CLASSES]
+                    for c in item["industry"] if c in INDUSTRY_CLASSES]
+            else:
+                item["states"] = " ".join(str(item[form]).split())
         out.append(plain)
     return {"name": name, "schema": to_plain(doc.get("schema")),
             "entries": out}

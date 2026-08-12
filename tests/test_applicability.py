@@ -286,6 +286,55 @@ class TestTheShippedBankSaysWhatItMeans:
                 assert c["label"] == contract.INDUSTRY_CLASSES[c["id"]][
                     "label"]
 
+    def test_every_form_the_loader_accepts_arrives_with_its_sentence(self):
+        """The word and what it means to a reader are one object.
+
+        They were two. The loader accepted three forms and the Metrics page
+        held a two-way branch, so `undetected` — the form where nothing
+        refuses and nothing can — rendered as "refused by the calculation
+        itself, from the figures", with its own text blank beside it. A
+        reader was told the program had checked something it cannot check.
+
+        This is the pairing, and it cannot grow quietly: a fourth form added
+        to `_NMW_FORMS` without a sentence fails here, and one added anywhere
+        else is not a form the loader accepts."""
+        forms = {f for e in bank.bank_view()["entries"]
+                 for item in (e.get("not_meaningful_when") or [])
+                 if (f := item["form"]["id"])}
+        assert forms == set(bank._NMW_FORMS), (
+            "the shipped bank does not exercise every form the loader "
+            "accepts, so one of them renders untested")
+        for item in (i for e in bank.bank_view()["entries"]
+                     for i in (e.get("not_meaningful_when") or [])):
+            means = item["form"]["means"]
+            assert len(means.split()) >= 8, item
+
+    def test_a_condition_carries_its_own_text_where_the_host_cannot_settle_it(
+            self):
+        """An industry condition renders from its class list; the other two
+        render their own prose, and it has to survive the trip. `t.data` was
+        read on an undetected item, which is undefined — so the sentence
+        saying what the reader should go and check rendered as nothing."""
+        for e in bank.bank_view()["entries"]:
+            for item in (e.get("not_meaningful_when") or []):
+                if item["form"]["id"] == "industry":
+                    assert item["industry"]
+                else:
+                    assert item["states"].strip(), (e["id"], item)
+
+    def test_only_an_undetected_condition_owes_anything(self):
+        """`needs` is what it would take to settle a condition nobody can
+        settle, and the view renders it wherever it appears. On a refused
+        condition it would print a standing request against the host for a
+        question the host already answers — so it is refused at load, for
+        every form but the one it belongs to."""
+        for e in bank.bank_view()["entries"]:
+            for item in (e.get("not_meaningful_when") or []):
+                if item["form"]["id"] == "undetected":
+                    assert str(item.get("needs") or "").strip(), e["id"]
+                else:
+                    assert "needs" not in item, e["id"]
+
 
 # ---------------------------------------------------------------------------
 # the other form — the one the host cannot evaluate
