@@ -18,7 +18,7 @@ import pytest
 from conftest import balance_face, dur, filing, industry_node
 
 from engine import context, contract, facts_store, judgements
-from engine import strategy_loader, strategy_values
+from engine import strategy_floor, strategy_loader, strategy_values
 
 DOCS = Path(__file__).resolve().parent.parent / "docs"
 
@@ -124,8 +124,13 @@ def build(record, known=None, series=None, moat=None, held=False,
 
 def verdict(record, **kw):
     result = contract.evaluate(record, build(record, **kw))
-    assert result["state"]["id"] != "host:invalid-decision", \
-        result["reason"]["summary"]
+    # `produced_by`, not "is not host:invalid-decision". This bundle is the
+    # one docs/WRITING-A-STRATEGY.md tells a new author to copy, and it
+    # carried the weakest of the three versions of this check: the shipped
+    # suites assert the stronger form, which also catches
+    # host:strategy-error and host:inputs-missing. A pattern being
+    # advertised should not be the loosest one in the repository.
+    assert result["produced_by"] == "strategy", result["reason"]["summary"]
     return result
 
 
@@ -346,8 +351,11 @@ class TestEveryStateIsReachable:
             {"held": True, "weight": 8.0, "known": {**CLEARS, **breached},
              "series": {"interest_coverage": falling(9.0, 9.0, 3.0, 2.0)}},
         ]
-        reached = {verdict(example, **c)["state"]["id"] for c in cases}
-        assert reached == {s["id"] for s in example["states"]}
+        # Through the shared helper, which is the whole point of it
+        # existing: this is what an author writes, and it is one line rather
+        # than a set comprehension they have to get right themselves.
+        assert strategy_floor.unmet(
+            example, [verdict(example, **c) for c in cases]) == []
 
 
 class TestThroughTheRealContext:

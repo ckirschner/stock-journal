@@ -35,7 +35,7 @@ from conftest import entered, filer, filing, dur, balance_face, \
     industry_node
 
 from engine import context, contract, facts_store, strategy_loader
-from engine import strategy_values
+from engine import strategy_floor, strategy_values
 
 MEASURES = ("pe_3y_avg_eps", "price_to_book", "graham_combined_multiple",
             "current_ratio", "ltd_to_working_capital", "profitable_years_10y",
@@ -1074,38 +1074,44 @@ class TestEveryStateIsReachable:
         # cost — the strategy has no access to that and could not use it.
         room = {"known": {**CLEARS_ENTRY, **CLEARS_EXITS}, "weight": 2.0,
                 **held}
-        reached = {
-            verdict(graham, **room)["state"]["id"],
+        results = [
+            verdict(graham, **room),
             # The same holding, where the current ratio stood at 3.6 when it
             # was first bought and is 2.4 now. Not one exit has been crossed
             # — 2.4 is comfortably above the 1.2 that sells — and the total
             # move is further than this strategy will add behind.
             verdict(graham, bought={"first": {**CLEARS_ENTRY, **CLEARS_EXITS,
                                               "current_ratio": 3.6}},
-                    **room)["state"]["id"],
-            verdict(graham, known=CLEARS_ENTRY)["state"]["id"],
+                    **room),
+            verdict(graham, known=CLEARS_ENTRY),
             verdict(graham, known=CLEARS_ENTRY,
-                    occupied=20)["state"]["id"],
+                    occupied=20),
             verdict(graham, known={**CLEARS_ENTRY, "price_to_book": 2.9}
-                    )["state"]["id"],
+                    ),
             verdict(graham, known={k: v for k, v in CLEARS_ENTRY.items()
-                                   if k != "price_to_book"})["state"]["id"],
-            verdict(graham, known=CLEARS_EXITS, **held)["state"]["id"],
+                                   if k != "price_to_book"}),
+            verdict(graham, known=CLEARS_EXITS, **held),
             verdict(graham, known={**CLEARS_EXITS, "price_to_book": 3.4},
                     series={"price_to_book": [(QUARTERS[4], 3.4)]},
-                    **held)["state"]["id"],
+                    **held),
             verdict(graham, known=CLEARS_EXITS, weight=18.2,
-                    **held)["state"]["id"],
+                    **held),
             verdict(graham, known={**CLEARS_EXITS, "price_to_book": 3.4},
-                    series=breach, **held)["state"]["id"],
+                    series=breach, **held),
             verdict(graham, known={**CLEARS_EXITS,
                                    "consecutive_annual_loss_years": 2},
-                    **held)["state"]["id"],
+                    **held),
             verdict(graham, known=CLEARS_EXITS, held=True,
-                    opened="2024-01-01")["state"]["id"],
-            verdict(graham, held=True, opened="2026-01-05")["state"]["id"],
-        }
-        assert reached == {s["id"] for s in graham["states"]}
+                    opened="2024-01-01"),
+            verdict(graham, held=True, opened="2026-01-05"),
+        ]
+        # The floor the documentation names, from the helper an author
+        # imports rather than from a copy per suite. It covers both
+        # assertions: no case came back host:invalid-decision, and every
+        # declared state was reached. The `produced_by` check at the top of
+        # this file stays — it is stronger than the first of the two and
+        # fails at the case rather than at the end.
+        assert strategy_floor.unmet(graham, results) == []
 
 
 class TestThroughTheRealContext:

@@ -34,7 +34,7 @@ from conftest import entered, filer, filing, dur, balance_face, \
     industry_node
 
 from engine import context, contract, facts_store, judgements
-from engine import strategy_loader, strategy_values
+from engine import strategy_floor, strategy_loader, strategy_values
 
 QUALITATIVE = ("moat_durability", "management_integrity", "capital_allocation")
 
@@ -1223,43 +1223,46 @@ class TestEveryDeclaredStateIsReachable:
     journal never uses. Twelve declared, twelve driven."""
 
     def test_all_twelve(self, buffett):
-        reached = {
+        results = [
             verdict(buffett, known=CLEARS_ENTRY,
-                    judged=SAID_YES)["state"]["id"],
-            verdict(buffett, known=CLEARS_ENTRY)["state"]["id"],
+                    judged=SAID_YES),
+            verdict(buffett, known=CLEARS_ENTRY),
             verdict(buffett, known=CLEARS_ENTRY,
                     judged={**SAID_YES, "moat_durability": False}
-                    )["state"]["id"],
+                    ),
             verdict(buffett, known={**CLEARS_ENTRY, "roic_median_5y": 6.0}
-                    )["state"]["id"],
-            verdict(buffett, known={})["state"]["id"],
+                    ),
+            verdict(buffett, known={}),
             verdict(buffett, known=CLEARS_ENTRY, judged=SAID_YES,
-                    occupied=10)["state"]["id"],
+                    occupied=10),
             verdict(buffett, known=CLEARS_EXITS, judged=SAID_YES, held=True,
-                    opened="2019-04-01", weight=52.0)["state"]["id"],
+                    opened="2019-04-01", weight=52.0),
             verdict(buffett, known=CLEARS_EXITS, judged=SAID_YES, held=True,
-                    opened="2019-04-01", weight=14.0)["state"]["id"],
+                    opened="2019-04-01", weight=14.0),
             verdict(buffett, known={**CLEARS_EXITS,
                                     "total_debt_to_avg_fcf_5y": 6.4},
                     judged=SAID_YES, held=True, opened="2019-04-01",
                     weight=14.0,
                     series={"total_debt_to_avg_fcf_5y":
                             [(q, 1.4) for q in QUARTERS[:-1]]
-                            + [(QUARTERS[-1], 6.4)]})["state"]["id"],
+                            + [(QUARTERS[-1], 6.4)]}),
             verdict(buffett, known={**CLEARS_EXITS,
                                     "total_debt_to_avg_fcf_5y": 6.4},
                     judged=SAID_YES, held=True, opened="2019-04-01",
                     weight=14.0,
                     series={"total_debt_to_avg_fcf_5y":
-                            [(q, 6.4) for q in QUARTERS]})["state"]["id"],
+                            [(q, 6.4) for q in QUARTERS]}),
             verdict(buffett, known=CLEARS_EXITS,
                     judged={**SAID_YES, "capital_allocation": False},
                     held=True, opened="2019-04-01",
-                    weight=14.0)["state"]["id"],
+                    weight=14.0),
             verdict(buffett, known={}, judged=SAID_YES, held=True,
-                    opened="2019-04-01", weight=14.0)["state"]["id"],
-        }
-        assert reached == {s["id"] for s in buffett["states"]}
+                    opened="2019-04-01", weight=14.0),
+        ]
+        # The documented floor, from the shared helper. Buffett's own
+        # authoring is where host:invalid-decision was found the hard way,
+        # one contradicted commit at a time.
+        assert strategy_floor.unmet(buffett, results) == []
 
 
 # ---------------------------------------------------------------------------
