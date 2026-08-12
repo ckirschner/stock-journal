@@ -66,6 +66,14 @@ MARKS = ("pass", "fail")
 # as success.
 _AS_VALUE = {"pass": True, "fail": False}
 
+# The unit a mark renders in, named where the shape of an answer is decided.
+# A mark is an answer and not a quantity, and `_AS_VALUE` above makes it a
+# boolean — so yes/no is the only honest rendering of one, and engine/bank.py
+# refuses a qualitative entry declaring anything else. Stated here rather than
+# beside the other host vocabulary in engine/contract.py because this is the
+# module that makes it true: change `_AS_VALUE` and this moves with it.
+UNIT = "yes_no"
+
 _BELONGS_TO_AN_EARLIER_HOLDING = (
     "this assessment was written on {when}, while you still owned this from "
     "an earlier holding that closed on {closed} — it was written about that "
