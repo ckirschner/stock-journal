@@ -253,13 +253,64 @@ def _cand_list(spec) -> list:
     return spec.get("candidates") or []
 
 
+# -- absence, with a reason ---------------------------------------------------
+#
+# A resolver used to return None for every way a line could fail to arrive, so
+# a refusal and a gap were the same answer, and the sentence a reader finally
+# saw was manufactured a layer up from the only thing left: that nothing came
+# back. "Capital expenditure did not resolve in the newest annual report" is
+# true of a filer that tags no capex caption at all, and it is what was shown
+# for a filer that tagged one NEGATIVE — a sign this program refuses precisely
+# because it cannot tell a reversed convention from a real refund. The reader
+# was sent to look for a missing line that is sitting in the filing.
+#
+# The shape is engine/periods.py's, which `is_absent` already treated None as,
+# so every guard written against the old return keeps working. Defined here
+# because this is where the refusals happen; periods re-exports it.
+
+def absent(reason: str) -> dict:
+    return {"absent": True, "reason": str(reason)}
+
+
+def is_absent(x) -> bool:
+    return x is None or (isinstance(x, dict) and x.get("absent"))
+
+
+def label(input_id: str) -> str:
+    """What to call an input in a sentence, from its own declaration.
+
+    Lives here rather than in engine/periods.py, where it used to, because
+    the refusals below need it and periods reads this module rather than the
+    other way round. periods re-exports it; every existing caller is
+    unchanged.
+    """
+    try:
+        return str(input_spec(input_id).get("label") or input_id)
+    except KeyError:
+        return input_id
+
+
+def _no_candidate(input_id, fi, where: str) -> dict:
+    return absent(f"no concept this program maps to {label(input_id)} is "
+                  f"tagged for {where} in {fi.form} {fi.accession}")
+
+
 def resolve_duration(fi: FilingIndex, input_id: str, start: str, end: str):
-    """One input over one duration in one filing, or None."""
+    """One input over one duration in one filing, or an absence saying why.
+
+    Every way this can fail now says which way it was. It used to return None
+    for all of them, so "no such line in this filing" and "the line is there
+    and tagged with the wrong sign" were one answer — and the sentence a
+    reader eventually saw was assembled a layer up from the only fact left,
+    that nothing came back.
+    """
     spec = input_spec(input_id)
+    where = f"{start} to {end}"
     if spec.get("derive"):
         base = resolve_duration(fi, spec["derive"], start, end)
-        if base is None:
-            return None
+        if is_absent(base):
+            return base if base is not None else _no_candidate(
+                input_id, fi, where)
         return {**base, "input": input_id,
                 "cautions": base["cautions"] + [spec.get("caution")] if spec.get("caution")
                 else base["cautions"]}
@@ -268,8 +319,13 @@ def resolve_duration(fi: FilingIndex, input_id: str, start: str, end: str):
         total = 0.0
         for sub in spec["derive_sum"]:
             r = resolve_duration(fi, sub, start, end)
-            if r is None:
-                return None
+            if is_absent(r):
+                # Named, because a sum of four lines that is missing one is a
+                # different fix from one that is missing all of them.
+                return absent(
+                    f"{label(input_id)} is worked out from {label(sub)}, and "
+                    + (r["reason"] if isinstance(r, dict) and r.get("reason")
+                       else f"that did not resolve for {where}"))
             total += r["value"]
             parts.append({"concept": r.get("concept"), "input": sub,
                           "value": r["value"], "matched_by": r["matched"]})
@@ -280,7 +336,8 @@ def resolve_duration(fi: FilingIndex, input_id: str, start: str, end: str):
     for cand in _cand_list(spec):
         r = _try_candidate_duration(fi, input_id, cand, start, end)
         if r is not None:
-            return r if _sign_holds(spec, r) else None
+            return r if _sign_holds(spec, r) else _sign_refusal(spec,
+                                                                input_id, r)
     if spec.get("absent_means_zero") and (start, end) in fi._cf_periods:
         # Cash-flow-face completeness: the statement's sections sum to their
         # totals, so a located cash flow statement with no such line is the
@@ -290,7 +347,7 @@ def resolve_duration(fi: FilingIndex, input_id: str, start: str, end: str):
                               "cash flow statement for this period; the "
                               "statement reports none."],
                     start=start, end=end)
-    return None
+    return _no_candidate(input_id, fi, where)
 
 
 # The sign conventions an input may declare. Adding one is a change here,
@@ -299,7 +356,25 @@ def resolve_duration(fi: FilingIndex, input_id: str, start: str, end: str):
 _SIGNS = {
     # A payments element: the taxonomy tags the amount LEAVING the company as
     # a positive number, and every consumer subtracts it.
-    "outflow_positive": lambda v: v >= 0,
+    "outflow_positive": {
+        "holds": lambda v: v >= 0,
+        # The sentence lives with the convention, so a refusal cannot be
+        # performed without one and cannot describe a different rule than the
+        # one that fired. The reader is told what was in the filing and why
+        # it is not usable — not that the line was missing, which is what
+        # they were told before and sent them looking for something that is
+        # sitting right there.
+        "refuses": lambda label_, v, where, concept: (
+            f"{label_} is tagged {v:,.0f} for {where}"
+            + (f" ({concept})" if concept else "")
+            + ". This is a payments line: the taxonomy states the amount "
+              "leaving the company as a positive number, and every figure "
+              "built on it subtracts it — so a negative here is either the "
+              "opposite convention or a real reversal, such as a refund or a "
+              "sale-leaseback credited back to the same caption. Those want "
+              "opposite corrections and the filing does not say which it is, "
+              "so the value is refused rather than guessed at"),
+    },
 }
 
 
@@ -327,7 +402,17 @@ def _sign_holds(spec, r) -> bool:
     payout ratio divides by two more of them.
     """
     rule = _SIGNS.get(spec.get("sign"))
-    return rule is None or rule(r["value"])
+    return rule is None or rule["holds"](r["value"])
+
+
+def _sign_refusal(spec, input_id, r) -> dict:
+    """Why a resolved fact was refused on its sign, in the convention's own
+    words. One copy, beside the rule that fired."""
+    rule = _SIGNS[spec["sign"]]
+    where = (f'{r["start"]} to {r["end"]}' if r.get("start")
+             else r.get("instant") or "that period")
+    return absent(rule["refuses"](label(input_id), r["value"], where,
+                                  r.get("concept")))
 
 
 def _try_candidate_duration(fi, input_id, cand, start, end):
@@ -357,7 +442,8 @@ def _try_candidate_duration(fi, input_id, cand, start, end):
 
 
 def resolve_instant(fi: FilingIndex, input_id: str, date: str):
-    """One input at one balance-sheet date in one filing, or None."""
+    """One input at one balance-sheet date in one filing, or an absence
+    saying why — the same channel `resolve_duration` carries."""
     spec = input_spec(input_id)
     if spec.get("resolve") == "aggregate":
         return _resolve_aggregate(fi, input_id, spec, date)
@@ -399,7 +485,7 @@ def resolve_instant(fi: FilingIndex, input_id: str, date: str):
                               "balance-sheet face at this date; the face sums "
                               "to its total, so the statement reports none."],
                     instant=date)
-    return None
+    return _no_candidate(input_id, fi, f"the balance sheet at {date}")
 
 
 # -- debt aggregates ---------------------------------------------------------

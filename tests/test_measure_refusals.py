@@ -251,7 +251,54 @@ class TestAPaymentsLineTaggedNegativeIsRefused:
         fi = cm.FilingIndex(filing("N-1", "10-K", "2024-02-20", d, [
             dur("us-gaap:PaymentsOfDividendsCommonStock", s, d, -40.0,
                 stmt="CashFlowStatement")]))
-        assert cm.resolve_duration(fi, "dividends_paid", s, d) is None
+        r = cm.resolve_duration(fi, "dividends_paid", s, d)
+        assert cm.is_absent(r)
+        assert "value" not in r
+
+    def test_the_refusal_says_it_was_the_sign_and_not_a_missing_line(self):
+        """The absence that could not say why.
+
+        Every way a resolution could fail came back as None, so the sentence
+        a reader finally saw was assembled from the only fact left — that
+        nothing arrived. "Capital expenditure did not resolve in the newest
+        annual report" is true of a filer that tags no such caption, and it
+        is what was shown for a filer whose caption is right there tagged
+        negative. The reader was sent to look for a line that is in the
+        filing, and the two point at completely different things: one is a
+        gap in the data, the other is this program refusing a number it
+        cannot interpret.
+        """
+        d, s = "2023-12-31", "2023-01-01"
+        fi = cm.FilingIndex(filing("N-2", "10-K", "2024-02-20", d, [
+            dur("us-gaap:PaymentsToAcquirePropertyPlantAndEquipment", s, d,
+                -50.0, stmt="CashFlowStatement")]))
+        r = cm.resolve_duration(fi, "capex", s, d)
+        assert cm.is_absent(r)
+        why = r["reason"]
+        assert "-50" in why                     # the figure that is there
+        assert "payments line" in why           # the convention that fired
+        assert "opposite convention or a real reversal" in why
+        assert "did not resolve" not in why
+
+    def test_a_line_that_is_genuinely_missing_says_that_instead(self):
+        """The other half, so the sentence above is not simply what every
+        absence now says."""
+        d, s = "2023-12-31", "2023-01-01"
+        fi = cm.FilingIndex(filing("N-3", "10-K", "2024-02-20", d, [
+            dur("us-gaap:Revenues", s, d, 1000.0)]))
+        r = cm.resolve_duration(fi, "capex", s, d)
+        assert cm.is_absent(r)
+        assert "no concept this program maps to" in r["reason"]
+        assert "payments line" not in r["reason"]
+
+    def test_the_reason_reaches_the_measure_a_reader_is_looking_at(self):
+        """The whole point of the channel. It has to survive the trip from
+        the resolver, through period assembly, to the sentence on the entry
+        the reader clicked — otherwise it is a better message nobody sees."""
+        r = entry(five(cfo=200.0, capex=-50.0), "fcf_ttm")
+        assert r["status"] == "absent"
+        assert "payments line" in r["reason"]
+        assert "-50" in r["reason"]
 
     def test_a_sign_convention_the_host_cannot_perform_refuses_the_map(self):
         """`sign` sat in the map unread for as long as it existed. A word
