@@ -165,6 +165,34 @@ goes on the rule-change record and asks you to write down why. Changing an
 answer updates a fact, so it goes on its own dated record and asks for
 nothing — your cash balance moving is not a rule being retuned.
 
+### When a measure itself is redefined
+
+A strategy says a holding fails below fifteen per cent. What the fifteen per
+cent is measured *over* — five fiscal years or three, which kinds of company
+the measure refuses to describe, how many readings a breach of it needs — is
+defined in `config/metric-bank.yaml`, outside any journal and shared by all of
+them. Editing that changes what every exit demands just as surely as editing
+the threshold, and it is a file on your machine that the program re-reads
+whenever it changes.
+
+So each journal stamps what its measures meant when it was created and
+compares them every time it is opened. A move is recorded per measure and per
+field — *Return on invested capital, 5-year median · observations read: 5 → 3*
+— on its own append-only record beside the rule changes.
+
+What the record can say depends on what moved. A value that means something on
+its own is recorded as a before and after. A formula cannot be: the program can
+see the arithmetic change and has no honest way to tell you what it now
+demands, so it says that and no more. The prose that explains a measure to a
+reader is not on the record at all and can be edited freely — it changes
+nothing any verdict reads.
+
+Who is asked to explain it follows the same rule as a threshold. The bank
+carries a version and a changelog, and a release that does not say what it
+changed will not load; bump the version and the changelog is the account.
+Edit a definition in place and the version beside it does not move — so the
+record says so, and asks *you* for the sentence.
+
 ### Your judgement, per security
 
 Some of what decides an investment is not in the filings: whether a moat
@@ -923,7 +951,7 @@ engine/                   no UI imports live here
   context.py              what a strategy receives, built per security
   strategy_loader.py      discovery, loading, and refusing a bad bundle
   strategy_values.py      the declared-values resolution chain
-  journals.py             the journal collection, the rule-change record and
+  journals.py             the journal collection, the two change records and
                           the record of answers you changed
   bank.py                 the metric bank
   lists.py                the dated set of securities a journal imported,
@@ -978,6 +1006,18 @@ explanation are required of you rather than of the loader — a bare number with
 no explanation is incomplete, not a follow-up ticket. The UI renders
 whatever the bank and the strategy hand it; there is no view code to change.
 
+**Bump `version` at the top of the file and add a `changelog` line for it.**
+A version with nothing saying what changed will not load. Every journal records
+the move either way — it compares stamped definitions, not version numbers — so
+what the bump decides is whether the record quotes your line or asks the person
+at the keyboard to write one.
+
+**A key you add to an entry has to be placed.** `bank.ACCOUNTED_FOR` says,
+for every key an entry can carry, where a change to it lands: on the record
+under a name, as a digest of arithmetic nobody can read back, or nowhere and
+why. A test compares that against the keys the file actually carries, so a new
+one cannot reach a verdict while sitting on no record.
+
 A `qualitative` entry is one you answer rather than one the host computes: it
 carries the question instead of a derivation, and adding one adds it to the
 security pages of every journal whose strategy reads it — again with no view
@@ -995,7 +1035,7 @@ python -m pytest
 
 The suite pins the behaviours that would fail *silently* — history
 immutability, evaluation correctness, absence handling, atomic persistence,
-and the rule-change record. A guarantee asserted in prose decays; one with a
+and both change records. A guarantee asserted in prose decays; one with a
 failing test does not.
 
 One test renders every screen under Node with a stub DOM

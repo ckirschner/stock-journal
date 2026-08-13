@@ -177,3 +177,224 @@ class TestWhatAnswersAMeasureAndHowItRenders:
         for e in bank.load_bank()["entries"]:
             if str(e.get("kind")) == "qualitative":
                 assert str(e.get("unit")) == judgements.UNIT
+
+
+class TestTheBankSaysWhatChangedWhenItChanges:
+    """A measure definition is a rule, and this is the half of that claim the
+    bank itself has to carry.
+
+    Editing a formula here changes what every exit in every journal demands,
+    exactly as editing a threshold in a strategy does — and the strategy had a
+    version, a changelog, and a loader that refused a version saying nothing.
+    The bank had none of it. What that cost was not that a change went
+    unrecorded: a journal stamps the definitions and catches an edit either
+    way. It was that there was no way to tell an author's release from
+    somebody's edit in place, and therefore no way to know who was owed the
+    sentence explaining it.
+    """
+
+    def _write(self, tmp_path, monkeypatch, text):
+        (tmp_path / "probe.yaml").write_text(
+            "schema: ledger.metric-bank/1\n" + text, encoding="utf-8")
+        monkeypatch.setattr(bank, "CONFIG_DIR", tmp_path)
+        bank._bank_cache.clear()
+        bank._definitions_cache.clear()
+
+    def test_a_bank_with_no_version_is_refused(self, tmp_path, monkeypatch):
+        self._write(tmp_path, monkeypatch, "entries: []\n")
+        with pytest.raises(ValueError, match="`version` must be a whole "
+                                             "number"):
+            bank.load_bank("probe")
+
+    def test_a_version_that_does_not_say_what_changed_is_refused(
+            self, tmp_path, monkeypatch):
+        """The whole point of the number. A release that says nothing is a
+        release a journal cannot quote, which leaves it recording that the
+        measures moved and unable to say why — the exact hole the strategy
+        contract already refuses to leave open."""
+        self._write(tmp_path, monkeypatch,
+                    "version: 2\nchangelog:\n  1: first\nentries: []\n")
+        with pytest.raises(ValueError, match="version 2 has no changelog"):
+            bank.load_bank("probe")
+
+    def test_a_changelog_entry_with_no_sentence_is_refused(self, tmp_path,
+                                                           monkeypatch):
+        self._write(tmp_path, monkeypatch,
+                    "version: 1\nchangelog:\n  1: '   '\nentries: []\n")
+        with pytest.raises(ValueError, match="non-empty text"):
+            bank.load_bank("probe")
+
+    def test_the_shipped_bank_passes_its_own_release_check(self):
+        """The control, and the reason the rest of this class means
+        anything."""
+        assert bank._check_release(bank.load_bank()) == []
+        assert bank.definitions()["version"] in bank.changelog()
+
+
+class TestEveryFieldOfAMeasureHasBeenDecidedAbout:
+    """The failure this prevents is the quiet one: somebody adds a key to an
+    entry — a second window, a switch the formula reads — and it reaches every
+    journal's verdicts while sitting on no record, because the code that
+    builds a definition simply never looked at it.
+
+    A list of what IS recorded cannot catch that. Only a list of everything,
+    checked against what the file actually carries, can.
+    """
+
+    def _keys(self):
+        return {str(k) for e in bank.load_bank()["entries"] for k in e}
+
+    def test_every_key_a_shipped_entry_carries_has_been_placed(self):
+        unplaced = sorted(self._keys() - set(bank.ACCOUNTED_FOR))
+        assert unplaced == [], (
+            f"{unplaced} reach a verdict and no journal would record them "
+            "moving. Add each to bank.ACCOUNTED_FOR, saying where a change to "
+            "it lands — on the record under a name, or nowhere and why.")
+
+    def test_nothing_is_accounted_for_that_no_entry_carries(self):
+        """A sentence about a field that no longer exists is a sentence
+        nobody can check, and it reads as coverage."""
+        stale = sorted(set(bank.ACCOUNTED_FOR) - self._keys()
+                       - {"parameters"})
+        assert stale == [], stale
+
+    def test_the_two_halves_say_different_kinds_of_thing(self):
+        """`states` carries values a reader can act on; `restates` carries
+        fingerprints of arithmetic nobody can read back. Mixing them is how a
+        record comes to claim it knows what a changed formula now demands."""
+        d = bank.definitions()["entries"]["roic_median_5y"]
+        assert d["states"]["observations read"] == 5
+        assert d["states"]["does not describe"] == [
+            "depository-lending", "insurance", "real-estate"]
+        assert set(d["restates"]) == {
+            "how it is worked out", "what the formula refuses on",
+            "what nothing here can settle", "the question you answer"}
+        assert all(isinstance(v, str) and len(v) == 12
+                   for v in d["restates"].values())
+
+    def test_re_wrapping_a_formula_is_not_a_change_to_what_it_demands(self):
+        """A digest over whitespace would report a column being re-flowed to
+        every journal as a change to what an exit demands, which is how a
+        record fills with things nobody was worried about."""
+        assert bank._digest("a  b\n c") == bank._digest("a b c")
+        assert bank._digest("a b") != bank._digest("a c")
+
+    def test_a_prose_edit_moves_nothing_and_an_arithmetic_edit_does(self):
+        """The line this record draws, on one entry, both ways."""
+        import copy
+        e = copy.deepcopy(bank.to_plain(
+            bank.bank_index(bank.load_bank())["roic_median_5y"]))
+        before = bank._definition(e)
+        e["explanation"]["plain"] = "Something else entirely."
+        assert bank._definition(e) == before
+        e["derivation"]["formula"] = "value = 1"
+        assert bank._definition(e)["restates"][
+            "how it is worked out"] != before["restates"][
+            "how it is worked out"]
+
+
+class TestEveryRecordedFieldComesFromSomewhere:
+    """The other half of the pairing above, and the failure it prevents is the
+    inverse one: a field is named on the record, and nothing under it is
+    actually read — so a measure's definition moves and the record says
+    nothing, in the one place that looks like it is watched.
+
+    Asserted against one entry carrying every key an entry can carry, so the
+    table below has to grow when the definition does, and cannot quietly stop
+    covering something.
+    """
+
+    def entry(self):
+        return {
+            "id": "probe", "kind": "computed", "label": "Probe",
+            "unit": "percent", "format": "0.0%",
+            "polarity": "higher_is_better",
+            "estimator": {"kind": "median", "observations": 5,
+                          "window": {"statistic": "averaged",
+                                     "observations": 3}},
+            "inputs": {"filings": ["revenue"], "prices": [],
+                       "entries": ["fcf_ttm"]},
+            "parameters": [{"id": "discount_rate", "unit": "percent"}],
+            "derivation": {"formula": "value = 1", "window": "one year"},
+            "question": "Does it hold?",
+            "response": {"prose": "required", "marks": ["pass", "fail"],
+                         "unmarked": "unassessed"},
+            "not_meaningful_when": [
+                {"industry": ["insurance"], "because": "they do not"},
+                {"data": "revenue is negative", "because": "it inverts"},
+                {"undetected": "a captive finance arm",
+                 "needs": "segment data", "because": "nothing can tell"}],
+            "explanation": {"plain": "p", "misfires": "m",
+                            "attribution": "a"},
+            "polarity_note": "n",
+        }
+
+    # What each recorded field is read from. One row per field, so a field
+    # added to a definition with nothing under it fails here rather than
+    # reaching a journal as a name that never moves.
+    MOVES = {
+        "name": lambda e: e.update(label="Renamed"),
+        "answered by": lambda e: e.update(kind="qualitative"),
+        "unit": lambda e: e.update(unit="ratio"),
+        "format": lambda e: e.update(format="0.00%"),
+        "favourable direction": lambda e: e.update(polarity="none"),
+        "how it is read": lambda e: e["estimator"].update(kind="averaged"),
+        "observations read": lambda e: e["estimator"].update(observations=4),
+        "judged against":
+            lambda e: e["estimator"]["window"].update(statistic="median"),
+        "observations judged against":
+            lambda e: e["estimator"]["window"].update(observations=5),
+        "built on": lambda e: e["inputs"].update(entries=["pe_ttm"]),
+        "parameters": lambda e: e["parameters"].append({"id": "rate"}),
+        "does not describe":
+            lambda e: e["not_meaningful_when"][0].update(
+                industry=["insurance", "real-estate"]),
+        "marks it accepts":
+            lambda e: e["response"].update(marks=["pass", "fail", "maybe"]),
+        "prose": lambda e: e["response"].update(prose="optional"),
+        "unmarked reads as": lambda e: e["response"].update(unmarked="none"),
+        "how it is worked out":
+            lambda e: e["derivation"].update(formula="value = 2"),
+        "what the formula refuses on":
+            lambda e: e["not_meaningful_when"][1].update(data="revenue is 0"),
+        "what nothing here can settle":
+            lambda e: e["not_meaningful_when"][2].update(needs="a filing"),
+        "the question you answer": lambda e: e.update(question="Does it?"),
+    }
+
+    def test_every_recorded_field_moves_when_its_source_moves(self):
+        import copy
+        before = bank._definition(self.entry())
+        for field, break_it in self.MOVES.items():
+            e = self.entry()
+            break_it(e)
+            after = bank._definition(e)
+            half = "states" if field in before["states"] else "restates"
+            assert after[half].get(field) != before[half].get(field), (
+                f"{field} is on the record and nothing under it is read — a "
+                "measure could move here and no journal would say so.")
+            # and it is the ONLY thing that moved, so a field is not quietly
+            # standing in for a neighbour
+            moved = {k for h in ("states", "restates")
+                     for k in set(before[h]) | set(after[h])
+                     if before[h].get(k) != after[h].get(k)}
+            assert moved == {field}, (field, moved)
+        assert before == bank._definition(self.entry())  # nothing mutated
+
+    def test_the_table_covers_every_field_a_definition_produces(self):
+        d = bank._definition(self.entry())
+        produced = set(d["states"]) | set(d["restates"])
+        assert produced == set(self.MOVES), produced ^ set(self.MOVES)
+
+    def test_prose_a_reader_reads_moves_nothing(self):
+        """The stated line, checked rather than asserted in a comment."""
+        for edit in (lambda e: e["explanation"].update(plain="rewritten"),
+                     lambda e: e["explanation"].update(misfires="rewritten"),
+                     lambda e: e["explanation"].update(attribution="someone"),
+                     lambda e: e.update(polarity_note="rewritten"),
+                     lambda e: e["inputs"].update(filings=["net income"]),
+                     lambda e: e["not_meaningful_when"][0].update(
+                         because="a different sentence")):
+            e = self.entry()
+            edit(e)
+            assert bank._definition(e) == bank._definition(self.entry())

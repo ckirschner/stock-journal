@@ -28,7 +28,7 @@ import json
 import pytest
 from conftest import entered, journal_for
 
-from engine import contract, journals, store
+from engine import bank, contract, journals, store
 
 # -- journals ---------------------------------------------------------------
 
@@ -61,7 +61,8 @@ def _furnished(journal, record, ticker="ARBR"):
     portfolio.add_lot(security, _decision(), 10, 40.0, "2026-03-02")
     journal["securities"].append(security)
     journals.observe_rule_change(journal, record, {"cash-floor": 250000})
-    journals.explain(journal, 1, "Overrides on this kept working out.")
+    journals.explain(journal, "rules", 1,
+                     "Overrides on this kept working out.")
     journals.save(journal)
     return journal
 
@@ -147,7 +148,7 @@ class TestARenameIsNotAMove:
         which is the move this whole split exists to avoid."""
         strategies("verdicts")
         a, record = journal_for("verdicts", "Ideas")
-        b = journals.create("Second", record)
+        b = journals.create("Second", record, bank.definitions())
         journals.rename(b["id"], "Ideas")
         assert a["id"] != b["id"]
         assert [j["name"] for j in journals.list_journals()] == \
@@ -170,7 +171,7 @@ class TestDeleteTakesOneJournalAndNothingElse:
         strategies("verdicts")
         keep, record = journal_for("verdicts", "Keep")
         _furnished(keep, record, ticker="ARBR")
-        discard = journals.create("Discard", record)
+        discard = journals.create("Discard", record, bank.definitions())
         _furnished(discard, record, ticker="BRKW")
         return keep, discard
 

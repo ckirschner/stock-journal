@@ -98,12 +98,19 @@ class Api:
         is on the books before the first verdict that uses it. journal is
         None when none exists yet; record is None when the stamped strategy
         is not installed here.
+
+        The measure definitions are compared first, and whether or not the
+        strategy is installed. A strategy missing from this machine is a
+        reason no verdict can be produced; it is not a reason for the file
+        that says what every figure means to move unobserved.
         """
         strategies, reports = self._strategies()
         jid = jid or journals.resolve_open()
         if jid is None:
             return None, None, None, reports
         journal = journals.load(jid)
+        if self._observe_measures(journal):
+            journals.save(journal)
         stamp = journal.get("strategy") or {}
         record = strategies.get(stamp.get("id"))
         if record is None:
@@ -115,6 +122,23 @@ class Api:
             if journals.observe_rule_change(journal, record, chain["values"]):
                 journals.save(journal)
         return journal, record, chain, reports
+
+    def _observe_measures(self, journal):
+        """Put any move in what the measures mean onto this journal's record.
+        Returns the appended entry, or None where nothing moved.
+
+        Contained, because a bank that will not load is already reported
+        everywhere a figure would have been and must not additionally stop a
+        journal opening. What it costs is that the move is recorded the next
+        time the file parses — which is the same as any other unreadable
+        file here, and better than a window in which nothing opens at all.
+        """
+        try:
+            return journals.observe_measure_change(
+                journal, bank.definitions(), bank.changelog())
+        except Exception:                               # noqa: BLE001
+            traceback.print_exc()
+            return None
 
     def _find(self, journal, ticker):
         for s in journal.get("securities", []):
@@ -746,8 +770,23 @@ class Api:
             strategy_missing=(journal.get("strategy") or {})
             if record is None else None,
             rule_changes=list(journal.get("rule_changes") or []),
+            measure_changes=list(journal.get("measure_changes") or []),
             input_changes=list(journal.get("input_changes") or []),
             pending_changes=journals.pending(journal),
+            # What each record is, in the host's words. The banner asking for
+            # a reason has to say which of them moved, and a view holding its
+            # own table of the two is a view that has to be edited when there
+            # is a third — the wrong turn principle 9 names.
+            change_records=journals.record_words(),
+            # Every moment the definitions actually moved, so a decision
+            # frozen before one of them can say so where it is read rather
+            # than leaving the reader to join two screens. Moments and not a
+            # count, because the comparison is per frozen entry and each one
+            # was frozen on a different day. Which entries count as a move is
+            # the host's to decide and is decided in engine/journals.py — a
+            # release that changed only wording moved nothing.
+            measures_moved_at=journals.measures_moved_at(journal),
+            measures_version=journals.measures_baseline(journal)["version"],
             securities=securities,
             bank_meta=bank_meta,
             # The render types, so the view sorts and counts a state
@@ -803,7 +842,8 @@ class Api:
         _, problems = contract.check_inputs(record, typed, chain["values"])
         if problems:
             return err(" ".join(problems))
-        journal = journals.create(name, record, inputs=typed)
+        journal = journals.create(name, record, bank.definitions(),
+                                  inputs=typed)
         journals.set_open(journal["id"])
         return ok(id=journal["id"], name=journal["name"])
 
@@ -935,11 +975,18 @@ class Api:
 
     @guarded
     @locked
-    def explain_rule_change(self, seq, reason):
+    def explain_change(self, record, seq, reason):
+        """Write the reason a recorded change was made.
+
+        `record` names which of this journal's append-only records the change
+        sits on — the view is handed those words with the change itself and
+        hands them back, rather than holding a list of the records that
+        exist.
+        """
         journal, *_ = self._open()
         if journal is None:
             return err("No journal is open.")
-        change = journals.explain(journal, int(seq), reason)
+        change = journals.explain(journal, str(record), int(seq), reason)
         journals.save(journal)
         return ok(seq=change["seq"])
 
@@ -2151,7 +2198,7 @@ class Api:
         if problems:
             return None, f"{path.name}: {' '.join(problems)}"
         journal = journals.create(f"Sample — {record['name']}", record,
-                                  inputs=inputs)
+                                  bank.definitions(), inputs=inputs)
         journal["securities"] = sample["securities"]
         # A sample for a strategy that works from a list carries the imports
         # that were made into it, whole. They are the buy side of its story:
@@ -2207,8 +2254,10 @@ class Api:
     @guarded
     @locked
     def clear_all(self):
-        """Empty the open journal of securities. Its strategy stamp, settings
-        and rule-change record stay — they are what the journal *is*."""
+        """Empty the open journal of securities. Its strategy stamp, its
+        measure stamp, its settings and both change records stay — they are
+        what the journal *is*, and clearing positions is not a statement that
+        the rules never moved."""
         journal, *_ = self._open()
         if journal is None:
             return err("No journal is open.")

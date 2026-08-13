@@ -22,7 +22,7 @@ What would fail silently here, and is therefore pinned:
 
 import pytest
 
-from engine import backup, contract, context, dated, journals, lists
+from engine import backup, bank, contract, context, dated, journals, lists
 from engine import strategy_loader, strategy_values
 
 
@@ -438,7 +438,7 @@ class TestItSurvivesAnExport:
     def test_a_bundle_carries_the_imports_whole(self, tmp_path):
         strategies, _ = strategy_loader.discover()
         record = strategies["magic-formula"]
-        j = journals.create("Listed", record, inputs={})
+        j = journals.create("Listed", record, bank.definitions(), inputs={})
         lists.record(j, "2026-08-01", ["ACME", "BRIA"], 1e9)
         journals.save(j)
 
@@ -455,7 +455,8 @@ class TestItSurvivesAnExport:
     def test_a_journal_that_never_had_one_loads_with_an_empty_record(self,
                                                                      tmp_path):
         strategies, _ = strategy_loader.discover()
-        j = journals.create("Plain", strategies["graham"], inputs={})
+        j = journals.create("Plain", strategies["graham"],
+                            bank.definitions(), inputs={})
         assert journals.load(j["id"])[lists.KEY] == []
 
 
@@ -471,7 +472,8 @@ class TestTheImportItself:
         from app import Api
         api = Api()
         strategies, _ = strategy_loader.discover()
-        journals.create("Listed", strategies["magic-formula"], inputs={})
+        journals.create("Listed", strategies["magic-formula"],
+                        bank.definitions(), inputs={})
         return api
 
     def test_an_unreadable_line_refuses_and_writes_nothing(self):
@@ -540,7 +542,8 @@ class TestTheImportItself:
         from app import Api
         api = Api()
         strategies, _ = strategy_loader.discover()
-        journals.create("Plain", strategies["graham"], inputs={})
+        journals.create("Plain", strategies["graham"],
+                        bank.definitions(), inputs={})
         assert api.import_list("2026-08-01", "ACME")["ok"] is False
         assert api.pass_over("ACME", "why not")["ok"] is False
         assert api.get_state()["list"] is None

@@ -30,7 +30,7 @@ import importlib.util
 import pytest
 from conftest import industry_node
 
-from engine import (contract, context, journals, lists, portfolio,
+from engine import (bank, contract, context, journals, lists, portfolio,
                     strategy_floor, strategy_loader, strategy_values)
 
 PASS, FAIL, UNKNOWN, NOTED = (contract.PASS, contract.FAIL, contract.UNKNOWN,
@@ -481,7 +481,7 @@ class TestAgainstAContextTheHostActuallyBuilds:
 
     def test_a_real_journal_with_a_real_list_reaches_a_real_verdict(self,
                                                                     magic):
-        journal = journals.create("Live", magic, inputs={})
+        journal = journals.create("Live", magic, bank.definitions(), inputs={})
         lists.record(journal, "2026-08-01", ["ACME", "BRIA"])
         security = portfolio.new_security("ACME", "Acme Works")
         journal["securities"] = [security]
@@ -501,7 +501,8 @@ class TestAgainstAContextTheHostActuallyBuilds:
         assert result["state"]["id"] == "buy-it"
 
     def test_a_real_journal_with_no_list_blocks_with_a_way_out(self, magic):
-        journal = journals.create("Empty", magic, inputs={})
+        journal = journals.create("Empty", magic, bank.definitions(),
+                                  inputs={})
         security = portfolio.new_security("ACME", "Acme Works")
         journal["securities"] = [security]
         journals.save(journal)

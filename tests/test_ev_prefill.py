@@ -12,7 +12,7 @@ import pytest
 from conftest import (balance_face, dur, entered, filing, inst, symbols,
                       journal_for, no_filer)
 
-from engine import facts_store, journals, price_store
+from engine import bank, facts_store, journals, price_store
 from engine.compute import Ctx, shares_outstanding_result, ttm_flow_result
 
 import app as app_mod
@@ -245,7 +245,7 @@ class TestValuationDefaults:
         first = journals.resolve_open()
         app_mod.Api().save_valuation_defaults(10.0, 2.0, 25.0)
         record = strategy_loader.discover()[0]["verdicts"]
-        second = journals.create("Other", record)
+        second = journals.create("Other", record, bank.definitions())
         journals.set_open(second["id"])
         app_mod.Api().save_valuation_defaults(14.0, 3.0, 40.0)
         assert journals.load(first)["settings"]["discount_rate"] == 10.0

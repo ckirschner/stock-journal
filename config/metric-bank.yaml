@@ -1,5 +1,22 @@
 schema: ledger.metric-bank/1
 
+# What release of these definitions this is. A whole number, bumped by whoever
+# edits the file — and every bump says what changed, below, or the file does
+# not load.
+#
+# It is here for the same reason a strategy's values.yaml carries one: a
+# measure definition is a rule, editing a formula is as easy as editing a
+# threshold, and a rule that can be quietly retuned is not a rule. A journal
+# records what moved either way — it stamps these definitions when it is
+# created and compares on every read, so a hand edit is caught whether or not
+# this number moves. What the number decides is WHO OWES THE SENTENCE: bump it
+# and the changelog below is the account, leave it alone and the journal asks
+# the person who edited the file to write one.
+version: 1
+
+changelog:
+  1: |
+    The definitions as they stood when they started being recorded.
 # =============================================================================
 # THE METRIC BANK
 # =============================================================================
@@ -149,6 +166,35 @@ schema: ledger.metric-bank/1
 #                 it belongs to a strategy, and a number that is arithmetically
 #                 right and merely read differently is a caution for the
 #                 reader — `explanation.misfires` — not a refusal.
+#
+# -----------------------------------------------------------------------------
+# What every journal records when this file changes
+# -----------------------------------------------------------------------------
+#
+# Editing an entry below changes what every exit in every journal demands, so
+# each journal stamps these definitions when it is created and compares them on
+# every read. What it can honestly SAY about a change follows the same split
+# the strategy record already draws — see engine/bank.py, DEFINITION:
+#
+#   stated      A before and after, because the value means something on its
+#               own: the name, the unit, the format, the favourable direction,
+#               how it is read and over how many observations, which entries it
+#               is built on, which kinds of company it does not describe, the
+#               marks a judgement accepts.
+#
+#   restated    Recorded as having changed, with the contents not stated,
+#               because the host can see the arithmetic move and cannot know
+#               what the move meant: the formula, the conditions the formula
+#               refuses on, the conditions nothing here can settle, and the
+#               question a judgement asks.
+#
+#   not recorded    The prose that explains a measure to a reader —
+#               `explanation` in all its parts, `polarity_note`, the `because`
+#               on a condition, and the `inputs` lists that gloss the formula.
+#               None of it changes what the measure demands, and putting a
+#               wording pass over 74 entries onto every journal's record would
+#               bury the retunings the record exists to surface. Said here
+#               rather than left to be inferred from a silence.
 #
 # =============================================================================
 

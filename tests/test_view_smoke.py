@@ -32,7 +32,7 @@ import pytest
 from conftest import (balance_face, dur, filer, filing, inst, journal_for,
                       open_since, tie)
 
-from engine import contract, facts_store, journals, price_store
+from engine import bank, contract, facts_store, journals, price_store
 from engine import strategy_loader
 
 import app as app_mod
@@ -68,12 +68,41 @@ def _company(cik, ticker="ACME"):
     price_store.save(cik, doc)
 
 
-def _state(strategies, answers=ANSWERS) -> dict:
+def _redefine_a_measure(tmp_path, monkeypatch):
+    """Edit the metric bank the way a user would — in the file — so the
+    screens that report a measure moving have something real to report.
+
+    A copy on disk and not a mutated dict, because that is the whole posture
+    of this record: what is detected is what is stored, and a change observed
+    only when the app made it is a record of the changes nobody was worried
+    about. Two edits, so both halves render — an observation window is a
+    before and after a reader can act on, and a formula is one the host can
+    only say has moved.
+    """
+    src = (bank.APP_DIR / "config" / "metric-bank.yaml").read_text(
+        encoding="utf-8")
+    edited = src.replace("      kind: median\n      observations: 5\n",
+                         "      kind: median\n      observations: 4\n", 1)
+    edited = edited.replace("        value = median( ROIC(year) for each of "
+                            "the last five fiscal years )",
+                            "        value = median( ROIC(year) for each of "
+                            "the last four fiscal years )", 1)
+    assert edited != src, "the bank no longer has the entry this edits"
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    (tmp_path / "metric-bank.yaml").write_text(edited, encoding="utf-8")
+    monkeypatch.setattr(bank, "CONFIG_DIR", tmp_path)
+    bank._bank_cache.clear()
+    bank._definitions_cache.clear()
+
+
+def _state(strategies, answers=ANSWERS, redefine=None) -> dict:
     """A journal exercising every branch the screens have: a holding built
     from two lots and trimmed by a partial sale, one lot bought against the
     signal, a name held twice — closed and bought back — a name closed and
     left closed, an idea, a valuation claim, a thesis amended once, a note, a
-    second journal to switch to, and a rule change owed a reason.
+    second journal to switch to, a rule change owed a reason, and — where
+    `redefine` is given — a measure whose definition moved after the entries
+    above were frozen under the old one.
 
     The two-holdings case earns its place here rather than in a fixture of
     its own: the previous-holdings table, the period grouping in the lot
@@ -209,11 +238,17 @@ def _state(strategies, answers=ANSWERS) -> dict:
     api.add_note("BRDG", "watching this one")
 
     record = strategy_loader.discover()[0]["awkward"]
-    journals.create("Small caps", record)
+    journals.create("Small caps", record, bank.definitions())
 
     # A retuned setting, through the same surface the user would use, so the
     # rule-change record and the answers record both have an entry.
     assert api.save_journal_settings(None, {"cap": "12"})["ok"]
+
+    # And a measure redefined under the journal, AFTER every entry above was
+    # frozen — which is the only order in which the line beside a frozen
+    # decision has anything to say.
+    if redefine is not None:
+        redefine()
 
     state = api.get_state()
     assert state["ok"], state
@@ -269,12 +304,23 @@ def _render(state, tmp_path, mode="coverage"):
                           capture_output=True, text=True, timeout=120)
 
 
-def test_every_screen_renders(strategies, tmp_path):
-    state = _state(strategies)
+def test_every_screen_renders(strategies, tmp_path, monkeypatch):
+    state = _state(strategies, redefine=lambda: _redefine_a_measure(
+        tmp_path / "bank", monkeypatch))
     assert state["journal"], "the harness built no journal to render"
     assert state["securities"], "the harness built no securities to render"
-    assert state["pending_changes"], "the rule-change banner has nothing to say"
     assert state["input_changes"] == [], "no answer was edited by this path"
+
+    # Both records have something owed and something to show, so the banner,
+    # the two histories and the reason dialog all render against real
+    # entries rather than against an empty list that renders as nothing.
+    assert {c["record"] for c in state["pending_changes"]} == {"rules",
+                                                              "measures"}
+    [moved] = state["measure_changes"]
+    assert moved["moved"] and moved["restated"], moved
+    assert set(state["change_records"]) == {"rules", "measures"}
+    # And the line beside a frozen decision has a moment to point at.
+    assert state["measures_moved_at"] == [moved["seen"]]
 
     # The one field the harness's own condition cannot guard: a gate that
     # vanished with the thing it asserts would pass exactly when the payload

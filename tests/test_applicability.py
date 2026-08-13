@@ -106,7 +106,9 @@ class TestTheConditionIsDeclaredAndNotProse:
         from ruamel.yaml import YAML
         y = YAML()
         buf = io.StringIO()
-        y.dump({"schema": "ledger.metric-bank/1", "entries": entries}, buf)
+        y.dump({"schema": "ledger.metric-bank/1", "version": 1,
+                "changelog": {1: "The first release of this probe."},
+                "entries": entries}, buf)
         path.write_text(buf.getvalue(), encoding="utf-8")
         return path
 

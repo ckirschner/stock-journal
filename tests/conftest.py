@@ -233,11 +233,12 @@ def journal_for(strategy_id, name="Test journal", inputs=None, config=None):
     tests that drive the UI seam go through Api.create_journal, which is the
     same path with the typing and validation the dialog does.
     """
-    from engine import journals, strategy_loader
+    from engine import bank, journals, strategy_loader
     strategies, reports = strategy_loader.discover()
     record = strategies.get(strategy_id)
     assert record is not None, [r["errors"] for r in reports]
-    journal = journals.create(name, record, config=config, inputs=inputs)
+    journal = journals.create(name, record, bank.definitions(),
+                              config=config, inputs=inputs)
     journals.set_open(journal["id"])
     return journal, record
 

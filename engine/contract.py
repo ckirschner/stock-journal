@@ -3647,6 +3647,22 @@ def _subject(kind: str, subject_id, *, reads, label, unit, explain=None,
     """One citation's subject as a screen reads it, and — separately — which
     metric-bank entry it draws on.
 
+    Everything a reader needs to make sense of the figure travels HERE, on the
+    subject, because this is what a decision freezes. What it did not carry was
+    the bank's `format`, and the screen filled the gap from the bank standing
+    at the moment somebody opened the page: a purchase frozen two years ago
+    rendered its 10.4× through today's definition, and a measure whose unit had
+    since been corrected from `times` to `percent` printed the old number as
+    "10.4%". A frozen record that reads differently depending on a file it
+    does not own is not frozen. It carried no `explain` for a computed measure
+    either, so the one thing CLAUDE.md says a number may never appear without
+    was also being served live — and vanished entirely when an entry was
+    dropped from the bank.
+
+    So `format` is resolved once, here, alongside the label and the unit that
+    already were. The three of them decide what the figure IS to a reader, and
+    the record has to be able to say that with nothing else on hand.
+
     `reads` is the whole reason this is a constructor and not a literal.
     Everything that answers a citation per security has to know which bank
     entry it touches: the hand-entry surface offers exactly those figures,
@@ -3754,6 +3770,7 @@ def resolve_evidence(record: dict, ctx: dict, items: list):
                     label=f'{_bank_label(item["measure"])}, '
                           + form.get("label", item["without"]),
                     unit=_bank_unit(item["measure"]),
+                    format=_bank_format(item["measure"]),
                     without=item["without"], explain=form.get("explain"))
             else:
                 # `explain` is the plain-language definition on every kind of
@@ -3770,7 +3787,8 @@ def resolve_evidence(record: dict, ctx: dict, items: list):
                     reads=item["measure"],
                     label=_bank_label(item["measure"]),
                     unit=_bank_unit(item["measure"]),
-                    explain=meta.get("plain") if judged else None)
+                    format=_bank_format(item["measure"]),
+                    explain=meta.get("plain"))
                 if judged and meta.get("question"):
                     view["asks"] = meta["question"]
                 if "at" in item:
@@ -4065,6 +4083,12 @@ def _bank_entry(measure_id):
             _bank_cache[str(e.get("id"))] = {
                 "label": str(e.get("label") or e.get("id")),
                 "unit": str(e.get("unit") or "none"),
+                # None where the bank declares none, which is a real answer:
+                # a yes/no carries no format and running one through a format
+                # prints a 1. A frozen subject that says `None` says the bank
+                # had none; one that says nothing at all predates the field.
+                "format": (str(e["format"]) if e.get("format") is not None
+                           else None),
                 "kind": str(e.get("kind") or ""),
                 "estimator": _plain_estimator(e.get("estimator")),
                 "question": str(e.get("question") or "").strip() or None,
@@ -4080,6 +4104,14 @@ def _bank_entry(measure_id):
 def _bank_label(measure_id):
     entry = _bank_entry(measure_id)
     return entry["label"] if entry else measure_id
+
+
+def _bank_format(measure_id):
+    """How a bank measure's figure is printed, frozen onto the citation that
+    reads it. None where the bank declares none, and where the bank has never
+    heard of the measure — both are "print it by its unit"."""
+    entry = _bank_entry(measure_id)
+    return entry["format"] if entry else None
 
 
 def _bank_unit(measure_id):

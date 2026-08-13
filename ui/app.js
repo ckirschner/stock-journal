@@ -152,13 +152,19 @@ function fmtUnit(v, unit) {
   if (["yes_no", "date", "text", "none"].includes(unit)) return f(v);
   return Number.isFinite(Number(v)) ? f(Number(v)) : String(v);
 }
-/* A cited figure renders through its bank format where the bank has one, so
-   a measure reads the same in a strategy's reason as it does anywhere else,
-   and through the contract's unit list otherwise. */
+/* A cited figure renders through the format the citation itself carries, so a
+   measure reads the same in a strategy's reason as it does anywhere else —
+   and so a decision frozen two years ago still reads the way it did the day
+   it was frozen. The bank standing today is consulted only for a record that
+   predates the citation carrying its own format at all; `null` there is the
+   bank saying it declares none, which is a different answer from silence and
+   must not fall through to whatever the file says now. */
 function fmtSubject(subj, v) {
-  const b = ["measure", "robustness"].includes(subj.kind)
-    ? bankMeta(subj.id) : null;
-  if (b && b.format) return fmtBank(v, b.format);
+  const known = ["measure", "robustness"].includes(subj.kind);
+  const f = !known ? null
+    : subj.format !== undefined ? subj.format
+    : (bankMeta(subj.id) || {}).format;
+  if (f) return fmtBank(v, f);
   const out = fmtUnit(v, subj.unit);
   /* A distance between two readings always shows its sign. The bank's format
      is deliberately not used for one — "0.0%" over a six-point fall in a
@@ -550,22 +556,48 @@ const movedLine = (m) =>
     ? `${m.label}: was ${m.from} — the strategy no longer has this setting`
     : `${m.label}: ${m.from} → ${m.to}`;
 
-/* A change to what the strategy demands is already on the record. What is
-   still owed is the reason — and only where the user is the one who moved a
-   number. An author's new version already says what changed. */
+/* One measure's definition moving. The field name is the host's own word for
+   what moved, so nothing in here has to know what an observation or an
+   estimator is — see engine/bank.py, DEFINITION. A restated field has no
+   before and after on purpose: the host can see the arithmetic move and has
+   no way to say what it now demands, and inventing a summary of it here would
+   be the program claiming to have read something it cannot. */
+const measureMovedLine = (m) =>
+  `${m.name} · ${m.field}: ${fmtDefined(m.from)} → ${fmtDefined(m.to)}`;
+const measureRestatedLine = (r) =>
+  `${r.name} · ${r.field} changed — what it now says is not something this program can read back to you.`;
+/* A value that was not there is not a value. "now 3" and "3 → null" say
+   different things and only the first is true. */
+const fmtDefined = (v) =>
+  v === null || v === undefined ? "not declared"
+    : Array.isArray(v) ? (v.length ? v.join(", ") : "nothing")
+    : String(v);
+
+/* A change to what this journal demands is already on the record. What is
+   still owed is the reason — and only where the user is the one who moved
+   something. An author's new version, of a strategy or of the measures,
+   already says what changed. */
 function pendingBanner() {
   const pend = S.pending_changes || [];
   if (!pend.length) return "";
-  return `<div class="pending"><h4>Rule changes without a written reason</h4>
+  const rec = (c) => (S.change_records || {})[c.record] || {};
+  return `<div class="pending"><h4>Changes without a written reason</h4>
     ${pend.map((c) => `<div class="pendrow">
-      <b>Change ${c.seq} · ${esc(String(c.seen).slice(0, 10))}</b>
-      <ul>${(c.moved || []).map((m) => `<li>${esc(movedLine(m))}</li>`).join("")}</ul>
+      <b>${esc(cap(rec(c).noun || "change"))} ${c.seq} · ${esc(String(c.seen).slice(0, 10))}</b>
+      <div class="pe-sub">What moved: ${esc(rec(c).means || "")}</div>
+      <ul>${(c.moved || []).map((m) => `<li>${esc(
+        c.record === "measures" ? measureMovedLine(m) : movedLine(m))}</li>`).join("")}
+        ${(c.restated || []).map((r) => `<li>${esc(measureRestatedLine(r))}</li>`).join("")}
+        ${(c.added || []).map((a) => `<li>${esc(a.name)} is new</li>`).join("")}
+        ${(c.removed || []).map((r) => `<li>${esc(r.name)} is gone — nothing can be measured by it now</li>`).join("")}</ul>
       ${(c.notes || []).map((n) => `<p class="hint">${esc(n)}</p>`).join("")}
-      <button class="btn" data-act="explain" data-seq="${c.seq}">Write the reason</button>
+      <button class="btn" data-act="explain" data-record="${esc(c.record)}"
+        data-seq="${c.seq}">Write the reason</button>
     </div>`).join("")}
-    <p class="hint" style="margin-top:10px">The change itself is recorded either way — timestamped, with the
-    numbers that moved. The reason is the part only you can supply, and it is written once.</p></div>`;
+    <p class="hint" style="margin-top:10px">The change itself is recorded either way — timestamped, with what
+    moved. The reason is the part only you can supply, and it is written once.</p></div>`;
 }
+const cap = (s) => String(s).charAt(0).toUpperCase() + String(s).slice(1);
 
 function missingStrategyBanner() {
   if (!S.strategy_missing) return "";
@@ -1647,6 +1679,18 @@ function lotHistory(s) {
       && st.version !== (S.journal.strategy || {}).version)
       ? `<p class="hint">Recorded under v${esc(st.version)}; the strategy is at v${esc((S.journal.strategy || {}).version)} now.
          Every change between them is on the Strategy tab.</p>` : "";
+    /* The other half of the same sentence, and the reason it is here rather
+       than in a banner: a measure being redefined does not change this entry,
+       it changes what a number beside it would mean today. Said where the
+       difference is, derived from when this was frozen, and gone on its own
+       once there is nothing to say — nothing to dismiss, so nothing that
+       trains the reader to dismiss it. */
+    const since = (S.measures_moved_at || []).filter((t) => String(t) > String(snap.frozen || "")).length;
+    const redefined = (since && snap.frozen)
+      ? `<p class="hint">What ${since === 1 ? "one of these measures means has" : `these measures mean has`}
+         changed ${since === 1 ? "once" : `${since} times`} since this was frozen. The figures above are the ones
+         that were read at the time and are not restated; a figure shown for this security today may be worked out
+         differently. What moved is on the Strategy tab.</p>` : "";
 
     /* Keyed on the lot's own id, not its position in the list: grouped by
        holding, two entries would otherwise share an index and one "what is
@@ -1668,7 +1712,7 @@ function lotHistory(s) {
           : pctWhy(lotReturn) ? `<span class="chip blank" title="${esc("Not known: " + pctWhy(lotReturn))}">not known</span>` : ""}
       </div>
       <div class="pe-sub">${left}${how}${st.name ? ` · under ${esc(st.name)} v${esc(st.version)}` : ""}</div>
-      ${moved}${diff}
+      ${moved}${diff}${redefined}
       ${recollectionBox(lot)}
       ${lot.unreconstructed ? `<p class="hint">No verdict could be rebuilt for
         ${esc(lot.unreconstructed.as_of)}: ${esc(lot.unreconstructed.why)}
@@ -2051,7 +2095,7 @@ function strategyView() {
     return h + missingStrategyBanner() + `<div class="sheet"><div class="empty">
       <p>This journal is stamped with <b>${esc(m.name || m.id)}</b> v${esc(m.version)}, which is not installed
       on this machine. Put the bundle back in the strategies folder and it will be picked up.</p></div></div>`
-      + ruleChangeHistory();
+      + ruleChangeHistory() + measureChangeHistory();
   }
   h += cfgErrorBox(st.value_errors || []);
   const stamp = S.journal.strategy || {};
@@ -2129,7 +2173,7 @@ function strategyView() {
         <button class="btn" data-act="settings">Change these settings</button></div></section>`;
   }
 
-  h += ruleChangeHistory() + inputChangeHistory();
+  h += ruleChangeHistory() + measureChangeHistory() + inputChangeHistory();
   if ((S.refused || []).length) {
     h += `<div class="rollup" style="margin-top:26px"><h3>Strategies that would not load</h3>
       <p>These bundles are on this machine and were refused. A refused strategy is skipped with its reason and
@@ -2207,10 +2251,46 @@ function ruleChangeHistory() {
         ${(c.notes || []).map((n) => `<div class="greynote">${esc(n)}</div>`).join("")}
         ${c.reason ? esc(c.reason) : c.reason_owed
           ? `<span class="neg">No reason recorded yet.</span>
-             <button class="btn" data-act="explain" data-seq="${c.seq}">Write the reason</button>`
+             <button class="btn" data-act="explain" data-record="rules" data-seq="${c.seq}">Write the reason</button>`
           : '<span class="dim">Recorded from the strategy\'s own changelog — nothing is owed from you.</span>'}</span>
       <time>${esc(String(c.seen).slice(0, 10))}</time></li>`).join("")
       || "<li><span>Nothing has changed since this journal was created.</span></li>"}</ul></div>`;
+}
+
+/* What a measure IS is a rule too, and it lives in a different file. A
+   strategy says a holding fails below fifteen percent; the metric bank says
+   what the fifteen percent is measured over, and editing that changes every
+   exit in every journal just as surely. So it is recorded the same way, at
+   the grain a reader can act on: which measure, which thing about it, and
+   what it was. */
+function measureChangeHistory() {
+  const hist = (S.measure_changes || []).slice().reverse();
+  const v = S.measures_version;
+  return `<div class="rollup" style="margin-top:26px"><h3>Measure changes</h3>
+    <p>What each figure means — how it is worked out, over how many years, which kinds of company it cannot
+    describe — is defined outside this journal, in the metric bank, and shared by every journal on this machine.
+    Editing one changes what every exit demands. Each is recorded per measure and per field the moment it is
+    seen${v === null || v === undefined ? "" : `; the definitions in force now are release <b>v${esc(v)}</b>`}.
+    Where the value means something on its own it is recorded as a before and after. Where it is arithmetic —
+    a formula, a condition it refuses on — this program can see that it moved and cannot honestly tell you what
+    it now demands, so it says only that. The wording that explains a measure is not on this record and can be
+    edited freely; it changes nothing a verdict reads.</p>
+    <ul class="histlist">${hist.map((c) => `<li><b>#${c.seq}</b>
+      <span>${(c.moved || []).length || (c.restated || []).length || (c.added || []).length || (c.removed || []).length
+        ? `<div class="histchanges">${[
+            ...(c.added || []).map((a) => `${a.name} is new`),
+            ...(c.removed || []).map((r) => `${r.name} is gone — nothing can be measured by it now`),
+            ...(c.moved || []).map(measureMovedLine),
+            ...(c.restated || []).map(measureRestatedLine),
+          ].map(esc).join("<br>")}</div>` : ""}
+        ${(c.changelog || []).length ? `<div class="histchanges">${c.changelog.map(esc).join("<br>")}</div>` : ""}
+        ${(c.notes || []).map((n) => `<div class="greynote">${esc(n)}</div>`).join("")}
+        ${c.reason ? esc(c.reason) : c.reason_owed
+          ? `<span class="neg">No reason recorded yet.</span>
+             <button class="btn" data-act="explain" data-record="measures" data-seq="${c.seq}">Write the reason</button>`
+          : '<span class="dim">Recorded from the metric bank\'s own changelog — nothing is owed from you.</span>'}</span>
+      <time>${esc(String(c.seen).slice(0, 10))}</time></li>`).join("")
+      || "<li><span>No measure has been redefined since this journal was created.</span></li>"}</ul></div>`;
 }
 
 /* -------------------------------------------------- config: metrics page */
@@ -3759,22 +3839,35 @@ function dlgEV(s, methodOverride, pf) {
   });
 }
 
-function dlgExplain(seq) {
-  const c = (S.rule_changes || []).find((x) => x.seq === Number(seq));
-  const moved = c ? (c.moved || []) : [];
+/* Both records are asked for a reason the same way, and neither is named in
+   here: the change carries the word for the record it sits on, and the host's
+   own sentence for what that record covers. A third record would arrive with
+   its own words rather than needing a branch added here. */
+function dlgExplain(record, seq) {
+  const spec = (S.change_records || {})[record] || {};
+  const list = record === "measures" ? (S.measure_changes || []) : (S.rule_changes || []);
+  const c = list.find((x) => x.seq === Number(seq)) || {};
+  const lines = record === "measures"
+    ? [...(c.added || []).map((a) => `${a.name} is new`),
+       ...(c.removed || []).map((r) => `${r.name} is gone`),
+       ...(c.moved || []).map(measureMovedLine),
+       ...(c.restated || []).map(measureRestatedLine)]
+    : (c.moved || []).map(movedLine);
   dialog({
-    title: `Rule change ${seq}`,
-    blurb: "This change is already on the record. Write down why it was made — in two years this line will be the most useful thing here.",
-    body: (moved.length ? `<div class="dlg-err" style="background:var(--card-2);border-left-color:var(--ink);color:var(--ink-2)">
-        ${moved.map((m) => esc(movedLine(m))).join("<br>")}</div>` : "")
-      + area("reason", "Why was this changed?", "",
-        "For example: “Overrides on the leverage limit kept working out, so widening it from 2.5× to 3.0×.” Written once; it cannot be edited later."),
+    title: `${cap(spec.noun || "change")} ${seq}`,
+    blurb: `This change is already on the record — what moved is ${spec.means || "what this journal demands"}.
+      Write down why — in two years this line will be the most useful thing here.`,
+    body: (lines.length ? `<div class="dlg-err" style="background:var(--card-2);border-left-color:var(--ink);color:var(--ink-2)">
+        ${lines.map(esc).join("<br>")}</div>` : "")
+      + area("reason", "Why was this changed?", "", record === "measures"
+        ? "For example: “The five-year window kept being carried by one exceptional year, so I cut it to three.” Written once; it cannot be edited later."
+        : "For example: “Overrides on the leverage limit kept working out, so widening it from 2.5× to 3.0×.” Written once; it cannot be edited later."),
     confirm: "Record the reason",
     onConfirm: async (d) => {
       if (!(d.reason || "").trim()) return "A reason is required.";
-      const r = await api("explain_rule_change", Number(seq), d.reason);
+      const r = await api("explain_change", record, Number(seq), d.reason);
       if (!r) return " ";
-      toast(`Recorded the reason for change ${seq}.`);
+      toast(`Recorded the reason for ${spec.noun || "change"} ${seq}.`);
     },
   });
 }
@@ -3946,7 +4039,7 @@ document.addEventListener("click", async (ev) => {
     case "backfill": return dlgBackfill(s);
     case "ev": return dlgEV(s);
     case "settings": return dlgSettings();
-    case "explain": return dlgExplain(act.dataset.seq);
+    case "explain": return dlgExplain(act.dataset.record, act.dataset.seq);
     case "export": {
       const r = await api("export_data");
       if (r && !r.cancelled) toast("Exported to " + r.path);

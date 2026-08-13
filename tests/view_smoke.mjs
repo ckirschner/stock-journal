@@ -256,6 +256,16 @@ const dlg = (label, code) => check(label,
              document.getElementById("dlgblurb").textContent,
              document.getElementById("dlgbody").innerHTML].join("\\n")`);
 dlg("dlg:settings", "dlgSettings()");
+/* The one dialog that writes into an append-only record. It renders from a
+   change on one of two records, and each of those has its own shape — a
+   strategy's settings move as whole values, a measure's definition moves per
+   field and sometimes moves in a way nothing can quote. It was never
+   rendered here at all, which is how it came to read the wrong list when a
+   second record appeared beside the first. */
+for (const c of state.pending_changes || []) {
+  dlg(`dlg:explain-${c.record}`,
+      `dlgExplain(${JSON.stringify(c.record)}, ${JSON.stringify(c.seq)})`);
+}
 if (state.list) {
   dlg("dlg:importlist", "dlgImportList()");
   dlg("dlg:passover", 'dlgPassOver("ZZZZ")');
