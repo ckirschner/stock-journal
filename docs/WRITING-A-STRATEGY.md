@@ -139,6 +139,7 @@ lookup table produces plausible wrong answers, which is worse than not loading.
 | `reference` | file names it ships beside its code. Optional. |
 | `declines` | kinds of company this strategy will not evaluate. Optional. |
 | `limits` | what the method demands or delivers that this program does not. Optional. |
+| `list` | that this strategy works from a set of securities chosen elsewhere. Optional. |
 
 ### What you will not evaluate
 
@@ -244,6 +245,51 @@ Two shapes worth writing, and both are in the shipped strategies:
   meant hold more bonds rather than lower a threshold. Without that said, a
   strategy that correctly returns nothing for a year reads as broken — and a
   reader who concludes the tool is broken loosens the tool.
+
+### Working from a list somebody else chose
+
+Some methods do not screen. The choosing happens elsewhere — a ranked screen
+run against a universe this program does not have — and what the journal is
+for is what you do with the names that come back. Say so and the host does
+the rest:
+
+```python
+"list": {
+    "label": "Your Magic Formula list",
+    "explain": "The thirty or fifty names the screen returned, and the day "
+               "you pulled them…",
+    "source": {"name": "the screener's own site — the screener itself",
+               "reasoning": False},
+},
+```
+
+Declared rather than inferred, because everything it turns on has to be
+settled before any decision exists. A journal whose strategy declares one
+gets the import screen, a tab, and a **blocked verdict with a button** —
+`host:list-missing` — until a list has been given to it. A journal whose
+strategy does not declare one gets none of that, sees no tab, and is never
+asked. The view reads whether *this journal* works from a list and never
+which strategy is running, which is what keeps §9 true.
+
+Four facts follow (§13): whether a security is on the list in force, the day
+the freshest list carrying it was pulled, the day the current list was
+pulled, and how many months old that is. They are ordinary host facts and are
+cited like any other. `security.on_list` is **absent, not false**, where the
+journal has no list — "not on your list" and "you have no list" are different
+answers.
+
+Two things it deliberately does not carry. **No thresholds** — how many names,
+how often, how stale is too stale are levels, they belong in `values` where a
+change to one lands on the rule-change record, and a list declaration holding
+them would be a set of numbers nothing could retune. And **no ranking** — the
+host keeps a set of securities with a date, and where a name sat inside the
+ranking that produced it is not recoverable from the list, because a rank is a
+statement about the thousands of companies that did not make it. A strategy
+that implies otherwise is claiming the tool selected something.
+
+`source` is required and is the same field a declared value carries, for the
+same reason: where a list came from is the most load-bearing fact on the page
+in a strategy shaped like this one.
 
 ### States
 
@@ -937,6 +983,15 @@ You find this by looking at the output, not by reading anything.
 - **A staged `plan` cannot be anchored to what you paid.** Not because the
   payload lacks a field — because nothing about cost is in the context. Anchor
   it to what the business is worth.
+- **A verdict that is really about the journal is still one verdict per
+  security.** A strategy that works from a list has states meaning "your list
+  is out of date" and "you have started enough names this month", and those are
+  facts about the journal rather than about the name in front of you — so
+  whichever is true is true of *every* unheld security at once, and no two of
+  them can be reached on the same day. That is not a fault to design around;
+  it is what a method with no screen looks like. What it costs is that a
+  sample journal can demonstrate exactly one of them, so the rest belong in
+  your tests, and it is worth saying so where a reader will find it.
 
 ### Testing one
 
