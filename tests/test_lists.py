@@ -200,6 +200,39 @@ class TestReconstruction:
         assert lists.listed_on(j, "BRIA", as_of="2026-03-01") is None
         assert lists.current(j, as_of="2026-01-01") is None
 
+    def test_a_day_between_the_pull_and_the_import_sees_the_older_list(
+            self, monkeypatch):
+        """The day the two dates part company, and the only day on which
+        swapping them is visible.
+
+        A list pulled on the 3rd and imported on the 6th was not on this
+        journal's record on the 4th. A reconstruction cutting on `pulled_on`
+        would hand it to a purchase dated then — a decision judged against a
+        ranking nobody had yet seen — and every other as_of in this file gives
+        the same answer either way, so nothing else here would notice.
+        """
+        j = {}
+        monkeypatch.setattr(dated, "stamp", lambda: "2026-01-10T12:00:00+00:00")
+        lists.record(j, "2026-01-05", ["ACME"])
+        monkeypatch.setattr(dated, "stamp", lambda: "2026-08-06T12:00:00+00:00")
+        lists.record(j, "2026-08-03", ["BRIA"])
+
+        for day in ("2026-08-03", "2026-08-04", "2026-08-05"):
+            assert lists.current(j, as_of=day)["pulled_on"] == "2026-01-05", day
+            assert lists.on_current(j, "BRIA", as_of=day) is False, day
+            assert lists.listed_on(j, "BRIA", as_of=day) is None, day
+        # And on the day it was actually imported, it is in force.
+        assert lists.current(j, as_of="2026-08-06")["pulled_on"] == "2026-08-03"
+
+    def test_the_first_import_is_invisible_before_the_day_it_was_made(
+            self, monkeypatch):
+        j = {}
+        monkeypatch.setattr(dated, "stamp", lambda: "2026-01-10T12:00:00+00:00")
+        lists.record(j, "2025-11-01", ["ACME"])
+        assert lists.current(j, as_of="2025-12-31") is None
+        assert lists.on_current(j, "ACME", as_of="2025-12-31") is None
+        assert lists.current(j, as_of="2026-01-10")["pulled_on"] == "2025-11-01"
+
     def test_a_list_pulled_before_it_was_imported_still_dates_from_the_pull(
             self, monkeypatch):
         """The two dates are kept apart on purpose: `recorded` answers what
@@ -322,16 +355,25 @@ class TestTheFactsTheHostServes:
 
 class TestTheBlockedVerdictAndWhoGetsIt:
 
-    def test_a_strategy_that_works_from_a_list_is_blocked_without_one(self,
-                                                                      magic):
+    def test_a_strategy_that_works_from_a_list_blocks_without_one(self, magic):
+        """The strategy's own state, not a host gate. The host used to refuse
+        to run at all, which also silenced the clock on positions already
+        held — see the magic-formula suite."""
         ctx = context.build_context({"ticker": "ACME", "lots": []}, [],
                                     strategy_values.resolve(magic)["values"],
                                     {}, record=magic, journal={})
         result = contract.evaluate(magic, ctx)
-        assert result["state"]["id"] == "host:list-missing"
+        assert result["produced_by"] == "strategy"
+        assert result["state"]["id"] == "waiting-on-a-list"
         assert result["render"] == "blocked"
         assert result["state"]["fix"] == "list"
         assert result["payload"]["needs"]
+
+    def test_the_host_has_no_opinion_about_a_missing_list(self):
+        """Deliberately not a host state. Whether a strategy can say anything
+        without a list is the strategy's question — a lender-declining rule
+        set can answer it before running, and this cannot."""
+        assert not [s for s in contract.HOST_STATES if "list" in s]
 
     def test_the_way_out_is_a_destination_the_host_holds(self):
         assert "list" in contract.STATE_FIXES
@@ -347,8 +389,8 @@ class TestTheBlockedVerdictAndWhoGetsIt:
                                     strategy_values.resolve(graham)["values"],
                                     {}, record=graham, journal={})
         assert "list" in ctx
-        assert contract.evaluate(graham, ctx)["state"]["id"] != \
-            "host:list-missing"
+        assert ctx["list"]["pulled"]["status"] == "absent"
+        assert contract.evaluate(graham, ctx)["produced_by"] == "strategy"
 
     def test_the_gate_and_the_row_read_the_same_node(self, magic):
         """A verdict blocked on a missing list beside evidence naming the
@@ -358,11 +400,8 @@ class TestTheBlockedVerdictAndWhoGetsIt:
                                     strategy_values.resolve(magic)["values"],
                                     {}, as_of="2026-08-13", record=magic,
                                     journal=j)
-        assert contract._has_list(ctx) is True
         assert contract.test(ctx, {"fact": "list.pulled"}) == contract.NOTED
-        assert contract._has_list({"list": {"pulled": {"status": "absent",
-                                                        "reason": "x"}}}) \
-            is False
+        assert contract.test(ctx, {"fact": "list.age_months"}) == contract.NOTED
 
 
 class TestTheDeclaration:
@@ -418,3 +457,90 @@ class TestItSurvivesAnExport:
         strategies, _ = strategy_loader.discover()
         j = journals.create("Plain", strategies["graham"], inputs={})
         assert journals.load(j["id"])[lists.KEY] == []
+
+
+# -- the wiring that turns a paste into a record -----------------------------
+
+class TestTheImportItself:
+    """`Api.import_list` and `Api.pass_over`, driven the way the browser
+    drives them. `lists.read` is well covered on its own; what is pinned here
+    is the refusal — the commit's own claim that an unreadable line writes
+    nothing — and the security a pass-over creates on its way past."""
+
+    def open_journal(self):
+        from app import Api
+        api = Api()
+        strategies, _ = strategy_loader.discover()
+        journals.create("Listed", strategies["magic-formula"], inputs={})
+        return api
+
+    def test_an_unreadable_line_refuses_and_writes_nothing(self):
+        api = self.open_journal()
+        r = api.import_list("2026-08-01", "ACME\nnot a row at all\nBRIA")
+        assert r["ok"] is False
+        assert "not a row at all" in r["error"]
+        journal, *_ = api._open()
+        assert journal[lists.KEY] == []
+
+    def test_a_good_paste_is_recorded_whole(self):
+        api = self.open_journal()
+        r = api.import_list("2026-08-01",
+                            "Acme Diagnostics\tACME\t1,204\n"
+                            "Briar Foods\tBRIA\t880", 1e9)
+        assert r["ok"] and r["n"] == 2 and r["pulled_on"] == "2026-08-01"
+        journal, *_ = api._open()
+        assert lists.current(journal)["tickers"] == ["ACME", "BRIA"]
+        assert lists.current(journal)["floor"] == 1e9
+
+    def test_a_bad_pull_date_refuses_and_writes_nothing(self):
+        api = self.open_journal()
+        for bad in ("2026-02-31", "2099-01-01", "not a day"):
+            assert api.import_list(bad, "ACME")["ok"] is False, bad
+        journal, *_ = api._open()
+        assert journal[lists.KEY] == []
+
+    def test_importing_creates_no_securities(self):
+        """Fifty names is not fifty things to track, and each one created
+        would carry its own fetch, queued behind the last."""
+        api = self.open_journal()
+        api.import_list("2026-08-01", "ACME\nBRIA\nCWTH")
+        journal, *_ = api._open()
+        assert journal["securities"] == []
+
+    def test_passing_over_creates_the_security_and_records_the_reason(self):
+        api = self.open_journal()
+        api.import_list("2026-08-01", "ACME\nBRIA")
+        r = api.pass_over("acme", "Second glass company in two years.")
+        assert r["ok"] and r["ticker"] == "ACME" and r["list"] == "2026-08-01"
+        journal, *_ = api._open()
+        s = next(x for x in journal["securities"] if x["ticker"] == "ACME")
+        assert lists.passed_over(s, "2026-08-01")["reason"].startswith("Second")
+        assert s["lots"] == []
+
+    def test_passing_over_needs_a_reason_and_a_name_on_the_list(self):
+        api = self.open_journal()
+        api.import_list("2026-08-01", "ACME")
+        assert api.pass_over("ACME", "   ")["ok"] is False
+        assert api.pass_over("ZZZZ", "not on it")["ok"] is False
+        journal, *_ = api._open()
+        assert journal["securities"] == []
+
+    def test_it_does_not_change_the_verdict(self):
+        """Principle 2. The strategy goes on saying what its rules say; the
+        record says what was done about it."""
+        api = self.open_journal()
+        api.import_list("2026-08-01", "ACME")
+        api.pass_over("ACME", "Do not like the look of it.")
+        state = api.get_state()
+        row = next(r for r in state["list"]["rows"] if r["ticker"] == "ACME")
+        assert row["passed_over"]["reason"].startswith("Do not like")
+        assert row["decision"]["state"]["id"] == "buy-it"
+
+    def test_a_journal_that_screens_for_itself_refuses_both(self):
+        from app import Api
+        api = Api()
+        strategies, _ = strategy_loader.discover()
+        journals.create("Plain", strategies["graham"], inputs={})
+        assert api.import_list("2026-08-01", "ACME")["ok"] is False
+        assert api.pass_over("ACME", "why not")["ok"] is False
+        assert api.get_state()["list"] is None

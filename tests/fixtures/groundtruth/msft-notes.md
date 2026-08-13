@@ -71,7 +71,24 @@ are inside the caption itself, so the printed value is already net. FY2024:
 depreciation 24,179). Both in millions, current-year column first on this
 filer's sheet.
 
-This is the clean case for `net_ppe`: one `us-gaap:PropertyPlantAndEquipmentNet`
-fact on the balance-sheet face, no lease asset folded in — Microsoft prints
-"Operating lease right-of-use assets" as its own separate line directly below,
-which is what leaves the property line narrow.
+**This is the case that proves the plain element is not narrow, and it was
+first written up here as though it were.** Microsoft tags one undimensioned
+`us-gaap:PropertyPlantAndEquipmentNet` = 135,591 on the balance-sheet face,
+and a second, dimensioned `LeaseContractualTermAxis = FinanceLeaseMember`
+fact = 25,862 in the lease note. The second is inside the first, and the
+filing says so in words rather than leaving it to be worked out:
+
+> Finance leases are included in property and equipment, other current
+> liabilities, and other long-term liabilities in our consolidated balance
+> sheets.
+
+So nineteen percent of the figure served here is a finance-lease right-of-use
+asset. The operating-lease asset is genuinely separate — "Operating lease
+right-of-use assets" 18,961 is its own line directly below, under its own
+element — and nothing in the map reaches it.
+
+That matters because the concept map briefly refused the longer ASC 842
+element on the stated grounds that the plain one excluded leased assets. It
+does not, this filing is the proof, and the refusal would have made Target
+absent at four percent lease content while serving Microsoft at nineteen. See
+the note in `config/concept-map.yaml`.

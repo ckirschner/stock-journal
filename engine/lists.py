@@ -43,6 +43,7 @@ its own object rather than a flag on `journal["securities"]`.
 from __future__ import annotations
 
 import re
+from datetime import date
 
 from engine import dated
 
@@ -65,7 +66,20 @@ _TICKER = re.compile(r"^[A-Za-z][A-Za-z.\-]{0,6}$")
 # a rule that insisted on the column would refuse them.
 _TICKER_COLUMN = 1
 
-_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+def _is_day(text) -> bool:
+    """A real calendar day, not merely something shaped like one.
+
+    The shape rule alone accepted 2026-02-31, which then travelled the whole
+    way through: the import was written, `security.listed_on` served it as a
+    known date, and the month arithmetic that counts a position's year came
+    back None against it — so the clock the strategy depends on resolved
+    unreadable forever, on a journal that looked completely ordinary.
+    """
+    try:
+        date.fromisoformat(str(text or "")[:10])
+    except (TypeError, ValueError):
+        return False
+    return True
 
 
 # -- reading what somebody pasted ---------------------------------------------
@@ -149,7 +163,7 @@ def record(journal: dict, pulled_on: str, tickers, floor=None) -> dict:
     other way to find that out.
     """
     day = str(pulled_on or "").strip()[:10]
-    if not _DATE.match(day):
+    if not _is_day(day):
         raise ValueError(
             "Say what day you pulled this list, as YYYY-MM-DD. It is the "
             "list's identity — how old the ranking is, and what a position's "
@@ -276,7 +290,7 @@ def pass_over(security: dict, pulled_on: str, reason: str) -> dict:
     answer to this one.
     """
     day = str(pulled_on or "").strip()[:10]
-    if not _DATE.match(day):
+    if not _is_day(day):
         raise ValueError("A decision not to buy is recorded against the list "
                          "that offered the name, so it needs that list's "
                          "pull date.")

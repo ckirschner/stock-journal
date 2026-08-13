@@ -414,6 +414,11 @@ const shownTabs = () => TABS.filter(([id]) => id !== "list" || !!S.list);
 
 function renderTabs() {
   if (!S.journal) { $("tabs").innerHTML = ""; return; }
+  /* Switching to a journal whose strategy screens for itself takes the list
+     tab away underneath whoever was standing on it. Without this they are
+     left on a tab with no button, and render() falls through to the holdings
+     table with a heading for a bucket that does not exist. */
+  if (!shownTabs().some(([id]) => id === tab)) tab = "holdings";
   $("tabs").innerHTML = shownTabs().map(([id, label]) => {
     /* Previous holdings counts closed periods, not securities: a name held
        and closed twice is two things that happened, and counting it once
@@ -430,11 +435,15 @@ function renderTabs() {
            not be asked" are different facts, and a badge reading 0 for the
            second says the discipline is working when nothing ran. */
         : '<em title="This journal\'s strategy could not be asked">—</em>')
-      /* Names on the current list this journal is not holding — what is
-         left to do about it. Not the list's length, which stays the same
-         all year and tells nobody anything, and an em-dash rather than a
-         nought where no list has been imported, because "nothing left to
-         buy" and "no list yet" are opposite situations. */
+      /* Names on the current list this journal is not holding. Not the
+         list's length, which stays the same all year and tells nobody
+         anything, and an em-dash rather than a nought where no list has been
+         imported, because "nothing left to buy" and "no list yet" are
+         opposite situations.
+         A name passed over is still counted, deliberately: the verdict on it
+         has not changed and the strategy still says to buy it. Deducting it
+         here would make a badge that quietly agreed with the user against
+         their own rules, which is the one thing this program will not do. */
       : id === "list" ? (S.list && S.list.current
         ? `<em>${(S.list.rows || []).filter((r) => !r.held).length}</em>`
         : '<em title="No list has been imported yet">—</em>')
@@ -2001,6 +2010,20 @@ function wontEvaluate(st) {
    Nothing here is hardcoded and nothing here does anything. A strategy that
    declares no limits renders no section, and the host neither reads these
    nor acts on them. */
+function worksFromAList(st) {
+  const d = st.list;
+  if (!d) return "";
+  return `<section class="group" style="margin-top:26px">
+    <div class="ghead"><h3>${esc(d.label)}</h3><span>where the buying comes from</span></div>
+    <p class="hint" style="margin:8px 0 0">${prose(d.explain)}</p>
+    <div class="pe-sub" style="margin-top:10px">Pulled from ${esc(d.source.name)}. ${
+      d.source.reasoning ? "That description is theirs."
+                         : "The description above is this strategy's own."}</div>
+    <div class="toolbar" style="margin-top:12px">
+      <button class="btn" data-act="list">Open the list</button></div>
+  </section>`;
+}
+
 function methodLimits(st) {
   const list = st.limits || [];
   if (!list.length) return "";
@@ -2043,6 +2066,7 @@ function strategyView() {
       (st.reference || []).length ? ` · ships ${st.reference.map((r) => `<code>${esc(r)}</code>`).join(", ")}` : ""}</p></div>
   </div>`;
 
+  h += worksFromAList(st);
   h += methodLimits(st);
 
   h += `<section class="group" style="margin-top:26px"><div class="ghead"><h3>What it can say</h3>
@@ -2654,7 +2678,11 @@ function dlgPassOver(ticker) {
   dialog({
     title: `Not buying ${ticker}`,
     blurb: "Your own list gave you this name and your rules say to buy it. Nothing here stops you passing — this writes down that you did, and why.",
-    body: `<div class="dlg-err">Skipping names you do not like the look of is
+    /* `.dlg-warn`, not `.dlg-err`: dialog() reuses the first `.dlg-err` it
+       finds for validation messages, so a caution written into that slot is
+       replaced by "A reason is required" the first time somebody confirms an
+       empty form — and never comes back. */
+    body: `<div class="dlg-warn">Skipping names you do not like the look of is
       one of the three documented ways people stop getting this method's
       results. The list is the decision; second-guessing it is the deviation
       the method exists to prevent. That is not an argument against passing —
@@ -2741,7 +2769,7 @@ function render() {
   else if (tab === "metrics") v.innerHTML = metricsView();
   else if (tab === "data") v.innerHTML = dataView();
   else if (tab === "allocate") v.innerHTML = allocationView();
-  else if (tab === "list") v.innerHTML = S.list ? importedListView() : listView();
+  else if (tab === "list") v.innerHTML = importedListView();
   else v.innerHTML = listView();
 }
 
@@ -2926,6 +2954,10 @@ function dlgNewJournal(chosenId) {
            cur.declines.map((d) => esc(d.noun)).join(", ")}.</b> Its measures were not built for them, so a
            security of one of those kinds reads “outside these rules” rather than getting a verdict. Said here
            because it is knowable before the journal exists, and a journal cannot change strategy afterwards.</div>` : ""}
+         ${cur.list ? `<div class="help"><b>Works from a list you import.</b> It does not screen for itself —
+           you run ${esc(cur.list.source.name)} yourself, paste what it gives you, and this journal records
+           which list and when. Nothing is bought here that is not on it. Said now because it is the largest
+           single difference in how a journal is used, and the strategy cannot be changed afterwards.</div>` : ""}
          </div>`
       + (setup ? `<p class="hint" style="margin:4px 0 10px">${esc(cur.name)} asks for the following. These are things no
           strategy could ship a default for, because they are facts about you rather than opinions about investing.</p>${setup}` : ""),

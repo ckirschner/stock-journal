@@ -1,5 +1,5 @@
 {
- "built": "2026-08-13T05:03:57+00:00",
+ "built": "2026-08-13T05:54:50+00:00",
  "as_of": "2026-08-13",
  "free_cash": 48000.0,
  "strategy": "magic-formula",
@@ -1296,14 +1296,14 @@
      "id": "l1",
      "seq": 1,
      "kind": "buy",
-     "date": "2025-10-13",
-     "recorded": "2025-10-13T12:00:00-04:00",
+     "date": "2026-05-11",
+     "recorded": "2026-05-11T12:00:00-04:00",
      "shares": 190.0,
      "price": 52.8,
      "override": null,
      "unreconstructed": null,
      "snapshot": {
-      "frozen": "2025-10-13T12:00:00-04:00",
+      "frozen": "2026-05-11T12:00:00-04:00",
       "decision": {
        "render": "commit",
        "tier": "position",
@@ -1361,7 +1361,7 @@
           },
           "observed": {
            "status": "known",
-           "value": 2,
+           "value": 9,
            "source": "fact",
            "cautions": [],
            "provenance": []
@@ -1423,7 +1423,7 @@
           },
           "observed": {
            "status": "known",
-           "value": 1,
+           "value": 0,
            "source": "stated",
            "cautions": [],
            "provenance": []
@@ -1588,7 +1588,7 @@
       "price_ticker": null,
       "evaluation": {
        "basis": "reconstructed",
-       "as_of": "2025-10-13",
+       "as_of": "2026-05-11",
        "filings_by_then": 0,
        "newest_filed": null,
        "priced": null,
@@ -1597,7 +1597,7 @@
         "return_on_capital"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2025-10-13 could be consulted; 2 hand-entered values on record by 2025-10-13; judged by Magic Formula v1 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2026-05-11 could be consulted; 2 hand-entered values on record by 2026-05-11; judged by Magic Formula v1 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": null,
       "valuation": null,
@@ -1624,8 +1624,8 @@
    "valuations": [],
    "notes": [
     {
-     "date": "2025-10-13T12:00:00-04:00",
-     "text": "Recorded from history: 1 purchase, dated 2025-10-13. Each was judged against the data available on its own day, not against today's."
+     "date": "2026-05-11T12:00:00-04:00",
+     "text": "Recorded from history: 1 purchase, dated 2026-05-11. Each was judged against the data available on its own day, not against today's."
     }
    ],
    "lot_seq": 1
@@ -1767,7 +1767,7 @@
           },
           "observed": {
            "status": "known",
-           "value": 0,
+           "value": 1,
            "source": "stated",
            "cautions": [],
            "provenance": []
@@ -2111,7 +2111,7 @@
           },
           "observed": {
            "status": "known",
-           "value": 1,
+           "value": 2,
            "source": "stated",
            "cautions": [],
            "provenance": []

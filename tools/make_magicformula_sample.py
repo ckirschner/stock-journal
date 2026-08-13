@@ -20,7 +20,7 @@ that came back on the second list and had its year restarted.
 
 It is deliberately **mid-build**, because that is where a user of this method
 spends their first year and it is the state the other three samples have no
-equivalent of. It holds five names against a target of twenty-five and is
+equivalent of. It holds six names against a target of twenty-five and is
 still staging: the journal is not broken, it is eight months into a job that
 takes about eight months, and a reader who does not know that will think the
 tool has stopped working.
@@ -162,8 +162,14 @@ def build():
     buy("BRAMLY", 420, 25.40, "2025-08-11")
     buy("FENWCK", 610, 17.05, "2025-08-18")
 
-    # The second, two months later.
-    buy("TARRNT", 190, 52.80, "2025-10-13")
+    # The second tranche. Dated later than the story strictly needs, and the
+    # reason is worth knowing before moving it back: tests/test_sample.py
+    # evaluates this journal live, with no pinned clock, so every holding here
+    # flips to `time-is-up` on its own anniversary and takes the suite with
+    # it. A sample whose only exit is a calendar has a shelf life; what can be
+    # controlled is that every name in it turns over at roughly the same
+    # distance rather than one of them going first and quietly.
+    buy("TARRNT", 190, 52.80, "2026-05-11")
 
     # ------------------------------------------------- still buying, a year on
     # Both off the FIRST list, which was still inside the freshness limit —

@@ -265,11 +265,20 @@ the rest:
 
 Declared rather than inferred, because everything it turns on has to be
 settled before any decision exists. A journal whose strategy declares one
-gets the import screen, a tab, and a **blocked verdict with a button** —
-`host:list-missing` — until a list has been given to it. A journal whose
-strategy does not declare one gets none of that, sees no tab, and is never
-asked. The view reads whether *this journal* works from a list and never
-which strategy is running, which is what keeps §9 true.
+gets the import screen and a tab; one whose strategy does not gets none of
+that, sees no tab, and is never asked. The view reads whether *this journal*
+works from a list and never which strategy is running, which is what keeps §9
+true.
+
+**There is no host state for "no list yet", and the reason is worth reading
+once.** There was one, briefly, and it blocked every verdict in a journal
+that had never imported — including the securities it already held, whose
+clocks needed no list at all. So a strategy whose only exit is a holding
+period went silent on the one verdict that mattered, in a journal whose setup
+looked merely incomplete. Whether your rules can say anything without a list
+is a question about your rules: declare a `blocked` state with `fix: "list"`,
+reach it on the branch where the answer is really no, and the reader gets
+your sentence and the host's button.
 
 Four facts follow (§13): whether a security is on the list in force, the day
 the freshest list carrying it was pulled, the day the current list was
@@ -1090,7 +1099,6 @@ strategy verdict exists.
 | `host:inputs-missing` | `blocked` | Waiting on setup | `settings` |
 | `host:strategy-missing` | `blocked` | Strategy not installed | nothing in the app resolves it |
 | `host:values-unresolved` | `blocked` | Settings need fixing | `settings` |
-| `host:list-missing` | `blocked` | Waiting on a list | `list` |
 | `host:strategy-error` | `unknown` | Strategy failed | nothing in the app resolves it |
 | `host:data-unreadable` | `unknown` | Data could not be read | nothing in the app resolves it |
 | `host:invalid-decision` | `unknown` | Strategy failed | nothing in the app resolves it |

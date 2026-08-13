@@ -2381,11 +2381,24 @@ entries:
         two. A seasonal business reads differently depending on which quarter
         end its working capital was measured at.
 
-        Absent rather than approximated for a filer whose property line
-        includes leased assets under one combined caption, and for one whose
-        borrowings inside current liabilities cannot be separated from the
-        rest. Both would move the bottom by an unknown amount in a known
-        direction.
+        Net property here includes the right-of-use asset from FINANCE
+        leases wherever the filer presents it there, which since 2019 is most
+        of them. That is right for this figure rather than a compromise: a
+        finance lease is an owned asset bought with borrowed money, and the
+        borrowing is already counted as debt above, so leaving the asset out
+        would take one side of the transaction and keep the other. Operating
+        leases are not in it — they carry their own line and their own tag.
+        What is left is a smaller inconsistency worth knowing about: a filer
+        that reports its finance-lease assets on a line of their own reads
+        with slightly less capital than one folding them in.
+
+        Absent rather than approximated for a filer whose borrowings inside
+        current liabilities cannot be separated from the rest, and for one
+        with no readable property line at all. Both would move the bottom by
+        an unknown amount in a known direction, and a caution beside a figure
+        a decision consumed would be read by a person and ignored by the
+        arithmetic — which is why these are absences and the lease question
+        above is not. Nothing tests this measure.
       attribution: |
         Joel Greenblatt, The Little Book That Still Beats the Market — the
         second of the two figures the Magic Formula ranks on, with his

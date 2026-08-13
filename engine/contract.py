@@ -456,15 +456,6 @@ HOST_STATES = MappingProxyType({
         "render": "blocked", "name": "Settings need fixing", "fix": "settings",
         "description": "The strategy's declared values could not be "
                        "resolved, so no verdict can honestly be produced."}),
-    "host:list-missing": MappingProxyType({
-        "render": "blocked", "name": "Waiting on a list", "fix": "list",
-        "description": "This journal's strategy works from a list of "
-                       "securities chosen somewhere else, and no list has "
-                       "been imported yet. Until one is, there is nothing "
-                       "for it to decide about — not because the data is "
-                       "thin, but because the list is the decision.\n\n"
-                       "Nothing you record is affected, and recording a "
-                       "decision is never blocked by this."}),
     "host:strategy-error": MappingProxyType({
         "render": "unknown", "name": "Strategy failed", "fix": None,
         "description": "The strategy's own logic failed while deciding. "
@@ -1898,22 +1889,6 @@ def _check_list(decl: dict, errors: list) -> None:
             "thirty tickers without saying what they are pasting is the same "
             "incomplete figure as a threshold with no explanation.")
     _check_source("`list`", spec, errors)
-
-
-def _has_list(ctx: dict) -> bool:
-    """Whether this journal has a list on record at all.
-
-    Read off the same node the `list.pulled` fact resolves from, so the gate
-    that blocks and the row that renders can never disagree about whether
-    there is a list — one of them saying yes while the other says no is how a
-    verdict comes back blocked beside evidence naming the list it is waiting
-    for.
-    """
-    node = ctx.get("list")
-    if not _is_mapping(node):
-        return False
-    pulled = node.get("pulled")
-    return _is_mapping(pulled) and pulled.get("status") == "known"
 
 
 def declares_list(record: dict) -> bool:
@@ -4148,23 +4123,6 @@ def evaluate(record: dict, ctx: dict) -> dict:
             "host:inputs-missing",
             f'{record["name"]} needs information before it can produce a '
             "verdict.", record, needs=problems)
-
-    # A strategy that works from a list somebody else chose is not merely
-    # short of data without one — it has nothing to decide about. The gate is
-    # here, beside the one for setup, and for the same reason: the answer is
-    # settled from the declaration and the journal, so `decide` never has to
-    # open with a branch every author would have to remember to write, and
-    # the reader gets a button rather than a strategy's own sentence about a
-    # screen it cannot name.
-    if declares_list(record) and not _has_list(ctx):
-        spec = record["list"]
-        return host_result(
-            "host:list-missing",
-            f'{record["name"]} works from a list of securities chosen '
-            "somewhere else, and this journal has not imported one yet.",
-            record,
-            needs=[f'Import {spec["label"]}, from '
-                   f'{spec["source"]["name"]}.'])
 
     # Reference data the bundle ships travels with the context rather than
     # being read off disk inside decide(): a strategy reaches nothing, not

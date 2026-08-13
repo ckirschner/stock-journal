@@ -423,9 +423,6 @@ class TestTheContractIsNeverContradicted:
 
     def test_no_case_is_refused_by_the_host(self, magic):
         for case, result in zip(self.CASES, self.results(magic)):
-            if case.get("have_list") is False:
-                assert result["state"]["id"] == "host:list-missing"
-                continue
             assert result["produced_by"] == "strategy", \
                 f'{case}: {result["reason"]["summary"]}'
 
@@ -441,6 +438,41 @@ class TestTheContractIsNeverContradicted:
         assert "reduce" not in renders
         assert "unknown" not in renders
         assert renders == {"commit", "hold", "close", "blocked"}
+
+
+class TestAJournalWithNoListStillClocksWhatItHolds:
+    """The bug the host gate had. A journal that has never imported a list
+    still holds positions — bought against the signal, or added by hand — and
+    each of those has a year running that the clock needs no list to measure.
+    The host used to refuse to run at all in that journal, so the one verdict
+    that matters went quiet, while this strategy's own `waiting-on-a-list`
+    description promised the opposite in as many words."""
+
+    def test_an_overdue_holding_is_sold_and_not_blocked(self, magic):
+        result = verdict(magic, have_list=False, on_list=False,
+                         listed_on=None, held=True, opened="2025-02-01")
+        assert result["state"]["id"] == "time-is-up"
+        assert result["payload"]["when"] == "2026-02-01"
+
+    def test_a_holding_inside_its_year_is_held_and_not_blocked(self, magic):
+        result = verdict(magic, have_list=False, on_list=False,
+                         listed_on=None, held=True, opened="2026-06-01")
+        assert result["state"]["id"] == "still-running"
+
+    def test_only_a_name_you_do_not_hold_waits_on_the_list(self, magic):
+        result = verdict(magic, have_list=False, on_list=False,
+                         listed_on=None)
+        assert result["state"]["id"] == "waiting-on-a-list"
+        assert result["reason"]["rule"] == "no-list-to-buy-from"
+        assert "no list yet" in result["reason"]["summary"]
+
+    def test_the_promise_in_the_state_description_is_the_behaviour(self,
+                                                                    magic):
+        """The description says positions you already hold are unaffected.
+        Pinned against the words, so the two cannot part company again."""
+        state = next(s for s in magic["states"]
+                     if s["id"] == "waiting-on-a-list")
+        assert "already hold are unaffected" in state["description"]
 
 
 class TestAgainstAContextTheHostActuallyBuilds:
@@ -477,5 +509,7 @@ class TestAgainstAContextTheHostActuallyBuilds:
                                     values_for(magic), {}, record=magic,
                                     journal=journal)
         result = contract.evaluate(magic, ctx)
-        assert result["state"]["id"] == "host:list-missing"
+        assert result["produced_by"] == "strategy"
+        assert result["state"]["id"] == "waiting-on-a-list"
         assert result["state"]["fix"] == "list"
+        assert result["reason"]["rule"] == "no-list-to-buy-from"

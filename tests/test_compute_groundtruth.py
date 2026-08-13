@@ -275,15 +275,20 @@ class TestGOOGL:
                     "2017-12-31") == 42383 * M
 
 
-class TestNetPropertyIsNarrow:
-    """`net_ppe` serves property the company owns, and nothing wearing that
-    caption.
+class TestNetProperty:
+    """`net_ppe` serves the property line whichever of the two elements a
+    filer tags it with, because the two answer the same question.
 
-    Return on capital divides by this, so a right-of-use asset folded into the
-    line understates the return by an unknown amount for every filer that
-    folds it and by nothing at all for every filer that does not — which makes
-    the two incomparable while both read as figures. Every value here was read
-    off the primary document; see the -notes.md files.
+    That is the correction of a wrong first reading and it is worth pinning as
+    one. The longer element names the finance-lease right-of-use asset; the
+    plain one does not name it and does not exclude it, and Microsoft is the
+    proof — see `test_the_plain_element_is_not_narrow`. Refusing the longer
+    one would have made Target absent at four percent lease content while
+    serving Microsoft at nineteen, on a rule whose stated purpose was
+    comparability.
+
+    Every value here was read off the primary document; see the -notes.md
+    files.
     """
 
     def test_the_clean_filers_resolve_what_is_printed(self):
@@ -297,16 +302,129 @@ class TestNetPropertyIsNarrow:
         assert inst(fi(1585364, "0001585364-24-000009"), "net_ppe",
                     "2023-12-31") == 916.4 * M
 
-    def test_a_lease_combined_caption_is_absent_not_taken(self):
-        """Target FY2023 prints 33,096 for "Property and equipment, net" and
-        tags it with the element that includes the finance-lease right-of-use
-        asset. Taking it would be a wider quantity under a narrower name."""
+    def test_the_lease_combined_element_resolves_too(self):
+        """Target FY2023 carries no plain element at all — its 33,096 is
+        tagged with the one that names the finance-lease right-of-use asset.
+        Same quantity, longer name."""
         assert inst(fi(27419, "0000027419-24-000032"), "net_ppe",
-                    "2024-02-03") is None
+                    "2024-02-03") == 33096 * M
 
-    def test_a_reit_has_no_such_line_at_all(self):
+    def test_the_plain_element_is_not_narrow(self):
+        """The fact the whole decision turns on, read straight out of the
+        filing rather than assumed from the element's name.
+
+        Microsoft tags the plain element on its face and a dimensioned copy
+        of it in the lease note, and states in the filing that "Finance
+        leases are included in property and equipment". So 25,862 of the
+        135,591 served above is a leased asset — nineteen percent, against
+        Target's four and a half in the element that says so out loud.
+        """
+        x = fi(789019, "0000950170-24-087843")
+        face = cm.resolve_instant(x, "net_ppe", "2024-06-30")
+        assert face["value"] == 135591 * M
+        # The dimensioned breakdown is deliberately NOT reachable through the
+        # map — it takes undimensioned facts only — so it is read off the
+        # recorded extraction directly, which is the only honest way to state
+        # it here.
+        raw = load_filing(789019, "0000950170-24-087843")
+        rows = raw["facts"] if isinstance(raw, dict) and "facts" in raw else raw
+        finance = [r for r in rows
+                   if r.get("concept") == "us-gaap:PropertyPlantAndEquipmentNet"
+                   and r.get("dimensions")
+                   and str(r.get("end") or r.get("instant")) == "2024-06-30"]
+        assert finance and finance[0]["value"] == 25862 * M
+        assert finance[0]["value"] / face["value"] > 0.19
+
+    def test_a_reit_has_neither_element(self):
         assert inst(fi(726728, "0000726728-25-000055"), "net_ppe",
                     "2024-12-31") is None
+
+
+class TestGreenblattsTwoFigures:
+    """The arithmetic of the two measures the Magic Formula ranks on.
+
+    Both were shipped with no test of a value they produce — the registry-wide
+    cadence probe records which helpers a formula touches and never looks at
+    the number, so doubling either one, or flipping a sign, passed the whole
+    suite. These assert against constants read off Microsoft's FY2024
+    statements by hand (see msft.json and msft-notes.md), never against the
+    resolvers, so agreeing with itself is not available to them.
+    """
+
+    # Every one of these is a printed figure, FY2024 column, in millions.
+    EBIT = 109433 * M            # Operating income
+    CURRENT_ASSETS = 159734 * M  # Total current assets
+    CURRENT_LIABS = 125286 * M   # Total current liabilities
+    CASH = 18315 * M             # Cash and cash equivalents
+    SHORT_DEBT = (6693 + 2249) * M   # Short-term debt + current portion of LTD
+    NET_PPE = 135591 * M         # Property and equipment, net
+
+    def context(self):
+        from engine.periods import SeriesBuilder
+        sb = SeriesBuilder([load_filing(789019, "0000950170-24-087843")])
+        ctx = type("Ctx", (), {})()
+        ctx.sb, ctx._memo = sb, {}
+        return ctx
+
+    def test_return_on_capital_is_ebit_over_greenblatts_capital(self):
+        from engine import compute
+        working = ((self.CURRENT_ASSETS - self.CASH)
+                   - (self.CURRENT_LIABS - self.SHORT_DEBT))
+        want = 100.0 * self.EBIT / (working + self.NET_PPE)
+        assert round(want, 2) == 68.11        # what a reader will see
+        got = compute.return_on_capital(self.context())
+        assert got["status"] == "computed"
+        assert round(got["value"], 6) == round(want, 6)
+
+    def test_the_denominator_is_capital_and_not_invested_capital(self):
+        """Debt, equity and goodwill are deliberately not in it — the whole
+        point of his construction. Microsoft's goodwill alone is 119,220, so a
+        formula that had reached for invested capital would come out around
+        forty percent instead of sixty-eight."""
+        from engine import compute
+        assert compute.return_on_capital(self.context())["value"] > 60.0
+
+    def test_earnings_yield_is_a_percent_and_not_a_ratio(self):
+        """Driven directly, because the enterprise value underneath needs a
+        price and a share count that no stored filing carries. What is being
+        checked is the arithmetic the formula does on top of it."""
+        from engine import compute
+
+        class Stub:
+            _memo = {}
+            sb = None
+            def entry(self, _):
+                return compute.computed(1_000_000.0, [], [])
+        stub = Stub()
+        stub._memo = {("ttm", "ebit"): compute.computed(120_000.0, [], [])}
+        got = compute.earnings_yield(stub)
+        assert got["status"] == "computed"
+        assert round(got["value"], 6) == 12.0        # 12%, not 0.12
+
+    def test_a_loss_at_the_operating_line_is_reported_as_a_negative_yield(self):
+        """Unlike the multiple it inverts, which refuses. A negative yield
+        over a real price means what it looks like."""
+        from engine import compute
+
+        class Stub:
+            sb = None
+            def entry(self, _):
+                return compute.computed(1_000_000.0, [], [])
+        stub = Stub()
+        stub._memo = {("ttm", "ebit"): compute.computed(-50_000.0, [], [])}
+        assert compute.earnings_yield(stub)["value"] == -5.0
+
+    def test_a_negative_enterprise_value_is_refused_by_both_ends(self):
+        from engine import compute
+
+        class Stub:
+            sb = None
+            _memo = {}
+            def entry(self, _):
+                return compute.computed(-1.0, [], [])
+        got = compute.earnings_yield(Stub())
+        assert got["status"] == "not_meaningful" or got["status"] == "absent"
+        assert "enterprise value" in str(got.get("reason", "")).lower()
 
 
 class TestRealtyIncome:

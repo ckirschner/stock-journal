@@ -340,6 +340,12 @@ dialog::backdrop{background:rgba(18,23,27,.45)}
 .field .help.refline{margin-top:3px}
 .dlg-err{background:var(--fail-bg);border-left:3px solid var(--fail);padding:10px 13px;
   font-size:13px;color:#5C1E21;margin-bottom:14px}
+/* A standing caution in a dialog, as opposed to a validation error. It looks
+   the same and is a different element on purpose: dialog() reuses the first
+   .dlg-err it finds to show what went wrong, so a caution sharing that slot
+   is overwritten by the first empty-form confirm and never returns. */
+.dlg-warn{background:var(--fail-bg);border-left:3px solid var(--fail);padding:10px 13px;
+  font-size:13px;color:#5C1E21;margin-bottom:14px}
 .metric-input{display:grid;grid-template-columns:1fr 110px;gap:9px 12px;align-items:center;
   padding:7px 0;border-bottom:1px solid var(--rule);font-size:13px}
 .metric-input:last-child{border-bottom:0}

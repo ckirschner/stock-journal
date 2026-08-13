@@ -363,10 +363,11 @@ STRATEGY = {
                         "appears on."},
 
         {"id": "waiting-on-a-list", "render": "blocked", "fix": "list",
-         "name": "Your list is out of date",
-         "description": "The list this journal is working from is older than "
-                        "the strategy will buy off, so there is no honest "
-                        "verdict to give about starting a new position.\n\n"
+         "name": "Waiting on a list",
+         "description": "This journal has no list, or the one it is working "
+                        "from is older than the strategy will buy off — so "
+                        "there is no honest verdict to give about starting a "
+                        "new position.\n\n"
                         "A screen is a photograph of prices and published "
                         "accounts on one day. Prices have moved since and "
                         "accounts have been restated, so an old list is no "
@@ -648,23 +649,43 @@ def _on_a_candidate(ctx):
     fresh = contract.test(ctx, LIST_FRESH)
     listed = contract.test(ctx, ON_LIST)
     age = (ctx.get("list") or {}).get("age_months")
+    have = ((ctx.get("list") or {}).get("pulled") or {}).get("status") == "known"
 
-    # The list first, because a stale list makes every other answer on this
-    # path unsafe rather than merely unknown: a name is on it or off it
-    # according to a ranking that no longer describes anything.
+    # The list first, because without a current one every other answer on this
+    # path is unsafe rather than merely unknown: a name is on it or off it
+    # according to a ranking that does not exist or no longer describes
+    # anything.
+    #
+    # This branch and not a host gate, and the difference is a bug this
+    # strategy had. The host used to refuse to run at all where a journal had
+    # no list, which is right for a purchase and wrong for everything else —
+    # a position already held has a year running and the clock needs no list
+    # to say when it is up, so a journal that had never imported one went
+    # quiet on the one verdict that matters. Whether the held path needs a
+    # list is this strategy's question, so this strategy answers it, and the
+    # ladder above has already sent every holding somewhere else.
     if fresh != PASS:
         return {
             "state": "waiting-on-a-list",
             "payload": {"needs": [
-                "Pull a fresh Magic Formula list and import it. Everything "
-                "you already hold keeps its own clock and is unaffected."]},
+                ("Pull a fresh Magic Formula list and import it."
+                 if have else
+                 "Pull a Magic Formula list and import it — the list is what "
+                 "this strategy buys from.")
+                + " Everything you already hold keeps its own clock and is "
+                  "unaffected."]},
             "reason": {
-                "rule": "list-too-old-to-buy-from",
+                "rule": ("list-too-old-to-buy-from" if have
+                         else "no-list-to-buy-from"),
                 "summary": (
                     f"The list this journal is working from is {age} months "
                     "old, and this strategy will not start a position off a "
                     "ranking that stale."
-                    if isinstance(age, int) else
+                    if have and isinstance(age, int) else
+                    "This journal has no list yet, and the list is the whole "
+                    "of what this strategy buys on — so there is nothing "
+                    "here to decide about this name."
+                    if not have else
                     "How old the list this journal is working from is could "
                     "not be worked out, so nothing can be bought off it."),
                 "evidence": [{"fact": "list.pulled"}, LIST_FRESH],
@@ -788,7 +809,12 @@ def _on_a_holding(ctx):
                     f"A list pulled on {start} still carries this name, so "
                     "it has been chosen again on fresh prices and fresh "
                     f"accounts. Its year now runs to {due} rather than from "
-                    "the day you bought."),
+                    "the day you bought."
+                    if due else
+                    f"A list pulled on {start} still carries this name, so "
+                    "its year runs from that day rather than from the day "
+                    "you bought — but when it falls due could not be worked "
+                    "out, so nothing here says to sell it."),
                 "evidence": rows + list(WHY_ROWS),
                 "groups": [CLOCK_GROUP, WHY_GROUP],
                 "note": None},

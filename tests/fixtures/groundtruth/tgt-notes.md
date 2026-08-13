@@ -141,32 +141,31 @@ at all to stay absent. Both behaviours are pinned in
 
 ---
 
-## Net property, and why it is absent rather than 33,096
+## Net property, and the element that reads longer than it is
 
 FY2023, accession `0000027419-24-000032`, primary document `tgt-20240203.htm`.
 The Consolidated Statements of Financial Position print:
 
 > Property and equipment, net … 33,096 … 31,512
 
-read as the FY2023 and FY2022 columns, in millions. The figure is real and it
-is on the page. The pipeline reports **absent** for it, on purpose.
+read as the FY2023 and FY2022 columns, in millions.
 
-The reason is the tag rather than the number. This filer carries no
-`us-gaap:PropertyPlantAndEquipmentNet` fact at all; the caption above is tagged
+This filer carries no `us-gaap:PropertyPlantAndEquipmentNet` fact at all. The
+caption above is tagged
 `us-gaap:PropertyPlantAndEquipmentAndFinanceLeaseRightOfUseAssetAfterAccumulated
-DepreciationAndAmortization`, which since ASC 842 folds the right-of-use asset
-from finance leases into the same line. That is a wider quantity than the one
-`net_ppe` is declared to serve, and the width is not small for a retailer:
-Target's own leased-asset breakdown in the same filing puts it in the billions.
+DepreciationAndAmortization`, which names the finance-lease right-of-use asset
+in the element rather than leaving it to the lease note. Target's own
+breakdown puts that asset at 1,470 — four and a half percent of the line.
 
-Serving it with a caution was the alternative and is refused for the reason the
-`us-gaap:LongTermDebt` fallback was removed from `long_term_debt` — the caution
-is read by a person and ignored by the arithmetic. Return on capital divides by
-this, so a leased asset in the denominator understates the return, silently,
-for every post-2019 retailer and restaurant against every filer still tagging
-the narrow element. Comparing those two would be comparing an accounting
-convention.
+**It is served, and the first version of this work refused it.** The refusal
+was reasoned from the belief that the plain element excludes leased assets and
+this one does not. That is false: Microsoft's FY2024 sheet tags the plain
+element and states outright that finance leases are inside it, at nineteen
+percent. So the two elements answer the same question, and refusing one of
+them would have discarded the least contaminated filer in this set while
+serving the most — a rule uncorrelated with the property it claimed to
+enforce. See `msft-notes.md` and the note in `config/concept-map.yaml`.
 
-Recorded in `tgt.json` with a `note` rather than left out, so the figure a
-reader sees on the page sits beside the reason the pipeline will not serve it.
-This is the case that pins the refusal.
+This filer stays in the fixtures as the case that pins the second element
+resolving at all, and as the reminder that an element's name is evidence about
+what it includes and never evidence about what the other one excludes.

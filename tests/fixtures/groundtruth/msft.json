@@ -205,6 +205,39 @@
       "caption": "Property and equipment, net of accumulated depreciation of $24,179 and $19,800",
       "statement": "balance",
       "accession": "0001564590-17-014900"
+    },
+    {
+      "metric": "cash_and_equivalents",
+      "fiscal_year": "FY2024",
+      "period_end": "2024-06-30",
+      "as_printed": "18,315",
+      "scale": "millions",
+      "value_usd": 18315000000,
+      "caption": "Cash and cash equivalents",
+      "statement": "balance",
+      "accession": "0000950170-24-087843"
+    },
+    {
+      "metric": "current_assets",
+      "fiscal_year": "FY2024",
+      "period_end": "2024-06-30",
+      "as_printed": "159,734",
+      "scale": "millions",
+      "value_usd": 159734000000,
+      "caption": "Total current assets",
+      "statement": "balance",
+      "accession": "0000950170-24-087843"
+    },
+    {
+      "metric": "current_liabilities",
+      "fiscal_year": "FY2024",
+      "period_end": "2024-06-30",
+      "as_printed": "125,286",
+      "scale": "millions",
+      "value_usd": 125286000000,
+      "caption": "Total current liabilities",
+      "statement": "balance",
+      "accession": "0000950170-24-087843"
     }
   ]
 }

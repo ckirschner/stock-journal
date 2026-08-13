@@ -105,6 +105,38 @@ for (const t of ["holdings", "previous", "ideas", "allocate", "strategy",
     : t === "data" ? "dataView()"
     : t === "allocate" ? "allocationView()" : "listView()");
 }
+// The list a journal works from, for the journals that have one. Guarded
+// rather than unconditional because the tab genuinely does not exist for a
+// strategy that screens for itself — which is the behaviour, not a gap — and
+// the empty case is drawn separately below so the branch a brand-new journal
+// sees is not the one branch nothing renders.
+if (state.list) {
+  run('tab = "list";');
+  check("list", "importedListView()");
+  check("list:empty", `(() => {
+    const was = S.list;
+    S.list = { ...was, current: null, rows: [], history: [] };
+    const html = importedListView(); S.list = was; return html;
+  })()`);
+  check("list:no-history", `(() => {
+    const was = S.list;
+    S.list = { ...was, history: [] };
+    const html = importedListView(); S.list = was; return html;
+  })()`);
+  check("list:untracked-row", `(() => {
+    const was = S.list;
+    S.list = { ...was, rows: [{ ticker: "ZZZZ", name: null, tracked: false,
+                                held: false, new: true, decision: null,
+                                passed_over: null }] };
+    const html = importedListView(); S.list = was; return html;
+  })()`);
+  check("list:no-floor", `(() => {
+    const was = S.list;
+    S.list = { ...was, current: { ...was.current, floor: null } };
+    const html = importedListView(); S.list = was; return html;
+  })()`);
+  run('tab = "holdings";');
+}
 // The allocation view's four standings, each rendered. Only one of them can
 // be true of any real journal, and the other three are exactly where an
 // empty screen would ship unnoticed — "nothing qualifies" is the ORDINARY
@@ -224,6 +256,10 @@ const dlg = (label, code) => check(label,
              document.getElementById("dlgblurb").textContent,
              document.getElementById("dlgbody").innerHTML].join("\\n")`);
 dlg("dlg:settings", "dlgSettings()");
+if (state.list) {
+  dlg("dlg:importlist", "dlgImportList()");
+  dlg("dlg:passover", 'dlgPassOver("ZZZZ")');
+}
 dlg("dlg:newjournal", "dlgNewJournal()");
 dlg("dlg:renamejournal", "dlgRenameJournal()");
 // The one destructive dialog in the program. It has to say what goes, and it
