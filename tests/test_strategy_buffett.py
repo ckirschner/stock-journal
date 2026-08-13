@@ -119,9 +119,33 @@ def _baseline(when, values):
                          for mid, v in values.items()}}
 
 
+def _one_out_for(mid, value, outs):
+    """The dropped-year readings a measure's `current` carries.
+
+    Supplied for every measure whose estimator asks for the check, because
+    the computation supplies them for every such measure — a fixture that
+    omitted them would test a hole in the fixture rather than the strategy,
+    and it would do it by making every breach unconfirmable, which is the
+    silent direction.
+
+    The default is that the breach survives: dropping any single year leaves
+    the reading where it was. That is what "nothing about one year in this
+    fixture is special" means, and a test wanting the other case — one year
+    carrying the whole breach — passes `outs` and says so.
+    """
+    if mid in (outs or {}):
+        return [{"dropped": y, "value": v} for y, v in outs[mid]]
+    est = contract.estimator_of(mid) or {}
+    if est.get("robustness") != "always" or not isinstance(value,
+                                                           (int, float)):
+        return None
+    return [{"dropped": f"20{19 + i}-12-31", "value": float(value)}
+            for i in range(3)]
+
+
 def build(record, known=None, series=None, judged=None, held=False,
           opened=None, weight=None, occupied=0, today="2026-08-09",
-          bought=None, purchases=1, industry=None, **override):
+          bought=None, purchases=1, industry=None, outs=None, **override):
     """A context shaped exactly as engine/context builds one.
 
     `judged` is {bank id: True|False} for the three questions; anything left
@@ -140,6 +164,10 @@ def build(record, known=None, series=None, judged=None, held=False,
                     "source": "manual", "cautions": [], "provenance": []}
                    if mid in known else
                    {"status": "absent", "reason": "nothing is on record"})
+        if current["status"] == "known":
+            one_out = _one_out_for(mid, known[mid], outs)
+            if one_out:
+                current["leave_one_out"] = one_out
         points = [{"period_end": pe, "filed": pe, "form": "10-Q",
                    "accession": pe, "value": value,
                    "reason": None if value is not None else "unreadable",
@@ -731,13 +759,44 @@ class TestNothingFiresOnOneReading:
         """A verdict has to name the rule that produced it, and here that is
         different for different exits. The sentence used to say "more than
         one set of filings" whatever had happened — one rule speaking for
-        five exits that are read three different ways."""
+        five exits that are read three different ways.
+
+        The debt exit names the dropped year rather than the filing count,
+        and that is the correction: the measure is debt at one balance-sheet
+        date over free cash flow averaged across five fiscal years, so the
+        noisiest leg is the instant and the window underneath is still a
+        window one year can carry. It was computing the one-out readings all
+        along and nothing could ask for them.
+        """
         debt = verdict(
             buffett, known={**CLEARS_EXITS, "total_debt_to_avg_fcf_5y": 6.4},
             judged=SAID_YES, held=True, opened="2019-04-01", weight=14.0,
             series={"total_debt_to_avg_fcf_5y": [(q, 6.4) for q in QUARTERS]},
         )["reason"]["summary"]
-        assert "on 2 consecutive filings" in debt
+        assert "survives dropping the year that most favours" in debt
+
+    def test_a_debt_breach_one_year_is_carrying_is_not_established(
+            self, buffett):
+        """The other side of the same correction, and the reason it matters.
+        Five years of free cash flow averaged: one very good year in the
+        window can hold the ratio down, and one very bad one can push it up.
+        A breach that clears when that year is dropped is one year, not a
+        record, and this exit now waits instead of selling."""
+        def at(one_out):
+            return verdict(
+                buffett,
+                known={**CLEARS_EXITS, "total_debt_to_avg_fcf_5y": 6.4},
+                judged=SAID_YES, held=True, opened="2019-04-01", weight=14.0,
+                series={"total_debt_to_avg_fcf_5y":
+                        [(q, 6.4) for q in QUARTERS]},
+                outs={"total_debt_to_avg_fcf_5y": one_out})["state"]["id"]
+
+        # every year dropped leaves it breached — the record carries it
+        assert at([("2021-12-31", 6.4), ("2022-12-31", 6.5)]) \
+            == "business-broken"
+        # drop 2021 and the requirement is met again — one year carried it
+        assert at([("2021-12-31", 2.0), ("2022-12-31", 6.4)]) \
+            == "one-reading-past"
 
         shares = verdict(
             buffett,

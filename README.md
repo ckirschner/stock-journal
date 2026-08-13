@@ -732,8 +732,17 @@ the year that produced the breach does not leave the window by being looked at
 again. So a median acts on the reading in front of you; a balance-sheet ratio,
 which is one morning's photograph, still wants a second filing; and a measure
 read across a window is asked instead whether its failure survives dropping
-the single year that most favours the company. The metric bank states how each
-measure is read, so an author of a new one cannot get it wrong.
+the single year that most favours the company.
+
+**And a second reading is not always a second filing.** A multiple against a
+share price is a new number every session, so waiting for the next quarterly
+report to agree would wait three months while the thing being watched moved
+two hundred times — and the series doing the waiting could not see any of it.
+Those measures are confirmed over trading days instead. The metric bank states
+how each measure is read; where getting it wrong is settleable from the
+arithmetic — a measure that reads a price, or one that drops a fiscal year out
+of a window — the program refuses to load rather than trusting the author to
+remember.
 
 **A measure that was never built to describe this kind of company says so
 instead of computing.** Nearly everything here was written for a business that
@@ -962,9 +971,11 @@ reimplementing scoring.
 
 ## Adding a measure
 
-Add an entry to `config/metric-bank.yaml` — id, label, unit, format,
-derivation and the plain-language explanation are all required; a bare number
-with no explanation is incomplete, not a follow-up ticket. The UI renders
+Add an entry to `config/metric-bank.yaml`. The loader refuses one without
+`id`, `kind`, `estimator` and `unit`, and refuses an estimator that disagrees
+with what the formula does. Label, format, derivation and the plain-language
+explanation are required of you rather than of the loader — a bare number with
+no explanation is incomplete, not a follow-up ticket. The UI renders
 whatever the bank and the strategy hand it; there is no view code to change.
 
 A `qualitative` entry is one you answer rather than one the host computes: it
@@ -1024,11 +1035,12 @@ with Windows 10 and 11, so the build stays around 20 MB rather than the
 
 ## What isn't built yet
 
-- **Two of the four strategies.** Graham and Buffett ship; Lynch and Discount
-  Closure do not. `dev_reference_docs/ledger-default-profiles.md` carries a
-  section for each, and each of those sections now opens with a header saying
-  which state it is in and what the review corrected — read it and the
-  addendum beside it before authoring either.
+- **Discount Closure.** All four shipped strategies — Graham, Buffett, Lynch
+  and Magic Formula — are in `strategies/`. Discount Closure is not, and is
+  the one method described in `dev_reference_docs/ledger-default-profiles.md`
+  with no bundle behind it; that section opens with a header saying which
+  state it is in and what the review corrected — read it and the addendum
+  beside it before authoring it.
 - **Debt falling due within 24 months, and so the maturity wall built on it.**
   The characteristic failure of a discount strategy is the value trap, and the
   mechanism by which a cheap company becomes a zero inside a two-year holding

@@ -352,6 +352,86 @@ class TestTheBankDeclaresHowEveryMeasureIsRead:
         assert formed, "none of them computed on this fixture"
         for eid in formed:
             assert got[eid].get("leave_one_out"), eid
+        # This fixture carries revenue and net income and nothing else, so
+        # most of `want` goes absent on it and is checked by nobody. Named
+        # here rather than left implicit, because a silent skip is how this
+        # test came to cover six of thirteen while reading as though it
+        # covered all of them — and the seven it missed include the entry
+        # this whole split was about.
+        skipped = sorted(set(want) - set(formed))
+        assert skipped == [
+            "eps_cagr_5y", "eps_growth_10y",
+            "eps_minus_revenue_cagr_spread_5y",
+            "goodwill_impairment_to_equity_5y", "gross_margin_range_5y",
+            "gross_margin_range_relative_5y", "gross_margin_vs_3y_median",
+            "incremental_roic_5y", "total_debt_to_avg_fcf_5y",
+        ], skipped
+
+    def test_a_formula_that_drops_a_year_declares_the_window_it_drops_from(
+            self):
+        """The other direction, and the one that was live.
+
+        Forming a dropped-year reading is a statement that this measure is
+        judged against a window of fiscal years — one of them can be taken
+        out and the answer asked again. If the estimator declares no such
+        window, that statement is made in the computation and nowhere a
+        reader or a strategy can see it, and the robustness question is
+        answered "no" by default.
+
+        `total_debt_to_avg_fcf_5y` was exactly there: debt at one
+        balance-sheet date over five fiscal years of free cash flow
+        averaged, declared `instant` because the instant is the leg a new
+        filing replaces — which is right, and which used to also decide that
+        no year could be carrying it. A Buffett exit read it. That is what
+        `estimator.window` is for.
+
+        Not "robustness must be always": a five-point median deliberately
+        does not demand the check (one observation cannot move it past the
+        one beside it) and still offers the reading, because a strategy may
+        cite `without` on any measure that has a window. What is refused is
+        forming one with no window declared anywhere.
+        """
+        from conftest import balance_face, dur as _dur, inst as _inst
+        rev = {y: 1000.0 * (1.05 ** (y - 2015)) for y in range(2015, 2027)}
+        ni = {y: 100.0 * (1.09 ** (y - 2015)) for y in range(2015, 2027)}
+        extra = {y: [_dur("us-gaap:CostOfRevenue",
+                          f"{y}-01-01", f"{y}-12-31", 600.0),
+                     _dur("us-gaap:NetCashProvidedByUsedInOperating"
+                          "Activities", f"{y}-01-01", f"{y}-12-31", 200.0,
+                          stmt="CashFlowStatement"),
+                     _dur("us-gaap:PaymentsToAcquirePropertyPlantAnd"
+                          "Equipment", f"{y}-01-01", f"{y}-12-31", 50.0,
+                          stmt="CashFlowStatement"),
+                     _dur("us-gaap:PaymentsOfDividendsCommonStock",
+                          f"{y}-01-01", f"{y}-12-31", 20.0,
+                          stmt="CashFlowStatement"),
+                     _dur("us-gaap:NetIncomeLoss",
+                          f"{y}-01-01", f"{y}-12-31", ni[y])]
+                 + balance_face(f"{y}-12-31", extra=[
+                     _inst("us-gaap:LongTermDebtNoncurrent",
+                           f"{y}-12-31", 300.0),
+                     _inst("us-gaap:StockholdersEquity",
+                           f"{y}-12-31", 400.0),
+                 ])
+                 for y in rev}
+        got = compute_all(years(rev, extra=extra), None, symbols("SYN"),
+                          industry=no_filer())
+        offenders, checked = [], []
+        for eid, r in got.items():
+            if r.get("status") != "computed" or not r.get("leave_one_out"):
+                continue
+            est = contract.estimator_of(eid) or {}
+            checked.append(eid)
+            if est.get("kind") not in contract.WINDOW_STATISTICS \
+                    and not est.get("window"):
+                offenders.append(eid)
+        assert offenders == [], (
+            "these form a dropped-year reading and declare no window to drop "
+            "it from — say what they are judged against, under "
+            "`estimator.window`: " + ", ".join(sorted(offenders)))
+        assert "total_debt_to_avg_fcf_5y" in checked, (
+            "the entry this check was written for did not compute on this "
+            "fixture, so it proved nothing")
 
 
 class TestADroppedYearNeverFlatters:
@@ -704,3 +784,186 @@ class TestTheDroppedYearReachesAStrategy:
         assert got["robust"] is False
         assert contract.test(ctx, {**cite, "without": "one-year"}) \
             == contract.PASS
+
+
+# ---------------------------------------------------------------------------
+# the clock a breach is counted on
+# ---------------------------------------------------------------------------
+
+def _priced_filer():
+    """A filer whose book equity is readable and whose cover states a count,
+    so the price-bearing entries reach a price instead of refusing above it."""
+    from conftest import balance_face, inst
+    end = "2025-12-31"
+    facts = balance_face(end, extra=[
+        inst("us-gaap:StockholdersEquity", end, 400.0),
+    ]) + [{**inst("dei:EntityCommonStockSharesOutstanding", "2026-01-05",
+                  100.0, stmt=None), "unit": "shares", "currency": None}]
+    return [filing("K1", "10-K", "2026-02-10", end, facts)]
+
+
+def _sessions(cik, closes, events=()):
+    from engine import price_store
+    doc = price_store.load(cik)
+    price_store.merge_series(doc, "ACME", "test",
+                             [[d, c, 100] for d, c in closes],
+                             [list(e) for e in events])
+    return doc
+
+
+def _series(cik, closes, today):
+    from engine import instruments
+    from engine.context import _series_for
+    fs = _priced_filer()
+    return _series_for(fs, _sessions(cik, closes), 
+                       instruments.company_symbols(fs, ["ACME"]),
+                       today, ind=no_filer())
+
+
+class TestAPriceIsReadEverySession:
+    """`instant`'s case for two confirmations is that the next filing brings a
+    wholly new reading. True of a balance sheet. False of a price ratio, where
+    every day brings one — and the filing series doing the waiting cannot see
+    any of it.
+
+    So a measure carrying a quoted price is counted on the series it actually
+    changes on. Everything downstream is unchanged: the same point shape, the
+    same run, the same `confirm`. What moved is which series says when a new
+    reading exists.
+    """
+
+    CLOSES = [(f"2026-03-0{d}", 10.0 + d) for d in range(2, 7)]
+
+    def test_a_price_measure_is_read_on_trading_days(self):
+        s = _series(920, self.CLOSES, "2026-03-06")["price_to_book"]
+        assert s["cadence"] == "daily"
+        assert [p["period_end"] for p in s["points"]] == \
+            [d for d, _ in self.CLOSES]
+        # a different reading each session, which is the whole argument
+        assert len({p["value"] for p in s["points"]}) == len(self.CLOSES)
+
+    def test_a_filing_measure_is_still_read_on_filings(self):
+        s = _series(921, self.CLOSES, "2026-03-06")["current_ratio"]
+        assert s["cadence"] == "quarterly"
+        assert [p["period_end"] for p in s["points"]] == ["2025-12-31"]
+
+    def test_only_days_the_series_holds_a_close_for_are_boundaries(self):
+        """`price_store.close_on` reaches back to the nearest earlier trading
+        day. A boundary on a day with no row would serve the day before's
+        close a second time, and the run would count one observation twice —
+        the same failure the filing frontier rule exists to prevent, arriving
+        by a different route."""
+        closes = [("2026-03-02", 12.0), ("2026-03-06", 13.0)]
+        s = _series(922, closes, "2026-03-10")["price_to_book"]
+        assert [p["period_end"] for p in s["points"]] == \
+            ["2026-03-02", "2026-03-06"]
+
+    def test_a_session_reading_never_names_a_filing(self):
+        """No document produced it. An accession here would attribute a figure
+        to a filing that never contained it — and `portfolio._snapshot` freezes
+        whatever it is handed, for good."""
+        s = _series(923, self.CLOSES, "2026-03-06")["price_to_book"]
+        for p in s["points"]:
+            assert p["form"] is None and p["accession"] is None
+
+    def test_a_session_reading_says_where_it_came_from(self):
+        ctx = {"measures": {"m": {
+            "current": {"status": "known", "value": 1.0},
+            "series": {"cadence": "daily", "points": [
+                {"period_end": "2026-03-02", "filed": "2026-03-02",
+                 "form": None, "accession": None, "value": 4.0,
+                 "reason": None, "cautions": [], "provenance": []}]}}}}
+        got = contract._measure_observation(
+            ctx, {"measure": "m", "at": "2026-03-02"})[0]
+        assert "the close of 2026-03-02" in got["provenance"][0]
+        assert "filed" not in got["provenance"][0]
+
+    def test_no_price_history_says_what_to_fetch(self):
+        s = _series(924, [], "2026-03-06")["price_to_book"]
+        assert s["points"] == []
+        assert "trading days" in s["note"] and "price history" in s["note"]
+
+
+class TestTheClockIsTheHostsWordAndNotAStrategys:
+    def test_a_quoted_measure_counts_trading_days(self):
+        est = contract.estimator_of("peg_trailing")
+        assert est["clock"] == "sessions"
+        assert est["counts"] == "trading days"
+        assert est["counts_one"] == "trading day"
+
+    def test_a_filing_measure_counts_filings(self):
+        est = contract.estimator_of("current_ratio")
+        assert est["clock"] == "filings"
+        assert est["counts"] == "filings"
+
+    def test_every_estimator_kind_names_a_clock_the_host_knows(self):
+        for kind, spec in contract.ESTIMATORS.items():
+            assert spec["clock"] in contract.CLOCKS, kind
+
+    def test_no_shipped_strategy_writes_the_unit_itself(self):
+        """The noun belongs to the host. Three bundles used to write
+        "consecutive filings" into their own reasons — a strategy stating a
+        fact about machinery it does not own, and false the day a second clock
+        existed."""
+        import pathlib
+        for p in pathlib.Path("strategies").glob("*/strategy.py"):
+            src = p.read_text(encoding="utf-8")
+            for line in src.splitlines():
+                if "consecutive filings" not in line:
+                    continue
+                # narrative prose about a measure that genuinely is on the
+                # filing clock is fine; a formatted count is not
+                assert "needs" not in line and "{f[" not in line, \
+                    f"{p}: {line.strip()}"
+
+
+class TestTheBankCannotDeclareTheWrongClock:
+    """The one contradiction between a declaration and the arithmetic under it
+    that can be settled exactly — so it is refused at load rather than pinned
+    by a test that only runs under pytest. The bank is a file the program
+    re-reads when its mtime moves.
+    """
+
+    def _bank_with(self, tmp_path, monkeypatch, entry_id, kind):
+        import copy
+        doc = copy.deepcopy(bank.load_bank())
+        for e in doc["entries"]:
+            if str(e.get("id")) == entry_id:
+                e["estimator"]["kind"] = kind
+        import ruamel.yaml
+        y = ruamel.yaml.YAML()
+        with open(tmp_path / "probe.yaml", "w", encoding="utf-8") as f:
+            y.dump(doc, f)
+        monkeypatch.setattr(bank, "CONFIG_DIR", tmp_path)
+        bank._bank_cache.clear()
+        return "probe"
+
+    def test_a_price_entry_declared_as_a_filing_reading_is_refused(
+            self, tmp_path, monkeypatch):
+        name = self._bank_with(tmp_path, monkeypatch, "price_to_book",
+                               "instant")
+        with pytest.raises(ValueError, match="reads a quoted price"):
+            bank.load_bank(name)
+
+    def test_a_filing_entry_declared_quoted_is_refused(self, tmp_path,
+                                                       monkeypatch):
+        name = self._bank_with(tmp_path, monkeypatch, "current_ratio",
+                               "quoted")
+        with pytest.raises(ValueError, match="reads no price"):
+            bank.load_bank(name)
+
+    def test_the_shipped_bank_agrees_with_its_own_formulas(self):
+        priced = compute.price_driven_entries()
+        assert len(priced) == 20, sorted(priced)
+        for eid in compute.REGISTRY:
+            est = contract.estimator_of(eid) or {}
+            assert (est.get("kind") == "quoted") == (eid in priced), eid
+
+    def test_every_price_door_the_context_offers_is_watched(self):
+        """The derivation is only exact while every price arrives through a
+        door it knows about. A third one added to Ctx without being named
+        here would make a price-bearing entry look price-free."""
+        doors = {n for n in dir(compute.Ctx)
+                 if n.startswith("price_") and callable(
+                     getattr(compute.Ctx, n))}
+        assert doors - {"price_dates_served"} == set(compute._PRICE_DOORS)

@@ -465,7 +465,6 @@ ENFORCED_BY_SHARED_MACHINERY = {
     ("incremental_roic_5y", "pre-tax income in any year of the window is zero or negative"),
     ("goodwill_impairment_to_equity_5y", "any year in the window has no resolvable impairment figure"),
     ("consecutive_capital_return_years", "a year in the run paid no dividend and has no resolvable repurchase figure"),
-    ("altman_z_double_prime", "total liabilities are zero"),
     # no such data source is ingested, so the entry is absent for everyone
     ("insider_net_buying_6m", "no Form 4 filings exist for the issuer in the window"),
     ("institutional_ownership_pct", "13F holdings have not been aggregated for the ticker"),

@@ -631,11 +631,27 @@ STRATEGY = {
     "summary": "Buys a company that is growing, at a price that has not paid "
                "for the growth yet. Sells when the growth stops or when the "
                "price runs past it — and never because time has passed.",
-    "version": 1,
-    "contract": 6,
+    "version": 2,
+    "contract": 7,
     "declines": DECLINES,
     "limits": LIMITS,
     "changelog": {
+    2: "THE PRICE EXIT NOW ACTS IN DAYS RATHER THAN IN QUARTERS. No level "
+       "moved.\n\n"
+       "`exit-peg` reads a multiple against a share price, and that is a new "
+       "number every session. The host used to wait for a second FILING to "
+       "carry the breach before closing the position — up to a quarter, "
+       "while the multiple this exit exists to catch moved every day and the "
+       "series doing the waiting could not see any of it. A company bought "
+       "for its growth whose price ran away in a fortnight could not be sold "
+       "on that until its next report agreed. It now takes two trading "
+       "days.\n\n"
+       "Two, and not more, because what a second close rules out is the odd "
+       "print — a thin session, a bad tick, a halt. How long you are willing "
+       "to hold something expensive is `exit-peg` itself, and saying it "
+       "twice would be saying half of it somewhere you cannot see. The six "
+       "other exits are unchanged: they read the accounts, and the accounts "
+       "change when a report is filed.",
         1: "First version, and the first strategy in this program whose "
            "entry tests and exit tests are different measures.\n\n"
            "WHAT IT BUYS ON is a five-year earnings growth rate measured "
@@ -1621,15 +1637,19 @@ STRATEGY = {
                     "stops the strategy selling something the moment it "
                     "stops being a bargain.\n\n"
                     "**One thing to know about how quickly this can fire.** "
-                    "The wait for a second reading counts filings, not days "
-                    "— so a price that runs away in a fortnight cannot close "
-                    "the position until the following quarter's filing "
-                    "agrees. That is right for a measure built on a balance "
-                    "sheet and it is slow for one built on a share price. It "
-                    "is a limitation of this program rather than of the "
-                    "rule; a reader watching a multiple double in a month "
-                    "should know that the tool will take a quarter to say "
-                    "so."},
+                    "The wait for a second reading counts trading days, "
+                    "because that is how often this reading changes — a "
+                    "multiple against a share price is a new number every "
+                    "session. So a price that runs away in a fortnight "
+                    "closes the position two sessions after it crosses, "
+                    "rather than waiting for a filing that has nothing to "
+                    "say about it.\n\n"
+                    "What the two days buy is the odd close: a thin print, "
+                    "a bad tick, a halt. They are not a bet that a high "
+                    "price comes back down — how long you are willing to sit "
+                    "with an expensive holding is what the level above says, "
+                    "and saying it twice would be saying it in a place you "
+                    "cannot see."},
 
         {"id": "exit-debt-to-equity",
          "label": "Debt against equity that ends a holding",
@@ -1873,13 +1893,27 @@ def _confirmed_on(broken):
             ways.add(" on a reading a single year cannot have moved, so "
                      "there is nothing to wait for")
         elif f["needs"] == 1:
-            ways.add(" on the newest filing")
+            ways.add(f" on the newest {f['estimator']['counts_one']}")
         else:
-            ways.add(f" on {f['needs']} consecutive filings, so this is a "
-                     "change and not a wobble")
+            ways.add(f" on {f['needs']} consecutive "
+                     f"{f['estimator']['counts']}, so this is a change "
+                     "and not a wobble")
     if len(ways) != 1:
         return " each on the evidence its own measure can carry"
     return ways.pop()
+
+
+def _waiting_unit(waiting) -> str:
+    """The host's word for what these breaches are waiting on.
+
+    Never "filings". Which series a breach is counted in is a property of the
+    measure and the host derives it, so this asks rather than assumes — a
+    valuation multiple is confirmed over trading days and a balance-sheet
+    ratio over filings, and a single sentence covering both has to say
+    "readings" rather than pick one and be wrong about the other.
+    """
+    nouns = {f["estimator"]["counts"] for f in waiting}
+    return nouns.pop() if len(nouns) == 1 else "readings"
 
 
 def _exit_evidence(group, states):
@@ -2269,8 +2303,9 @@ def _on_a_holding(ctx):
                     + ("has" if len(waiting) == 1 else "have")
                     + " been crossed on the current reading and "
                     + ("has" if len(waiting) == 1 else "have")
-                    + " not yet been crossed on enough consecutive filings "
-                      "to act on. Nothing is owed from you today."),
+                    + " not yet been crossed on enough consecutive "
+                    + _waiting_unit(waiting)
+                    + " to act on. Nothing is owed from you today."),
                 "evidence": evidence, "groups": groups,
             },
         }

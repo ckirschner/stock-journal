@@ -62,7 +62,13 @@ class TestEveryHostTableIsDocumented:
     DOCUMENTED = {
         "RENDER_TYPES", "STATE_FIXES", "HOST_STATES", "COMPARATORS",
         "HOST_FACTS", "BASELINE_ANCHORS", "CHANGE_FORMS", "INPUT_ROLES",
-        "INDUSTRY_CLASSES", "ESTIMATORS", "ROBUSTNESS",
+        "INDUSTRY_CLASSES", "ESTIMATORS", "ROBUSTNESS", "CLOCKS",
+        # Bank vocabulary rather than strategy vocabulary: a strategy never
+        # declares a window, it reads the robustness that follows from one.
+        # The estimators table above already renders that column, and the
+        # declaration itself is documented in config/metric-bank.yaml where
+        # the person writing one is looking.
+        "WINDOW_STATISTICS",
         # Flattened into the vocabulary list rather than a table of their own.
         "VALUE_TYPES", "SIZE_UNITS", "EVIDENCE_UNITS", "OUTCOMES",
         "GROUP_REQUIREMENTS", "CONFIRMATIONS",

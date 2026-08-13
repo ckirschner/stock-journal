@@ -30,6 +30,7 @@ convention the journal's hand-entered values already use.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import date
 from statistics import median
 
@@ -710,7 +711,7 @@ def ttm_flow_result(ctx, input_id):
     return out
 
 
-def blend_classes(ctx, classes: list, on: str | None = None):
+def blend_classes(ctx, classes: list, counted_on, on: str | None = None):
     """Every share class at its own close, with the classes that have none
     valued at the largest priced class — or absent when none of them can be
     priced at all.
@@ -745,13 +746,42 @@ def blend_classes(ctx, classes: list, on: str | None = None):
     self-comparison blends by exactly the same rule as the live side. Two
     different rules either side of "P/E against its own five-year median" made
     the comparison meaningless.
+
+    `counted_on` is the day the share count states, and it is required rather
+    than optional because the check below cannot be left to a caller to
+    remember. A count and a close are only multipliable while no split sits
+    between them: a two-for-one on Tuesday doubles the count and halves the
+    close, and a Monday count against a Wednesday close is out by four in the
+    direction that makes the company look cheap. The events are stored — that
+    is what price_store keeps alongside the raw rows — and nothing here read
+    them until now.
+
+    Absent, not cautioned. This figure reaches P/E, price-to-book, the Graham
+    multiple and every yield, and three of those close a position: a caution
+    is read by a person and ignored by the arithmetic.
     """
     priced, unpriced = [], []
+    straddled = []
     for cl in classes:
         sym = cl.get("symbol")
         got = (ctx.price_on(sym, on) if on else ctx.price_for(sym)) \
             if sym else None
+        if got and counted_on:
+            splits = price_store.splits_between(ctx.prices, sym, counted_on,
+                                                got[0])
+            if splits:
+                straddled.append((sym, splits, got[0]))
         (priced if got else unpriced).append((cl, got))
+
+    if straddled:
+        sym, splits, closed = straddled[0]
+        when = ", ".join(str(s[0]) for s in splits)
+        return absent(
+            f"{sym} split on {when}, between the day the share count states "
+            f"({counted_on}) and the close being used ({closed}). The count "
+            "is on one side of that and the price on the other, so their "
+            "product is out by the split factor — market capitalization is "
+            "not reported until a filing restates the count")
 
     count = sum(cl["value"] for cl in classes) or 0.0
     if not priced:
@@ -791,6 +821,27 @@ def blend_classes(ctx, classes: list, on: str | None = None):
               "those shares are worth, not a measurement of it.")
     return {"total": total, "provenance": prov, "cautions": cautions,
             "oldest": min(dates)}
+
+
+def _counted_on(shares) -> str | None:
+    """The day a cover share count speaks for.
+
+    `stated` is the date the cover fact itself claims and is the honest
+    answer; `filed` is when the document was published, which is later and is
+    the fallback. Where the cover states one date per class and they disagree,
+    `resolve_cover_shares` carries no `stated` at all rather than averaging
+    them, and the filing date stands in.
+
+    None where neither is on record — and a caller handed None asks for no
+    split check, because a check against an unknown date would either refuse
+    everything or nothing, and both are worse than saying the date is not
+    known. That case is already visible: a count with no date behind it is
+    the one thing this function cannot make comparable.
+    """
+    if not isinstance(shares, dict):
+        return None
+    return (str(shares.get("stated") or "")[:10]
+            or str(shares.get("filed") or "")[:10] or None)
 
 
 def _classes_to_price(ctx, shares):
@@ -850,7 +901,7 @@ def _market_cap_result(ctx):
     classes = _classes_to_price(ctx, shares)
     if is_absent(classes):
         return _absent_result(classes)
-    blend = blend_classes(ctx, classes)
+    blend = blend_classes(ctx, classes, _counted_on(shares))
     if is_absent(blend):
         return _absent_result(blend)
 
@@ -1012,13 +1063,24 @@ def roe_median_5y(ctx):
             "of net income; the window cannot be aligned"))
     roes = []
     for i, y in enumerate(years):
-        avg_eq = (eq["values"][i] + eq["values"][i + 1]) / 2.0
-        if avg_eq <= 0:
+        # Each END, not their average, and that is what the bank's condition
+        # says: "total shareholders' equity is zero or negative". Refusing on
+        # the average alone let a year-end that dips negative between two
+        # positive ones through — 300, 200, 100, −20, 60, 150 averages
+        # positive at every step, so the year bracketed by 100 and −20
+        # divides net income by 40 and reports a return four times the truth,
+        # on a `higher_is_better` measure, for the company whose equity had
+        # just gone negative. That is precisely the case the `because` prose
+        # says the refusal exists to stop, and the same sentence in
+        # debt_to_equity and price_to_book is enforced as written.
+        opening, closing = eq["values"][i], eq["values"][i + 1]
+        if opening <= 0 or closing <= 0:
             return not_meaningful(
                 "roe_median_5y",
                 "total shareholders' equity is zero or negative",
-                f"the average for FY ending {y} is {avg_eq:,.0f}")
-        roes.append(ni["values"][i] / avg_eq * 100.0)
+                f"FY ending {y} opens at {opening:,.0f} and closes at "
+                f"{closing:,.0f}")
+        roes.append(ni["values"][i] / ((opening + closing) / 2.0) * 100.0)
     value, outs = _median_of(roes, years)
     return computed(value,
                     [f"net income FY {years[0]}..{years[-1]}",
@@ -1206,16 +1268,33 @@ def gross_margin_change_3y(ctx):
 
 
 def gross_margin_vs_3y_median(ctx):
+    """Today's gross margin against the middle of its last three fiscal years.
+
+    The one-out readings are formed even though this measure's estimator does
+    not demand them, and that is not the same thing as forming a check nobody
+    asked for. A strategy may cite `without: one-year` on any measure, and on
+    a measure that IS read over a window of fiscal years the honest answer is
+    the reading, not the sentence `_leave_one_out` gives when none was formed
+    — "this measure is not read over a window of fiscal years, so there is no
+    year to drop out of it", which is false here: it is read over three.
+
+    Which year the drop takes is decided by the comparator, in the host. Only
+    the median leg moves; the trailing leg is one reading and no dropped
+    fiscal year can perturb it. That is the right target — the near leg is
+    the one a dropped year cannot distort.
+    """
     now = _gross_margin_ttm_pct(ctx)
     if is_absent(now):
         return _absent_result(now)
     ann = _gross_margin_annual_pct(ctx, 3)
     if is_absent(ann):
         return _absent_result(ann)
-    return computed(now["value"] - median(ann["values"]),
+    value, outs = _with_one_out(ann["values"], ann["years"],
+                                lambda vs: now["value"] - median(vs))
+    return computed(value,
                     [f"gross margin TTM against the FY "
                      f"{ann['years'][0]}..{ann['years'][-1]} median"],
-                    sorted(set(now["cautions"] + ann["cautions"])))
+                    sorted(set(now["cautions"] + ann["cautions"])), outs)
 
 
 def fcf_ttm(ctx):
@@ -1741,7 +1820,7 @@ def _quarterly_ratio_series(ctx, kind):
             if is_absent(classes):
                 why = classes["reason"]
             else:
-                blend = blend_classes(ctx, classes, on=q)
+                blend = blend_classes(ctx, classes, _counted_on(shares), on=q)
                 if is_absent(blend):
                     why = blend["reason"]
                 else:
@@ -2127,10 +2206,20 @@ def revenue_change_yoy(ctx):
         w = _window(ctx, "revenue", 2)
         if is_absent(w):
             return _absent_result(w)
-        if w["values"][0] == 0:
-            return _absent_result(absent("revenue for the prior fiscal year "
-                                         "is zero"))
         ends = [p["end"] for p in w["points"]]
+        # Positive, not merely non-zero, and the same guard `fcf_margin_ttm`
+        # already makes for the same reason: a contra-revenue restatement
+        # tags `us-gaap:Revenues` negative, and dividing one negative total
+        # by another turns a further collapse into a large POSITIVE rate.
+        # This entry is `higher_is_better` and Lynch reads it as the half of
+        # its growth exit that can hold the exit OFF, so the flattering
+        # direction of that flip suppresses a sale the record justifies.
+        if w["values"][0] <= 0:
+            return not_meaningful(
+                "revenue_change_yoy",
+                "revenue over the earlier of the two windows is zero or "
+                "negative",
+                f"FY {ends[0]} is {w['values'][0]:,.0f}")
         return computed((w["values"][1] / w["values"][0] - 1) * 100.0,
                         [f"FY {ends[1]} against FY {ends[0]}, both from a "
                          "basis-checked window"], w["cautions"])
@@ -2140,27 +2229,34 @@ def revenue_change_yoy(ctx):
     prior = _prior_year_ttm(ctx, "revenue")
     if is_absent(prior):
         return _absent_result(prior)
-    if prior["value"] == 0:
-        return _absent_result(absent("revenue for the prior trailing window "
-                                     "is zero"))
+    if prior["value"] <= 0:
+        return not_meaningful(
+            "revenue_change_yoy",
+            "revenue over the earlier of the two windows is zero or negative",
+            f"the trailing window to {prior.get('end')} is "
+            f"{prior['value']:,.0f}")
     # The two trailing windows come from different filing vintages; apply the
     # same basis discipline annual windows get.
     fams = _families_of(now) | _families_of(prior)
     if len(fams) > 1:
-        return _absent_result(absent(
-            "the two trailing windows resolve revenue under different tag "
-            f"families ({' and '.join(sorted(fams))}) — the ASC 606 "
-            "transition changed what the number measures, and a growth rate "
-            "across it is a definition change dressed as growth"))
+        return not_meaningful(
+            "revenue_change_yoy",
+            "the two windows resolve revenue under different tag families, or "
+            "a fiscal year inside them was restated after the earlier "
+            "window's filings were prepared",
+            f"they resolve under {' and '.join(sorted(fams))} — the ASC 606 "
+            "transition changed what the number measures")
     prior_filed = min((r.get("filed") or "")
                       for r in (prior.get("legs") or [prior]))
     for ev in ctx.sb._restatement_events(ctx.sb.annual_points("revenue")):
         if ev["restating_filed"] > prior_filed:
-            return _absent_result(absent(
-                f"revenue for FY ending {ev['year_end']} was restated by "
-                f"filing {ev['restating_accession']} after the prior "
-                "trailing window's source filings were prepared — the "
-                "comparison would mix bases"))
+            return not_meaningful(
+                "revenue_change_yoy",
+                "the two windows resolve revenue under different tag "
+                "families, or a fiscal year inside them was restated after "
+                "the earlier window's filings were prepared",
+                f"FY ending {ev['year_end']} was restated by filing "
+                f"{ev['restating_accession']}")
     return computed((now["value"] / prior["value"] - 1) * 100.0,
                     [f"TTM to {now.get('end')} against TTM to "
                      f"{prior.get('end')}"],
@@ -2377,7 +2473,8 @@ def net_margin_base_share_5y(ctx):
         return not_meaningful(
             "net_margin_base_share_5y",
             "mean revenue at either end of the window is zero or negative, "
-            "or the margin over the three most recent fiscal years is",
+            "or the margin over the three most recent fiscal years is zero "
+            "or negative",
             f"mean revenue {rev['base']:,.0f} then and {rev['end']:,.0f} "
             f"now, mean net income {ni['end']:,.0f} now")
     outs = []
@@ -2480,12 +2577,22 @@ def _same_filing_revenue_yoy(ctx, fi):
     """Revenue growth, current period against the same period a year earlier,
     both columns from one filing so both sit on one basis."""
     end = fi.period_of_report
+    # `is_absent`, not `is None`. Neither helper has ever returned None — both
+    # come back with a resolved reading or with `absent(reason)` (see
+    # periods.SeriesBuilder._ytd_resolution and _matching_prior_ytd, and the
+    # is_absent guards every other caller of them already makes). So the two
+    # checks below never fired, and a filing carrying no prior-year revenue
+    # comparative reached the arithmetic as a dict with no `value` key: both
+    # balance-growth spreads came back "computation failed: KeyError: 'value'"
+    # where the honest answer was the reason the helper had already written.
     cur = ctx.sb._ytd_resolution(fi, "revenue", end)
-    if cur is None:
-        return absent("revenue did not resolve in the filing")
+    if is_absent(cur):
+        return absent("revenue did not resolve in the filing: "
+                      + cur["reason"])
     prior = ctx.sb._matching_prior_ytd(fi, "revenue", cur)
-    if prior is None:
-        return absent("the filing carries no prior-year revenue comparative")
+    if is_absent(prior):
+        return absent("the filing carries no prior-year revenue comparative: "
+                      + prior["reason"])
     if prior["value"] == 0:
         return absent("prior-period revenue is zero")
     return {"value": (cur["value"] / prior["value"] - 1) * 100.0,
@@ -3167,9 +3274,11 @@ def altman_z_double_prime(ctx):
         if is_absent(w):
             return _absent_result(absent(f"{what}: " + w["reason"]))
     if tl["value"] <= 0:
-        return _absent_result(absent(
-            "total liabilities are zero or negative, so the equity-to-"
-            "liabilities term has no denominator"))
+        return not_meaningful(
+            "altman_z_double_prime",
+            "total liabilities are zero or negative",
+            f"total liabilities are {tl['value']:,.0f}, so the "
+            "equity-to-liabilities term has no denominator")
     ebit = _ttm(ctx, "ebit")
     if is_absent(ebit):
         return _absent_result(ebit)
@@ -3251,11 +3360,19 @@ def compute_all(filings: list[dict], prices_doc: dict | None,
 # cover data, all of which a quarterly report refreshes. Price is not a
 # filing input — a price-bearing entry over annual windows is still "annual".
 #
+# A third value, "daily", is not written below and cannot be: it is DERIVED,
+# from the estimator kind the bank declares, by `cadence_of`. An entry read
+# by a quoted price gains a new reading every session rather than every
+# filing, and the clock follows from that fact rather than restating it. See
+# contract.CLOCKS.
+#
 # This is a statement of fact about each formula above, not a judgement about
-# any metric's importance; tests/test_confirmation.py verifies each claim
-# against which period helpers the formula actually touches.
+# any metric's importance; tests/test_filing_series.py TestCadence verifies
+# each claim against which period helpers the formula actually touches, and
+# tests/test_estimators.py verifies the derived arm against which formulas
+# actually reach a price.
 
-CADENCE = {
+_FILING_CADENCE = {
     # annual windows / annual streaks only
     "roic_median_5y": "annual", "roe_median_5y": "annual",
     "gross_margin_range_5y": "annual", "fcf_margin_median_5y": "annual",
@@ -3310,10 +3427,11 @@ CADENCE = {
     "receivables_minus_revenue_growth_yoy": "quarterly",
     "diluted_share_count_change_ttm": "quarterly",
     "goodwill_intangibles_to_assets": "quarterly",
-    # The debt is a balance-sheet instant and the enterprise value carries a
-    # price, so both refresh on a 10-Q even though the window under each is
-    # annual. The noisiest leg names the cadence, the same rule the bank's
-    # estimator kinds follow.
+    # A balance-sheet instant over a five-year window: the debt refreshes on
+    # a 10-Q even though the window under it is annual. The noisiest leg
+    # names the cadence, the same rule the bank's estimator kinds follow.
+    # (This entry reads no price — the comment here used to say it carried an
+    # enterprise value, which is true of its neighbour below and not of it.)
     "total_debt_to_avg_fcf_5y": "quarterly",
     "owner_earnings_yield_on_ev": "quarterly",
     "revenue_ttm": "quarterly",
@@ -3323,7 +3441,173 @@ CADENCE = {
     "institutional_ownership_pct": "quarterly",
 }
 
+DAILY = "daily"
+
+# --------------------------------------------------------------------------
+# which formulas read a price — derived from this file, not declared about it
+# --------------------------------------------------------------------------
+# The bank says how each measure is read, and for twenty entries the answer
+# turns on one fact: does the arithmetic consult a quoted price? That decides
+# the clock a breach of them is confirmed on, and it is not a thing an author
+# should be trusted to remember about the fifty-ninth measure.
+#
+# So it is read off the formulas. Every price in this file arrives through
+# `Ctx.price_for` or `Ctx.price_on` — both say so, and `_one_symbol` refuses
+# anything reaching around them — so a static walk of the call graph from an
+# entry's own function, following local calls and `ctx.entry("...")` into
+# other entries, settles it exactly. There is no fixture to be too thin and
+# no guard to refuse before the price is reached, which is what rules out
+# doing this by running the formulas: a price-bearing entry that goes absent
+# on a missing input looks price-free, and the derivation would then agree
+# with a wrong declaration.
+#
+# What it cannot see is a price reached by a name this file does not contain.
+# That is what `_PRICE_DOORS` is: the doors are named here, and
+# tests/test_estimators.py checks the list against the methods Ctx actually
+# offers, so a third door cannot be added without this being told.
+
+_PRICE_DOORS = ("price_for", "price_on")
+
+_price_driven: dict = {}
+
+
+def _entry_calls(node):
+    """Every name one function calls, plus `ctx.entry("x")` as "@x"."""
+    import ast
+    out = set()
+    for c in ast.walk(node):
+        if not isinstance(c, ast.Call):
+            continue
+        name = getattr(c.func, "id", None) or getattr(c.func, "attr", None)
+        if not name:
+            continue
+        out.add(name)
+        if name == "entry" and c.args:
+            try:
+                lit = ast.literal_eval(c.args[0])
+            except Exception:                             # noqa: BLE001
+                lit = None
+            if isinstance(lit, str):
+                out.add("@" + lit)
+    return out
+
+
+def price_driven_entries() -> frozenset:
+    """Every REGISTRY entry whose arithmetic reaches a quoted price."""
+    import ast
+    import pathlib
+    if _price_driven:
+        return _price_driven["ids"]
+    tree = ast.parse(pathlib.Path(__file__).read_text(encoding="utf-8"))
+    funcs = {n.name: n for n in ast.walk(tree)
+             if isinstance(n, ast.FunctionDef)}
+    edges = {n: _entry_calls(f) for n, f in funcs.items()}
+
+    def reaches(name, seen):
+        if name in seen:
+            return False
+        seen.add(name)
+        for callee in edges.get(name, ()):
+            tgt = callee[1:] if callee.startswith("@") else callee
+            if tgt in _PRICE_DOORS:
+                return True
+            if tgt in funcs and reaches(tgt, seen):
+                return True
+        return False
+
+    _price_driven["ids"] = frozenset(
+        eid for eid in REGISTRY if eid in funcs and reaches(eid, set()))
+    return _price_driven["ids"]
+
+
+def cadence_of(entry_id: str):
+    """Which clock one entry's confirmation series runs on, or None.
+
+    Derived where it can be. An entry the bank declares `quoted` is read from
+    a price, so its readings are sessions and not filings — and that is the
+    bank's declaration, not a second table here that would have to be kept in
+    step with it. Everything else falls through to the filing cadence stated
+    above, which is a claim about which FILINGS refresh a formula's inputs
+    and remains exactly that.
+
+    Falls back to the stated filing cadence where the bank cannot be read at
+    all, because a render must not depend on the bank being well formed —
+    same rule as contract._plain_estimator.
+    """
+    try:
+        from .contract import ESTIMATORS, estimator_of
+        est = estimator_of(entry_id)
+        if est and ESTIMATORS[est["kind"]]["clock"] == "sessions":
+            return DAILY
+    except Exception:                                     # noqa: BLE001
+        pass
+    return _FILING_CADENCE.get(entry_id)
+
+
+class _Cadence(Mapping):
+    """`CADENCE` as it always read — {entry id: clock word} — with the
+    derived arm folded in.
+
+    Resolved on access rather than built once at import. The bank is cached
+    on its file's mtime precisely so an edit takes effect without a restart,
+    and a dict built at import would answer from whatever the bank said the
+    first time anything imported this module. It would also have to import
+    contract at module scope, which imports bank, which reads this one.
+    """
+
+    def __getitem__(self, key):
+        if key not in _FILING_CADENCE:
+            raise KeyError(key)
+        return cadence_of(key)
+
+    def __iter__(self):
+        return iter(_FILING_CADENCE)
+
+    def __len__(self):
+        return len(_FILING_CADENCE)
+
+
+CADENCE = _Cadence()
+
+# Every clock an entry can be on. engine/context._series_for walks these and
+# builds one pinned context per boundary within each.
+CADENCES = ("annual", "quarterly", DAILY)
+
 CONFIRMATION_BOUNDARY_CAP = 12
+
+
+def trading_boundaries(prices_doc, symbols, today: str,
+                       limit: int = CONFIRMATION_BOUNDARY_CAP) -> list[dict]:
+    """The sessions on which a price-bearing metric gained a new reading,
+    oldest first: {"filed", "accession", "form", "period_end"}.
+
+    The sibling of `confirmation_boundaries`, in the same shape and for the
+    same reason: everything downstream counts readings and must not care
+    which series produced them.
+
+    A boundary is a day the series actually holds a close for — never a
+    calendar day. `price_store.close_on` reaches backward to the nearest
+    earlier trading day, so a boundary on a day with no row would serve the
+    close from the day before and the run would count one observation twice.
+    That is the same failure the filing frontier rule exists to prevent, and
+    it arrives here by a different route.
+
+    Across every symbol the company has, unioned: a day on which any listed
+    class traded is a day the blended reading could have moved. `period_end`
+    and `filed` are the session itself — a reading taken that day, from the
+    filings on record that day. There is no accession or form, and inventing
+    one would put a fiscal document behind a figure that came from a price.
+    """
+    days: set = set()
+    for sym in sorted(getattr(symbols, "all", symbols) or []):
+        key = price_store.series_key(prices_doc or {}, sym)
+        if key is None:
+            continue
+        days.update(str(r[0])[:10]
+                    for r in (prices_doc["series"][key].get("rows") or [])
+                    if r[1] not in (None, 0) and str(r[0])[:10] <= today)
+    return [{"filed": d, "accession": None, "form": None, "period_end": d}
+            for d in sorted(days)[-limit:]] if days else []
 
 
 def confirmation_boundaries(filings: list[dict], cadence: str) -> list[dict]:

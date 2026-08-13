@@ -166,7 +166,28 @@ from types import MappingProxyType
 # existed cannot ask for the other form and cannot be handed it by accident,
 # so the meaning that moved is reachable only from a citation that names it,
 # and a strategy that names nothing is owed no version.
-CONTRACT_VERSION = 6
+# 7: a confirmation no longer counts filings for every measure. Twenty bank
+#    entries carry a quoted price, and a price is a new reading every session
+#    — so `confirm()` counts trading days for them and filings for everything
+#    else, and `estimator` says which with `clock` and `counts`.
+#
+#    This is a bump for the reason 4 and 6 were. A v6 bundle asked
+#    `confirm(ctx, {"measure": "price_to_book", ...})` and got back `needs`,
+#    `run` and `periods` denominated in filings; the same call under v7
+#    returns the same keys with the same shapes, holding sessions. Nothing
+#    raises and nothing looks wrong — a strategy that waited two filings for a
+#    valuation multiple to establish now waits two days, and one that printed
+#    "on 2 consecutive filings" beside it prints a sentence that is false.
+#    Every shipped strategy did print exactly that, which is the other half of
+#    this version: the noun belongs to the host and is handed back rather than
+#    written by a bundle that cannot know which series it is being told about.
+#
+#    Bundled with it, because bumping once beats bumping twice: a measure's
+#    series may now be built from trading days, so a point in it carries no
+#    `form` and no `accession` — a reading that came off a price series was
+#    produced by no document, and naming one would attribute a figure to a
+#    filing that never contained it.
+CONTRACT_VERSION = 7
 
 # A strategy may declare at most this many states. The cap is deliberate:
 # states are user-facing vocabulary, and complexity must not creep back in
@@ -711,13 +732,23 @@ CHANGE_FORMS = MappingProxyType({
 # claim about the business — rather than with repetition, which is a claim
 # about the data that is not true.
 #
-#   `confirmations`  how many consecutive filings must carry the failure
-#                    before it is established, counting the current reading.
+#   `confirmations`  how many consecutive readings must carry the failure
+#                    before it is established, counting the current one.
 #                    0 means the current reading is enough.
+#   `clock`          WHICH readings those are — see CLOCKS. Every kind but
+#                    one counts filings, because a filing is when a figure
+#                    out of the accounts changes. A quoted price changes
+#                    every session, so counting filings for one would be
+#                    waiting on a series that cannot see the thing being
+#                    filtered.
 #   `robustness`     whether the breach must also survive dropping the single
 #                    annual observation that most favours it — see ROBUSTNESS.
 #                    `short-window` means only where the window holds fewer
 #                    than BREAKDOWN_OBSERVATIONS.
+#
+# The clock is here rather than beside each measure because it follows from
+# the kind, and a second declaration of a thing already declared is a second
+# thing to keep in step. `engine/compute.CADENCE` derives from it.
 #
 # `observations` is declared beside the kind in the bank, and says how many
 # annual observations the estimator reads. It is what separates a five-point
@@ -731,10 +762,54 @@ CHANGE_FORMS = MappingProxyType({
 
 BREAKDOWN_OBSERVATIONS = 5
 
+# What a confirmation counts, and what it is called in a sentence.
+#
+# There are two series a reading can come from and they run at wildly
+# different rates: a company files four times a year, and a listed price
+# prints every session. Confirmation exists to filter noise, and it can only
+# filter noise it can see — counting filings for a figure that moves daily
+# waits two quarters while the thing being filtered moves two hundred times.
+#
+# `noun` is the host's word for one tick of the clock, and it is here so that
+# nothing else has to say it. Three shipped strategies used to write
+# "consecutive filings" into their own reasons; that was a strategy stating a
+# fact about the host's machinery, which principle 8 does not allow it to
+# know, and it became false the moment a second clock existed. `confirm()`
+# hands the noun back with the count.
+#
+# `boundary` is what the engine builds the reading series from. Adding a
+# clock is a host change in this one table and in engine/context._series_for.
+CLOCKS = MappingProxyType({
+    "filings": MappingProxyType({
+        "noun": "filings", "one": "filing",
+        "means": "reports filed with the SEC that brought a new reporting "
+                 "period",
+        "explain":
+            "A figure out of the accounts changes when the accounts do, and "
+            "that is when a report is filed. Reading it again on any other "
+            "day re-reads the same filing, so the only thing a second "
+            "reading can mean is that a second filing said it too.",
+    }),
+    "sessions": MappingProxyType({
+        "noun": "trading days", "one": "trading day",
+        "means": "days on which the stock actually traded and a close was "
+                 "recorded",
+        "explain":
+            "A price is a new observation every session, and it is observed "
+            "without error — so what a second reading filters is not "
+            "measurement noise in the usual sense but a single odd close: a "
+            "thin-volume print, a bad tick, a halt. Two sessions in a row "
+            "carrying the failure rules that out. Asking for more than that "
+            "would be a claim about whether prices revert, which is a view "
+            "about markets and belongs to a strategy's level rather than to "
+            "the host's clock.",
+    }),
+})
 
-def _est(label, means, confirmations, robustness, explain):
+
+def _est(label, means, confirmations, robustness, explain, clock="filings"):
     return MappingProxyType({"label": label, "means": means,
-                             "confirmations": confirmations,
+                             "confirmations": confirmations, "clock": clock,
                              "robustness": robustness, "explain": explain})
 
 
@@ -747,6 +822,19 @@ ESTIMATORS = MappingProxyType({
         "filing agreeing with the first is real evidence — and it is the "
         "only measure of robustness available, because there is no window "
         "to drop a year out of."),
+    "quoted": _est(
+        "a market price against the filings", "a figure carrying a quoted "
+        "price, so a new one exists every session", 2, "no",
+        "The same photograph as a balance-sheet reading, taken every day. "
+        "That is the whole difference and it decides the clock: a multiple "
+        "against a price is a new number each session, so waiting for the "
+        "next filing to agree waits a quarter while the thing being watched "
+        "moves continuously — and the filing series doing the waiting cannot "
+        "see any of it. Two sessions, because a close is observed exactly "
+        "and the only noise in it is the odd print. There is no window to "
+        "drop a year out of; the accounting leg under the price is whatever "
+        "the newest filing says, exactly as it is on any other day.",
+        clock="sessions"),
     "trailing": _est(
         "a trailing window", "a flow added up over the months just gone, "
         "usually the last four quarters", 2, "no",
@@ -813,6 +901,56 @@ ESTIMATORS = MappingProxyType({
         "waiting for a filing to agree with them would be waiting for the "
         "wrong thing."),
 })
+
+# The statistics a reference window can be summarised by, and how fragile
+# each is — derived from ESTIMATORS rather than restated, because these ARE
+# those kinds. A window read as a median is exactly as robust whether the
+# median is the whole measure or the thing the measure is compared against.
+#
+# This exists because one word was answering two questions.
+#
+# `kind` says what one more READING can do, and the bank's rule for a measure
+# with legs of different speeds is that the noisiest one names it: a price
+# over a three-year average earnings is `quoted`, because the price is new
+# every session and the average is not. That rule is right and it decides the
+# clock and the confirmation count correctly.
+#
+# But it also used to decide robustness, and robustness is a different
+# question: not "does waiting help" but "could one fiscal year be carrying
+# this". Those come apart on exactly the measures the noisiest-leg rule is
+# for. A price over a three-year mean gets a wholly new reading each session
+# AND has a three-year window where one year might be doing all the work, and
+# naming the fast leg switched the dropped-year check off. Five entries were
+# in that position, and `total_debt_to_avg_fcf_5y` — which a shipped exit
+# reads — had been computing one-out readings that nothing could ever ask
+# for.
+#
+# So an entry whose kind does not already name a window may declare the
+# window it is judged against, and the robustness follows from that. Nothing
+# about the noisiest-leg rule changed; it stopped being asked a question it
+# was never about.
+WINDOW_STATISTICS = MappingProxyType({
+    k: MappingProxyType({"label": ESTIMATORS[k]["label"],
+                         "means": ESTIMATORS[k]["means"],
+                         "robustness": ESTIMATORS[k]["robustness"]})
+    for k in ("averaged", "median", "range", "cumulative")})
+
+
+def robustness_of(statistic: str, observations) -> str:
+    """What a breach over this window must survive: "always" or "no".
+
+    One function, so the short-window rule is applied in one place whether
+    the window came from the kind or from a `window` declaration beside it.
+    """
+    spec = WINDOW_STATISTICS.get(statistic)
+    if spec is None:
+        return "no"
+    if spec["robustness"] != "short-window":
+        return spec["robustness"]
+    return "always" if isinstance(observations, int) \
+        and not isinstance(observations, bool) \
+        and observations < BREAKDOWN_OBSERVATIONS else "no"
+
 
 # What a breach must survive, where its estimator asks for it.
 #
@@ -2894,15 +3032,27 @@ def _measure_observation(ctx, item):
             "measure"), None
     if hit["value"] is None:
         return _unobserved(hit["reason"], "measure"), None
-    # The filing this reading came from, then how the reading was built and
-    # what qualifies it. A point is a measure like any other: citing one at
-    # a past period must not be the way to get a figure with its cautions
-    # filed off, because a screen showing evidence has no other source for
-    # them and a frozen snapshot keeps whatever it was handed forever.
+    # Where this reading came from, then how it was built and what qualifies
+    # it. A point is a measure like any other: citing one at a past period
+    # must not be the way to get a figure with its cautions filed off,
+    # because a screen showing evidence has no other source for them and a
+    # frozen snapshot keeps whatever it was handed forever.
+    #
+    # A point on the session clock carries no form and no accession, because
+    # no document produced it. Naming one would put a fiscal report behind a
+    # figure that came off a price series — a false attribution, frozen into
+    # a purchase snapshot forever by `portfolio._snapshot`.
     return _observed(hit["value"], "measure", hit.get("cautions"),
-                     [f'{hit["form"]} for the period ending '
-                      f'{hit["period_end"]}, filed {hit["filed"]}']
+                     [_where_read(hit)]
                      + list(hit.get("provenance") or [])), None
+
+
+def _where_read(point) -> str:
+    """One sentence saying what produced a reading in a measure's series."""
+    if point.get("form"):
+        return (f'{point["form"]} for the period ending '
+                f'{point["period_end"]}, filed {point["filed"]}')
+    return f'the close of {point["period_end"]}'
 
 
 def _change_form(item) -> str:
@@ -3464,20 +3614,31 @@ def confirm(ctx: dict, item: dict) -> dict:
                 "why": _why_confirmed(est, run, needs)}
     return {**base, "confirmation": BREACHED,
             "why": (f"this is {est['label']}, which takes {needs} "
-                    f"consecutive filings to establish; {run} "
+                    f"consecutive {_ticks(est, needs)} to establish; {run} "
                     + ("carries" if run == 1 else "carry") + " it so far")}
+
+
+def _ticks(est, n) -> str:
+    """The host's noun for n readings on this measure's clock.
+
+    Said here and nowhere else. A count of readings is not a number a reader
+    can do anything with until it says what it counts, and "filings" was
+    written into three strategies as though it were the only answer.
+    """
+    return est["counts_one"] if n == 1 else est["counts"]
 
 
 def _why_confirmed(est, run, needs) -> str:
     if est["robustness"] == "always":
-        return (f"this is {est['label']}, so waiting for another filing "
+        return (f"this is {est['label']}, so waiting for another reading "
                 "would re-read the same years; the failure survives dropping "
                 "the year that most favours it, which one bad year would not")
     if needs == 0:
         return (f"this is {est['label']}, and the window has already done "
                 "the smoothing a second reading would be asked for — one "
                 "observation cannot move it past the one next to it")
-    return (f"this is {est['label']}, and {needs} consecutive filings "
+    return (f"this is {est['label']}, and {needs} consecutive "
+            f"{_ticks(est, needs)} "
             f"{'carries' if needs == 1 else 'carry'} the failure")
 
 
@@ -3830,27 +3991,55 @@ def _plain_estimator(node):
     if kind not in ESTIMATORS:
         return None
     obs = node.get("observations")
-    return {"kind": kind,
-            "observations": int(obs) if isinstance(obs, int)
-            and not isinstance(obs, bool) else None}
+    out = {"kind": kind,
+           "observations": int(obs) if isinstance(obs, int)
+           and not isinstance(obs, bool) else None}
+    # The window a reading is judged against, where the entry declares one.
+    # Carried rather than dropped: robustness is derived from it, and an
+    # estimator arriving here without it comes back saying no dropped year is
+    # needed — which is the silent direction. `load_bank` has already refused
+    # a malformed one, so anything shaped right is taken at its word.
+    window = node.get("window")
+    if isinstance(window, dict) and window.get("statistic") in \
+            WINDOW_STATISTICS:
+        wobs = window.get("observations")
+        out["window"] = {
+            "statistic": str(window["statistic"]),
+            "observations": int(wobs) if isinstance(wobs, int)
+            and not isinstance(wobs, bool) else None}
+    return out
 
 
 def estimator_of(measure_id):
     """How a measure is read, and therefore what a breach of it needs:
-    {"kind", "observations", "confirmations", "robustness"} or None where the
-    bank does not say."""
+    {"kind", "observations", "confirmations", "clock", "counts", "robustness",
+    "label"} or None where the bank does not say.
+
+    `counts` is the noun for one tick of this measure's clock — "filings" or
+    "trading days". It travels with the count because the count is
+    meaningless without it, and because the alternative was every consumer
+    knowing which clock a measure runs on. Three of them did not, and said
+    "filings" about all of them.
+    """
     meta = _bank_entry(measure_id) or {}
     est = meta.get("estimator")
     if not est:
         return None
     spec = ESTIMATORS[est["kind"]]
-    robustness = spec["robustness"]
-    if robustness == "short-window":
-        obs = est.get("observations")
-        robustness = "always" if isinstance(obs, int) \
-            and obs < BREAKDOWN_OBSERVATIONS else "no"
+    # Robustness follows the WINDOW, which is the kind's own where the kind
+    # names one and the separately declared one otherwise. See
+    # WINDOW_STATISTICS for why those are two questions.
+    window = est.get("window")
+    if isinstance(window, dict):
+        robustness = robustness_of(str(window.get("statistic") or ""),
+                                   window.get("observations"))
+    else:
+        robustness = robustness_of(est["kind"], est.get("observations"))
+    clock = CLOCKS[spec["clock"]]
     return {**est, "confirmations": spec["confirmations"],
-            "robustness": robustness, "label": spec["label"]}
+            "robustness": robustness, "label": spec["label"],
+            "clock": spec["clock"], "counts": clock["noun"],
+            "counts_one": clock["one"]}
 
 
 def _bank_entry(measure_id):

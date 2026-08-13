@@ -548,12 +548,15 @@ class TestTheContractVersionMovesOnlyForAMeaning:
         The bare number is here on purpose, and it is the reason this cannot
         grow quietly: a contract bump has to come past this test, and whoever
         updates it has to be able to say the move was for a meaning that
-        changed rather than for a key that was added. It has moved once since
-        — to 6, when `position.disposals` narrowed from the security's whole
-        record to the current holding's sales — and the staged plan is still
-        not why.
+        changed rather than for a key that was added. It has moved twice
+        since — to 6, when `position.disposals` narrowed from the security's
+        whole record to the current holding's sales, and to 7, when
+        `confirm()` stopped counting filings for the twenty measures carrying
+        a quoted price and started counting the sessions they actually change
+        on. Both are the same test: the same key, the same shape, a different
+        question answered. The staged plan is still not why.
         """
-        assert contract.CONTRACT_VERSION == 6
+        assert contract.CONTRACT_VERSION == 7
         assert contract.validate_declaration(decl()) == []
         assert json.loads(json.dumps(payload([tranche()]))) == \
             payload([tranche()])

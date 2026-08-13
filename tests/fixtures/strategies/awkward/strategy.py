@@ -24,7 +24,7 @@ STRATEGY = {
                "asks every awkward question a declaration can ask. It is "
                "not investment logic.",
     "version": 1,
-    "contract": 6,
+    "contract": 7,
     "changelog": {
         1: "First version: sizes against account weight and a cap.",
     },

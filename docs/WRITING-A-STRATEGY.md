@@ -1187,18 +1187,36 @@ slower to sell asks for a worse number, which is a claim about the business, not
 for more repetitions, which is a claim about the data that is not true.
 
 <!-- generated: estimators -->
-| `kind` | reads as | filings a breach needs | must survive dropping a year |
-|---|---|---|---|
-| `instant` | read at one date | 2 | — |
-| `trailing` | a trailing window | 2 | — |
-| `endpoint` | two readings, one at each end | 1 | — |
-| `averaged` | means at both ends | 0 | yes |
-| `median` | the middle of a window | 0 | under 5 observations |
-| `range` | the spread across a window | 0 | yes |
-| `cumulative` | added up across a window | 0 | yes |
-| `count` | a count of annual reports | 0 | — |
-| `assessed` | assessed, not measured | 0 | — |
+| `kind` | reads as | a breach needs | counted in | must survive dropping a year |
+|---|---|---|---|---|
+| `instant` | read at one date | 2 | filings | — |
+| `quoted` | a market price against the filings | 2 | trading days | — |
+| `trailing` | a trailing window | 2 | filings | — |
+| `endpoint` | two readings, one at each end | 1 | filings | — |
+| `averaged` | means at both ends | 0 | filings | yes |
+| `median` | the middle of a window | 0 | filings | under 5 observations |
+| `range` | the spread across a window | 0 | filings | yes |
+| `cumulative` | added up across a window | 0 | filings | yes |
+| `count` | a count of annual reports | 0 | filings | — |
+| `assessed` | assessed, not measured | 0 | filings | — |
 <!-- end: estimators -->
+
+**A breach is counted in readings, and readings are not all filings.** A figure
+out of the accounts changes when a report is filed; a multiple against a market
+price changes every session. Confirmation can only filter noise it can see, so
+each kind names the series its readings come from:
+
+<!-- generated: clocks -->
+| `clock` | counts | which are |
+|---|---|---|
+| `filings` | filings | reports filed with the SEC that brought a new reporting period |
+| `sessions` | trading days | days on which the stock actually traded and a close was recorded |
+<!-- end: clocks -->
+
+Never write the noun yourself. `confirm()` returns `estimator.counts` — the
+host's word for what it counted — because a strategy that says "two consecutive
+filings" about a measure read from a price is stating a fact about machinery it
+does not own, and it was wrong the day a second clock existed.
 
 Ask for the answer with `contract.confirm(ctx, item)`, passing the citation
 that says what the holding must keep being true. Where an estimator asks for
@@ -1239,7 +1257,7 @@ against the SEC's published list in
 ### The rest of the vocabulary
 
 <!-- generated: vocabulary -->
-- **Contract version** — `6`. A declaration naming any other is refused at load.
+- **Contract version** — `7`. A declaration naming any other is refused at load.
 - **Most states one strategy may declare** — `16`.
 - **Declared field types** — `number`, `integer`, `boolean`, `text`.
 - **Units a `size` may be in** — `weight`, `usd`, `shares` (`weight` is a percent number).

@@ -476,6 +476,12 @@ class TestMulticlassMarketCap:
 
     A, B, C = 5833 * M, 860 * M, 5497 * M
 
+    # The day the cover count speaks for. Every close in this class is later
+    # than it and no split sits between, so the blend is reached — which is
+    # what these tests are about. The straddle case has its own tests in
+    # tests/test_share_class_pricing.py.
+    COUNTED_ON = "2026-08-01"
+
     def _ctx(self, rows):
         from engine import compute, price_store
         doc = {"schema": price_store.SCHEMA, "cik": 1652044, "series": {}}
@@ -495,7 +501,7 @@ class TestMulticlassMarketCap:
         from engine import compute
         ctx = self._ctx([("GOOGL", "2026-08-06", 200.0),
                          ("GOOG", "2026-08-07", 198.0)])
-        blend = compute.blend_classes(ctx, self._classes())
+        blend = compute.blend_classes(ctx, self._classes(), self.COUNTED_ON)
         # 5,833M x 200.00  +  860M x 200.00 (borrowed)  +  5,497M x 198.00
         assert blend["total"] == (5833 * 200 + 860 * 200 + 5497 * 198) * M
         assert blend["total"] == 2427006 * M
@@ -509,7 +515,7 @@ class TestMulticlassMarketCap:
         from engine import compute
         ctx = self._ctx([("GOOGL", "2026-08-06", 200.0),
                          ("GOOG", "2026-08-06", 198.0)])
-        note = " ".join(compute.blend_classes(ctx, self._classes())["cautions"])
+        note = " ".join(compute.blend_classes(ctx, self._classes(), self.COUNTED_ON)["cautions"])
         assert "7.1%" in note                       # 860 / 12,190 of the count
         assert "860,000,000 shares" in note
         assert "GOOGL close of 2026-08-06" in note
@@ -523,7 +529,7 @@ class TestMulticlassMarketCap:
         from engine import compute
         ctx = self._ctx([("GOOGL", "2026-08-06", 200.0),
                          ("GOOG", "2026-08-06", 198.0)])
-        note = " ".join(compute.blend_classes(ctx, self._classes())["cautions"])
+        note = " ".join(compute.blend_classes(ctx, self._classes(), self.COUNTED_ON)["cautions"])
         assert "unlisted" not in note
         assert "no stored close" in note
 
@@ -534,14 +540,14 @@ class TestMulticlassMarketCap:
         from engine import compute
         ctx = self._ctx([("GOOGL", "2026-08-06", 200.0),
                          ("GOOG", "2025-01-02", 198.0)])
-        assert compute.blend_classes(ctx, self._classes())["oldest"] \
+        assert compute.blend_classes(ctx, self._classes(), self.COUNTED_ON)["oldest"] \
             == "2025-01-02"
 
     def test_with_no_priced_class_there_is_nothing_to_anchor_to(self):
         """Absence, not a number built on a symbol that is not a share
         class."""
         from engine import compute
-        blend = compute.blend_classes(self._ctx([]), self._classes())
+        blend = compute.blend_classes(self._ctx([]), self._classes(), self.COUNTED_ON)
         assert is_absent(blend)
         assert "none of the 3 share classes" in blend["reason"]
         assert "without inventing a price" in blend["reason"]
@@ -553,7 +559,7 @@ class TestMulticlassMarketCap:
         from engine import compute
         ctx = self._ctx([("GOOGL", "2026-08-06", 200.0),
                          ("GOOG", "2026-08-06", 150.0)])
-        blend = compute.blend_classes(ctx, self._classes())
+        blend = compute.blend_classes(ctx, self._classes(), self.COUNTED_ON)
         assert blend["total"] == (5833 * 200 + 860 * 200 + 5497 * 150) * M
         borrowed = [p for p in blend["provenance"] if "borrowed" in p]
         assert len(borrowed) == 1 and "860,000,000" in borrowed[0]
@@ -567,6 +573,6 @@ class TestMulticlassMarketCap:
         ctx = self._ctx([("GOOGL", "2026-08-06", 200.0),
                          ("GOOG", "2026-08-07", 198.0)])
         classes = self._classes()
-        live = compute.blend_classes(ctx, classes)
-        then = compute.blend_classes(ctx, classes, on="2026-08-07")
+        live = compute.blend_classes(ctx, classes, self.COUNTED_ON)
+        then = compute.blend_classes(ctx, classes, self.COUNTED_ON, on="2026-08-07")
         assert live["total"] == then["total"] == 2427006 * M
