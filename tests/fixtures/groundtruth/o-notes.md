@@ -121,3 +121,20 @@ recur legitimately in MD&A/selected-financial-data sections of the same filing.
   still find "Net income" 316,477 printed below.
 - All FY2024 borrowing lines are "net" (of deferred financing costs and
   premiums/discounts) except the line of credit/commercial paper line.
+
+---
+
+## Net property: a REIT has none of the lines this needs
+
+FY2024, accession `0000726728-25-000055`. Realty Income tags neither
+`us-gaap:PropertyPlantAndEquipmentNet` nor a classified balance sheet, so
+`net_ppe`, `current_assets`, `current_liabilities` and `short_term_debt` all
+resolve absent. Its property is `us-gaap:RealEstateInvestmentPropertyNet` — the
+same assets under a different element, because for this filer they are the
+business rather than the equipment the business runs on.
+
+Nothing needs fixing here. Return on capital declares itself not meaningful for
+`real-estate` before any of that is reached, so the absences are never the
+reason a reader is told anything: the industry gate answers first, and it
+answers with a sentence about what kind of company this is rather than with a
+list of lines that did not resolve.

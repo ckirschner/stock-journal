@@ -188,6 +188,18 @@
    "accession": "0001637459-19-000049",
    "column": "December 29, 2018 — current-year column (the 'As Restated & Recast' spanning header covers only the 2017 and 2016 columns)",
    "note": "Cross-checked against 'Total depreciation and amortization expense' of 983 in the segment note, where it is built up from the five segment figures 626 + 39 + 102 + 119 + 97."
+  },
+  {
+   "metric": "net_ppe",
+   "fiscal_year": "FY2018",
+   "period_end": "2018-12-29",
+   "as_printed": "7,078",
+   "scale": "millions",
+   "value_usd": 7078000000,
+   "caption": "Property, plant and equipment, net",
+   "statement": "balance",
+   "accession": "0001637459-19-000049",
+   "column": "December 29, 2018 — the current-year column"
   }
  ]
 }

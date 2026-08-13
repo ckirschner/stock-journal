@@ -16,7 +16,9 @@ The shape, in full::
                              | {"status": "absent", "reason"},
                    "industry": {"status": "known", "value", "class", "sic",
                                 "title", "source", "cautions", "provenance"}
-                             | {"status": "absent", "reason"}},
+                             | {"status": "absent", "reason"},
+                   "on_list":   known-or-absent,   # yes/no, off the list
+                   "listed_on": known-or-absent},  # the freshest list's day
       "measures": {bank id: {
           "current": {"status": "known", "value", "source", "cautions",
                       "provenance"}
@@ -46,6 +48,8 @@ The shape, in full::
                     "slots": {"occupied"},
                     "holdings": [{"ticker", "name", "shares", "opened",
                                   "market_value", "weight"}]},
+      "list":     {"pulled": known-or-absent,        # the day it was run
+                   "age_months": int | None},        # whole months since
       "values": {id: value},        # the resolved declaration chain
       "inputs": {id: value},        # the answers that apply, with answers
       "reference": {file name: parsed},   # what the bundle ships, frozen
@@ -107,6 +111,16 @@ Reading rules a strategy can rely on:
   $14,100,000 instead of $9,400 — silently, in a figure sizing rules bind on.
 - **Percent units are percent numbers** (18.9 means 18.9%), including
   position weight, matching the metric bank's convention.
+- **The list is a record of what somebody handed you, not a ranking.** Where a
+  strategy works from a list chosen by a screen run elsewhere, `list` and the
+  two `security` keys say which names are on the one in force and when a name
+  was last on one. What none of them says is where a name sat in that
+  ranking, because a rank means nothing without the thousands of companies it
+  was ranked against and none of those are here. `list.pulled` is the day the
+  screen was run, which the user typed; the day it was imported governs which
+  lists a reconstruction can see and is not served as a figure. `on_list` is
+  absent rather than false where there is no list at all — "not on your list"
+  and "you have no list" are different answers.
 - **A hand-entered value is dated, like everything else the user supplies.**
   It wins over a computed one for its own day, says so in `source`, and
   names the day it was entered in `provenance`. A reconstruction sees the
@@ -232,9 +246,9 @@ import copy
 from datetime import date
 
 from . import bank as bank_mod
-from . import compute, contract, dataview
+from . import compute, contract, dated, dataview
 from . import industry as industry_mod
-from . import judgements, portfolio, tickermap
+from . import judgements, lists, portfolio, tickermap
 
 # Series stop at the same number of filing boundaries the sell-confirmation
 # view uses; the truncated flag says when older boundaries exist.
@@ -951,6 +965,63 @@ def _portfolio(journal_securities, subject, today, as_of, roles) -> dict:
     }
 
 
+_NO_LIST = "this journal has no list on record"
+
+
+def _list(journal, today, as_of) -> dict:
+    """What the journal is currently working from, and how old it is.
+
+    Two dates and only one of them is here. `pulled` is the day the screen was
+    run, which is what a strategy asks about; the day it was typed in governs
+    which imports are visible under a reconstruction and is not served as a
+    figure, because a rule reading it would be measuring how promptly somebody
+    does their admin.
+
+    Cut at the pin rather than at `today`, exactly as the rest of a
+    reconstruction is. A purchase dated in March is judged against the list
+    this journal held in March, and a list imported since cannot present
+    itself as though it had been there.
+    """
+    now = lists.current(journal or {}, as_of)
+    if now is None:
+        return {"pulled": {"status": "absent", "reason": _NO_LIST},
+                "age_months": None}
+    return {
+        "pulled": {"status": "known", "value": now["pulled_on"],
+                   "source": "your list", "cautions": [],
+                   "provenance": [f'imported on {dated.day_of(now)}']},
+        "age_months": contract.months_between(now["pulled_on"], today),
+    }
+
+
+def _on_list(journal, ticker, as_of) -> dict:
+    """Whether the list in force carries this name.
+
+    Absent and not False where there is no list at all. "Your list does not
+    have this on it" and "you have no list" ask different things of a reader,
+    and a rule that could not tell them apart would report the first while
+    meaning the second — an absence reading as a settled answer, which is the
+    one shape this program refuses everywhere.
+    """
+    answer = lists.on_current(journal or {}, ticker, as_of)
+    if answer is None:
+        return {"status": "absent", "reason": _NO_LIST}
+    return {"status": "known", "value": answer, "source": "your list",
+            "cautions": [], "provenance": []}
+
+
+def _listed_on(journal, ticker, as_of) -> dict:
+    """The pull date of the freshest list that has ever carried this name."""
+    day = lists.listed_on(journal or {}, ticker, as_of)
+    if day is None:
+        return {"status": "absent",
+                "reason": (f"no list on this journal's record has carried "
+                           f"{ticker}" if lists.current(journal or {}, as_of)
+                           else _NO_LIST)}
+    return {"status": "known", "value": day, "source": "your list",
+            "cautions": [], "provenance": []}
+
+
 def portfolio_view(journal_securities: list, roles: dict,
                    today: str | None = None) -> dict:
     """The journal's portfolio node on its own, without evaluating anything.
@@ -971,7 +1042,8 @@ def portfolio_view(journal_securities: list, roles: dict,
 def build_context(security: dict, journal_securities: list | None,
                   values: dict, inputs: dict,
                   as_of: str | None = None, record: dict | None = None,
-                  snap: dict | None = None) -> dict:
+                  snap: dict | None = None,
+                  journal: dict | None = None) -> dict:
     """The context for one security, live or pinned.
 
     With `as_of`, everything is reconstructed from what was observable on
@@ -1026,7 +1098,17 @@ def build_context(security: dict, journal_securities: list | None,
                      # same file. `industry.at` resolves an already-read
                      # history, which is what dataview._bundle holds.
                      **(industry_mod.at(snap["industry"], as_of) if snap
-                        else industry_mod.report(security, as_of))},
+                        else industry_mod.report(security, as_of)),
+                     # Whether the list this journal works from carries this
+                     # name, and when a list last did. Facts about the
+                     # journal's own record rather than about the company —
+                     # nothing here ranked anything, and where a name sits
+                     # within the ranking that produced the list is not
+                     # recoverable from the list.
+                     "on_list": _on_list(journal,
+                                         security.get("ticker"), as_of),
+                     "listed_on": _listed_on(journal,
+                                             security.get("ticker"), as_of)},
         # Two symbol scopes, deliberately. `tickers` is every class the SEC
         # maps to the company, which is what a whole-company measure needs.
         # The price is the security's own instrument and never sees that list.
@@ -1036,6 +1118,7 @@ def build_context(security: dict, journal_securities: list | None,
         "position": _position(security, today, as_of,
                               folio["account_value"]),
         "portfolio": folio,
+        "list": _list(journal, today, as_of),
         "values": values or {},
         "inputs": effective,
     }

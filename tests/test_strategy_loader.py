@@ -46,7 +46,8 @@ class TestDiscovery:
         picker and a journal created against it rendered verdicts built on
         one invented threshold."""
         strategies, _ = strategy_loader.discover()
-        assert sorted(strategies) == ["buffett", "graham", "lynch"]
+        assert sorted(strategies) == ["buffett", "graham", "lynch",
+                                      "magic-formula"]
 
 
 class TestRefusals:

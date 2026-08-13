@@ -84,3 +84,17 @@ parentheses in the source), "5,833" x1, "5,497" x1, "12,211" x2, "12,460" x4,
 - "As of January 28, 2025" in the source HTML uses a non-breaking space
   (January&#160;28) and is split across spans — plain-text grep for the date
   fails on the raw HTML but the date is as recorded.
+
+---
+
+## Net property
+
+Both years, from the Consolidated Balance Sheets, caption "Property and
+equipment, net". FY2024: 171,036; FY2017: 42,383. In millions.
+
+**Column order is the trap on this filer and it is worth stating.** Alphabet
+prints the EARLIER year on the left: the FY2024 sheet reads 2023 then 2024, so
+the right-hand 171,036 is the one wanted and the left-hand 134,345 is the prior
+year. The FY2017 sheet reads 2016 then 2017 the same way. Both are confirmed
+against the property note later in each filing, which repeats the same pair
+under an explicit "As of December 31, 2023 | 2024" header.

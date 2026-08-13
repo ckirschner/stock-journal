@@ -476,6 +476,36 @@ inputs:
       bank's inventory entry is explicitly not meaningful for companies that
       carry none, and absence is what signals that.
 
+  net_ppe:
+    label: Property, plant and equipment, net
+    period: instant
+    candidates:
+      - concept: us-gaap:PropertyPlantAndEquipmentNet
+    notes: >
+      One element and no fallback, which is the whole decision here.
+
+      Since ASC 842 a great many filers print one caption covering property
+      AND the right-of-use asset from finance leases, tagged with the
+      PropertyPlantAndEquipmentAndFinanceLeaseRightOfUseAsset element rather
+      than this one. Target's FY2023 sheet is the case in the fixtures: it
+      carries no PropertyPlantAndEquipmentNet at all, and its "Property and
+      equipment, net" line is that wider tag.
+
+      Taking that tag would be wrong in a direction that matters. This input
+      exists to serve the capital a business has tied up in fixed assets; a
+      leased asset the company does not own, brought on balance sheet by a
+      change in accounting convention, inflates it — and inflating the
+      denominator of a return understates the return, silently, for every
+      post-2019 retailer and restaurant against every filer that still tags
+      the narrow element. That is a figure wrong by an unknown amount for a
+      known reason, which principle 4 calls absent. Same reasoning as the
+      us-gaap:LongTermDebt fallback removed above, and the same answer.
+
+      No absent_means_zero either. A filer can genuinely own no fixed assets,
+      but a filer that tags this line under a different element looks exactly
+      the same from here, and nought is a confident answer where the honest
+      one is that this could not be read.
+
   accounts_receivable_net:
     label: Accounts receivable, net
     period: instant

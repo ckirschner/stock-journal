@@ -2241,6 +2241,188 @@ entries:
           median, under a sentence saying that means 30% below its own
           normal.
 
+  - id: earnings_yield
+    kind: computed
+    estimator:
+      kind: instant
+    label: Earnings yield
+    unit: percent
+    format: "0.0%"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        EBIT (TTM) ÷ (market cap + total debt − cash & equivalents)
+      window: trailing twelve months EBIT over current enterprise value
+    inputs:
+      filings:
+        - EBIT
+      prices:
+        - current price
+      entries:
+        - enterprise_value
+    explanation:
+      plain: |
+        What the business earns before interest and tax, as a percentage of
+        what the whole thing would cost you — the shares plus the debts you
+        would take on with them, less the cash you would get. A 12% earnings
+        yield says the operating profit is twelve cents a year on every
+        dollar it costs to own the whole company.
+
+        It is a yield rather than a multiple so that it reads the way a
+        savings rate reads: higher is cheaper. Enterprise value rather than
+        market capitalisation because buying a company with borrowings means
+        buying the borrowings, and a price tag that leaves them out flatters
+        every leveraged business.
+      misfires: |
+        One depressed or inflated year of operating profit moves this a long
+        way, and a company whose profit is dominated by a single segment in
+        trouble reads cheap on a consolidated basis.
+
+        The cash taken off here is every dollar of cash and equivalents. The
+        original construction takes off only the cash a business does not
+        need to operate, and how much that is, is a judgement about the
+        business rather than a line in a filing — so this reads slightly
+        cheaper than his would for a company sitting on cash it genuinely
+        needs. Nothing in this program decides for a strategy how much cash a
+        business needs.
+
+        EBIT here is served as operating income, which is the common
+        approximation and not an identity — a company with material
+        non-operating income that belongs in EBIT reads low.
+      attribution: |
+        Joel Greenblatt, The Little Book That Still Beats the Market — the
+        first of the two figures the Magic Formula ranks on, stated as he
+        states it.
+
+        What cannot be reproduced here is the ranking. His method buys the
+        best thirty of three thousand on this and return on capital together;
+        the number on its own was never meant to be compared against a
+        threshold, and he says so. Read it as why a name is on a list, not as
+        a test it passed.
+    not_meaningful_when:
+      - industry: [depository-lending, insurance]
+        because: |
+          The price underneath is already the wrong quantity for these
+          companies: enterprise value adds on the debts a buyer would take
+          on, and for a lender those are deposits and for an insurer they are
+          claims not yet made — neither of which any filer tags as borrowing.
+          The yield therefore reads as though the whole company could be had
+          for its market value plus a rounding error, whatever it earns.
+      - industry: [real-estate]
+        because: |
+          The accounts charge depreciation against buildings every year as
+          though they were wearing out, and well-kept property mostly does
+          not. Reported operating profit is therefore lower than what the
+          business actually earns, by a lot, so a property company reads as
+          expensive on this whatever it is worth. The industry uses funds
+          from operations instead, which adds the depreciation back, and this
+          program does not compute it.
+      - data: enterprise value is zero or negative
+        because: |
+          Enterprise value is what the whole business costs with its debts
+          added and its cash taken off, and a company holding more cash than
+          its shares and its borrowings are worth together prices at nothing
+          or less. A yield on that is not a yield: a positive profit over a
+          negative price comes out negative, which reads as a company losing
+          money when the arithmetic is saying the opposite. A loss at the
+          operating line is a different matter and is reported as it stands —
+          a negative yield over a real price means what it looks like.
+
+  - id: return_on_capital
+    kind: computed
+    estimator:
+      kind: instant
+    label: Return on capital
+    unit: percent
+    format: "0.0%"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        tangible capital = (current assets − cash & equivalents)
+                           − (current liabilities − short-term debt)
+                           + property, plant and equipment, net
+
+        value = EBIT (TTM) ÷ tangible capital
+      window: trailing twelve months EBIT over the latest balance sheet
+    inputs:
+      filings:
+        - EBIT
+        - total current assets
+        - total current liabilities
+        - cash and cash equivalents
+        - short-term debt
+        - property, plant and equipment, net
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        How many cents of operating profit the business earns on every dollar
+        of capital it actually needs to run — the stock and receivables it
+        has to carry, less what its suppliers fund for free, plus the
+        buildings and equipment. A company earning 40 cents on the dollar is
+        a far better business than one earning 8, and it can grow without
+        raising money to do it.
+
+        Three things are deliberately left out of the bottom. Debt and equity,
+        because how a business is financed is a different question from how
+        good it is. Cash, because money sitting in the bank is not earning the
+        operating profit. And what a previous owner overpaid for an
+        acquisition, because goodwill tells you about a past purchase and not
+        about the return the assets throw off.
+      misfires: |
+        A business with almost no tangible capital — a licensor, a franchisor,
+        anything asset-light — divides by a very small number and produces a
+        very large percentage. It is arithmetically right and means less than
+        it looks: the figure separates good businesses from ordinary ones far
+        better in the middle of its range than at the top.
+
+        A company that has just built a plant carries the full cost in the
+        bottom before the plant earns anything, and reads low for a year or
+        two. A seasonal business reads differently depending on which quarter
+        end its working capital was measured at.
+
+        Absent rather than approximated for a filer whose property line
+        includes leased assets under one combined caption, and for one whose
+        borrowings inside current liabilities cannot be separated from the
+        rest. Both would move the bottom by an unknown amount in a known
+        direction.
+      attribution: |
+        Joel Greenblatt, The Little Book That Still Beats the Market — the
+        second of the two figures the Magic Formula ranks on, with his
+        definition of capital rather than the ordinary one.
+
+        As with earnings yield, the ranking is the part that cannot be
+        reproduced here. A high figure is why a name reached a list; it is
+        not a test the company passed.
+    not_meaningful_when:
+      - industry: [depository-lending, insurance]
+        because: |
+          Neither files a balance sheet that splits current from non-current,
+          so there is no working capital to read at all. Beyond that the
+          quantity means nothing here: a lender's capital is the funding it
+          exists to lend out rather than money tied up in operations, and an
+          insurer's investments are held against claims not yet made and
+          belong to policyholders. A return measured against either is
+          measuring the wrong money.
+      - industry: [real-estate]
+        because: |
+          The profit on top is struck after depreciation on buildings, which
+          is a convention rather than a cost being incurred, so it understates
+          by design. The capital underneath is those same buildings at what
+          they cost decades ago rather than what they are worth. Both ends are
+          wrong and they do not cancel — and a property company presenting an
+          unclassified balance sheet has no working capital to read either.
+      - data: tangible capital is zero or negative
+        because: |
+          A business funded entirely by its suppliers and customers — money
+          in before stock goes out — can need no net capital at all, or less
+          than none. That is a real and often excellent position to be in,
+          and it is also a division this measure cannot perform: a profit
+          over a negative capital comes out negative, which reads as a
+          business destroying money when it is doing the opposite. Refused
+          rather than shown, because a large negative percentage beside a
+          company earning well is worse than no figure at all.
+
   - id: ev_ebit_to_own_5y_median
     kind: computed
     estimator:

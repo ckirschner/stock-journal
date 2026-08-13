@@ -28,9 +28,10 @@ from pathlib import Path
 import webview
 
 from engine import (allocation, backup, bank, contract, context, dataview,
-                    fetch, hand_entered, journals, judgements, portfolio,
-                    secrets, store, strategy_loader, strategy_values, thesis as
-                    thesis_mod, tickermap, tiingo, valuation)
+                    fetch, hand_entered, journals, judgements, lists,
+                    portfolio, secrets, store, strategy_loader,
+                    strategy_values, thesis as thesis_mod, tickermap, tiingo,
+                    valuation)
 from engine.expected_value import EV_METHODS, EVError
 from engine.portfolio import EXIT_REASONS
 
@@ -224,6 +225,14 @@ class Api:
             # journal exists, and finding out afterwards is finding out too
             # late to choose differently.
             "limits": [dict(l) for l in (record.get("limits") or [])],
+            # Whether this strategy works from a list somebody else chose,
+            # and what it calls it. On the offer because it is the largest
+            # single thing about how a journal will be used — one strategy
+            # asks you to assess a business, another asks you to paste in
+            # thirty names every year — and choosing between them without
+            # being told that is choosing blind.
+            "list": dict(record["list"]) if contract.declares_list(record)
+                    else None,
         }
 
     def _strategy_view(self, record, chain, journal):
@@ -273,6 +282,49 @@ class Api:
             "roles": {k: dict(v) for k, v in contract.INPUT_ROLES.items()},
             "bundle": Path(record["dir"]).name,
             "reference": sorted(record.get("reference") or {}),
+        }
+
+    def _list_view(self, journal, record, securities):
+        """The list this journal works from, as the screen needs it.
+
+        None where the strategy screens for itself — which is what keeps the
+        tab off a Graham journal without the view ever asking which strategy
+        is running. It reads one thing: whether this journal's strategy said
+        it works from a list.
+
+        Every row carries what the journal already knows about that name and
+        nothing it has had to go and find out: whether a security record
+        exists, whether it is held, the verdict already computed for this
+        render, and whether the user has recorded a decision not to buy it.
+        A name on the list with no security record is the ordinary case —
+        importing fifty names does not create fifty securities, because
+        forty-three of them will never be bought and each would carry its own
+        fetch.
+        """
+        if record is None or not contract.declares_list(record):
+            return None
+        known = {s["ticker"]: s for s in securities}
+        entries = lists.changes(journal)
+        now = entries[0] if entries else None
+        rows = []
+        for ticker in (now or {}).get("tickers") or []:
+            s = known.get(ticker)
+            skip = (lists.passed_over(s, now["pulled_on"])
+                    if s is not None else None)
+            rows.append({
+                "ticker": ticker,
+                "name": (s or {}).get("name"),
+                "tracked": s is not None,
+                "held": bool(s is not None and portfolio.shares_held(s) > 0),
+                "new": ticker in ((now or {}).get("added") or []),
+                "decision": (s or {}).get("_decision"),
+                "passed_over": skip,
+            })
+        return {
+            "declared": dict(record["list"]),
+            "current": now,
+            "rows": rows,
+            "history": entries[1:],
         }
 
     def _typed(self, specs, raw):
@@ -362,7 +414,7 @@ class Api:
             ctx = context.build_context(security, securities,
                                         chain["values"], supplied,
                                         as_of=as_of, record=record,
-                                        snap=snap)
+                                        snap=snap, journal=journal)
         except Exception as e:                          # noqa: BLE001
             traceback.print_exc()
             return contract.host_result(
@@ -713,6 +765,10 @@ class Api:
                          contract.STATE_FIXES.items()},
             ev_methods=EV_METHODS,
             exit_reasons=EXIT_REASONS,
+            # None for a journal whose strategy screens for itself, which is
+            # what hides the screen. The view asks whether this journal works
+            # from a list, never which strategy is running.
+            list=self._list_view(journal, record, securities),
             override_scorecard=portfolio.override_scorecard(
                 securities, lambda s: by_ticker.get(s["ticker"])),
             exit_scorecard=portfolio.exit_scorecard(
@@ -886,6 +942,75 @@ class Api:
         change = journals.explain(journal, int(seq), reason)
         journals.save(journal)
         return ok(seq=change["seq"])
+
+    # -- the list this journal works from --------------------------------
+    @guarded
+    @locked
+    def import_list(self, pulled_on, pasted, floor=None):
+        """Record one pull of the list this journal works from.
+
+        Refuses rather than guesses. A paste with a line this cannot resolve
+        to exactly one ticker comes back naming those lines and writes
+        nothing — a list of thirty that quietly became twenty-nine looks
+        exactly like a screen that returned twenty-nine, and the missing name
+        is one the user will never buy and never know they skipped.
+
+        Nothing is created here but the record itself. The names become
+        securities when the user does something about one.
+        """
+        journal, record, *_ = self._open()
+        if journal is None:
+            return err("Create a journal first.")
+        if record is None or not contract.declares_list(record):
+            return err("This journal's strategy screens for itself; it does "
+                       "not work from a list.")
+        read = lists.read(pasted)
+        if read["unreadable"]:
+            shown = "; ".join(read["unreadable"][:4])
+            more = (f" and {len(read['unreadable']) - 4} more"
+                    if len(read["unreadable"]) > 4 else "")
+            return err(
+                f"{len(read['unreadable'])} line(s) here do not hold a "
+                f"ticker this program can read: {shown}{more}. Nothing has "
+                "been imported. Paste the screen's own table, or one ticker "
+                "per line, and take out anything else.")
+        entry = lists.record(journal, pulled_on, read["tickers"], floor)
+        self._write(journal)
+        return ok(pulled_on=entry["pulled_on"], n=len(entry["tickers"]),
+                  seq=entry["seq"])
+
+    @guarded
+    @locked
+    def pass_over(self, ticker, reason, name=None):
+        """Record that a name the list offered is not being bought.
+
+        It creates the security if the journal has never seen it, because the
+        decision belongs on the security the way every other decision does —
+        and a name considered and declined, with the reason on it, is exactly
+        what this journal is for. Nothing about the verdict changes: the
+        strategy goes on saying what its rules say, and this record says what
+        was done about it.
+        """
+        journal, record, *_ = self._open()
+        if journal is None:
+            return err("No journal is open.")
+        if record is None or not contract.declares_list(record):
+            return err("This journal's strategy does not work from a list.")
+        now = lists.current(journal)
+        if now is None:
+            return err("There is no list to pass over a name from.")
+        symbol = str(ticker or "").strip().upper()
+        if symbol not in (now.get("tickers") or []):
+            return err(f"{symbol} is not on the list this journal is working "
+                       "from, so there is nothing here to decline.")
+        securities = journal.setdefault("securities", [])
+        s = next((x for x in securities if x["ticker"] == symbol), None)
+        if s is None:
+            s = portfolio.new_security(symbol, name or symbol)
+            securities.append(s)
+        entry = lists.pass_over(s, now["pulled_on"], reason)
+        self._write(journal)
+        return ok(ticker=symbol, seq=entry["seq"], list=entry["list"])
 
     # -- securities ------------------------------------------------------
     def _write(self, journal):
@@ -2028,6 +2153,12 @@ class Api:
         journal = journals.create(f"Sample — {record['name']}", record,
                                   inputs=inputs)
         journal["securities"] = sample["securities"]
+        # A sample for a strategy that works from a list carries the imports
+        # that were made into it, whole. They are the buy side of its story:
+        # without them every verdict in the journal comes back blocked on a
+        # list nobody can import for the user, and the sample would show
+        # nothing but its own empty state.
+        journal[lists.KEY] = list(sample.get(lists.KEY) or [])
         journals.save(journal)
         return journal, None
 

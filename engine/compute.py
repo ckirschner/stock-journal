@@ -1637,6 +1637,82 @@ def ev_to_ebit(ctx):
                     sorted(set(ev["cautions"] + _cautions_of(ebit))))
 
 
+def earnings_yield(ctx):
+    """Greenblatt's first half: operating profit against what the whole
+    business costs, price included and debts included.
+
+    Not `1 / ev_to_ebit`. Same arithmetic, and it is written out rather than
+    inverted because the two guards do not invert with it: `ev_to_ebit`
+    refuses a non-positive EBIT because a negative multiple sorts below every
+    real reading on a measure where lower is better, and that reasoning is
+    about the multiple rather than about the yield. Here a negative EBIT
+    gives a negative yield, which is the ordinary reading of a company
+    losing money at the operating line and sorts exactly where it belongs.
+    Only the denominator is refused.
+    """
+    ev = ctx.entry("enterprise_value")
+    if ev["status"] != "computed":
+        return ev
+    if ev["value"] <= 0:
+        return not_meaningful(
+            "earnings_yield", "enterprise value is zero or negative",
+            f"enterprise value is {ev['value']:,.0f}")
+    ebit = _ttm(ctx, "ebit")
+    if is_absent(ebit):
+        return _absent_result(ebit)
+    return computed(100.0 * ebit["value"] / ev["value"],
+                    ev["provenance"] + [_prov_point(ebit)],
+                    sorted(set(ev["cautions"] + _cautions_of(ebit))))
+
+
+def return_on_capital(ctx):
+    """Greenblatt's second half: operating profit against the capital the
+    business actually needs to earn it — working capital plus fixed assets,
+    and nothing else.
+
+    The denominator is his and not the ordinary invested-capital one. Debt
+    and equity are deliberately not in it: how a business is financed is a
+    question about its balance sheet, and this is a question about how good
+    the business is. Goodwill is not in it either, for the same reason — what
+    a previous owner overpaid tells you nothing about the return the assets
+    throw off.
+
+    Non-interest-bearing current liabilities come out because supplier credit
+    funds part of the working capital at no cost, and capital somebody else
+    is providing for free is not capital tied up. They are reached by
+    subtraction — current liabilities less the short-term borrowings inside
+    them — because no filer tags the residual directly. Where the borrowings
+    inside current liabilities cannot be separated, `short_term_debt` comes
+    back absent by its own zero_guard and so does this: a denominator that
+    silently kept the borrowings in would overstate capital and understate
+    the return by an unknown amount.
+    """
+    ebit = _ttm(ctx, "ebit")
+    if is_absent(ebit):
+        return _absent_result(ebit)
+    parts = {}
+    for iid in ("current_assets", "current_liabilities",
+                "cash_and_equivalents", "short_term_debt", "net_ppe"):
+        got = _instant(ctx, iid)
+        if is_absent(got):
+            return _absent_result(got)
+        parts[iid] = got
+    # Working capital as he defines it, then the fixed assets it works with.
+    working = ((parts["current_assets"]["value"]
+                - parts["cash_and_equivalents"]["value"])
+               - (parts["current_liabilities"]["value"]
+                  - parts["short_term_debt"]["value"]))
+    capital = working + parts["net_ppe"]["value"]
+    if capital <= 0:
+        return not_meaningful(
+            "return_on_capital", "tangible capital is zero or negative",
+            f"working capital and net fixed assets come to {capital:,.0f}")
+    return computed(
+        100.0 * ebit["value"] / capital,
+        [_prov_point(ebit)] + [_prov_point(p) for p in parts.values()],
+        _cautions_of(ebit, *parts.values()))
+
+
 def _quarterly_ratio_series(ctx, kind):
     """20 quarterly observations of EV/EBIT or P/E, each self-consistent on
     its own quarter's original filing, price and cover shares."""
@@ -3119,6 +3195,7 @@ REGISTRY = {fn.__name__: fn for fn in (
     operating_income_ttm, market_cap, enterprise_value, pe_ttm, pe_3y_avg_eps,
     price_to_book, price_to_net_tangible_assets, graham_combined_multiple,
     owner_earnings_yield, ev_to_ebit, ev_ebit_to_own_5y_median,
+    earnings_yield, return_on_capital,
     pe_to_own_5y_median_pe, peg_trailing, dividend_adjusted_peg,
     dividend_yield, ncav_to_market_cap, net_cash_to_market_cap,
     revenue_cagr_5y, revenue_cagr_3y,
@@ -3223,6 +3300,7 @@ CADENCE = {
     "price_to_net_tangible_assets": "quarterly",
     "graham_combined_multiple": "quarterly",
     "owner_earnings_yield": "quarterly", "ev_to_ebit": "quarterly",
+    "earnings_yield": "quarterly", "return_on_capital": "quarterly",
     "ev_ebit_to_own_5y_median": "quarterly",
     "pe_to_own_5y_median_pe": "quarterly", "peg_trailing": "quarterly",
     "dividend_adjusted_peg": "quarterly", "dividend_yield": "quarterly",

@@ -206,6 +206,11 @@ def _load_bundle(bundle_dir: Path) -> dict:
     # able to see what it does not promise before a journal is stamped with
     # it, not after the first verdict.
     record["limits"] = decl.get("limits", [])
+    # Whether this strategy works from a list somebody else chose. Carried on
+    # the record for the third time for the same reason: it decides whether a
+    # journal shows an import screen and whether the host serves the `list.*`
+    # facts, and both of those are settled before any verdict exists.
+    record["list"] = decl.get("list")
     record["reference"] = MappingProxyType(reference)
     record["defaults"] = dict((values_doc or {}).get("values") or {})
     record["values_version"] = (values_doc or {}).get("version")

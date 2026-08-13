@@ -265,6 +265,49 @@ class TestGOOGL:
         assert dur(x, "revenue", "2024-01-01", "2024-12-31") == 350018 * M
         assert dur(x, "capex", "2024-01-01", "2024-12-31") == 52535 * M
 
+    def test_net_ppe_takes_the_right_hand_column(self):
+        """Alphabet prints the EARLIER year on the left, so a resolver reading
+        by position rather than by date reports the prior year and looks
+        right. 134,345 is 2023; 171,036 is 2024."""
+        assert inst(fi(1652044, "0001652044-25-000014"), "net_ppe",
+                    "2024-12-31") == 171036 * M
+        assert inst(fi(1652044, "0001652044-18-000007"), "net_ppe",
+                    "2017-12-31") == 42383 * M
+
+
+class TestNetPropertyIsNarrow:
+    """`net_ppe` serves property the company owns, and nothing wearing that
+    caption.
+
+    Return on capital divides by this, so a right-of-use asset folded into the
+    line understates the return by an unknown amount for every filer that
+    folds it and by nothing at all for every filer that does not — which makes
+    the two incomparable while both read as figures. Every value here was read
+    off the primary document; see the -notes.md files.
+    """
+
+    def test_the_clean_filers_resolve_what_is_printed(self):
+        assert inst(fi(789019, "0000950170-24-087843"), "net_ppe",
+                    "2024-06-30") == 135591 * M
+        assert inst(fi(789019, "0001564590-17-014900"), "net_ppe",
+                    "2017-06-30") == 23734 * M
+        assert inst(fi(1637459, "0001637459-19-000049"), "net_ppe",
+                    "2018-12-29") == 7078 * M
+        # One decimal in millions, so 916.4 is 916,400,000.
+        assert inst(fi(1585364, "0001585364-24-000009"), "net_ppe",
+                    "2023-12-31") == 916.4 * M
+
+    def test_a_lease_combined_caption_is_absent_not_taken(self):
+        """Target FY2023 prints 33,096 for "Property and equipment, net" and
+        tags it with the element that includes the finance-lease right-of-use
+        asset. Taking it would be a wider quantity under a narrower name."""
+        assert inst(fi(27419, "0000027419-24-000032"), "net_ppe",
+                    "2024-02-03") is None
+
+    def test_a_reit_has_no_such_line_at_all(self):
+        assert inst(fi(726728, "0000726728-25-000055"), "net_ppe",
+                    "2024-12-31") is None
+
 
 class TestRealtyIncome:
     """REIT: thousands scale, extension debt line, honest absences."""

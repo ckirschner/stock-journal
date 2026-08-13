@@ -1021,6 +1021,7 @@ the host produces it, from `declines`.
 | `settings` | Fix this journal's settings | this journal's setup screen | — |
 | `judgement` | Answer these questions | "Your judgement" on this security's page | a bank entry of kind `qualitative`, however it is cited |
 | `thesis` | Write down what you think now | this security's thesis record | — |
+| `list` | Import a list | the list this journal works from | — |
 <!-- end: state-fixes -->
 
 ### States the host produces itself
@@ -1034,6 +1035,7 @@ strategy verdict exists.
 | `host:inputs-missing` | `blocked` | Waiting on setup | `settings` |
 | `host:strategy-missing` | `blocked` | Strategy not installed | nothing in the app resolves it |
 | `host:values-unresolved` | `blocked` | Settings need fixing | `settings` |
+| `host:list-missing` | `blocked` | Waiting on a list | `list` |
 | `host:strategy-error` | `unknown` | Strategy failed | nothing in the app resolves it |
 | `host:data-unreadable` | `unknown` | Data could not be read | nothing in the app resolves it |
 | `host:invalid-decision` | `unknown` | Strategy failed | nothing in the app resolves it |
@@ -1064,6 +1066,10 @@ in `contract.HOST_FACTS`, which is what the reader sees.
 |---|---|---|
 | `security.industry` | Industry | `text` |
 | `security.sic` | SEC industry code | `text` |
+| `security.on_list` | On your current list | `yes_no` |
+| `security.listed_on` | Last on a list | `date` |
+| `list.pulled` | List pulled | `date` |
+| `list.age_months` | Months since the list was pulled | `months` |
 | `position.weight` | Position weight | `percent` |
 | `position.months_held` | Months held | `months` |
 | `position.market_value` | Position market value | `usd` |

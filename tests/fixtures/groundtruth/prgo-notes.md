@@ -66,3 +66,17 @@ Re-grepped printed forms in the raw primary HTML:
   "...Total operating expenses 1,013.6 Operating income 94.5 ..." confirmed.
 - `4,655.6` — 6 occurrences in prgo-20231231.htm; ">151.9<" present; context
   "Total operating expenses 1,528.5 1,376.5 1,005.8 Operating income 151.9" confirmed.
+
+---
+
+## Net property
+
+FY2023, Consolidated Balance Sheets, caption "Property, plant and equipment,
+net": 916.4, in millions, December 31 2023 column (prior column 926.3).
+Confirmed against the property note, which builds the same 916.4 from land,
+buildings, machinery and construction in progress less accumulated
+depreciation.
+
+Scale is the thing to notice on this filer: Perrigo prints one decimal place in
+millions where the other companies here print whole millions, so 916.4 is
+916,400,000 and not 916,000,000.

@@ -54,6 +54,11 @@ const TABS = [
      its own strategy wants it, so the thing you already hold too much of is
      never what the screen suggests. */
   ["allocate", "Where capital goes"],
+  /* Only for a journal whose strategy said it works from a list somebody
+     else chose — see `shownTabs`. It is not a screen every journal gets a
+     dimmed version of: a tab about a list, on a journal that screens for
+     itself, is a permanent piece of furniture with nothing behind it. */
+  ["list", "The list"],
   ["strategy", "Strategy"],
   ["metrics", "Metrics"],
   ["data", "Data"],
@@ -401,9 +406,15 @@ function renderMast() {
   $("foot").innerHTML = `This tool never places a trade and holds no broker credentials. `
     + `A journal has one strategy, chosen when it is created.<br>Data stored at ${esc(S.data_dir)}, never inside the project folder.`;
 }
+/* Which tabs this journal has. The only conditional one is the list, and the
+   condition is read off the journal's own payload rather than off which
+   strategy is running — the view never learns that a strategy called
+   "magic-formula" exists, exactly as it never learns which measures do. */
+const shownTabs = () => TABS.filter(([id]) => id !== "list" || !!S.list);
+
 function renderTabs() {
   if (!S.journal) { $("tabs").innerHTML = ""; return; }
-  $("tabs").innerHTML = TABS.map(([id, label]) => {
+  $("tabs").innerHTML = shownTabs().map(([id, label]) => {
     /* Previous holdings counts closed periods, not securities: a name held
        and closed twice is two things that happened, and counting it once
        hides the second. The other two count securities, because a security
@@ -419,6 +430,14 @@ function renderTabs() {
            not be asked" are different facts, and a badge reading 0 for the
            second says the discipline is working when nothing ran. */
         : '<em title="This journal\'s strategy could not be asked">—</em>')
+      /* Names on the current list this journal is not holding — what is
+         left to do about it. Not the list's length, which stays the same
+         all year and tells nobody anything, and an em-dash rather than a
+         nought where no list has been imported, because "nothing left to
+         buy" and "no list yet" are opposite situations. */
+      : id === "list" ? (S.list && S.list.current
+        ? `<em>${(S.list.rows || []).filter((r) => !r.held).length}</em>`
+        : '<em title="No list has been imported yet">—</em>')
       : BUCKETS.includes(id) ? `<em>${inBucket(id).length}</em>` : "";
     return `<button class="tab" role="tab" aria-selected="${tab === id}" data-tab="${id}">${label}${n}</button>`;
   }).join("");
@@ -2522,6 +2541,135 @@ function allocExcluded(e) {
   </div>`;
 }
 
+/* ------------------------------------------------------------- the list */
+/* Everything here comes off `S.list`, which the host builds only for a
+   journal whose strategy declared that it works from one. Nothing in this
+   file knows what a Magic Formula is, what a ranking is, or how old is too
+   old — the strategy's own label and explanation head the screen, and every
+   verdict beside a name is the one the strategy already produced. */
+
+function importedListRow(r) {
+  const skip = r.passed_over;
+  const state = r.decision
+    ? stateStamp(r.decision)
+    : '<span class="chip blank" title="This name is not in the journal yet, so nothing has been evaluated about it">not looked at</span>';
+  /* Held names get no buttons. The list's job is done for them — what
+     happens next is the clock, and that lives on the security's own page. */
+  const acts = r.held ? ""
+    : `<button class="btn" data-act="listadd" data-t="${esc(r.ticker)}">${
+        r.tracked ? "Open" : "Track this"}</button>`
+      + (skip ? "" : `<button class="btn" data-act="passover" data-t="${esc(r.ticker)}">Not buying this one</button>`);
+  return `<div class="pentry">
+    <div class="pe-head"><b>${esc(r.ticker)}</b>${
+      r.name && r.name !== r.ticker ? `<span class="dim">${esc(r.name)}</span>` : ""}
+      ${r.new ? '<span class="chip blank" title="This name was not on the list before this one">new</span>' : ""}
+      ${r.held ? '<span class="chip s-pass">held</span>' : ""}
+      <span class="req">${state}</span></div>
+    ${skip ? `<div class="pe-why"><b>You passed on this one</b> on ${
+      esc(String(skip.recorded).slice(0, 10))}: ${esc(skip.reason)}</div>` : ""}
+    ${acts ? `<div class="toolbar">${acts}</div>` : ""}
+  </div>`;
+}
+
+function importedListView() {
+  const L = S.list;
+  const d = L.declared;
+  let h = `<section class="group">
+    <div class="ghead"><h3>${esc(d.label)}</h3>${
+      L.current ? `<span>${(L.current.tickers || []).length} names</span>` : ""}</div>
+    <p class="hint">${prose(d.explain)}</p>
+    <div class="pe-sub">Pulled from ${esc(d.source.name)}. ${
+      d.source.reasoning
+        ? "That description is theirs."
+        : "The description above is this strategy's own."}</div>`;
+
+  if (!L.current) {
+    /* An empty state that invites the action, and says the one thing a
+       reader needs to know before taking it: nothing here chose these. */
+    h += `<div class="rollup"><div class="pe-head"><b>No list has been imported yet.</b></div>
+      <div class="pe-why">Run the screen, then paste what it gives you. This
+      journal records which list and what day it was pulled, and every list
+      you have ever imported stays on the record — so a name's year can be
+      counted from the day it was last chosen, and so a ranking you are still
+      buying from a year later says how old it is.</div>
+      <div class="toolbar"><button class="btn primary" data-act="importlist">Import a list</button></div>
+    </div></section>`;
+    return h;
+  }
+
+  const held = L.rows.filter((r) => r.held).length;
+  const passed = L.rows.filter((r) => r.passed_over).length;
+  h += `<div class="facts">
+    <div class="fact"><i>Pulled</i><b>${esc(L.current.pulled_on)}</b></div>
+    <div class="fact"><i>Imported</i><b>${esc(String(L.current.recorded).slice(0, 10))}</b></div>
+    <div class="fact"><i>Held</i><b>${held} of ${L.rows.length}</b></div>
+    ${L.current.floor !== null && L.current.floor !== undefined
+      ? `<div class="fact"><i>Smallest asked for</i><b>${esc(fmtUnit(L.current.floor, "usd"))}</b></div>` : ""}
+    ${passed ? `<div class="fact"><i>Passed over</i><b>${passed}</b></div>` : ""}
+  </div>
+  <p class="hint">These are the names the screen returned, in the order it
+  returned them. Where each sits in its own ranking is not here and cannot
+  be: a rank means nothing without the thousands of companies it was ranked
+  against, and none of those are in this journal. Nothing on this screen
+  ranked anything.</p>
+  <div class="toolbar"><button class="btn primary" data-act="importlist">Import a fresh list</button></div>
+  <div class="plist">${L.rows.map(importedListRow).join("")}</div>
+  </section>`;
+
+  if (L.history.length) {
+    h += `<section class="group"><div class="ghead"><h3>Lists before this one</h3>
+      <span>${L.history.length}</span></div>
+      <p class="hint">Kept whole and never rewritten. What a list said on the
+      day you acted on it is what your own record has to be able to show.</p>
+      <div class="plist">${L.history.map((e) => `<div class="pentry">
+        <div class="pe-head"><b>Pulled ${esc(e.pulled_on)}</b>
+          <span class="dim">imported ${esc(String(e.recorded).slice(0, 10))} · ${
+            (e.tickers || []).length} names</span></div>
+        ${e.added.length ? `<div class="pe-why"><b>Came on:</b> ${esc(e.added.join(", "))}</div>` : ""}
+        ${e.dropped.length ? `<div class="pe-why"><b>Came off:</b> ${esc(e.dropped.join(", "))}</div>` : ""}
+      </div>`).join("")}</div></section>`;
+  }
+  return h;
+}
+
+function dlgImportList() {
+  const d = S.list.declared;
+  dialog({
+    title: "Import a list",
+    blurb: `Paste what ${d.source.name} gave you. Nothing is created until you confirm, and nothing already recorded changes.`,
+    body: field("pulled_on", "The day you pulled it", localToday(), "Not today unless you ran the screen today. Everything about how current this ranking is measures from this day, and so does the year each position you buy from it is given.", "date", `max="${localToday()}"`)
+      + field("floor", "Smallest company you asked for", "", "Optional, in dollars. Nothing reads it — it is here because \"thirty names\" means something different at a fifty-million floor than at a billion, and a reader in three years has no other way to find that out.", "number")
+      + area("pasted", "The names", "", "Paste the screen's own table, or one ticker per line. Any line this cannot read comes back named, and nothing is imported until every line is readable — a list of thirty that quietly became twenty-nine looks exactly like a screen that returned twenty-nine."),
+    confirm: "Import",
+    onConfirm: async (v) => {
+      if (!(v.pasted || "").trim()) return "Paste the names first.";
+      const r = await apiRaw("import_list", v.pulled_on, v.pasted, v.floor || null);
+      if (!r.ok) return r.error;
+      toast(`Imported ${r.n} names, pulled ${r.pulled_on}.`);
+    },
+  });
+}
+
+function dlgPassOver(ticker) {
+  dialog({
+    title: `Not buying ${ticker}`,
+    blurb: "Your own list gave you this name and your rules say to buy it. Nothing here stops you passing — this writes down that you did, and why.",
+    body: `<div class="dlg-err">Skipping names you do not like the look of is
+      one of the three documented ways people stop getting this method's
+      results. The list is the decision; second-guessing it is the deviation
+      the method exists to prevent. That is not an argument against passing —
+      it is the reason the reason is worth having in a year.</div>`
+      + area("reason", "Why are you passing on this one?", "", "Required. One sentence. You will read this again when you find out what it did."),
+    confirm: "Record it",
+    danger: true,
+    onConfirm: async (v) => {
+      if (!(v.reason || "").trim()) return "A reason is required.";
+      const r = await apiRaw("pass_over", ticker, v.reason);
+      if (!r.ok) return r.error;
+    },
+  });
+}
+
 function allocationView() {
   const a = S.allocation;
   /* Only when the screen itself could not be built — a data layer that threw
@@ -2593,6 +2741,7 @@ function render() {
   else if (tab === "metrics") v.innerHTML = metricsView();
   else if (tab === "data") v.innerHTML = dataView();
   else if (tab === "allocate") v.innerHTML = allocationView();
+  else if (tab === "list") v.innerHTML = S.list ? importedListView() : listView();
   else v.innerHTML = listView();
 }
 
@@ -3748,6 +3897,27 @@ document.addEventListener("click", async (ev) => {
       return;
     }
     case "thesis": return dlgThesis(s);
+    /* The way out of a verdict blocked because this journal has no list, and
+       the button on the list screen itself. Both land on the same dialog. */
+    case "list":
+      closeSecurity(); tab = "list"; render();
+      return S.list && !S.list.current ? dlgImportList() : undefined;
+    case "importlist": return dlgImportList();
+    case "passover": return dlgPassOver(act.dataset.t);
+    /* Track a name off the list. If the journal already has it, this is just
+       a way to reach its page; if not, it is created first — the list is a
+       set of ticker strings, and a security record appears when somebody
+       does something about one rather than fifty at a time on import. */
+    case "listadd": {
+      const t = act.dataset.t;
+      if (!find(t)) {
+        const r = await api("add_security", t, t);
+        if (!r) return;
+        await refresh();
+      }
+      openSecurity(t); render();
+      return window.scrollTo({ top: 0 });
+    }
     case "note": return dlgNote(s);
     case "buy": return dlgBuy(s);
     case "sell": return dlgSell(s);

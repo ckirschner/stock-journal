@@ -138,3 +138,35 @@ was written off, and tags the zero. A measure summing five years of write-offs
 needs that to be a zero rather than an absence, and needs a year with no figure
 at all to stay absent. Both behaviours are pinned in
 `test_compute_groundtruth.py`.
+
+---
+
+## Net property, and why it is absent rather than 33,096
+
+FY2023, accession `0000027419-24-000032`, primary document `tgt-20240203.htm`.
+The Consolidated Statements of Financial Position print:
+
+> Property and equipment, net … 33,096 … 31,512
+
+read as the FY2023 and FY2022 columns, in millions. The figure is real and it
+is on the page. The pipeline reports **absent** for it, on purpose.
+
+The reason is the tag rather than the number. This filer carries no
+`us-gaap:PropertyPlantAndEquipmentNet` fact at all; the caption above is tagged
+`us-gaap:PropertyPlantAndEquipmentAndFinanceLeaseRightOfUseAssetAfterAccumulated
+DepreciationAndAmortization`, which since ASC 842 folds the right-of-use asset
+from finance leases into the same line. That is a wider quantity than the one
+`net_ppe` is declared to serve, and the width is not small for a retailer:
+Target's own leased-asset breakdown in the same filing puts it in the billions.
+
+Serving it with a caution was the alternative and is refused for the reason the
+`us-gaap:LongTermDebt` fallback was removed from `long_term_debt` — the caution
+is read by a person and ignored by the arithmetic. Return on capital divides by
+this, so a leased asset in the denominator understates the return, silently,
+for every post-2019 retailer and restaurant against every filer still tagging
+the narrow element. Comparing those two would be comparing an accounting
+convention.
+
+Recorded in `tgt.json` with a `note` rather than left out, so the figure a
+reader sees on the page sits beside the reason the pipeline will not serve it.
+This is the case that pins the refusal.

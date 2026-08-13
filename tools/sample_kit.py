@@ -174,6 +174,29 @@ def securities():
     return open_journal["securities"]
 
 
+def import_list(pulled_on, tickers, floor=None):
+    """One pull of the list a journal works from, dated.
+
+    Written through the same API method the user's own import goes through,
+    on the day the story says it was pulled — so the sample's lists are
+    ordered by when they were imported exactly as a real journal's are, and
+    the strategy's own freshness rule is answered off real records rather
+    than off something written straight into the file.
+    """
+    with writing_on(pulled_on):
+        return call(api.import_list, pulled_on, "\n".join(tickers), floor)
+
+
+def pass_over(ticker, reason, on):
+    with writing_on(on):
+        return call(api.pass_over, ticker, reason)
+
+
+def lists_of():
+    open_journal, *_ = api._open()
+    return list(open_journal.get("lists") or [])
+
+
 def write(filename, strategy_id, free_cash, as_of, stories):
     """Assert every story, then write the file.
 
@@ -186,13 +209,19 @@ def write(filename, strategy_id, free_cash, as_of, stories):
     rows = securities()
     TEMPLATE_DIR.mkdir(parents=True, exist_ok=True)
     path = TEMPLATE_DIR / filename
-    path.write_text(json.dumps(
-        {"built": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-         "as_of": as_of,
-         "free_cash": free_cash,
-         "strategy": strategy_id,
-         "securities": rows}, indent=1, ensure_ascii=False) + "\n",
-        encoding="utf-8")
+    payload = {"built": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+               "as_of": as_of,
+               "free_cash": free_cash,
+               "strategy": strategy_id,
+               "securities": rows}
+    # Only where there are any, so the three samples whose strategies screen
+    # for themselves keep exactly the file they had.
+    imported = lists_of()
+    if imported:
+        payload["lists"] = imported
+    path.write_text(json.dumps(payload, indent=1, ensure_ascii=False) + "\n",
+                    encoding="utf-8")
     print(f"wrote {path.relative_to(ROOT)}: {len(rows)} securities, "
-          f"{len(set(stories.values()))} distinct states")
+          f"{len(set(stories.values()))} distinct states"
+          + (f", {len(imported)} list imports" if imported else ""))
     return rows

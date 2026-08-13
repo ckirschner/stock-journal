@@ -71,7 +71,7 @@ import re
 import shutil
 from pathlib import Path
 
-from . import dated, portfolio, secrets, store, strategy_values
+from . import dated, lists, portfolio, secrets, store, strategy_values
 
 # 2: a security's position became append-only lot history and every stored
 #    bucket, running total and single entry snapshot went with it. There is
@@ -205,6 +205,11 @@ def load(journal_id: str) -> dict:
     doc.setdefault("config", {})
     doc.setdefault("inputs", {})
     doc.setdefault("settings", {})
+    # Every import of a list this journal works from, oldest first. Empty for
+    # a journal whose strategy screens for itself, and empty for one that
+    # works from a list and has not been given one yet — which is a state the
+    # host answers with a blocked verdict rather than a guess.
+    doc.setdefault(lists.KEY, [])
     return doc
 
 
@@ -368,6 +373,7 @@ def create(name: str, record: dict, config: dict | None = None,
         "input_changes": [],
         "settings": dict(settings or DEFAULT_SETTINGS),
         "securities": [],
+        lists.KEY: [],
     }
     if path_for(journal["id"]).exists():
         raise ValueError(f'A journal already exists at {journal["id"]}.')

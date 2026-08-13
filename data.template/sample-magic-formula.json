@@ -1,0 +1,2736 @@
+{
+ "built": "2026-08-13T05:03:57+00:00",
+ "as_of": "2026-08-13",
+ "free_cash": 48000.0,
+ "strategy": "magic-formula",
+ "securities": [
+  {
+   "ticker": "MARLBK",
+   "name": "Marlbrook Ceramics",
+   "added": "2026-08-13",
+   "price": 41.2,
+   "lots": [
+    {
+     "id": "l1",
+     "seq": 1,
+     "kind": "buy",
+     "date": "2025-08-11",
+     "recorded": "2025-08-11T12:00:00-04:00",
+     "shares": 300.0,
+     "price": 38.1,
+     "override": null,
+     "unreconstructed": null,
+     "snapshot": {
+      "frozen": "2025-08-11T12:00:00-04:00",
+      "decision": {
+       "render": "commit",
+       "tier": "position",
+       "state": {
+        "id": "buy-it",
+        "name": "Buy it",
+        "description": "It is on the list you are working from, that list is still current, and there is room to start another name without breaking the staging rule.\n\nNothing was tested about the company, and that is not an oversight. The ranking that put this name in front of you was run against three thousand others and is the whole of the judgement in this method. The size is an equal share of the number of positions this journal is meant to run — equal dollar amounts, which is Greenblatt's own answer and differs from every other strategy here.",
+        "fix": null
+       },
+       "payload": {
+        "size": {
+         "unit": "weight",
+         "value": 4.0
+        },
+        "condition": null
+       },
+       "reason": {
+        "rule": "on-the-current-list-and-room-to-start-it",
+        "summary": "It is on the list you are working from and there is room to start it. Nothing about the company was tested here — the ranking that put it in front of you is the decision, and it was made against three thousand companies this journal does not have.",
+        "evidence": [
+         {
+          "subject": {
+           "kind": "fact",
+           "id": "security.on_list",
+           "reads": null,
+           "label": "On your current list",
+           "unit": "yes_no",
+           "explain": "Whether this security is one of the names on the list your journal is currently working from.\n\nIt is a fact about your list and not a judgement about the company. Nothing here ranked anything: a screen run somewhere else returned these names out of a universe of thousands, and where a name sits within that ranking cannot be recovered from the list alone, because the other two thousand nine hundred and seventy companies it was ranked against are not here.\n\nAbsent where this journal has no list at all, which is a different thing from a name that is not on one."
+          },
+          "observed": {
+           "status": "known",
+           "value": true,
+           "source": "fact",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": {
+           "comparator": "equals",
+           "phrase": "equal to",
+           "threshold": true,
+           "threshold_from": null,
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "list"
+         },
+         {
+          "subject": {
+           "kind": "fact",
+           "id": "list.age_months",
+           "reads": null,
+           "label": "Months since the list was pulled",
+           "unit": "months",
+           "explain": "How many whole months old the ranking this journal is working from is.\n\nA screen is a photograph of prices and accounts on one day. The prices have moved since and the accounts have been restated, so a list that has been sitting for a year is not a list of the cheapest companies any more — it is a list of the companies that were cheapest then.\n\nThe host reports the number and holds no view about it. How stale is too stale belongs to the strategy, which declares its own limit and compares against this."
+          },
+          "observed": {
+           "status": "known",
+           "value": 0,
+           "source": "fact",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": {
+           "comparator": "below",
+           "phrase": "below",
+           "threshold": 12,
+           "threshold_from": {
+            "kind": "value",
+            "id": "list-refresh-months",
+            "label": "How old a list may be and still be bought from",
+            "unit": "months"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "list"
+         },
+         {
+          "subject": {
+           "kind": "fact",
+           "id": "portfolio.slots_occupied",
+           "reads": null,
+           "label": "Positions held",
+           "unit": "count",
+           "explain": "How many separate securities this journal currently holds. A strategy that runs a fixed number of positions at once measures against this to know whether there is room for another."
+          },
+          "observed": {
+           "status": "known",
+           "value": 0,
+           "source": "fact",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": {
+           "comparator": "below",
+           "phrase": "below",
+           "threshold": 25,
+           "threshold_from": {
+            "kind": "value",
+            "id": "portfolio-slots",
+            "label": "How many names to hold at once",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "room"
+         },
+         {
+          "subject": {
+           "kind": "stated",
+           "id": null,
+           "reads": null,
+           "label": "Names started inside the staging window",
+           "unit": "count",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 0,
+           "source": "stated",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": {
+           "comparator": "below",
+           "phrase": "below",
+           "threshold": 7,
+           "threshold_from": {
+            "kind": "value",
+            "id": "names-per-tranche",
+            "label": "Most new names to start in one go",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "room"
+         },
+         {
+          "subject": {
+           "kind": "value",
+           "id": "tranche-months",
+           "reads": null,
+           "label": "How long a staging window lasts",
+           "unit": "months",
+           "explain": "How far back the journal looks when it counts how many names you have started recently. A name bought inside this window counts against the staging limit; one bought before it does not.\n\nTwo months at five to seven names fills a twenty-five-name portfolio in about eight months, which is the pace the method describes. Making it longer spreads the first year further and takes longer to be fully invested; making it shorter concentrates the entry back towards a single moment, which is the thing the staging exists to prevent.\n\nIt does not stop you replacing a position you have just sold. The limit counts names started recently, not days since the last purchase, so a sale at its anniversary and the replacement bought the same week are one name against the window rather than a blocked purchase."
+          },
+          "observed": {
+           "status": "known",
+           "value": 2,
+           "source": "value",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "room"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "earnings_yield",
+           "reads": "earnings_yield",
+           "label": "Earnings yield",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 13.9,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2025-08-04"
+           ]
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "why"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "return_on_capital",
+           "reads": "return_on_capital",
+           "label": "Return on capital",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 44.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2025-08-04"
+           ]
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "why"
+         }
+        ],
+        "groups": [
+         {
+          "id": "list",
+          "name": "The list you are working from",
+          "requires": "all",
+          "test": null,
+          "members": 2,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "room",
+          "name": "Whether there is room to start another",
+          "requires": "all",
+          "test": null,
+          "members": 3,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "why",
+          "name": "Why it was on the list",
+          "requires": "noted",
+          "test": null,
+          "members": 2,
+          "tested": 0,
+          "passed": 0,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "noted"
+         }
+        ],
+        "note": null
+       },
+       "produced_by": "strategy",
+       "strategy": {
+        "id": "magic-formula",
+        "name": "Magic Formula",
+        "version": 1,
+        "values_version": 1,
+        "contract": 6
+       }
+      },
+      "strategy": {
+       "id": "magic-formula",
+       "name": "Magic Formula",
+       "version": 1,
+       "values_version": 1,
+       "contract": 6
+      },
+      "metrics": {
+       "earnings_yield": {
+        "value": 13.9,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2025-08-04"
+        ]
+       },
+       "return_on_capital": {
+        "value": 44.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2025-08-04"
+        ]
+       }
+      },
+      "price": null,
+      "price_source": null,
+      "price_date": null,
+      "price_ticker": null,
+      "evaluation": {
+       "basis": "reconstructed",
+       "as_of": "2025-08-11",
+       "filings_by_then": 0,
+       "newest_filed": null,
+       "priced": null,
+       "manual_on_record": [
+        "earnings_yield",
+        "return_on_capital"
+       ],
+       "manual_withheld": [],
+       "note": "no company is linked to this ticker, so no stored filing or price from 2025-08-11 could be consulted; 2 hand-entered values on record by 2025-08-11; judged by Magic Formula v1 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+      },
+      "thesis": null,
+      "valuation": null,
+      "recollection": null
+     }
+    },
+    {
+     "id": "l2",
+     "seq": 2,
+     "kind": "sell",
+     "date": "2026-08-12",
+     "recorded": "2026-08-12T12:00:00-04:00",
+     "shares": 300.0,
+     "price": 47.8,
+     "against": [
+      {
+       "lot": "l1",
+       "shares": 300.0
+      }
+     ],
+     "reason": "Hit valuation",
+     "signal_at_exit": "The year is up",
+     "rule_triggered": true,
+     "strategy": {
+      "id": "magic-formula",
+      "name": "Magic Formula",
+      "version": 1,
+      "values_version": 1,
+      "contract": 6
+     },
+     "snapshot": {
+      "frozen": "2026-08-12T12:00:00-04:00",
+      "decision": {
+       "render": "close",
+       "tier": "position",
+       "state": {
+        "id": "time-is-up",
+        "name": "The year is up",
+        "description": "This has been held for about the year the method gives it, and no later list has carried the name since. Nothing about the company decided that — this is the only exit this strategy has.\n\nThe date shown is the anniversary itself, and a few days either side of it is free. Greenblatt's own refinement is to sell a position you are down on shortly before that date and one you are up on shortly after, which is worth a week of anybody's patience in a taxable account. This journal will not choose for you: it never holds what you paid, which is the same reason it will never tell you to buy more of something because it has fallen.\n\nSelling here is half a decision. The other half is a fresh list and a replacement bought from it.",
+        "fix": null
+       },
+       "payload": {
+        "when": "2026-08-11"
+       },
+       "reason": {
+        "rule": "year-since-you-bought-it-is-up",
+        "summary": "The year this position was given ran out on 2026-08-11. Nothing about the company decided that; the clock is the only exit this method has.",
+        "evidence": [
+         {
+          "subject": {
+           "kind": "fact",
+           "id": "position.opened",
+           "reads": null,
+           "label": "Held since",
+           "unit": "date",
+           "explain": "The day this holding began — the purchase that took the position up from nothing. It does not move when you trim part of the holding away, so it answers when you started owning this, not how old your oldest remaining share is."
+          },
+          "observed": {
+           "status": "known",
+           "value": "2025-08-11",
+           "source": "fact",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "clock"
+         },
+         {
+          "subject": {
+           "kind": "fact",
+           "id": "security.listed_on",
+           "reads": null,
+           "label": "Last on a list",
+           "unit": "date",
+           "explain": "The day the most recent list carrying this name was pulled.\n\nIt only moves forward. A name that appears on list after list is affirmed by each of them, and importing an older list afterwards cannot take that back — so a strategy counting a holding period from the last time a name was chosen has a date that cannot go backwards under it.\n\nThis is the pull date rather than the day it was typed in. Absent where no list on record has ever carried this name."
+          },
+          "observed": {
+           "status": "known",
+           "value": "2025-08-04",
+           "source": "fact",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "clock"
+         },
+         {
+          "subject": {
+           "kind": "fact",
+           "id": "position.months_held",
+           "reads": null,
+           "label": "Months held",
+           "unit": "months",
+           "explain": "How many whole months you have held this position, counted from the purchase that took it up from nothing. Selling part of it does not restart the clock; selling all of it and buying back later does, because that is a new decision. Counted the same way a date some number of months out is worked out, so \"twenty-four months held\" and \"the day two years after you bought\" always land together."
+          },
+          "observed": {
+           "status": "known",
+           "value": 12,
+           "source": "fact",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": {
+           "comparator": "below",
+           "phrase": "below",
+           "threshold": 12,
+           "threshold_from": {
+            "kind": "value",
+            "id": "holding-period-months",
+            "label": "How long a position is held",
+            "unit": "months"
+           },
+           "absent": null
+          },
+          "outcome": "fail",
+          "group": "clock"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "earnings_yield",
+           "reads": "earnings_yield",
+           "label": "Earnings yield",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 13.9,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2025-08-04"
+           ]
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "why"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "return_on_capital",
+           "reads": "return_on_capital",
+           "label": "Return on capital",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 44.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2025-08-04"
+           ]
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "why"
+         }
+        ],
+        "groups": [
+         {
+          "id": "clock",
+          "name": "The year it is given",
+          "requires": "all",
+          "test": null,
+          "members": 3,
+          "tested": 1,
+          "passed": 0,
+          "failed": 1,
+          "unknown": 0,
+          "outcome": "fail"
+         },
+         {
+          "id": "why",
+          "name": "Why it was on the list",
+          "requires": "noted",
+          "test": null,
+          "members": 2,
+          "tested": 0,
+          "passed": 0,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "noted"
+         }
+        ],
+        "note": null
+       },
+       "produced_by": "strategy",
+       "strategy": {
+        "id": "magic-formula",
+        "name": "Magic Formula",
+        "version": 1,
+        "values_version": 1,
+        "contract": 6
+       }
+      },
+      "strategy": {
+       "id": "magic-formula",
+       "name": "Magic Formula",
+       "version": 1,
+       "values_version": 1,
+       "contract": 6
+      },
+      "metrics": {
+       "earnings_yield": {
+        "value": 13.9,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2025-08-04"
+        ]
+       },
+       "return_on_capital": {
+        "value": 44.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2025-08-04"
+        ]
+       }
+      },
+      "price": null,
+      "price_source": null,
+      "price_date": null,
+      "price_ticker": null,
+      "evaluation": {
+       "basis": "reconstructed",
+       "as_of": "2026-08-12",
+       "filings_by_then": 0,
+       "newest_filed": null,
+       "priced": null,
+       "manual_on_record": [
+        "earnings_yield",
+        "return_on_capital"
+       ],
+       "manual_withheld": [],
+       "note": "no company is linked to this ticker, so no stored filing or price from 2026-08-12 could be consulted; 2 hand-entered values on record by 2026-08-12; judged by Magic Formula v1 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+      },
+      "thesis": null,
+      "valuation": null,
+      "recollection": null
+     }
+    }
+   ],
+   "judgements": [],
+   "hand_entered": [
+    {
+     "seq": 1,
+     "id": "earnings_yield",
+     "value": 13.9,
+     "recorded": "2025-08-04T12:00:00-04:00"
+    },
+    {
+     "seq": 2,
+     "id": "return_on_capital",
+     "value": 44.0,
+     "recorded": "2025-08-04T12:00:00-04:00"
+    }
+   ],
+   "thesis": [],
+   "valuations": [],
+   "notes": [
+    {
+     "date": "2025-08-04T12:00:00-04:00",
+     "text": "Third on the list I pulled. I have no idea what they make beyond the name and that is the method working — the ranking looked at three thousand of these and I looked at none of them."
+    },
+    {
+     "date": "2025-08-11T12:00:00-04:00",
+     "text": "Recorded from history: 1 purchase, dated 2025-08-11. Each was judged against the data available on its own day, not against today's."
+    },
+    {
+     "date": "2026-08-12T12:00:00-04:00",
+     "text": "Recorded from history: 1 sale, dated 2026-08-12. Each was judged against the data available on its own day, not against today's."
+    }
+   ],
+   "lot_seq": 2
+  },
+  {
+   "ticker": "BRAMLY",
+   "name": "Bramley Tool Works",
+   "added": "2026-08-13",
+   "price": 27.6,
+   "lots": [
+    {
+     "id": "l1",
+     "seq": 1,
+     "kind": "buy",
+     "date": "2025-08-11",
+     "recorded": "2025-08-11T12:00:00-04:00",
+     "shares": 420.0,
+     "price": 25.4,
+     "override": null,
+     "unreconstructed": null,
+     "snapshot": {
+      "frozen": "2025-08-11T12:00:00-04:00",
+      "decision": {
+       "render": "commit",
+       "tier": "position",
+       "state": {
+        "id": "buy-it",
+        "name": "Buy it",
+        "description": "It is on the list you are working from, that list is still current, and there is room to start another name without breaking the staging rule.\n\nNothing was tested about the company, and that is not an oversight. The ranking that put this name in front of you was run against three thousand others and is the whole of the judgement in this method. The size is an equal share of the number of positions this journal is meant to run — equal dollar amounts, which is Greenblatt's own answer and differs from every other strategy here.",
+        "fix": null
+       },
+       "payload": {
+        "size": {
+         "unit": "weight",
+         "value": 4.0
+        },
+        "condition": null
+       },
+       "reason": {
+        "rule": "on-the-current-list-and-room-to-start-it",
+        "summary": "It is on the list you are working from and there is room to start it. Nothing about the company was tested here — the ranking that put it in front of you is the decision, and it was made against three thousand companies this journal does not have.",
+        "evidence": [
+         {
+          "subject": {
+           "kind": "fact",
+           "id": "security.on_list",
+           "reads": null,
+           "label": "On your current list",
+           "unit": "yes_no",
+           "explain": "Whether this security is one of the names on the list your journal is currently working from.\n\nIt is a fact about your list and not a judgement about the company. Nothing here ranked anything: a screen run somewhere else returned these names out of a universe of thousands, and where a name sits within that ranking cannot be recovered from the list alone, because the other two thousand nine hundred and seventy companies it was ranked against are not here.\n\nAbsent where this journal has no list at all, which is a different thing from a name that is not on one."
+          },
+          "observed": {
+           "status": "known",
+           "value": true,
+           "source": "fact",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": {
+           "comparator": "equals",
+           "phrase": "equal to",
+           "threshold": true,
+           "threshold_from": null,
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "list"
+         },
+         {
+          "subject": {
+           "kind": "fact",
+           "id": "list.age_months",
+           "reads": null,
+           "label": "Months since the list was pulled",
+           "unit": "months",
+           "explain": "How many whole months old the ranking this journal is working from is.\n\nA screen is a photograph of prices and accounts on one day. The prices have moved since and the accounts have been restated, so a list that has been sitting for a year is not a list of the cheapest companies any more — it is a list of the companies that were cheapest then.\n\nThe host reports the number and holds no view about it. How stale is too stale belongs to the strategy, which declares its own limit and compares against this."
+          },
+          "observed": {
+           "status": "known",
+           "value": 0,
+           "source": "fact",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": {
+           "comparator": "below",
+           "phrase": "below",
+           "threshold": 12,
+           "threshold_from": {
+            "kind": "value",
+            "id": "list-refresh-months",
+            "label": "How old a list may be and still be bought from",
+            "unit": "months"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "list"
+         },
+         {
+          "subject": {
+           "kind": "fact",
+           "id": "portfolio.slots_occupied",
+           "reads": null,
+           "label": "Positions held",
+           "unit": "count",
+           "explain": "How many separate securities this journal currently holds. A strategy that runs a fixed number of positions at once measures against this to know whether there is room for another."
+          },
+          "observed": {
+           "status": "known",
+           "value": 1,
+           "source": "fact",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": {
+           "comparator": "below",
+           "phrase": "below",
+           "threshold": 25,
+           "threshold_from": {
+            "kind": "value",
+            "id": "portfolio-slots",
+            "label": "How many names to hold at once",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "room"
+         },
+         {
+          "subject": {
+           "kind": "stated",
+           "id": null,
+           "reads": null,
+           "label": "Names started inside the staging window",
+           "unit": "count",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 1,
+           "source": "stated",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": {
+           "comparator": "below",
+           "phrase": "below",
+           "threshold": 7,
+           "threshold_from": {
+            "kind": "value",
+            "id": "names-per-tranche",
+            "label": "Most new names to start in one go",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "room"
+         },
+         {
+          "subject": {
+           "kind": "value",
+           "id": "tranche-months",
+           "reads": null,
+           "label": "How long a staging window lasts",
+           "unit": "months",
+           "explain": "How far back the journal looks when it counts how many names you have started recently. A name bought inside this window counts against the staging limit; one bought before it does not.\n\nTwo months at five to seven names fills a twenty-five-name portfolio in about eight months, which is the pace the method describes. Making it longer spreads the first year further and takes longer to be fully invested; making it shorter concentrates the entry back towards a single moment, which is the thing the staging exists to prevent.\n\nIt does not stop you replacing a position you have just sold. The limit counts names started recently, not days since the last purchase, so a sale at its anniversary and the replacement bought the same week are one name against the window rather than a blocked purchase."
+          },
+          "observed": {
+           "status": "known",
+           "value": 2,
+           "source": "value",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "room"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "earnings_yield",
+           "reads": "earnings_yield",
+           "label": "Earnings yield",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 15.2,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2025-08-04"
+           ]
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "why"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "return_on_capital",
+           "reads": "return_on_capital",
+           "label": "Return on capital",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 38.5,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2025-08-04"
+           ]
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "why"
+         }
+        ],
+        "groups": [
+         {
+          "id": "list",
+          "name": "The list you are working from",
+          "requires": "all",
+          "test": null,
+          "members": 2,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "room",
+          "name": "Whether there is room to start another",
+          "requires": "all",
+          "test": null,
+          "members": 3,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "why",
+          "name": "Why it was on the list",
+          "requires": "noted",
+          "test": null,
+          "members": 2,
+          "tested": 0,
+          "passed": 0,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "noted"
+         }
+        ],
+        "note": null
+       },
+       "produced_by": "strategy",
+       "strategy": {
+        "id": "magic-formula",
+        "name": "Magic Formula",
+        "version": 1,
+        "values_version": 1,
+        "contract": 6
+       }
+      },
+      "strategy": {
+       "id": "magic-formula",
+       "name": "Magic Formula",
+       "version": 1,
+       "values_version": 1,
+       "contract": 6
+      },
+      "metrics": {
+       "earnings_yield": {
+        "value": 15.2,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2025-08-04"
+        ]
+       },
+       "return_on_capital": {
+        "value": 38.5,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2025-08-04"
+        ]
+       }
+      },
+      "price": null,
+      "price_source": null,
+      "price_date": null,
+      "price_ticker": null,
+      "evaluation": {
+       "basis": "reconstructed",
+       "as_of": "2025-08-11",
+       "filings_by_then": 0,
+       "newest_filed": null,
+       "priced": null,
+       "manual_on_record": [
+        "earnings_yield",
+        "return_on_capital"
+       ],
+       "manual_withheld": [],
+       "note": "no company is linked to this ticker, so no stored filing or price from 2025-08-11 could be consulted; 2 hand-entered values on record by 2025-08-11; judged by Magic Formula v1 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+      },
+      "thesis": null,
+      "valuation": null,
+      "recollection": null
+     }
+    }
+   ],
+   "judgements": [],
+   "hand_entered": [
+    {
+     "seq": 1,
+     "id": "earnings_yield",
+     "value": 15.2,
+     "recorded": "2025-08-04T12:00:00-04:00"
+    },
+    {
+     "seq": 2,
+     "id": "return_on_capital",
+     "value": 38.5,
+     "recorded": "2025-08-04T12:00:00-04:00"
+    }
+   ],
+   "thesis": [],
+   "valuations": [],
+   "notes": [
+    {
+     "date": "2025-08-11T12:00:00-04:00",
+     "text": "Recorded from history: 1 purchase, dated 2025-08-11. Each was judged against the data available on its own day, not against today's."
+    }
+   ],
+   "lot_seq": 1
+  },
+  {
+   "ticker": "FENWCK",
+   "name": "Fenwick Abrasives",
+   "added": "2026-08-13",
+   "price": 18.4,
+   "lots": [
+    {
+     "id": "l1",
+     "seq": 1,
+     "kind": "buy",
+     "date": "2025-08-18",
+     "recorded": "2025-08-18T12:00:00-04:00",
+     "shares": 610.0,
+     "price": 17.05,
+     "override": null,
+     "unreconstructed": null,
+     "snapshot": {
+      "frozen": "2025-08-18T12:00:00-04:00",
+      "decision": {
+       "render": "commit",
+       "tier": "position",
+       "state": {
+        "id": "buy-it",
+        "name": "Buy it",
+        "description": "It is on the list you are working from, that list is still current, and there is room to start another name without breaking the staging rule.\n\nNothing was tested about the company, and that is not an oversight. The ranking that put this name in front of you was run against three thousand others and is the whole of the judgement in this method. The size is an equal share of the number of positions this journal is meant to run — equal dollar amounts, which is Greenblatt's own answer and differs from every other strategy here.",
+        "fix": null
+       },
+       "payload": {
+        "size": {
+         "unit": "weight",
+         "value": 4.0
+        },
+        "condition": null
+       },
+       "reason": {
+        "rule": "on-the-current-list-and-room-to-start-it",
+        "summary": "It is on the list you are working from and there is room to start it. Nothing about the company was tested here — the ranking that put it in front of you is the decision, and it was made against three thousand companies this journal does not have.",
+        "evidence": [
+         {
+          "subject": {
+           "kind": "fact",
+           "id": "security.on_list",
+           "reads": null,
+           "label": "On your current list",
+           "unit": "yes_no",
+           "explain": "Whether this security is one of the names on the list your journal is currently working from.\n\nIt is a fact about your list and not a judgement about the company. Nothing here ranked anything: a screen run somewhere else returned these names out of a universe of thousands, and where a name sits within that ranking cannot be recovered from the list alone, because the other two thousand nine hundred and seventy companies it was ranked against are not here.\n\nAbsent where this journal has no list at all, which is a different thing from a name that is not on one."
+          },
+          "observed": {
+           "status": "known",
+           "value": true,
+           "source": "fact",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": {
+           "comparator": "equals",
+           "phrase": "equal to",
+           "threshold": true,
+           "threshold_from": null,
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "list"
+         },
+         {
+          "subject": {
+           "kind": "fact",
+           "id": "list.age_months",
+           "reads": null,
+           "label": "Months since the list was pulled",
+           "unit": "months",
+           "explain": "How many whole months old the ranking this journal is working from is.\n\nA screen is a photograph of prices and accounts on one day. The prices have moved since and the accounts have been restated, so a list that has been sitting for a year is not a list of the cheapest companies any more — it is a list of the companies that were cheapest then.\n\nThe host reports the number and holds no view about it. How stale is too stale belongs to the strategy, which declares its own limit and compares against this."
+          },
+          "observed": {
+           "status": "known",
+           "value": 0,
+           "source": "fact",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": {
+           "comparator": "below",
+           "phrase": "below",
+           "threshold": 12,
+           "threshold_from": {
+            "kind": "value",
+            "id": "list-refresh-months",
+            "label": "How old a list may be and still be bought from",
+            "unit": "months"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "list"
+         },
+         {
+          "subject": {
+           "kind": "fact",
+           "id": "portfolio.slots_occupied",
+           "reads": null,
+           "label": "Positions held",
+           "unit": "count",
+           "explain": "How many separate securities this journal currently holds. A strategy that runs a fixed number of positions at once measures against this to know whether there is room for another."
+          },
+          "observed": {
+           "status": "known",
+           "value": 2,
+           "source": "fact",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": {
+           "comparator": "below",
+           "phrase": "below",
+           "threshold": 25,
+           "threshold_from": {
+            "kind": "value",
+            "id": "portfolio-slots",
+            "label": "How many names to hold at once",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "room"
+         },
+         {
+          "subject": {
+           "kind": "stated",
+           "id": null,
+           "reads": null,
+           "label": "Names started inside the staging window",
+           "unit": "count",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 2,
+           "source": "stated",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": {
+           "comparator": "below",
+           "phrase": "below",
+           "threshold": 7,
+           "threshold_from": {
+            "kind": "value",
+            "id": "names-per-tranche",
+            "label": "Most new names to start in one go",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "room"
+         },
+         {
+          "subject": {
+           "kind": "value",
+           "id": "tranche-months",
+           "reads": null,
+           "label": "How long a staging window lasts",
+           "unit": "months",
+           "explain": "How far back the journal looks when it counts how many names you have started recently. A name bought inside this window counts against the staging limit; one bought before it does not.\n\nTwo months at five to seven names fills a twenty-five-name portfolio in about eight months, which is the pace the method describes. Making it longer spreads the first year further and takes longer to be fully invested; making it shorter concentrates the entry back towards a single moment, which is the thing the staging exists to prevent.\n\nIt does not stop you replacing a position you have just sold. The limit counts names started recently, not days since the last purchase, so a sale at its anniversary and the replacement bought the same week are one name against the window rather than a blocked purchase."
+          },
+          "observed": {
+           "status": "known",
+           "value": 2,
+           "source": "value",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "room"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "earnings_yield",
+           "reads": "earnings_yield",
+           "label": "Earnings yield",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 12.1,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2025-08-04"
+           ]
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "why"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "return_on_capital",
+           "reads": "return_on_capital",
+           "label": "Return on capital",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 51.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2025-08-04"
+           ]
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "why"
+         }
+        ],
+        "groups": [
+         {
+          "id": "list",
+          "name": "The list you are working from",
+          "requires": "all",
+          "test": null,
+          "members": 2,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "room",
+          "name": "Whether there is room to start another",
+          "requires": "all",
+          "test": null,
+          "members": 3,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "why",
+          "name": "Why it was on the list",
+          "requires": "noted",
+          "test": null,
+          "members": 2,
+          "tested": 0,
+          "passed": 0,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "noted"
+         }
+        ],
+        "note": null
+       },
+       "produced_by": "strategy",
+       "strategy": {
+        "id": "magic-formula",
+        "name": "Magic Formula",
+        "version": 1,
+        "values_version": 1,
+        "contract": 6
+       }
+      },
+      "strategy": {
+       "id": "magic-formula",
+       "name": "Magic Formula",
+       "version": 1,
+       "values_version": 1,
+       "contract": 6
+      },
+      "metrics": {
+       "earnings_yield": {
+        "value": 12.1,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2025-08-04"
+        ]
+       },
+       "return_on_capital": {
+        "value": 51.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2025-08-04"
+        ]
+       }
+      },
+      "price": null,
+      "price_source": null,
+      "price_date": null,
+      "price_ticker": null,
+      "evaluation": {
+       "basis": "reconstructed",
+       "as_of": "2025-08-18",
+       "filings_by_then": 0,
+       "newest_filed": null,
+       "priced": null,
+       "manual_on_record": [
+        "earnings_yield",
+        "return_on_capital"
+       ],
+       "manual_withheld": [],
+       "note": "no company is linked to this ticker, so no stored filing or price from 2025-08-18 could be consulted; 2 hand-entered values on record by 2025-08-18; judged by Magic Formula v1 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+      },
+      "thesis": null,
+      "valuation": null,
+      "recollection": null
+     }
+    }
+   ],
+   "judgements": [],
+   "hand_entered": [
+    {
+     "seq": 1,
+     "id": "earnings_yield",
+     "value": 12.1,
+     "recorded": "2025-08-04T12:00:00-04:00"
+    },
+    {
+     "seq": 2,
+     "id": "return_on_capital",
+     "value": 51.0,
+     "recorded": "2025-08-04T12:00:00-04:00"
+    }
+   ],
+   "thesis": [],
+   "valuations": [],
+   "notes": [
+    {
+     "date": "2025-08-18T12:00:00-04:00",
+     "text": "Recorded from history: 1 purchase, dated 2025-08-18. Each was judged against the data available on its own day, not against today's."
+    }
+   ],
+   "lot_seq": 1
+  },
+  {
+   "ticker": "TARRNT",
+   "name": "Tarrant Freight",
+   "added": "2026-08-13",
+   "price": 55.1,
+   "lots": [
+    {
+     "id": "l1",
+     "seq": 1,
+     "kind": "buy",
+     "date": "2025-10-13",
+     "recorded": "2025-10-13T12:00:00-04:00",
+     "shares": 190.0,
+     "price": 52.8,
+     "override": null,
+     "unreconstructed": null,
+     "snapshot": {
+      "frozen": "2025-10-13T12:00:00-04:00",
+      "decision": {
+       "render": "commit",
+       "tier": "position",
+       "state": {
+        "id": "buy-it",
+        "name": "Buy it",
+        "description": "It is on the list you are working from, that list is still current, and there is room to start another name without breaking the staging rule.\n\nNothing was tested about the company, and that is not an oversight. The ranking that put this name in front of you was run against three thousand others and is the whole of the judgement in this method. The size is an equal share of the number of positions this journal is meant to run — equal dollar amounts, which is Greenblatt's own answer and differs from every other strategy here.",
+        "fix": null
+       },
+       "payload": {
+        "size": {
+         "unit": "weight",
+         "value": 4.0
+        },
+        "condition": null
+       },
+       "reason": {
+        "rule": "on-the-current-list-and-room-to-start-it",
+        "summary": "It is on the list you are working from and there is room to start it. Nothing about the company was tested here — the ranking that put it in front of you is the decision, and it was made against three thousand companies this journal does not have.",
+        "evidence": [
+         {
+          "subject": {
+           "kind": "fact",
+           "id": "security.on_list",
+           "reads": null,
+           "label": "On your current list",
+           "unit": "yes_no",
+           "explain": "Whether this security is one of the names on the list your journal is currently working from.\n\nIt is a fact about your list and not a judgement about the company. Nothing here ranked anything: a screen run somewhere else returned these names out of a universe of thousands, and where a name sits within that ranking cannot be recovered from the list alone, because the other two thousand nine hundred and seventy companies it was ranked against are not here.\n\nAbsent where this journal has no list at all, which is a different thing from a name that is not on one."
+          },
+          "observed": {
+           "status": "known",
+           "value": true,
+           "source": "fact",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": {
+           "comparator": "equals",
+           "phrase": "equal to",
+           "threshold": true,
+           "threshold_from": null,
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "list"
+         },
+         {
+          "subject": {
+           "kind": "fact",
+           "id": "list.age_months",
+           "reads": null,
+           "label": "Months since the list was pulled",
+           "unit": "months",
+           "explain": "How many whole months old the ranking this journal is working from is.\n\nA screen is a photograph of prices and accounts on one day. The prices have moved since and the accounts have been restated, so a list that has been sitting for a year is not a list of the cheapest companies any more — it is a list of the companies that were cheapest then.\n\nThe host reports the number and holds no view about it. How stale is too stale belongs to the strategy, which declares its own limit and compares against this."
+          },
+          "observed": {
+           "status": "known",
+           "value": 2,
+           "source": "fact",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": {
+           "comparator": "below",
+           "phrase": "below",
+           "threshold": 12,
+           "threshold_from": {
+            "kind": "value",
+            "id": "list-refresh-months",
+            "label": "How old a list may be and still be bought from",
+            "unit": "months"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "list"
+         },
+         {
+          "subject": {
+           "kind": "fact",
+           "id": "portfolio.slots_occupied",
+           "reads": null,
+           "label": "Positions held",
+           "unit": "count",
+           "explain": "How many separate securities this journal currently holds. A strategy that runs a fixed number of positions at once measures against this to know whether there is room for another."
+          },
+          "observed": {
+           "status": "known",
+           "value": 3,
+           "source": "fact",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": {
+           "comparator": "below",
+           "phrase": "below",
+           "threshold": 25,
+           "threshold_from": {
+            "kind": "value",
+            "id": "portfolio-slots",
+            "label": "How many names to hold at once",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "room"
+         },
+         {
+          "subject": {
+           "kind": "stated",
+           "id": null,
+           "reads": null,
+           "label": "Names started inside the staging window",
+           "unit": "count",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 1,
+           "source": "stated",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": {
+           "comparator": "below",
+           "phrase": "below",
+           "threshold": 7,
+           "threshold_from": {
+            "kind": "value",
+            "id": "names-per-tranche",
+            "label": "Most new names to start in one go",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "room"
+         },
+         {
+          "subject": {
+           "kind": "value",
+           "id": "tranche-months",
+           "reads": null,
+           "label": "How long a staging window lasts",
+           "unit": "months",
+           "explain": "How far back the journal looks when it counts how many names you have started recently. A name bought inside this window counts against the staging limit; one bought before it does not.\n\nTwo months at five to seven names fills a twenty-five-name portfolio in about eight months, which is the pace the method describes. Making it longer spreads the first year further and takes longer to be fully invested; making it shorter concentrates the entry back towards a single moment, which is the thing the staging exists to prevent.\n\nIt does not stop you replacing a position you have just sold. The limit counts names started recently, not days since the last purchase, so a sale at its anniversary and the replacement bought the same week are one name against the window rather than a blocked purchase."
+          },
+          "observed": {
+           "status": "known",
+           "value": 2,
+           "source": "value",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "room"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "earnings_yield",
+           "reads": "earnings_yield",
+           "label": "Earnings yield",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 11.4,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2025-08-04"
+           ]
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "why"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "return_on_capital",
+           "reads": "return_on_capital",
+           "label": "Return on capital",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 29.8,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2025-08-04"
+           ]
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "why"
+         }
+        ],
+        "groups": [
+         {
+          "id": "list",
+          "name": "The list you are working from",
+          "requires": "all",
+          "test": null,
+          "members": 2,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "room",
+          "name": "Whether there is room to start another",
+          "requires": "all",
+          "test": null,
+          "members": 3,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "why",
+          "name": "Why it was on the list",
+          "requires": "noted",
+          "test": null,
+          "members": 2,
+          "tested": 0,
+          "passed": 0,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "noted"
+         }
+        ],
+        "note": null
+       },
+       "produced_by": "strategy",
+       "strategy": {
+        "id": "magic-formula",
+        "name": "Magic Formula",
+        "version": 1,
+        "values_version": 1,
+        "contract": 6
+       }
+      },
+      "strategy": {
+       "id": "magic-formula",
+       "name": "Magic Formula",
+       "version": 1,
+       "values_version": 1,
+       "contract": 6
+      },
+      "metrics": {
+       "earnings_yield": {
+        "value": 11.4,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2025-08-04"
+        ]
+       },
+       "return_on_capital": {
+        "value": 29.8,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2025-08-04"
+        ]
+       }
+      },
+      "price": null,
+      "price_source": null,
+      "price_date": null,
+      "price_ticker": null,
+      "evaluation": {
+       "basis": "reconstructed",
+       "as_of": "2025-10-13",
+       "filings_by_then": 0,
+       "newest_filed": null,
+       "priced": null,
+       "manual_on_record": [
+        "earnings_yield",
+        "return_on_capital"
+       ],
+       "manual_withheld": [],
+       "note": "no company is linked to this ticker, so no stored filing or price from 2025-10-13 could be consulted; 2 hand-entered values on record by 2025-10-13; judged by Magic Formula v1 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+      },
+      "thesis": null,
+      "valuation": null,
+      "recollection": null
+     }
+    }
+   ],
+   "judgements": [],
+   "hand_entered": [
+    {
+     "seq": 1,
+     "id": "earnings_yield",
+     "value": 11.4,
+     "recorded": "2025-08-04T12:00:00-04:00"
+    },
+    {
+     "seq": 2,
+     "id": "return_on_capital",
+     "value": 29.8,
+     "recorded": "2025-08-04T12:00:00-04:00"
+    }
+   ],
+   "thesis": [],
+   "valuations": [],
+   "notes": [
+    {
+     "date": "2025-10-13T12:00:00-04:00",
+     "text": "Recorded from history: 1 purchase, dated 2025-10-13. Each was judged against the data available on its own day, not against today's."
+    }
+   ],
+   "lot_seq": 1
+  },
+  {
+   "ticker": "WOOLSN",
+   "name": "Woolston Fasteners",
+   "added": "2026-08-13",
+   "price": 9.85,
+   "lots": [
+    {
+     "id": "l1",
+     "seq": 1,
+     "kind": "buy",
+     "date": "2026-06-15",
+     "recorded": "2026-06-15T12:00:00-04:00",
+     "shares": 900.0,
+     "price": 9.1,
+     "override": null,
+     "unreconstructed": null,
+     "snapshot": {
+      "frozen": "2026-06-15T12:00:00-04:00",
+      "decision": {
+       "render": "commit",
+       "tier": "position",
+       "state": {
+        "id": "buy-it",
+        "name": "Buy it",
+        "description": "It is on the list you are working from, that list is still current, and there is room to start another name without breaking the staging rule.\n\nNothing was tested about the company, and that is not an oversight. The ranking that put this name in front of you was run against three thousand others and is the whole of the judgement in this method. The size is an equal share of the number of positions this journal is meant to run — equal dollar amounts, which is Greenblatt's own answer and differs from every other strategy here.",
+        "fix": null
+       },
+       "payload": {
+        "size": {
+         "unit": "weight",
+         "value": 4.0
+        },
+        "condition": null
+       },
+       "reason": {
+        "rule": "on-the-current-list-and-room-to-start-it",
+        "summary": "It is on the list you are working from and there is room to start it. Nothing about the company was tested here — the ranking that put it in front of you is the decision, and it was made against three thousand companies this journal does not have.",
+        "evidence": [
+         {
+          "subject": {
+           "kind": "fact",
+           "id": "security.on_list",
+           "reads": null,
+           "label": "On your current list",
+           "unit": "yes_no",
+           "explain": "Whether this security is one of the names on the list your journal is currently working from.\n\nIt is a fact about your list and not a judgement about the company. Nothing here ranked anything: a screen run somewhere else returned these names out of a universe of thousands, and where a name sits within that ranking cannot be recovered from the list alone, because the other two thousand nine hundred and seventy companies it was ranked against are not here.\n\nAbsent where this journal has no list at all, which is a different thing from a name that is not on one."
+          },
+          "observed": {
+           "status": "known",
+           "value": true,
+           "source": "fact",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": {
+           "comparator": "equals",
+           "phrase": "equal to",
+           "threshold": true,
+           "threshold_from": null,
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "list"
+         },
+         {
+          "subject": {
+           "kind": "fact",
+           "id": "list.age_months",
+           "reads": null,
+           "label": "Months since the list was pulled",
+           "unit": "months",
+           "explain": "How many whole months old the ranking this journal is working from is.\n\nA screen is a photograph of prices and accounts on one day. The prices have moved since and the accounts have been restated, so a list that has been sitting for a year is not a list of the cheapest companies any more — it is a list of the companies that were cheapest then.\n\nThe host reports the number and holds no view about it. How stale is too stale belongs to the strategy, which declares its own limit and compares against this."
+          },
+          "observed": {
+           "status": "known",
+           "value": 10,
+           "source": "fact",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": {
+           "comparator": "below",
+           "phrase": "below",
+           "threshold": 12,
+           "threshold_from": {
+            "kind": "value",
+            "id": "list-refresh-months",
+            "label": "How old a list may be and still be bought from",
+            "unit": "months"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "list"
+         },
+         {
+          "subject": {
+           "kind": "fact",
+           "id": "portfolio.slots_occupied",
+           "reads": null,
+           "label": "Positions held",
+           "unit": "count",
+           "explain": "How many separate securities this journal currently holds. A strategy that runs a fixed number of positions at once measures against this to know whether there is room for another."
+          },
+          "observed": {
+           "status": "known",
+           "value": 4,
+           "source": "fact",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": {
+           "comparator": "below",
+           "phrase": "below",
+           "threshold": 25,
+           "threshold_from": {
+            "kind": "value",
+            "id": "portfolio-slots",
+            "label": "How many names to hold at once",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "room"
+         },
+         {
+          "subject": {
+           "kind": "stated",
+           "id": null,
+           "reads": null,
+           "label": "Names started inside the staging window",
+           "unit": "count",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 0,
+           "source": "stated",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": {
+           "comparator": "below",
+           "phrase": "below",
+           "threshold": 7,
+           "threshold_from": {
+            "kind": "value",
+            "id": "names-per-tranche",
+            "label": "Most new names to start in one go",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "room"
+         },
+         {
+          "subject": {
+           "kind": "value",
+           "id": "tranche-months",
+           "reads": null,
+           "label": "How long a staging window lasts",
+           "unit": "months",
+           "explain": "How far back the journal looks when it counts how many names you have started recently. A name bought inside this window counts against the staging limit; one bought before it does not.\n\nTwo months at five to seven names fills a twenty-five-name portfolio in about eight months, which is the pace the method describes. Making it longer spreads the first year further and takes longer to be fully invested; making it shorter concentrates the entry back towards a single moment, which is the thing the staging exists to prevent.\n\nIt does not stop you replacing a position you have just sold. The limit counts names started recently, not days since the last purchase, so a sale at its anniversary and the replacement bought the same week are one name against the window rather than a blocked purchase."
+          },
+          "observed": {
+           "status": "known",
+           "value": 2,
+           "source": "value",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "room"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "earnings_yield",
+           "reads": "earnings_yield",
+           "label": "Earnings yield",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 14.6,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2025-08-04"
+           ]
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "why"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "return_on_capital",
+           "reads": "return_on_capital",
+           "label": "Return on capital",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 33.2,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2025-08-04"
+           ]
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "why"
+         }
+        ],
+        "groups": [
+         {
+          "id": "list",
+          "name": "The list you are working from",
+          "requires": "all",
+          "test": null,
+          "members": 2,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "room",
+          "name": "Whether there is room to start another",
+          "requires": "all",
+          "test": null,
+          "members": 3,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "why",
+          "name": "Why it was on the list",
+          "requires": "noted",
+          "test": null,
+          "members": 2,
+          "tested": 0,
+          "passed": 0,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "noted"
+         }
+        ],
+        "note": null
+       },
+       "produced_by": "strategy",
+       "strategy": {
+        "id": "magic-formula",
+        "name": "Magic Formula",
+        "version": 1,
+        "values_version": 1,
+        "contract": 6
+       }
+      },
+      "strategy": {
+       "id": "magic-formula",
+       "name": "Magic Formula",
+       "version": 1,
+       "values_version": 1,
+       "contract": 6
+      },
+      "metrics": {
+       "earnings_yield": {
+        "value": 14.6,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2025-08-04"
+        ]
+       },
+       "return_on_capital": {
+        "value": 33.2,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2025-08-04"
+        ]
+       }
+      },
+      "price": null,
+      "price_source": null,
+      "price_date": null,
+      "price_ticker": null,
+      "evaluation": {
+       "basis": "reconstructed",
+       "as_of": "2026-06-15",
+       "filings_by_then": 0,
+       "newest_filed": null,
+       "priced": null,
+       "manual_on_record": [
+        "earnings_yield",
+        "return_on_capital"
+       ],
+       "manual_withheld": [],
+       "note": "no company is linked to this ticker, so no stored filing or price from 2026-06-15 could be consulted; 2 hand-entered values on record by 2026-06-15; judged by Magic Formula v1 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+      },
+      "thesis": null,
+      "valuation": null,
+      "recollection": null
+     }
+    }
+   ],
+   "judgements": [],
+   "hand_entered": [
+    {
+     "seq": 1,
+     "id": "earnings_yield",
+     "value": 14.6,
+     "recorded": "2025-08-04T12:00:00-04:00"
+    },
+    {
+     "seq": 2,
+     "id": "return_on_capital",
+     "value": 33.2,
+     "recorded": "2025-08-04T12:00:00-04:00"
+    }
+   ],
+   "thesis": [],
+   "valuations": [],
+   "notes": [
+    {
+     "date": "2026-06-15T12:00:00-04:00",
+     "text": "Recorded from history: 1 purchase, dated 2026-06-15. Each was judged against the data available on its own day, not against today's."
+    }
+   ],
+   "lot_seq": 1
+  },
+  {
+   "ticker": "KINVER",
+   "name": "Kinver Packaging",
+   "added": "2026-08-13",
+   "price": 62.3,
+   "lots": [
+    {
+     "id": "l1",
+     "seq": 1,
+     "kind": "buy",
+     "date": "2026-07-06",
+     "recorded": "2026-07-06T12:00:00-04:00",
+     "shares": 130.0,
+     "price": 58.9,
+     "override": null,
+     "unreconstructed": null,
+     "snapshot": {
+      "frozen": "2026-07-06T12:00:00-04:00",
+      "decision": {
+       "render": "commit",
+       "tier": "position",
+       "state": {
+        "id": "buy-it",
+        "name": "Buy it",
+        "description": "It is on the list you are working from, that list is still current, and there is room to start another name without breaking the staging rule.\n\nNothing was tested about the company, and that is not an oversight. The ranking that put this name in front of you was run against three thousand others and is the whole of the judgement in this method. The size is an equal share of the number of positions this journal is meant to run — equal dollar amounts, which is Greenblatt's own answer and differs from every other strategy here.",
+        "fix": null
+       },
+       "payload": {
+        "size": {
+         "unit": "weight",
+         "value": 4.0
+        },
+        "condition": null
+       },
+       "reason": {
+        "rule": "on-the-current-list-and-room-to-start-it",
+        "summary": "It is on the list you are working from and there is room to start it. Nothing about the company was tested here — the ranking that put it in front of you is the decision, and it was made against three thousand companies this journal does not have.",
+        "evidence": [
+         {
+          "subject": {
+           "kind": "fact",
+           "id": "security.on_list",
+           "reads": null,
+           "label": "On your current list",
+           "unit": "yes_no",
+           "explain": "Whether this security is one of the names on the list your journal is currently working from.\n\nIt is a fact about your list and not a judgement about the company. Nothing here ranked anything: a screen run somewhere else returned these names out of a universe of thousands, and where a name sits within that ranking cannot be recovered from the list alone, because the other two thousand nine hundred and seventy companies it was ranked against are not here.\n\nAbsent where this journal has no list at all, which is a different thing from a name that is not on one."
+          },
+          "observed": {
+           "status": "known",
+           "value": true,
+           "source": "fact",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": {
+           "comparator": "equals",
+           "phrase": "equal to",
+           "threshold": true,
+           "threshold_from": null,
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "list"
+         },
+         {
+          "subject": {
+           "kind": "fact",
+           "id": "list.age_months",
+           "reads": null,
+           "label": "Months since the list was pulled",
+           "unit": "months",
+           "explain": "How many whole months old the ranking this journal is working from is.\n\nA screen is a photograph of prices and accounts on one day. The prices have moved since and the accounts have been restated, so a list that has been sitting for a year is not a list of the cheapest companies any more — it is a list of the companies that were cheapest then.\n\nThe host reports the number and holds no view about it. How stale is too stale belongs to the strategy, which declares its own limit and compares against this."
+          },
+          "observed": {
+           "status": "known",
+           "value": 11,
+           "source": "fact",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": {
+           "comparator": "below",
+           "phrase": "below",
+           "threshold": 12,
+           "threshold_from": {
+            "kind": "value",
+            "id": "list-refresh-months",
+            "label": "How old a list may be and still be bought from",
+            "unit": "months"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "list"
+         },
+         {
+          "subject": {
+           "kind": "fact",
+           "id": "portfolio.slots_occupied",
+           "reads": null,
+           "label": "Positions held",
+           "unit": "count",
+           "explain": "How many separate securities this journal currently holds. A strategy that runs a fixed number of positions at once measures against this to know whether there is room for another."
+          },
+          "observed": {
+           "status": "known",
+           "value": 5,
+           "source": "fact",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": {
+           "comparator": "below",
+           "phrase": "below",
+           "threshold": 25,
+           "threshold_from": {
+            "kind": "value",
+            "id": "portfolio-slots",
+            "label": "How many names to hold at once",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "room"
+         },
+         {
+          "subject": {
+           "kind": "stated",
+           "id": null,
+           "reads": null,
+           "label": "Names started inside the staging window",
+           "unit": "count",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 1,
+           "source": "stated",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": {
+           "comparator": "below",
+           "phrase": "below",
+           "threshold": 7,
+           "threshold_from": {
+            "kind": "value",
+            "id": "names-per-tranche",
+            "label": "Most new names to start in one go",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "room"
+         },
+         {
+          "subject": {
+           "kind": "value",
+           "id": "tranche-months",
+           "reads": null,
+           "label": "How long a staging window lasts",
+           "unit": "months",
+           "explain": "How far back the journal looks when it counts how many names you have started recently. A name bought inside this window counts against the staging limit; one bought before it does not.\n\nTwo months at five to seven names fills a twenty-five-name portfolio in about eight months, which is the pace the method describes. Making it longer spreads the first year further and takes longer to be fully invested; making it shorter concentrates the entry back towards a single moment, which is the thing the staging exists to prevent.\n\nIt does not stop you replacing a position you have just sold. The limit counts names started recently, not days since the last purchase, so a sale at its anniversary and the replacement bought the same week are one name against the window rather than a blocked purchase."
+          },
+          "observed": {
+           "status": "known",
+           "value": 2,
+           "source": "value",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "room"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "earnings_yield",
+           "reads": "earnings_yield",
+           "label": "Earnings yield",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 10.8,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2025-08-04"
+           ]
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "why"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "return_on_capital",
+           "reads": "return_on_capital",
+           "label": "Return on capital",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 41.7,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2025-08-04"
+           ]
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "why"
+         }
+        ],
+        "groups": [
+         {
+          "id": "list",
+          "name": "The list you are working from",
+          "requires": "all",
+          "test": null,
+          "members": 2,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "room",
+          "name": "Whether there is room to start another",
+          "requires": "all",
+          "test": null,
+          "members": 3,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "why",
+          "name": "Why it was on the list",
+          "requires": "noted",
+          "test": null,
+          "members": 2,
+          "tested": 0,
+          "passed": 0,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "noted"
+         }
+        ],
+        "note": null
+       },
+       "produced_by": "strategy",
+       "strategy": {
+        "id": "magic-formula",
+        "name": "Magic Formula",
+        "version": 1,
+        "values_version": 1,
+        "contract": 6
+       }
+      },
+      "strategy": {
+       "id": "magic-formula",
+       "name": "Magic Formula",
+       "version": 1,
+       "values_version": 1,
+       "contract": 6
+      },
+      "metrics": {
+       "earnings_yield": {
+        "value": 10.8,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2025-08-04"
+        ]
+       },
+       "return_on_capital": {
+        "value": 41.7,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2025-08-04"
+        ]
+       }
+      },
+      "price": null,
+      "price_source": null,
+      "price_date": null,
+      "price_ticker": null,
+      "evaluation": {
+       "basis": "reconstructed",
+       "as_of": "2026-07-06",
+       "filings_by_then": 0,
+       "newest_filed": null,
+       "priced": null,
+       "manual_on_record": [
+        "earnings_yield",
+        "return_on_capital"
+       ],
+       "manual_withheld": [],
+       "note": "no company is linked to this ticker, so no stored filing or price from 2026-07-06 could be consulted; 2 hand-entered values on record by 2026-07-06; judged by Magic Formula v1 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+      },
+      "thesis": null,
+      "valuation": null,
+      "recollection": {
+       "text": "Last one off the old list. It was eleven months old and I could feel the deadline; I would rather have waited three weeks and bought off the new one.",
+       "written": "2026-07-06T12:00:00-04:00"
+      }
+     }
+    }
+   ],
+   "judgements": [],
+   "hand_entered": [
+    {
+     "seq": 1,
+     "id": "earnings_yield",
+     "value": 10.8,
+     "recorded": "2025-08-04T12:00:00-04:00"
+    },
+    {
+     "seq": 2,
+     "id": "return_on_capital",
+     "value": 41.7,
+     "recorded": "2025-08-04T12:00:00-04:00"
+    }
+   ],
+   "thesis": [],
+   "valuations": [],
+   "notes": [
+    {
+     "date": "2026-07-06T12:00:00-04:00",
+     "text": "Recorded from history: 1 purchase, dated 2026-07-06. Each was judged against the data available on its own day, not against today's."
+    }
+   ],
+   "lot_seq": 1
+  },
+  {
+   "ticker": "CRANWL",
+   "name": "Cranwell Instruments",
+   "added": "2026-08-13",
+   "price": 33.75,
+   "lots": [],
+   "judgements": [],
+   "hand_entered": [
+    {
+     "seq": 1,
+     "id": "earnings_yield",
+     "value": 12.7,
+     "recorded": "2025-08-04T12:00:00-04:00"
+    },
+    {
+     "seq": 2,
+     "id": "return_on_capital",
+     "value": 36.1,
+     "recorded": "2025-08-04T12:00:00-04:00"
+    }
+   ],
+   "thesis": [],
+   "valuations": [],
+   "notes": []
+  },
+  {
+   "ticker": "HALSTD",
+   "name": "Halstead Marine",
+   "added": "2026-08-13",
+   "price": 14.05,
+   "lots": [
+    {
+     "id": "l1",
+     "seq": 1,
+     "kind": "buy",
+     "date": "2026-07-20",
+     "recorded": "2026-07-20T12:00:00-04:00",
+     "shares": 700.0,
+     "price": 13.6,
+     "override": {
+      "date": "2026-07-20",
+      "kind": "against",
+      "state": "Not on your list",
+      "rule": "not-among-the-names-the-screen-returned",
+      "summary": "The screen did not return this name, so there is nothing here to buy. It was not judged and turned down — it was ranked somewhere else, against companies this journal has never seen.",
+      "basis": "reconstructed",
+      "as_of": "2026-07-20",
+      "strategy": {
+       "id": "magic-formula",
+       "name": "Magic Formula",
+       "version": 1,
+       "values_version": 1,
+       "contract": 6
+      },
+      "failed": [
+       {
+        "key": "fact:security.on_list",
+        "label": "On your current list"
+       }
+      ],
+      "missing": [],
+      "reason": "Not on either list. I bought it because somebody I trust likes it, which is exactly the judgement this method exists to keep me from making. Writing it down so I can check in a year whether my judgement or the list was right."
+     },
+     "unreconstructed": null,
+     "snapshot": {
+      "frozen": "2026-07-20T12:00:00-04:00",
+      "decision": {
+       "render": "hold",
+       "tier": "position",
+       "state": {
+        "id": "not-on-your-list",
+        "name": "Not on your list",
+        "description": "The screen did not return this name, so this method has nothing to say about buying it.\n\nRead that as a statement about your list rather than about the company. It has not been judged and found wanting: it was ranked against three thousand others somewhere else and did not reach the top thirty or fifty, and the ranking itself is not in this journal. If you want this name in a Magic Formula portfolio, the honest route is a list it appears on.",
+        "fix": null
+       },
+       "payload": {},
+       "reason": {
+        "rule": "not-among-the-names-the-screen-returned",
+        "summary": "The screen did not return this name, so there is nothing here to buy. It was not judged and turned down — it was ranked somewhere else, against companies this journal has never seen.",
+        "evidence": [
+         {
+          "subject": {
+           "kind": "fact",
+           "id": "security.on_list",
+           "reads": null,
+           "label": "On your current list",
+           "unit": "yes_no",
+           "explain": "Whether this security is one of the names on the list your journal is currently working from.\n\nIt is a fact about your list and not a judgement about the company. Nothing here ranked anything: a screen run somewhere else returned these names out of a universe of thousands, and where a name sits within that ranking cannot be recovered from the list alone, because the other two thousand nine hundred and seventy companies it was ranked against are not here.\n\nAbsent where this journal has no list at all, which is a different thing from a name that is not on one."
+          },
+          "observed": {
+           "status": "known",
+           "value": false,
+           "source": "fact",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": {
+           "comparator": "equals",
+           "phrase": "equal to",
+           "threshold": true,
+           "threshold_from": null,
+           "absent": null
+          },
+          "outcome": "fail",
+          "group": "list"
+         },
+         {
+          "subject": {
+           "kind": "fact",
+           "id": "security.listed_on",
+           "reads": null,
+           "label": "Last on a list",
+           "unit": "date",
+           "explain": "The day the most recent list carrying this name was pulled.\n\nIt only moves forward. A name that appears on list after list is affirmed by each of them, and importing an older list afterwards cannot take that back — so a strategy counting a holding period from the last time a name was chosen has a date that cannot go backwards under it.\n\nThis is the pull date rather than the day it was typed in. Absent where no list on record has ever carried this name."
+          },
+          "observed": {
+           "status": "absent",
+           "reason": "no list on this journal's record has carried HALSTD",
+           "source": "fact"
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "list"
+         },
+         {
+          "subject": {
+           "kind": "fact",
+           "id": "list.age_months",
+           "reads": null,
+           "label": "Months since the list was pulled",
+           "unit": "months",
+           "explain": "How many whole months old the ranking this journal is working from is.\n\nA screen is a photograph of prices and accounts on one day. The prices have moved since and the accounts have been restated, so a list that has been sitting for a year is not a list of the cheapest companies any more — it is a list of the companies that were cheapest then.\n\nThe host reports the number and holds no view about it. How stale is too stale belongs to the strategy, which declares its own limit and compares against this."
+          },
+          "observed": {
+           "status": "known",
+           "value": 11,
+           "source": "fact",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": {
+           "comparator": "below",
+           "phrase": "below",
+           "threshold": 12,
+           "threshold_from": {
+            "kind": "value",
+            "id": "list-refresh-months",
+            "label": "How old a list may be and still be bought from",
+            "unit": "months"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "list"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "earnings_yield",
+           "reads": "earnings_yield",
+           "label": "Earnings yield",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 9.2,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2026-07-18"
+           ]
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "why"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "return_on_capital",
+           "reads": "return_on_capital",
+           "label": "Return on capital",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 18.4,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2026-07-18"
+           ]
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "why"
+         }
+        ],
+        "groups": [
+         {
+          "id": "list",
+          "name": "The list you are working from",
+          "requires": "all",
+          "test": null,
+          "members": 3,
+          "tested": 2,
+          "passed": 1,
+          "failed": 1,
+          "unknown": 0,
+          "outcome": "fail"
+         },
+         {
+          "id": "why",
+          "name": "Why it was on the list",
+          "requires": "noted",
+          "test": null,
+          "members": 2,
+          "tested": 0,
+          "passed": 0,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "noted"
+         }
+        ],
+        "note": null
+       },
+       "produced_by": "strategy",
+       "strategy": {
+        "id": "magic-formula",
+        "name": "Magic Formula",
+        "version": 1,
+        "values_version": 1,
+        "contract": 6
+       }
+      },
+      "strategy": {
+       "id": "magic-formula",
+       "name": "Magic Formula",
+       "version": 1,
+       "values_version": 1,
+       "contract": 6
+      },
+      "metrics": {
+       "earnings_yield": {
+        "value": 9.2,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2026-07-18"
+        ]
+       },
+       "return_on_capital": {
+        "value": 18.4,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2026-07-18"
+        ]
+       }
+      },
+      "price": null,
+      "price_source": null,
+      "price_date": null,
+      "price_ticker": null,
+      "evaluation": {
+       "basis": "reconstructed",
+       "as_of": "2026-07-20",
+       "filings_by_then": 0,
+       "newest_filed": null,
+       "priced": null,
+       "manual_on_record": [
+        "earnings_yield",
+        "return_on_capital"
+       ],
+       "manual_withheld": [],
+       "note": "no company is linked to this ticker, so no stored filing or price from 2026-07-20 could be consulted; 2 hand-entered values on record by 2026-07-20; judged by Magic Formula v1 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+      },
+      "thesis": null,
+      "valuation": null,
+      "recollection": null
+     }
+    }
+   ],
+   "judgements": [],
+   "hand_entered": [
+    {
+     "seq": 1,
+     "id": "earnings_yield",
+     "value": 9.2,
+     "recorded": "2026-07-18T12:00:00-04:00"
+    },
+    {
+     "seq": 2,
+     "id": "return_on_capital",
+     "value": 18.4,
+     "recorded": "2026-07-18T12:00:00-04:00"
+    }
+   ],
+   "thesis": [],
+   "valuations": [],
+   "notes": [
+    {
+     "date": "2026-07-18T12:00:00-04:00",
+     "text": "A friend's tip. Not on the list, and I know that is the whole thing I am supposed to not do."
+    },
+    {
+     "date": "2026-07-20T12:00:00-04:00",
+     "text": "Recorded from history: 1 purchase, dated 2026-07-20. Each was judged against the data available on its own day, not against today's."
+    }
+   ],
+   "lot_seq": 1
+  },
+  {
+   "ticker": "ODDGLY",
+   "name": "Oddingley Chemical",
+   "added": "2026-08-13",
+   "price": 71.9,
+   "lots": [],
+   "judgements": [],
+   "hand_entered": [
+    {
+     "seq": 1,
+     "id": "earnings_yield",
+     "value": 16.3,
+     "recorded": "2026-08-03T12:00:00-04:00"
+    },
+    {
+     "seq": 2,
+     "id": "return_on_capital",
+     "value": 47.2,
+     "recorded": "2026-08-03T12:00:00-04:00"
+    }
+   ],
+   "thesis": [],
+   "valuations": [],
+   "notes": []
+  },
+  {
+   "ticker": "SUTTBY",
+   "name": "Sutterby Glassworks",
+   "added": "2026-08-13",
+   "price": 24.15,
+   "lots": [],
+   "judgements": [],
+   "hand_entered": [
+    {
+     "seq": 1,
+     "id": "earnings_yield",
+     "value": 13.1,
+     "recorded": "2026-08-03T12:00:00-04:00"
+    },
+    {
+     "seq": 2,
+     "id": "return_on_capital",
+     "value": 39.6,
+     "recorded": "2026-08-03T12:00:00-04:00"
+    }
+   ],
+   "thesis": [],
+   "valuations": [],
+   "notes": [],
+   "passed_over": [
+    {
+     "seq": 1,
+     "list": "2026-08-03",
+     "reason": "Second glass company I have been handed in two years and the first one went nowhere. That is not a reason, it is a feeling, and I am writing it down so I can find out which.",
+     "recorded": "2026-08-05T12:00:00-04:00"
+    }
+   ]
+  }
+ ],
+ "lists": [
+  {
+   "seq": 1,
+   "pulled_on": "2025-08-04",
+   "floor": 1000000000.0,
+   "tickers": [
+    "MARLBK",
+    "BRAMLY",
+    "FENWCK",
+    "TARRNT",
+    "WOOLSN",
+    "KINVER",
+    "CRANWL",
+    "ALDERT",
+    "GRIMSB",
+    "NETHRB"
+   ],
+   "recorded": "2025-08-04T12:00:00-04:00"
+  },
+  {
+   "seq": 2,
+   "pulled_on": "2026-08-03",
+   "floor": 1000000000.0,
+   "tickers": [
+    "FENWCK",
+    "ODDGLY",
+    "SUTTBY",
+    "ALDERT",
+    "PENKRG",
+    "WHARRM",
+    "BEAUDR",
+    "COLNEY",
+    "TREGRN",
+    "MELVRL",
+    "STANDH"
+   ],
+   "recorded": "2026-08-03T12:00:00-04:00"
+  }
+ ]
+}

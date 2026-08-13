@@ -136,6 +136,30 @@
       "stated_scale": "millions USD",
       "value_whole_units": 26146000000,
       "caption_verbatim": "Income from operations"
+    },
+    {
+      "metric": "net_ppe",
+      "fiscal_year": "FY2024",
+      "period_end": "2024-12-31",
+      "as_printed": "171,036",
+      "scale": "millions",
+      "value_usd": 171036000000,
+      "caption": "Property and equipment, net",
+      "statement": "balance",
+      "accession": "0001652044-25-000014",
+      "column": "the right-hand column; this balance sheet prints 2023 then 2024"
+    },
+    {
+      "metric": "net_ppe",
+      "fiscal_year": "FY2017",
+      "period_end": "2017-12-31",
+      "as_printed": "42,383",
+      "scale": "millions",
+      "value_usd": 42383000000,
+      "caption": "Property and equipment, net",
+      "statement": "balance",
+      "accession": "0001652044-18-000007",
+      "column": "the right-hand column; this balance sheet prints 2016 then 2017"
     }
   ]
 }

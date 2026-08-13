@@ -183,6 +183,28 @@
       "caption": "Long-term debt",
       "statement": "balance_sheet",
       "accession": "0001564590-17-014900"
+    },
+    {
+      "metric": "net_ppe",
+      "fiscal_year": "FY2024",
+      "period_end": "2024-06-30",
+      "as_printed": "135,591",
+      "scale": "millions",
+      "value_usd": 135591000000,
+      "caption": "Property and equipment, net of accumulated depreciation of $76,421 and $68,251",
+      "statement": "balance",
+      "accession": "0000950170-24-087843"
+    },
+    {
+      "metric": "net_ppe",
+      "fiscal_year": "FY2017",
+      "period_end": "2017-06-30",
+      "as_printed": "23,734",
+      "scale": "millions",
+      "value_usd": 23734000000,
+      "caption": "Property and equipment, net of accumulated depreciation of $24,179 and $19,800",
+      "statement": "balance",
+      "accession": "0001564590-17-014900"
     }
   ]
 }

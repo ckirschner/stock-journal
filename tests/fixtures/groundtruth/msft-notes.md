@@ -59,3 +59,19 @@ printed form in the raw HTML a second time (all hits confirmed).
    Note 16 roll-forward 7,434 million). The cover figure was recorded per instructions.
 3. Signs: capex recorded negative (parentheses as printed). Balance-sheet debt recorded
    positive (printed without parentheses).
+
+---
+
+## Net property
+
+Both years, from the Balance Sheets, caption "Property and equipment, net of
+accumulated depreciation of $X and $Y" — the accumulated-depreciation figures
+are inside the caption itself, so the printed value is already net. FY2024:
+135,591 (accumulated depreciation 76,421); FY2017: 23,734 (accumulated
+depreciation 24,179). Both in millions, current-year column first on this
+filer's sheet.
+
+This is the clean case for `net_ppe`: one `us-gaap:PropertyPlantAndEquipmentNet`
+fact on the balance-sheet face, no lease asset folded in — Microsoft prints
+"Operating lease right-of-use assets" as its own separate line directly below,
+which is what leaves the property line narrow.

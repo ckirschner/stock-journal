@@ -1,0 +1,61 @@
+# Shipped defaults for the Magic Formula's declared values.
+#
+# What each of these MEANS, why it sits where it does and where it misfires
+# lives in strategy.py beside the declaration. This file holds only the
+# numbers, so they can be read, compared and changed without touching logic
+# — and so a change to one of them is a recordable event rather than a diff
+# in a source file nobody reads.
+#
+# THE PROVENANCE HERE IS ONE SOURCE, which is unusual in this program and
+# worth saying before checking any number below.
+#
+#   Greenblatt     The Little Book That Still Beats the Market, and the FAQ
+#                  at magicformulainvesting.com. Every number here is his.
+#
+# Two of the five are a point inside a band he gives rather than a figure he
+# states, and each says so in its own `source`: twenty-five names is the
+# middle of his twenty-to-thirty, and a two-month staging window is the
+# shorter end of his two-to-three. Nothing below is this author's invention,
+# and nothing below is a second expert's disagreement with a first — the
+# other three strategies in this program are built out of exactly that, and
+# this one has no such argument to record because there is only one voice in
+# it.
+#
+# Five numbers is the whole strategy, and that is the point of the method
+# rather than an omission. There are no thresholds here because nothing about
+# a company is tested: the ranking that chooses these names is run somewhere
+# else, against a universe this program does not have. What is left is how
+# many to hold, how fast to buy them, how long to keep them, and when the
+# list goes stale.
+#
+# The two that decide the most:
+#
+#   holding-period-months  is the ENTIRE sell discipline. No figure about any
+#                          business can close a position here, so moving this
+#                          number is the largest single change anyone can make
+#                          to what this journal does.
+#   portfolio-slots        sizes every purchase, because a position is an
+#                          equal share of it. Lowering it makes each name
+#                          matter more, which is the opposite of what a method
+#                          expecting a good share of losers needs.
+#
+# Bump `version` whenever any number here moves. That is what makes the
+# change appear on the rule-change record of every journal running this
+# strategy, with a before and an after.
+version: 1
+
+values:
+
+  # How many, and how fast. Twenty-five names filled seven at a time every
+  # two months reaches full in about eight, which is the pace he describes.
+  portfolio-slots: 25
+  names-per-tranche: 7
+  tranche-months: 2
+
+  # The only exit, and the freshness limit that makes the loop close. They
+  # are deliberately the same number: the first positions come due at about
+  # the moment the list they were bought from expires, so one fresh pull
+  # answers both. Parting them is allowed and means the two halves of the
+  # yearly cycle stop landing together.
+  holding-period-months: 12
+  list-refresh-months: 12

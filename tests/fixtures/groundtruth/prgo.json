@@ -83,6 +83,17 @@
       "form": "10-K",
       "accession": "0001585364-24-000009",
       "note": "Explicit 'Operating income' subtotal printed. FY2023 operating income relates to continuing operations; discontinued operations are presented separately below the tax line."
+    },
+    {
+      "metric": "net_ppe",
+      "fiscal_year": "FY2023",
+      "period_end": "2023-12-31",
+      "as_printed": "916.4",
+      "scale": "millions",
+      "value_usd": 916400000,
+      "caption": "Property, plant and equipment, net",
+      "statement": "balance",
+      "accession": "0001585364-24-000009"
     }
   ]
 }

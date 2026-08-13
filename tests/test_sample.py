@@ -61,8 +61,23 @@ LYNCH = {
     "TREWIN": ("cannot-screen", "unknown"),
 }
 
-EXTRA = {"graham": {"LOWFD"}, "buffett": set(), "lynch": set()}
-STORIES = {"graham": GRAHAM, "buffett": BUFFETT, "lynch": LYNCH}
+MAGIC = {
+    "MARLBK": ("not-on-your-list", "hold"),
+    "BRAMLY": ("time-is-up", "close"),
+    "FENWCK": ("back-on-the-list", "hold"),
+    "TARRNT": ("still-running", "hold"),
+    "WOOLSN": ("still-running", "hold"),
+    "KINVER": ("still-running", "hold"),
+    "HALSTD": ("still-running", "hold"),
+    "ODDGLY": ("buy-it", "commit"),
+    "SUTTBY": ("buy-it", "commit"),
+    "CRANWL": ("not-on-your-list", "hold"),
+}
+
+EXTRA = {"graham": {"LOWFD"}, "buffett": set(), "lynch": set(),
+         "magic-formula": set()}
+STORIES = {"graham": GRAHAM, "buffett": BUFFETT, "lynch": LYNCH,
+           "magic-formula": MAGIC}
 
 
 @pytest.fixture
@@ -102,11 +117,12 @@ def securities_of(api, strategy_id):
 class TestBothLand:
     def test_one_journal_per_strategy(self, loaded):
         _api, result = loaded
-        assert result["journals"] == 3
-        assert result["n"] == 30
+        assert result["journals"] == 4
+        assert result["n"] == 40
         assert set(result["names"]) == {"Sample — Graham", "Sample — Buffett",
-                                        "Sample — Lynch"}
-        assert len(journals.list_journals()) == 3
+                                        "Sample — Lynch",
+                                        "Sample — Magic Formula"}
+        assert len(journals.list_journals()) == 4
 
     def test_each_is_stamped_with_its_own_strategy(self, loaded):
         api, _ = loaded
