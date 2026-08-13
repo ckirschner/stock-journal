@@ -35,6 +35,29 @@ def fi(cik, accession):
     return cm.FilingIndex(load_filing(cik, accession))
 
 
+def _all_recorded():
+    """Every recorded extraction on disk, as (cik, accession).
+
+    Read off the directory rather than listed, so a fixture added later is
+    exercised by the invariants below without anyone remembering to add it —
+    a list here would be the copy that falls behind. This enumerates INPUTS
+    only; nothing about what the answers should be comes from the pipeline."""
+    out = []
+    for d in sorted(FIX.iterdir()):
+        if not d.is_dir():
+            continue
+        try:
+            cik = int(d.name.removeprefix("CIK"))
+        except ValueError:
+            continue
+        out += [(cik, p.name[:-len(".json.gz")])
+                for p in sorted(d.glob("*.json.gz"))]
+    return out
+
+
+ALL_RECORDED = _all_recorded()
+
+
 # These helpers exist to compare a resolved figure against one read by hand
 # from the filing, so absence is None here whatever shape the resolver uses to
 # express it. The reason a resolution was refused is a different question and
@@ -456,6 +479,85 @@ class TestRealtyIncome:
         x = fi(726728, "0001104659-17-011170")
         r = cm.resolve_instant(x, "total_debt", "2016-12-31")
         assert r["value"] == 5839605 * K
+
+
+class TestTheDebtSplit:
+    """Short and long-term debt, against the printed balance sheets.
+
+    Three filers tag `us-gaap:LongTermDebtAndCapitalLeaseObligations`, which
+    the taxonomy defines as the NONCURRENT amount — the current portion has
+    its own element. It sat only in total_debt's unclassified block, so all
+    three got a total and no split, and every measure needing the split read
+    absent on a fact the filing had stated.
+
+    Both directions are pinned here, because the guard between them is what
+    makes the classification reachable and the two move together:
+
+      - a face line some split PLACES is not evidence the split is unknowable
+        (Alphabet: one noncurrent line, no current caption, so nil is what the
+        face says);
+      - a face line NOTHING places still refuses (Realty Income: an
+        unclassified sheet, where neither side can be told).
+
+    Every figure below was read off the primary document; see the -notes.md
+    files in tests/fixtures/groundtruth.
+    """
+
+    def test_the_combined_element_is_the_noncurrent_side(self):
+        """Target and Kraft Heinz print the current portion separately, so
+        the two elements partition the borrowings between them."""
+        x = fi(27419, "0000027419-24-000032")
+        assert inst(x, "short_term_debt", "2024-02-03") == 1116 * M
+        assert inst(x, "long_term_debt", "2024-02-03") == 14922 * M
+
+        x = fi(1637459, "0001637459-18-000015")
+        assert inst(x, "short_term_debt", "2017-12-30") == 3203 * M
+        assert inst(x, "long_term_debt", "2017-12-30") == 28333 * M
+
+    def test_alphabet_has_no_current_debt_and_the_face_says_so(self):
+        """The Dec 31 2024 sheet carries exactly one borrowing line — 10,883
+        tagged LongTermDebtAndCapitalLeaseObligations, printed "Long-term
+        debt" — and no current-debt caption at all. Current liabilities are
+        payables, accrued compensation, accrued expenses, accrued revenue
+        share and deferred revenue.
+
+        So nil is the statement's own assertion, not a value invented for it,
+        and the absence that used to stand here was a false one: it removed
+        return_on_capital, which needs the borrowings inside current
+        liabilities in order to subtract them."""
+        x = fi(1652044, "0001652044-25-000014")
+        assert inst(x, "long_term_debt", "2024-12-31") == 10883 * M
+        r = cm.resolve_instant(x, "short_term_debt", "2024-12-31")
+        assert r["value"] == 0
+        assert r["matched"] == "zero_by_completeness"
+
+    def test_an_unclassified_sheet_still_refuses_both_sides(self):
+        """Realty Income's borrowings are LoansPayable, NotesPayable,
+        SecuredDebt and an extension-tagged revolver. Nothing places any of
+        them, so neither side is knowable and neither is claimed — which is
+        what the guard exists for and must keep doing."""
+        x = fi(726728, "0000726728-25-000055")
+        assert inst(x, "short_term_debt", "2024-12-31") is None
+        assert inst(x, "long_term_debt", "2024-12-31") is None
+
+    def test_the_split_adds_up_to_the_total_wherever_both_resolve(self):
+        """The invariant that says the classification did not double-count or
+        drop a line. Checked across every recorded filing rather than a chosen
+        one, because a mapping that ties on the filer it was written for and
+        not on the next is the failure this is guarding."""
+        checked = 0
+        for cik, accession in ALL_RECORDED:
+            x = fi(cik, accession)
+            for d in x.balance_dates():
+                s = inst(x, "short_term_debt", d)
+                lt = inst(x, "long_term_debt", d)
+                total = inst(x, "total_debt", d)
+                if None in (s, lt, total):
+                    continue
+                assert s + lt == total, (
+                    f"CIK {cik} at {d}: {s:,.0f} + {lt:,.0f} != {total:,.0f}")
+                checked += 1
+        assert checked >= 20, f"only {checked} dates exercised the invariant"
 
 
 class TestMulticlassMarketCap:
