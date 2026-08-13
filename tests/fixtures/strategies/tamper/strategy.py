@@ -13,7 +13,7 @@ STRATEGY = {
     "summary": "A test fixture that rewrites what it was given and then "
                "cites it. It is not investment logic.",
     "version": 1,
-    "contract": 5,
+    "contract": 6,
     "changelog": {1: "First version: rewrites the context, then cites it."},
     "states": [
         {"id": "said-so", "name": "Said so", "render": "hold",

@@ -139,6 +139,7 @@ lookup table produces plausible wrong answers, which is worse than not loading.
 | `reference` | file names it ships beside its code. Optional. |
 | `declines` | kinds of company this strategy will not evaluate. Optional. |
 | `limits` | what the method demands or delivers that this program does not. Optional. |
+| `list` | that this strategy works from a set of securities chosen elsewhere. Optional. |
 
 ### What you will not evaluate
 
@@ -244,6 +245,60 @@ Two shapes worth writing, and both are in the shipped strategies:
   meant hold more bonds rather than lower a threshold. Without that said, a
   strategy that correctly returns nothing for a year reads as broken — and a
   reader who concludes the tool is broken loosens the tool.
+
+### Working from a list somebody else chose
+
+Some methods do not screen. The choosing happens elsewhere — a ranked screen
+run against a universe this program does not have — and what the journal is
+for is what you do with the names that come back. Say so and the host does
+the rest:
+
+```python
+"list": {
+    "label": "Your Magic Formula list",
+    "explain": "The thirty or fifty names the screen returned, and the day "
+               "you pulled them…",
+    "source": {"name": "the screener's own site — the screener itself",
+               "reasoning": False},
+},
+```
+
+Declared rather than inferred, because everything it turns on has to be
+settled before any decision exists. A journal whose strategy declares one
+gets the import screen and a tab; one whose strategy does not gets none of
+that, sees no tab, and is never asked. The view reads whether *this journal*
+works from a list and never which strategy is running, which is what keeps §9
+true.
+
+**There is no host state for "no list yet", and the reason is worth reading
+once.** There was one, briefly, and it blocked every verdict in a journal
+that had never imported — including the securities it already held, whose
+clocks needed no list at all. So a strategy whose only exit is a holding
+period went silent on the one verdict that mattered, in a journal whose setup
+looked merely incomplete. Whether your rules can say anything without a list
+is a question about your rules: declare a `blocked` state with `fix: "list"`,
+reach it on the branch where the answer is really no, and the reader gets
+your sentence and the host's button.
+
+Four facts follow (§13): whether a security is on the list in force, the day
+the freshest list carrying it was pulled, the day the current list was
+pulled, and how many months old that is. They are ordinary host facts and are
+cited like any other. `security.on_list` is **absent, not false**, where the
+journal has no list — "not on your list" and "you have no list" are different
+answers.
+
+Two things it deliberately does not carry. **No thresholds** — how many names,
+how often, how stale is too stale are levels, they belong in `values` where a
+change to one lands on the rule-change record, and a list declaration holding
+them would be a set of numbers nothing could retune. And **no ranking** — the
+host keeps a set of securities with a date, and where a name sat inside the
+ranking that produced it is not recoverable from the list, because a rank is a
+statement about the thousands of companies that did not make it. A strategy
+that implies otherwise is claiming the tool selected something.
+
+`source` is required and is the same field a declared value carries, for the
+same reason: where a list came from is the most load-bearing fact on the page
+in a strategy shaped like this one.
 
 ### States
 
@@ -426,7 +481,7 @@ top-level keys:
 
 ```python
 {
-  "contract": 5,
+  "contract": 6,
   "today": "YYYY-MM-DD",        # the clock; everything below obeys it
   "security":  {"ticker", "name", "cik"},
   "measures":  {bank id: {"current": known-or-absent,
@@ -487,9 +542,12 @@ for as long as the company is the kind of company it is.
   `position.market_value`, `position.weight` and every holding in `portfolio`
   are about the *instrument this journal holds*, priced from its own symbol
   alone. `measures` are about the *company* and read every class.
-- **`position` is the holding you have now** — except `lots` and `disposals`,
-  which are the security's whole record including holdings that closed. A rule
-  counting current entries wants `[l for l in lots if l["open"]]`.
+- **`position` is the holding you have now** — including `disposals`, which is
+  what *this* holding has sold and never a sale belonging to a holding that
+  closed before it opened. `lots` is the one exception: it is the security's
+  whole record, including purchases from holdings that closed, which is where
+  "have I owned this before" is answered. A rule counting what is held now
+  wants `[l for l in lots if l["open"]]`.
 - **`baselines` are what you were shown**, frozen onto each purchase and never
   recomputed. A company restating two years of accounts cannot move them.
 - **Nothing here says what a position cost.** Cost basis is kept out of the
@@ -934,6 +992,15 @@ You find this by looking at the output, not by reading anything.
 - **A staged `plan` cannot be anchored to what you paid.** Not because the
   payload lacks a field — because nothing about cost is in the context. Anchor
   it to what the business is worth.
+- **A verdict that is really about the journal is still one verdict per
+  security.** A strategy that works from a list has states meaning "your list
+  is out of date" and "you have started enough names this month", and those are
+  facts about the journal rather than about the name in front of you — so
+  whichever is true is true of *every* unheld security at once, and no two of
+  them can be reached on the same day. That is not a fault to design around;
+  it is what a method with no screen looks like. What it costs is that a
+  sample journal can demonstrate exactly one of them, so the rest belong in
+  your tests, and it is worth saying so where a reader will find it.
 
 ### Testing one
 
@@ -1018,6 +1085,7 @@ the host produces it, from `declines`.
 | `settings` | Fix this journal's settings | this journal's setup screen | — |
 | `judgement` | Answer these questions | "Your judgement" on this security's page | a bank entry of kind `qualitative`, however it is cited |
 | `thesis` | Write down what you think now | this security's thesis record | — |
+| `list` | Import a list | the list this journal works from | — |
 <!-- end: state-fixes -->
 
 ### States the host produces itself
@@ -1061,6 +1129,10 @@ in `contract.HOST_FACTS`, which is what the reader sees.
 |---|---|---|
 | `security.industry` | Industry | `text` |
 | `security.sic` | SEC industry code | `text` |
+| `security.on_list` | On your current list | `yes_no` |
+| `security.listed_on` | Last on a list | `date` |
+| `list.pulled` | List pulled | `date` |
+| `list.age_months` | Months since the list was pulled | `months` |
 | `position.weight` | Position weight | `percent` |
 | `position.months_held` | Months held | `months` |
 | `position.market_value` | Position market value | `usd` |
@@ -1167,7 +1239,7 @@ against the SEC's published list in
 ### The rest of the vocabulary
 
 <!-- generated: vocabulary -->
-- **Contract version** — `5`. A declaration naming any other is refused at load.
+- **Contract version** — `6`. A declaration naming any other is refused at load.
 - **Most states one strategy may declare** — `16`.
 - **Declared field types** — `number`, `integer`, `boolean`, `text`.
 - **Units a `size` may be in** — `weight`, `usd`, `shares` (`weight` is a percent number).

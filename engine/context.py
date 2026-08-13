@@ -16,7 +16,9 @@ The shape, in full::
                              | {"status": "absent", "reason"},
                    "industry": {"status": "known", "value", "class", "sic",
                                 "title", "source", "cautions", "provenance"}
-                             | {"status": "absent", "reason"}},
+                             | {"status": "absent", "reason"},
+                   "on_list":   known-or-absent,   # yes/no, off the list
+                   "listed_on": known-or-absent},  # the freshest list's day
       "measures": {bank id: {
           "current": {"status": "known", "value", "source", "cautions",
                       "provenance"}
@@ -39,13 +41,15 @@ The shape, in full::
                                           "measures": {bank id: known}}
                                        | {"status": "absent", "reason"}},
                    "lots":      [{"date", "shares", "remaining", "open"}],
-                   "disposals": [{"date", "shares"}],
+                   "disposals": [{"date", "shares"}],   # this holding's sales
                    "market_value": known-or-absent,
                    "weight": known-or-absent},       # percent of the account
       "portfolio": {"cash", "account_value",         # known-or-absent
                     "slots": {"occupied"},
                     "holdings": [{"ticker", "name", "shares", "opened",
                                   "market_value", "weight"}]},
+      "list":     {"pulled": known-or-absent,        # the day it was run
+                   "age_months": int | None},        # whole months since
       "values": {id: value},        # the resolved declaration chain
       "inputs": {id: value},        # the answers that apply, with answers
       "reference": {file name: parsed},   # what the bundle ships, frozen
@@ -107,6 +111,16 @@ Reading rules a strategy can rely on:
   $14,100,000 instead of $9,400 — silently, in a figure sizing rules bind on.
 - **Percent units are percent numbers** (18.9 means 18.9%), including
   position weight, matching the metric bank's convention.
+- **The list is a record of what somebody handed you, not a ranking.** Where a
+  strategy works from a list chosen by a screen run elsewhere, `list` and the
+  two `security` keys say which names are on the one in force and when a name
+  was last on one. What none of them says is where a name sat in that
+  ranking, because a rank means nothing without the thousands of companies it
+  was ranked against and none of those are here. `list.pulled` is the day the
+  screen was run, which the user typed; the day it was imported governs which
+  lists a reconstruction can see and is not served as a figure. `on_list` is
+  absent rather than false where there is no list at all — "not on your list"
+  and "you have no list" are different answers.
 - **A hand-entered value is dated, like everything else the user supplies.**
   It wins over a computed one for its own day, says so in `source`, and
   names the day it was entered in `provenance`. A reconstruction sees the
@@ -157,9 +171,12 @@ Reading rules a strategy can rely on:
 - **Unknown keys may appear** in future contract versions; a strategy reads
   what it declares an interest in and ignores the rest.
 - **`position` is the holding you have now, except where it says otherwise.**
-  `held`, `shares`, `opened`, `months_held`, `market_value` and `weight` are
-  all about the current holding period — the run from the purchase that took
-  the position up from nothing to now. `opened` is that period's first
+  `held`, `shares`, `opened`, `months_held`, `last_purchase`, `purchases`,
+  `disposals`, `market_value` and `weight` are all about the current holding
+  period — the run from the purchase that took the position up from nothing
+  to now. `lots` is the one exception, and says so below.
+
+  `opened` is that period's first
   purchase and does not move when a lot is trimmed away: it answers when this
   holding began, not how old the oldest surviving share is. A rule that wants
   lot ages reads `lots`, where every entry carries its own date, `remaining`
@@ -170,24 +187,29 @@ Reading rules a strategy can rely on:
   `contract.months_after` adds them, so a rule can compare it against a
   holding period without writing month arithmetic of its own. Absent — None
   — where nothing is held.
-- **`lots` and `disposals` are the security's whole record, not the current
-  holding's.** Every purchase this journal ever made in the name is in
-  `lots`, and every sale in `disposals`, including those belonging to a
-  holding that closed before the current one opened. That is deliberate: a
-  strategy asking "have I owned this before" has nowhere else to look. But it
-  means these two are scoped differently from everything beside them, so a
-  rule counting entries wants `[l for l in lots if l["open"]]` rather than
-  the length.
+- **`disposals` is what this holding has sold.** Every sale that reduced the
+  run you are in now, and none belonging to a holding that closed before it
+  opened — so it answers about the same thing `held`, `shares`, `opened`,
+  `market_value` and `weight` answer about, and a rule asking what it has
+  trimmed needs no filtering rule to remember. Empty where nothing is held,
+  because there is then no holding for a sale to have reduced.
 
-  `disposals` cannot be narrowed that way, and that is a known gap rather
-  than a design: each entry carries only `date` and `shares`, so nothing on
-  it says which holding it ended. Two securities can arrive with identical
-  `lots`, `disposals` and `shares` and different `opened` — one closed out
-  and bought back the same day, one added and trimmed the same day — and no
-  rule reading `disposals` can tell them apart. Until an entry can say which
-  holding it belongs to, treat `disposals` as a fact about the security and
-  not about the position, and do not derive "what this holding has sold" from
-  it.
+  It was the security's whole record and could not be narrowed by anyone: an
+  entry carries a date and a share count, and neither says which holding it
+  ended. Two securities can arrive with identical purchases, identical sales
+  and identical share counts and differ only in where the position touched
+  nothing — one closed out and bought back the same day, one added to and
+  trimmed the same day — and the boundary that tells them apart is in the
+  period walk, not on the entries. What the security has sold across every
+  period is an analytics question; if a strategy ever needs it, it arrives
+  under a name that says so.
+- **`lots` is the security's whole record, not the current holding's.** Every
+  purchase this journal ever made in the name is there, including those
+  belonging to a holding that closed before this one opened, each carrying
+  its own `remaining` and `open`. That is deliberate and it is the one scope
+  here that is not the current holding: a strategy asking "have I owned this
+  before" has nowhere else to look. So a rule counting what is held now wants
+  `[l for l in lots if l["open"]]` rather than the length.
 - **`baselines` are what you were shown, not what today's filings say about
   that day.** Each anchor carries the figures frozen onto that purchase's
   own snapshot, copied and never recomputed. A company restating two years
@@ -224,9 +246,9 @@ import copy
 from datetime import date
 
 from . import bank as bank_mod
-from . import compute, contract, dataview
+from . import compute, contract, dated, dataview
 from . import industry as industry_mod
-from . import judgements, portfolio, tickermap
+from . import judgements, lists, portfolio, tickermap
 
 # Series stop at the same number of filing boundaries the sell-confirmation
 # view uses; the truncated flag says when older boundaries exist.
@@ -842,12 +864,16 @@ def _baselines(security, today) -> dict:
 
 def _position(security, today, as_of, account_value) -> dict:
     """The lot history as a strategy reads it: every acquisition with what
-    remains of it, every disposal, and not one figure about cost.
+    remains of it, what this holding has sold, and not one figure about cost.
 
     `opened` is the current holding period's first purchase — when this
     holding began — and is read off the period rather than recomputed here,
     so what a strategy is told and what the screens show for the same holding
     are one value rather than two that happen to agree.
+
+    `disposals` is read off that same period, which is what makes it a fact
+    about the holding the keys beside it describe. Every other scope in here
+    is asked for by name.
     """
     held_lots = portfolio.open_lots(security, today)
     shares = round(sum(l["remaining"] for l in held_lots), 8)
@@ -881,8 +907,15 @@ def _position(security, today, as_of, account_value) -> dict:
         "lots": [{"date": l["date"], "shares": float(l["shares"]),
                   "remaining": l["remaining"], "open": l["open"]}
                  for l in held_lots],
+        # Every sale that reduced the holding you have now, and no others.
+        # Scoped where the period boundary is known rather than filtered by
+        # whoever asks: an entry carries a date and a share count, and neither
+        # says which holding it ended, so a list spanning every period is one
+        # nothing downstream could narrow. See
+        # portfolio.disposals_in_holding.
         "disposals": [{"date": l["date"], "shares": float(l["shares"])}
-                      for l in portfolio.lots(security, "sell", today)],
+                      for l in portfolio.disposals_in_holding(security,
+                                                              today)],
     }
     if held:
         out["market_value"] = _market_value(security, shares, today,
@@ -932,6 +965,63 @@ def _portfolio(journal_securities, subject, today, as_of, roles) -> dict:
     }
 
 
+_NO_LIST = "this journal has no list on record"
+
+
+def _list(journal, today, as_of) -> dict:
+    """What the journal is currently working from, and how old it is.
+
+    Two dates and only one of them is here. `pulled` is the day the screen was
+    run, which is what a strategy asks about; the day it was typed in governs
+    which imports are visible under a reconstruction and is not served as a
+    figure, because a rule reading it would be measuring how promptly somebody
+    does their admin.
+
+    Cut at the pin rather than at `today`, exactly as the rest of a
+    reconstruction is. A purchase dated in March is judged against the list
+    this journal held in March, and a list imported since cannot present
+    itself as though it had been there.
+    """
+    now = lists.current(journal or {}, as_of)
+    if now is None:
+        return {"pulled": {"status": "absent", "reason": _NO_LIST},
+                "age_months": None}
+    return {
+        "pulled": {"status": "known", "value": now["pulled_on"],
+                   "source": "your list", "cautions": [],
+                   "provenance": [f'imported on {dated.day_of(now)}']},
+        "age_months": contract.months_between(now["pulled_on"], today),
+    }
+
+
+def _on_list(journal, ticker, as_of) -> dict:
+    """Whether the list in force carries this name.
+
+    Absent and not False where there is no list at all. "Your list does not
+    have this on it" and "you have no list" ask different things of a reader,
+    and a rule that could not tell them apart would report the first while
+    meaning the second — an absence reading as a settled answer, which is the
+    one shape this program refuses everywhere.
+    """
+    answer = lists.on_current(journal or {}, ticker, as_of)
+    if answer is None:
+        return {"status": "absent", "reason": _NO_LIST}
+    return {"status": "known", "value": answer, "source": "your list",
+            "cautions": [], "provenance": []}
+
+
+def _listed_on(journal, ticker, as_of) -> dict:
+    """The pull date of the freshest list that has ever carried this name."""
+    day = lists.listed_on(journal or {}, ticker, as_of)
+    if day is None:
+        return {"status": "absent",
+                "reason": (f"no list on this journal's record has carried "
+                           f"{ticker}" if lists.current(journal or {}, as_of)
+                           else _NO_LIST)}
+    return {"status": "known", "value": day, "source": "your list",
+            "cautions": [], "provenance": []}
+
+
 def portfolio_view(journal_securities: list, roles: dict,
                    today: str | None = None) -> dict:
     """The journal's portfolio node on its own, without evaluating anything.
@@ -952,7 +1042,8 @@ def portfolio_view(journal_securities: list, roles: dict,
 def build_context(security: dict, journal_securities: list | None,
                   values: dict, inputs: dict,
                   as_of: str | None = None, record: dict | None = None,
-                  snap: dict | None = None) -> dict:
+                  snap: dict | None = None,
+                  journal: dict | None = None) -> dict:
     """The context for one security, live or pinned.
 
     With `as_of`, everything is reconstructed from what was observable on
@@ -1007,7 +1098,17 @@ def build_context(security: dict, journal_securities: list | None,
                      # same file. `industry.at` resolves an already-read
                      # history, which is what dataview._bundle holds.
                      **(industry_mod.at(snap["industry"], as_of) if snap
-                        else industry_mod.report(security, as_of))},
+                        else industry_mod.report(security, as_of)),
+                     # Whether the list this journal works from carries this
+                     # name, and when a list last did. Facts about the
+                     # journal's own record rather than about the company —
+                     # nothing here ranked anything, and where a name sits
+                     # within the ranking that produced the list is not
+                     # recoverable from the list.
+                     "on_list": _on_list(journal,
+                                         security.get("ticker"), as_of),
+                     "listed_on": _listed_on(journal,
+                                             security.get("ticker"), as_of)},
         # Two symbol scopes, deliberately. `tickers` is every class the SEC
         # maps to the company, which is what a whole-company measure needs.
         # The price is the security's own instrument and never sees that list.
@@ -1017,6 +1118,7 @@ def build_context(security: dict, journal_securities: list | None,
         "position": _position(security, today, as_of,
                               folio["account_value"]),
         "portfolio": folio,
+        "list": _list(journal, today, as_of),
         "values": values or {},
         "inputs": effective,
     }

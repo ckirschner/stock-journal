@@ -40,13 +40,14 @@ class TestDiscovery:
         assert strategies == {} and reports == []
 
     def test_the_shipped_strategies_are_discovered_by_default(self):
-        """The default root, with no argument. What ships is exactly the two
-        real strategies — the contract scaffold that used to sit beside them
-        is gone, because it was offered in the create-journal picker and a
-        journal created against it rendered verdicts built on one invented
-        threshold."""
+        """The default root, with no argument. What ships is exactly the
+        three real strategies — the contract scaffold that used to sit
+        beside them is gone, because it was offered in the create-journal
+        picker and a journal created against it rendered verdicts built on
+        one invented threshold."""
         strategies, _ = strategy_loader.discover()
-        assert sorted(strategies) == ["buffett", "graham"]
+        assert sorted(strategies) == ["buffett", "graham", "lynch",
+                                      "magic-formula"]
 
 
 class TestRefusals:

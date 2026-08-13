@@ -29,7 +29,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from . import journals, portfolio, store
+from . import journals, lists, portfolio, store
 
 # 4: journals hold lot history rather than one position per security, and
 #    carry the answers a strategy asked for. Nothing converts an older
@@ -94,6 +94,12 @@ def inspect_bundle(src: str | Path) -> dict:
         "holdings": sum(len([s for s in (d.get("securities") or [])
                              if portfolio.bucket_of(s) == "holdings"])
                         for d in docs),
+        # Every import of a list a journal works from. Counted here because
+        # this screen is what somebody confirms an import against, and a
+        # figure missing from it reads as a collection the bundle does not
+        # carry — which, for a strategy whose entire buy decision is the
+        # list, is the one thing they would want to check.
+        "lists": sum(len(d.get(lists.KEY) or []) for d in docs),
         "names": [str(d.get("name") or d.get("id")) for d in docs],
     }
 

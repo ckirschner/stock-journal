@@ -222,6 +222,18 @@
    "statement": "Notes to Consolidated Financial Statements — Goodwill and Intangible Assets",
    "accession": "0000027419-17-000008",
    "note": "A STATED nil, not an absent one. The filer says in words that nothing was written off, and separately tags the zero. That is the distinction the measure that consumes this depends on: a year with a stated zero counts as a year with no write-off, and a year with no figure at all is absent rather than nil."
+  },
+  {
+   "metric": "net_ppe",
+   "fiscal_year": "FY2023",
+   "period_end": "2024-02-03",
+   "as_printed": "33,096",
+   "scale": "millions",
+   "value_usd": 33096000000,
+   "caption": "Property and equipment, net",
+   "statement": "balance",
+   "accession": "0000027419-24-000032",
+   "note": "Printed, and deliberately NOT served. The line is tagged us-gaap:PropertyPlantAndEquipmentAndFinanceLeaseRightOfUseAssetAfterAccumulatedDepreciationAndAmortization, which folds the finance-lease right-of-use asset into the caption, so it is a wider quantity than net property. The figure is recorded here so what a reader sees on the page sits beside the reason the pipeline reports absence instead of it."
   }
  ]
 }

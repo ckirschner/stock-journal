@@ -2241,6 +2241,201 @@ entries:
           median, under a sentence saying that means 30% below its own
           normal.
 
+  - id: earnings_yield
+    kind: computed
+    estimator:
+      kind: instant
+    label: Earnings yield
+    unit: percent
+    format: "0.0%"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        EBIT (TTM) ÷ (market cap + total debt − cash & equivalents)
+      window: trailing twelve months EBIT over current enterprise value
+    inputs:
+      filings:
+        - EBIT
+      prices:
+        - current price
+      entries:
+        - enterprise_value
+    explanation:
+      plain: |
+        What the business earns before interest and tax, as a percentage of
+        what the whole thing would cost you — the shares plus the debts you
+        would take on with them, less the cash you would get. A 12% earnings
+        yield says the operating profit is twelve cents a year on every
+        dollar it costs to own the whole company.
+
+        It is a yield rather than a multiple so that it reads the way a
+        savings rate reads: higher is cheaper. Enterprise value rather than
+        market capitalisation because buying a company with borrowings means
+        buying the borrowings, and a price tag that leaves them out flatters
+        every leveraged business.
+      misfires: |
+        One depressed or inflated year of operating profit moves this a long
+        way, and a company whose profit is dominated by a single segment in
+        trouble reads cheap on a consolidated basis.
+
+        The cash taken off here is every dollar of cash and equivalents. The
+        original construction takes off only the cash a business does not
+        need to operate, and how much that is, is a judgement about the
+        business rather than a line in a filing — so this reads slightly
+        cheaper than his would for a company sitting on cash it genuinely
+        needs. Nothing in this program decides for a strategy how much cash a
+        business needs.
+
+        EBIT here is served as operating income, which is the common
+        approximation and not an identity — a company with material
+        non-operating income that belongs in EBIT reads low.
+      attribution: |
+        Joel Greenblatt, The Little Book That Still Beats the Market — the
+        first of the two figures the Magic Formula ranks on, stated as he
+        states it.
+
+        What cannot be reproduced here is the ranking. His method buys the
+        best thirty of three thousand on this and return on capital together;
+        the number on its own was never meant to be compared against a
+        threshold, and he says so. Read it as why a name is on a list, not as
+        a test it passed.
+    not_meaningful_when:
+      - industry: [depository-lending, insurance]
+        because: |
+          The price underneath is already the wrong quantity for these
+          companies: enterprise value adds on the debts a buyer would take
+          on, and for a lender those are deposits and for an insurer they are
+          claims not yet made — neither of which any filer tags as borrowing.
+          The yield therefore reads as though the whole company could be had
+          for its market value plus a rounding error, whatever it earns.
+      - industry: [real-estate]
+        because: |
+          The accounts charge depreciation against buildings every year as
+          though they were wearing out, and well-kept property mostly does
+          not. Reported operating profit is therefore lower than what the
+          business actually earns, by a lot, so a property company reads as
+          expensive on this whatever it is worth. The industry uses funds
+          from operations instead, which adds the depreciation back, and this
+          program does not compute it.
+      - data: enterprise value is zero or negative
+        because: |
+          Enterprise value is what the whole business costs with its debts
+          added and its cash taken off, and a company holding more cash than
+          its shares and its borrowings are worth together prices at nothing
+          or less. A yield on that is not a yield: a positive profit over a
+          negative price comes out negative, which reads as a company losing
+          money when the arithmetic is saying the opposite. A loss at the
+          operating line is a different matter and is reported as it stands —
+          a negative yield over a real price means what it looks like.
+
+  - id: return_on_capital
+    kind: computed
+    estimator:
+      kind: instant
+    label: Return on capital
+    unit: percent
+    format: "0.0%"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        tangible capital = (current assets − cash & equivalents)
+                           − (current liabilities − short-term debt)
+                           + property, plant and equipment, net
+
+        value = EBIT (TTM) ÷ tangible capital
+      window: trailing twelve months EBIT over the latest balance sheet
+    inputs:
+      filings:
+        - EBIT
+        - total current assets
+        - total current liabilities
+        - cash and cash equivalents
+        - short-term debt
+        - property, plant and equipment, net
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        How many cents of operating profit the business earns on every dollar
+        of capital it actually needs to run — the stock and receivables it
+        has to carry, less what its suppliers fund for free, plus the
+        buildings and equipment. A company earning 40 cents on the dollar is
+        a far better business than one earning 8, and it can grow without
+        raising money to do it.
+
+        Three things are deliberately left out of the bottom. Debt and equity,
+        because how a business is financed is a different question from how
+        good it is. Cash, because money sitting in the bank is not earning the
+        operating profit. And what a previous owner overpaid for an
+        acquisition, because goodwill tells you about a past purchase and not
+        about the return the assets throw off.
+      misfires: |
+        A business with almost no tangible capital — a licensor, a franchisor,
+        anything asset-light — divides by a very small number and produces a
+        very large percentage. It is arithmetically right and means less than
+        it looks: the figure separates good businesses from ordinary ones far
+        better in the middle of its range than at the top.
+
+        A company that has just built a plant carries the full cost in the
+        bottom before the plant earns anything, and reads low for a year or
+        two. A seasonal business reads differently depending on which quarter
+        end its working capital was measured at.
+
+        Net property here includes the right-of-use asset from FINANCE
+        leases wherever the filer presents it there, which since 2019 is most
+        of them. That is right for this figure rather than a compromise: a
+        finance lease is an owned asset bought with borrowed money, and the
+        borrowing is already counted as debt above, so leaving the asset out
+        would take one side of the transaction and keep the other. Operating
+        leases are not in it — they carry their own line and their own tag.
+        What is left is a smaller inconsistency worth knowing about: a filer
+        that reports its finance-lease assets on a line of their own reads
+        with slightly less capital than one folding them in.
+
+        Absent rather than approximated for a filer whose borrowings inside
+        current liabilities cannot be separated from the rest, and for one
+        with no readable property line at all. Both would move the bottom by
+        an unknown amount in a known direction, and a caution beside a figure
+        a decision consumed would be read by a person and ignored by the
+        arithmetic — which is why these are absences and the lease question
+        above is not. Nothing tests this measure.
+      attribution: |
+        Joel Greenblatt, The Little Book That Still Beats the Market — the
+        second of the two figures the Magic Formula ranks on, with his
+        definition of capital rather than the ordinary one.
+
+        As with earnings yield, the ranking is the part that cannot be
+        reproduced here. A high figure is why a name reached a list; it is
+        not a test the company passed.
+    not_meaningful_when:
+      - industry: [depository-lending, insurance]
+        because: |
+          Neither files a balance sheet that splits current from non-current,
+          so there is no working capital to read at all. Beyond that the
+          quantity means nothing here: a lender's capital is the funding it
+          exists to lend out rather than money tied up in operations, and an
+          insurer's investments are held against claims not yet made and
+          belong to policyholders. A return measured against either is
+          measuring the wrong money.
+      - industry: [real-estate]
+        because: |
+          The profit on top is struck after depreciation on buildings, which
+          is a convention rather than a cost being incurred, so it understates
+          by design. The capital underneath is those same buildings at what
+          they cost decades ago rather than what they are worth. Both ends are
+          wrong and they do not cancel — and a property company presenting an
+          unclassified balance sheet has no working capital to read either.
+      - data: tangible capital is zero or negative
+        because: |
+          A business funded entirely by its suppliers and customers — money
+          in before stock goes out — can need no net capital at all, or less
+          than none. That is a real and often excellent position to be in,
+          and it is also a division this measure cannot perform: a profit
+          over a negative capital comes out negative, which reads as a
+          business destroying money when it is doing the opposite. Refused
+          rather than shown, because a large negative percentage beside a
+          company earning well is worse than no figure at all.
+
   - id: ev_ebit_to_own_5y_median
     kind: computed
     estimator:
@@ -2793,6 +2988,215 @@ entries:
         Acquisitions and divestitures move this without organic change.
       attribution: |
         Standard. Used here as a survival check rather than a growth check.
+
+  - id: eps_change_yoy
+    kind: computed
+    estimator:
+      kind: trailing
+    label: Diluted EPS change, year over year
+    unit: percent
+    format: "+0.0%"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        diluted EPS (TTM) ÷ diluted EPS (prior year TTM) − 1
+
+        Where the most recent report is annual, both windows are fiscal
+        years, taken from a basis-checked annual window.
+      window: trailing twelve months against the prior trailing twelve months
+    inputs:
+      filings:
+        - diluted earnings per share
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        How much more the company is earning per share than it was a year ago.
+        This is the growth rate as it stands today, not the average of the
+        last several years — it is the number that changes when a company
+        stops growing, and it changes about two quarters afterwards rather
+        than several years afterwards.
+      misfires: |
+        Per share rather than in total, so a company retiring stock quickly
+        shows growth here that the business did not produce. Read it beside
+        revenue over the same two windows. A single weak quarter moves a
+        trailing twelve months by roughly a quarter of itself, and an
+        acquisition or a disposal moves both windows without anything
+        changing organically. A prior-year window that is zero or negative
+        has no rate from it at all.
+      attribution: |
+        Lynch. His sell discipline for a company bought for its growth was
+        that it stopped growing — which is a statement about the rate now,
+        not about the average of the last five years.
+    not_meaningful_when:
+      - industry: [real-estate]
+        because: |
+          The accounts charge depreciation against buildings every year as
+          though they were wearing out, and well-kept property mostly does
+          not. Earnings per share carry that charge like any other earnings
+          figure, and a change in them tracks the depreciation schedule and
+          the timing of building sales as much as the business. The industry
+          uses funds from operations instead, and this program does not
+          compute it.
+      - data: diluted EPS over the earlier of the two windows is zero or
+          negative
+        because: |
+          A rate of change from a loss has no interpretation as growth: a
+          company going from a loss to a smaller loss and one going from a
+          loss to a profit produce the same arithmetic, and neither is a
+          growth rate.
+      - data: the two windows resolve diluted EPS under different tag
+          families, or a fiscal year inside them was restated after the
+          earlier window's filings were prepared
+        because: |
+          The comparison would mix two definitions of the figure, which is a
+          definition change dressed as growth.
+
+  - id: earnings_base_share_5y
+    kind: computed
+    estimator:
+      kind: averaged
+      observations: 8
+    label: Earnings at the base of the growth window, as a share of earnings now
+    unit: percent
+    format: "0.0%"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        base = mean( net income, the 3 fiscal years ending 5 years before the
+                     most recent 3 )
+        end  = mean( net income, the most recent 3 fiscal years )
+
+        value = base ÷ end
+      window: eight fiscal years, three-year means at each end, five years
+        centre to centre — the same window the five-year growth rates use
+    inputs:
+      filings:
+        - net income
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        How much the company was earning at the start of the period a growth
+        rate is measured over, compared with what it earns at the end of it.
+        At 40% it earned two fifths then of what it earns now; at 2% it was
+        earning almost nothing, and what looks like growth is mostly the
+        distance from almost nothing.
+
+        This is published because a compound growth rate cannot tell the two
+        apart on its own. A company going from 1 to 100 and a company going
+        from 40 to 100 can carry rates that look alike over enough years, and
+        only one of them describes a business that was already working.
+      misfires: |
+        Low on its own is not a fault. A company whose sales multiplied as
+        fast as its earnings reads low here and grew — read it beside
+        [net_margin_base_share_5y], which is what separates a business
+        selling far more from one whose margin came back from nothing. A
+        single depressed year at the base end is diluted by the three-year
+        mean rather than removed by it, which is what the dropped-year
+        reading is for.
+      attribution: |
+        The second expert review's, at
+        dev_reference_docs/ledger-default-profiles-addendum.md, which sets out
+        why a floor on a growth rate's base cannot be denominated in cents of
+        earnings per share — a three-for-one split turns a 30-cent base into
+        10 and changes nothing about the business — and has to be a ratio of
+        two accounting quantities from the same period instead.
+    not_meaningful_when:
+      - industry: [real-estate]
+        because: |
+          Reported profit here is struck after depreciation on buildings,
+          which is an accounting convention rather than a cost being
+          incurred. Both ends of this ratio carry it, and they do not cancel:
+          the charge depends on when the buildings were bought and when they
+          were sold, so the shape of the record is the depreciation schedule
+          as much as the business.
+      - data: mean net income over the three most recent fiscal years is zero
+          or negative
+        because: |
+          There is no end for the base to be a share of. A company losing
+          money now is not a company whose growth window needs checking; it
+          is a company losing money, which the earnings measures say directly.
+      - data: fewer than eight fiscal years of net income are available on one
+          accounting basis
+        because: |
+          The window cannot be constructed, and it is deliberately the same
+          window the growth rates use rather than a shorter one — a figure
+          answering for a different span than the rate it qualifies would be
+          worse than no figure.
+
+  - id: net_margin_base_share_5y
+    kind: computed
+    estimator:
+      kind: averaged
+      observations: 8
+    label: Net margin at the base of the growth window, as a share of the margin now
+    unit: percent
+    format: "0.0%"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        base margin = mean(net income, base 3 FYs) ÷ mean(revenue, base 3 FYs)
+        end margin  = mean(net income, last 3 FYs) ÷ mean(revenue, last 3 FYs)
+
+        value = base margin ÷ end margin
+      window: eight fiscal years, three-year means at each end, five years
+        centre to centre — the same window the five-year growth rates use
+    inputs:
+      filings:
+        - net income
+        - revenue
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        How profitable each dollar of sales was at the start of the period a
+        growth rate is measured over, compared with how profitable it is at
+        the end. A business that scaled up keeps roughly the margin it had,
+        or improves it a little: going from 8% to 12% over five years reads
+        as 67% here and is ordinary operating leverage. A business whose
+        margin came back from nothing — 0.5% to 8% — reads as 6%, and its
+        earnings did not grow so much as appear.
+
+        It is a ratio of two ratios, so it says the same thing to a company
+        selling ten dollars and one selling ten billion, and a share split
+        cannot move it.
+      misfires: |
+        A company that genuinely expanded its margin a great deal while also
+        growing fast reads low here and is not recovering from anything —
+        which is why this is read beside [earnings_base_share_5y] rather
+        than alone. Businesses whose revenue was restated between the two
+        ends (the ASC 606 gross-to-net change is the common one) have a
+        margin step in the record that is a definition change.
+      attribution: |
+        The second expert review's, at
+        dev_reference_docs/ledger-default-profiles-addendum.md, which proposes
+        exactly this test — base-period net margin against end-period net
+        margin — as the scale-free way to ask whether a growth window had a
+        real business at the start of it.
+    not_meaningful_when:
+      - industry: [real-estate]
+        because: |
+          The profit on top of both margins is struck after depreciation on
+          buildings, which is an accounting convention rather than a cost
+          being incurred, so both margins understate by design and by
+          different amounts depending on the age of the portfolio at each
+          end.
+      - data: mean revenue at either end of the window is zero or negative, or
+          the margin over the three most recent fiscal years is
+        because: |
+          There is no end margin for the base one to be a share of, and a
+          negative one would print a negative share — which on a
+          higher-is-better measure reads as the base being tiny.
+      - data: revenue and net income resolve over different fiscal years
+        because: |
+          The two margins would describe different periods, which is not a
+          comparison.
+      - data: fewer than eight fiscal years of revenue or of net income are
+          available on one accounting basis
+        because: |
+          The window cannot be constructed, and it is deliberately the same
+          window the growth rates use rather than a shorter one.
 
   - id: net_income_cagr_5y
     kind: computed

@@ -138,3 +138,34 @@ was written off, and tags the zero. A measure summing five years of write-offs
 needs that to be a zero rather than an absence, and needs a year with no figure
 at all to stay absent. Both behaviours are pinned in
 `test_compute_groundtruth.py`.
+
+---
+
+## Net property, and the element that reads longer than it is
+
+FY2023, accession `0000027419-24-000032`, primary document `tgt-20240203.htm`.
+The Consolidated Statements of Financial Position print:
+
+> Property and equipment, net … 33,096 … 31,512
+
+read as the FY2023 and FY2022 columns, in millions.
+
+This filer carries no `us-gaap:PropertyPlantAndEquipmentNet` fact at all. The
+caption above is tagged
+`us-gaap:PropertyPlantAndEquipmentAndFinanceLeaseRightOfUseAssetAfterAccumulated
+DepreciationAndAmortization`, which names the finance-lease right-of-use asset
+in the element rather than leaving it to the lease note. Target's own
+breakdown puts that asset at 1,470 — four and a half percent of the line.
+
+**It is served, and the first version of this work refused it.** The refusal
+was reasoned from the belief that the plain element excludes leased assets and
+this one does not. That is false: Microsoft's FY2024 sheet tags the plain
+element and states outright that finance leases are inside it, at nineteen
+percent. So the two elements answer the same question, and refusing one of
+them would have discarded the least contaminated filer in this set while
+serving the most — a rule uncorrelated with the property it claimed to
+enforce. See `msft-notes.md` and the note in `config/concept-map.yaml`.
+
+This filer stays in the fixtures as the case that pins the second element
+resolving at all, and as the reminder that an element's name is evidence about
+what it includes and never evidence about what the other one excludes.

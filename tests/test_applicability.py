@@ -440,6 +440,8 @@ ENFORCED_BY_SHARED_MACHINERY = {
     ("eps_cagr_5y", "mean diluted EPS over the three base years is zero or negative"),
     ("eps_cagr_5y", "fewer than eight fiscal years of diluted EPS are available on one accounting basis"),
     ("eps_cagr_5y", "mean net income over the three base years is at most a tenth of the mean over the three end years, AND the base years' net margin is under half the end years'"),
+    ("earnings_base_share_5y", "fewer than eight fiscal years of net income are available on one accounting basis"),
+    ("net_margin_base_share_5y", "fewer than eight fiscal years of revenue or of net income are available on one accounting basis"),
     ("eps_growth_10y", "fewer than ten fiscal years of EPS are available"),
     ("eps_growth_10y", "mean net income over the three base years is at most a tenth of the mean over the three end years, AND the base years' net margin is under half the end years'"),
     # the gross-margin helpers, over five entries reading one input

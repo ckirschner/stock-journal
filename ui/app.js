@@ -54,6 +54,11 @@ const TABS = [
      its own strategy wants it, so the thing you already hold too much of is
      never what the screen suggests. */
   ["allocate", "Where capital goes"],
+  /* Only for a journal whose strategy said it works from a list somebody
+     else chose — see `shownTabs`. It is not a screen every journal gets a
+     dimmed version of: a tab about a list, on a journal that screens for
+     itself, is a permanent piece of furniture with nothing behind it. */
+  ["list", "The list"],
   ["strategy", "Strategy"],
   ["metrics", "Metrics"],
   ["data", "Data"],
@@ -401,9 +406,20 @@ function renderMast() {
   $("foot").innerHTML = `This tool never places a trade and holds no broker credentials. `
     + `A journal has one strategy, chosen when it is created.<br>Data stored at ${esc(S.data_dir)}, never inside the project folder.`;
 }
+/* Which tabs this journal has. The only conditional one is the list, and the
+   condition is read off the journal's own payload rather than off which
+   strategy is running — the view never learns that a strategy called
+   "magic-formula" exists, exactly as it never learns which measures do. */
+const shownTabs = () => TABS.filter(([id]) => id !== "list" || !!S.list);
+
 function renderTabs() {
   if (!S.journal) { $("tabs").innerHTML = ""; return; }
-  $("tabs").innerHTML = TABS.map(([id, label]) => {
+  /* Switching to a journal whose strategy screens for itself takes the list
+     tab away underneath whoever was standing on it. Without this they are
+     left on a tab with no button, and render() falls through to the holdings
+     table with a heading for a bucket that does not exist. */
+  if (!shownTabs().some(([id]) => id === tab)) tab = "holdings";
+  $("tabs").innerHTML = shownTabs().map(([id, label]) => {
     /* Previous holdings counts closed periods, not securities: a name held
        and closed twice is two things that happened, and counting it once
        hides the second. The other two count securities, because a security
@@ -419,6 +435,18 @@ function renderTabs() {
            not be asked" are different facts, and a badge reading 0 for the
            second says the discipline is working when nothing ran. */
         : '<em title="This journal\'s strategy could not be asked">—</em>')
+      /* Names on the current list this journal is not holding. Not the
+         list's length, which stays the same all year and tells nobody
+         anything, and an em-dash rather than a nought where no list has been
+         imported, because "nothing left to buy" and "no list yet" are
+         opposite situations.
+         A name passed over is still counted, deliberately: the verdict on it
+         has not changed and the strategy still says to buy it. Deducting it
+         here would make a badge that quietly agreed with the user against
+         their own rules, which is the one thing this program will not do. */
+      : id === "list" ? (S.list && S.list.current
+        ? `<em>${(S.list.rows || []).filter((r) => !r.held).length}</em>`
+        : '<em title="No list has been imported yet">—</em>')
       : BUCKETS.includes(id) ? `<em>${inBucket(id).length}</em>` : "";
     return `<button class="tab" role="tab" aria-selected="${tab === id}" data-tab="${id}">${label}${n}</button>`;
   }).join("");
@@ -1982,6 +2010,20 @@ function wontEvaluate(st) {
    Nothing here is hardcoded and nothing here does anything. A strategy that
    declares no limits renders no section, and the host neither reads these
    nor acts on them. */
+function worksFromAList(st) {
+  const d = st.list;
+  if (!d) return "";
+  return `<section class="group" style="margin-top:26px">
+    <div class="ghead"><h3>${esc(d.label)}</h3><span>where the buying comes from</span></div>
+    <p class="hint" style="margin:8px 0 0">${prose(d.explain)}</p>
+    <div class="pe-sub" style="margin-top:10px">Pulled from ${esc(d.source.name)}. ${
+      d.source.reasoning ? "That description is theirs."
+                         : "The description above is this strategy's own."}</div>
+    <div class="toolbar" style="margin-top:12px">
+      <button class="btn" data-act="list">Open the list</button></div>
+  </section>`;
+}
+
 function methodLimits(st) {
   const list = st.limits || [];
   if (!list.length) return "";
@@ -2024,6 +2066,7 @@ function strategyView() {
       (st.reference || []).length ? ` · ships ${st.reference.map((r) => `<code>${esc(r)}</code>`).join(", ")}` : ""}</p></div>
   </div>`;
 
+  h += worksFromAList(st);
   h += methodLimits(st);
 
   h += `<section class="group" style="margin-top:26px"><div class="ghead"><h3>What it can say</h3>
@@ -2522,6 +2565,139 @@ function allocExcluded(e) {
   </div>`;
 }
 
+/* ------------------------------------------------------------- the list */
+/* Everything here comes off `S.list`, which the host builds only for a
+   journal whose strategy declared that it works from one. Nothing in this
+   file knows what a Magic Formula is, what a ranking is, or how old is too
+   old — the strategy's own label and explanation head the screen, and every
+   verdict beside a name is the one the strategy already produced. */
+
+function importedListRow(r) {
+  const skip = r.passed_over;
+  const state = r.decision
+    ? stateStamp(r.decision)
+    : '<span class="chip blank" title="This name is not in the journal yet, so nothing has been evaluated about it">not looked at</span>';
+  /* Held names get no buttons. The list's job is done for them — what
+     happens next is the clock, and that lives on the security's own page. */
+  const acts = r.held ? ""
+    : `<button class="btn" data-act="listadd" data-t="${esc(r.ticker)}">${
+        r.tracked ? "Open" : "Track this"}</button>`
+      + (skip ? "" : `<button class="btn" data-act="passover" data-t="${esc(r.ticker)}">Not buying this one</button>`);
+  return `<div class="pentry">
+    <div class="pe-head"><b>${esc(r.ticker)}</b>${
+      r.name && r.name !== r.ticker ? `<span class="dim">${esc(r.name)}</span>` : ""}
+      ${r.new ? '<span class="chip blank" title="This name was not on the list before this one">new</span>' : ""}
+      ${r.held ? '<span class="chip s-pass">held</span>' : ""}
+      <span class="req">${state}</span></div>
+    ${skip ? `<div class="pe-why"><b>You passed on this one</b> on ${
+      esc(String(skip.recorded).slice(0, 10))}: ${esc(skip.reason)}</div>` : ""}
+    ${acts ? `<div class="toolbar">${acts}</div>` : ""}
+  </div>`;
+}
+
+function importedListView() {
+  const L = S.list;
+  const d = L.declared;
+  let h = `<section class="group">
+    <div class="ghead"><h3>${esc(d.label)}</h3>${
+      L.current ? `<span>${(L.current.tickers || []).length} names</span>` : ""}</div>
+    <p class="hint">${prose(d.explain)}</p>
+    <div class="pe-sub">Pulled from ${esc(d.source.name)}. ${
+      d.source.reasoning
+        ? "That description is theirs."
+        : "The description above is this strategy's own."}</div>`;
+
+  if (!L.current) {
+    /* An empty state that invites the action, and says the one thing a
+       reader needs to know before taking it: nothing here chose these. */
+    h += `<div class="rollup"><div class="pe-head"><b>No list has been imported yet.</b></div>
+      <div class="pe-why">Run the screen, then paste what it gives you. This
+      journal records which list and what day it was pulled, and every list
+      you have ever imported stays on the record — so a name's year can be
+      counted from the day it was last chosen, and so a ranking you are still
+      buying from a year later says how old it is.</div>
+      <div class="toolbar"><button class="btn primary" data-act="importlist">Import a list</button></div>
+    </div></section>`;
+    return h;
+  }
+
+  const held = L.rows.filter((r) => r.held).length;
+  const passed = L.rows.filter((r) => r.passed_over).length;
+  h += `<div class="facts">
+    <div class="fact"><i>Pulled</i><b>${esc(L.current.pulled_on)}</b></div>
+    <div class="fact"><i>Imported</i><b>${esc(String(L.current.recorded).slice(0, 10))}</b></div>
+    <div class="fact"><i>Held</i><b>${held} of ${L.rows.length}</b></div>
+    ${L.current.floor !== null && L.current.floor !== undefined
+      ? `<div class="fact"><i>Smallest asked for</i><b>${esc(fmtUnit(L.current.floor, "usd"))}</b></div>` : ""}
+    ${passed ? `<div class="fact"><i>Passed over</i><b>${passed}</b></div>` : ""}
+  </div>
+  <p class="hint">These are the names the screen returned, in the order it
+  returned them. Where each sits in its own ranking is not here and cannot
+  be: a rank means nothing without the thousands of companies it was ranked
+  against, and none of those are in this journal. Nothing on this screen
+  ranked anything.</p>
+  <div class="toolbar"><button class="btn primary" data-act="importlist">Import a fresh list</button></div>
+  <div class="plist">${L.rows.map(importedListRow).join("")}</div>
+  </section>`;
+
+  if (L.history.length) {
+    h += `<section class="group"><div class="ghead"><h3>Lists before this one</h3>
+      <span>${L.history.length}</span></div>
+      <p class="hint">Kept whole and never rewritten. What a list said on the
+      day you acted on it is what your own record has to be able to show.</p>
+      <div class="plist">${L.history.map((e) => `<div class="pentry">
+        <div class="pe-head"><b>Pulled ${esc(e.pulled_on)}</b>
+          <span class="dim">imported ${esc(String(e.recorded).slice(0, 10))} · ${
+            (e.tickers || []).length} names</span></div>
+        ${e.added.length ? `<div class="pe-why"><b>Came on:</b> ${esc(e.added.join(", "))}</div>` : ""}
+        ${e.dropped.length ? `<div class="pe-why"><b>Came off:</b> ${esc(e.dropped.join(", "))}</div>` : ""}
+      </div>`).join("")}</div></section>`;
+  }
+  return h;
+}
+
+function dlgImportList() {
+  const d = S.list.declared;
+  dialog({
+    title: "Import a list",
+    blurb: `Paste what ${d.source.name} gave you. Nothing is created until you confirm, and nothing already recorded changes.`,
+    body: field("pulled_on", "The day you pulled it", localToday(), "Not today unless you ran the screen today. Everything about how current this ranking is measures from this day, and so does the year each position you buy from it is given.", "date", `max="${localToday()}"`)
+      + field("floor", "Smallest company you asked for", "", "Optional, in dollars. Nothing reads it — it is here because \"thirty names\" means something different at a fifty-million floor than at a billion, and a reader in three years has no other way to find that out.", "number")
+      + area("pasted", "The names", "", "Paste the screen's own table, or one ticker per line. Any line this cannot read comes back named, and nothing is imported until every line is readable — a list of thirty that quietly became twenty-nine looks exactly like a screen that returned twenty-nine."),
+    confirm: "Import",
+    onConfirm: async (v) => {
+      if (!(v.pasted || "").trim()) return "Paste the names first.";
+      const r = await apiRaw("import_list", v.pulled_on, v.pasted, v.floor || null);
+      if (!r.ok) return r.error;
+      toast(`Imported ${r.n} names, pulled ${r.pulled_on}.`);
+    },
+  });
+}
+
+function dlgPassOver(ticker) {
+  dialog({
+    title: `Not buying ${ticker}`,
+    blurb: "Your own list gave you this name and your rules say to buy it. Nothing here stops you passing — this writes down that you did, and why.",
+    /* `.dlg-warn`, not `.dlg-err`: dialog() reuses the first `.dlg-err` it
+       finds for validation messages, so a caution written into that slot is
+       replaced by "A reason is required" the first time somebody confirms an
+       empty form — and never comes back. */
+    body: `<div class="dlg-warn">Skipping names you do not like the look of is
+      one of the three documented ways people stop getting this method's
+      results. The list is the decision; second-guessing it is the deviation
+      the method exists to prevent. That is not an argument against passing —
+      it is the reason the reason is worth having in a year.</div>`
+      + area("reason", "Why are you passing on this one?", "", "Required. One sentence. You will read this again when you find out what it did."),
+    confirm: "Record it",
+    danger: true,
+    onConfirm: async (v) => {
+      if (!(v.reason || "").trim()) return "A reason is required.";
+      const r = await apiRaw("pass_over", ticker, v.reason);
+      if (!r.ok) return r.error;
+    },
+  });
+}
+
 function allocationView() {
   const a = S.allocation;
   /* Only when the screen itself could not be built — a data layer that threw
@@ -2593,6 +2769,7 @@ function render() {
   else if (tab === "metrics") v.innerHTML = metricsView();
   else if (tab === "data") v.innerHTML = dataView();
   else if (tab === "allocate") v.innerHTML = allocationView();
+  else if (tab === "list") v.innerHTML = importedListView();
   else v.innerHTML = listView();
 }
 
@@ -2777,6 +2954,10 @@ function dlgNewJournal(chosenId) {
            cur.declines.map((d) => esc(d.noun)).join(", ")}.</b> Its measures were not built for them, so a
            security of one of those kinds reads “outside these rules” rather than getting a verdict. Said here
            because it is knowable before the journal exists, and a journal cannot change strategy afterwards.</div>` : ""}
+         ${cur.list ? `<div class="help"><b>Works from a list you import.</b> It does not screen for itself —
+           you run ${esc(cur.list.source.name)} yourself, paste what it gives you, and this journal records
+           which list and when. Nothing is bought here that is not on it. Said now because it is the largest
+           single difference in how a journal is used, and the strategy cannot be changed afterwards.</div>` : ""}
          </div>`
       + (setup ? `<p class="hint" style="margin:4px 0 10px">${esc(cur.name)} asks for the following. These are things no
           strategy could ship a default for, because they are facts about you rather than opinions about investing.</p>${setup}` : ""),
@@ -3160,8 +3341,14 @@ async function dlgBuy(s, dateChosen, keep, fallbackDate) {
 /* A sale is one more appended entry, not an edit. Selling part of a position
    leaves the remaining lots exactly as they were bought — which is what makes
    a trim recordable at all, and what a `reduce` verdict has been asking for
-   with nowhere to go. Shares default to everything held, so closing out is
-   still one field away. */
+   with nowhere to go. Shares default to everything held on the day the sale is
+   dated, so closing out is still one field away.
+
+   Every figure here about the position is read off the chosen date and none of
+   it off the live payload. This dialog has a date picker in it, so "what you
+   hold" is a question with two answers the moment somebody changes the date —
+   and the live one was being shown against a day years in the past, all the
+   way down to the reference close beside the price field. */
 async function dlgSell(s, dateChosen, keep, fallbackDate) {
   const today = localToday();
   const when = dateChosen || today;
@@ -3172,17 +3359,37 @@ async function dlgSell(s, dateChosen, keep, fallbackDate) {
      preview exists so the person entering it sees which verdict is about to
      go on the record, and sees it named as a reconstruction.
 
-     Only fetched when the date is in the past. A sale being recorded as it
-     happens is the ordinary case and the screen stays exactly as it was: a
-     verdict box on it would be the tool asking you to reconsider a trade you
-     have already made, which is a gate wearing a preview's clothes. */
+     Asked for on every date, not only a past one. The verdict box is still
+     shown only on a backdated sale — a verdict box on a trade already made
+     would be the tool asking you to reconsider it, which is a gate wearing a
+     preview's clothes — but the share count, the lots and the close have to
+     come from the same clock whichever day is chosen, or the dialog holds one
+     figure from the picker and three from today. */
   const past = when < today;
-  const p = past ? await api("preview_sale", s.ticker, when) : null;
-  if (past && !p) {
+  const reply = await api("preview_sale", s.ticker, when);
+  if (!reply && past) {
+    /* A past date has nowhere honest to fall back to: showing today's figures
+       against it is the exact reading this dialog exists to stop. So it
+       reopens on the date that last worked. */
     if (fallbackDate) dlgSell(s, fallbackDate, keep);
     return;
   }
-  const reconBox = p
+  /* Today's can fall back, and must. The live payload *is* today, so the
+     figures are the same figures — and a dialog that refuses to open because
+     a preview did not answer is a gate on recording a sale that has already
+     happened. The tool records decisions and never blocks them, and a screen
+     that will not appear is a block however it is described. */
+  const p = reply || {
+    held: s._shares,
+    lots: buyLots(s).filter((l) => l.open)
+      .map((l) => ({ date: l.date, remaining: l.remaining })),
+    price: (s._price || {}).value != null
+      ? { status: "known", value: s._price.value, date: s._price.date,
+          source: s._price.source, terminal: s._price.terminal }
+      : { status: "absent",
+          reason: (s._price || {}).reason || "no price is on record" },
+  };
+  const reconBox = past
     ? `<div class="notice quiet" style="margin:0 0 12px"><h4>From history — not seen at the time</h4>
        <p>${esc(when)} is in the past, so what gets frozen beside this sale is rebuilt from what was
        observable then: ${esc(p.note || "")}.
@@ -3209,18 +3416,29 @@ async function dlgSell(s, dateChosen, keep, fallbackDate) {
      close was under seven days old — a rule the browser applied itself, in a
      second copy of a judgement the engine was making too, and neither of
      them was the host's to make. The honest field is an empty one with the
-     close shown beside it as a reference. */
-  const quote = s._price || {};
-  const closeNote = quote.source === "fetched" && quote.date
-    ? ` For reference, the last fetched close was ${money(quote.value)} on ${quote.date}${
+     close shown beside it as a reference.
+
+     The close that belonged to the chosen day, from the preview, not the one
+     on the live payload. A sale dated 2019 was shown last week's close as its
+     reference, beside an empty field it was inviting a number into — the
+     nearest thing this dialog can do to prefilling the wrong price. */
+  const quote = p.price || {};
+  const closeNote = quote.status === "known" && quote.source === "fetched" && quote.date
+    ? ` For reference, the close on record for ${quote.date} was ${money(quote.value)}${
         quote.terminal ? " — the last this security ever traded at" : ""}.`
-    : "";
+    : past ? ` No close is on record for ${when}: ${quote.reason || "none was stored for that day"}.` : "";
   const priceHelp = "The price you actually sold at, per share. Nothing is "
     + "filled in for you: this goes on the record permanently, and a number "
     + "off the tape is not the number you got." + closeNote;
-  const lots = buyLots(s).filter((l) => l.open);
+  /* The purchases a sale dated this day can draw on, and what each had left
+     then. Read off the preview for the same reason the share count is: the
+     allocation stops at the sale's own date, so a lot bought after it cannot
+     supply anything — and listing it here promised shares the write would
+     refuse. */
+  const lots = p.lots || [];
+  const asOfThen = past ? ` as they stood on ${esc(when)}` : "";
   const lotHelp = lots.length > 1
-    ? `Oldest shares go first, across ${lots.length} open lots (${lots.map((l) => `${l.remaining} from ${l.date}`).join(", ")}).`
+    ? `Oldest shares go first, across ${lots.length} open lots${asOfThen} (${lots.map((l) => `${l.remaining} from ${l.date}`).join(", ")}).`
     : "";
   dialog({
     title: `Record a sale · ${s.ticker}`,
@@ -3228,8 +3446,8 @@ async function dlgSell(s, dateChosen, keep, fallbackDate) {
     body: reconBox + `<div class="field"><label for="f_reason">Why are you selling?</label>
         <select id="f_reason" name="reason">${opts}</select>
         <div class="help">Answer honestly. The Previous holdings tab groups outcomes by this, and it is the only way to find out whether your sell rules work.</div></div>`
-      + field("shares", "Shares sold", (keep && keep.shares) || s._shares,
-        `You hold ${s._shares}. Sell fewer to trim; the rest stays open, priced from what it actually cost. ${lotHelp}`, "number")
+      + field("shares", "Shares sold", (keep && keep.shares) || p.held,
+        `${past ? `You held ${p.held} on ${esc(when)}` : `You hold ${p.held}`}. Sell fewer to trim; the rest stays open, priced from what it actually cost. ${lotHelp}`, "number")
       + field("price", "Sale price per share", (keep && keep.price) || "", priceHelp, "number")
       /* Same bound as the purchase date, and for the same reason. A sale
          dated ahead has not happened: it reports the position closed to
@@ -3260,7 +3478,15 @@ async function dlgSell(s, dateChosen, keep, fallbackDate) {
   const dateEl = $("f_exited");
   if (dateEl) dateEl.onchange = () => {
     if ((dateEl.value || today) === when) return;
-    const keepNow = { shares: $("f_shares").value, price: $("f_price").value };
+    const typed = $("f_shares").value;
+    /* What the user typed is theirs and survives the date change. The default
+       does not: it is the answer to "how many were held" for the day that was
+       chosen before, and carrying it across would put the old day's count in
+       front of the new day's label — the same wrong-clock reading this dialog
+       just stopped making, reintroduced at the one seam where the clock
+       moves. */
+    const keepNow = { price: $("f_price").value,
+      shares: String(typed) === String(p.held) ? "" : typed };
     $("dlg").close();
     dlgSell(s, dateEl.value, keepNow, when);
   };
@@ -3703,6 +3929,27 @@ document.addEventListener("click", async (ev) => {
       return;
     }
     case "thesis": return dlgThesis(s);
+    /* The way out of a verdict blocked because this journal has no list, and
+       the button on the list screen itself. Both land on the same dialog. */
+    case "list":
+      closeSecurity(); tab = "list"; render();
+      return S.list && !S.list.current ? dlgImportList() : undefined;
+    case "importlist": return dlgImportList();
+    case "passover": return dlgPassOver(act.dataset.t);
+    /* Track a name off the list. If the journal already has it, this is just
+       a way to reach its page; if not, it is created first — the list is a
+       set of ticker strings, and a security record appears when somebody
+       does something about one rather than fifty at a time on import. */
+    case "listadd": {
+      const t = act.dataset.t;
+      if (!find(t)) {
+        const r = await api("add_security", t, t);
+        if (!r) return;
+        await refresh();
+      }
+      openSecurity(t); render();
+      return window.scrollTo({ top: 0 });
+    }
     case "note": return dlgNote(s);
     case "buy": return dlgBuy(s);
     case "sell": return dlgSell(s);

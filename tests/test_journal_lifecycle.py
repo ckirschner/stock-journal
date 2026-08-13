@@ -539,12 +539,21 @@ class TestAStagedPlanIsProseAndNotASchedule:
         assert "plan" not in second
 
 
-class TestTheContractVersionDidNotMove:
+class TestTheContractVersionMovesOnlyForAMeaning:
     def test_a_staged_plan_is_additive_to_the_version_already_spoken(self):
         """An optional key is the one kind of change that does not need a new
         contract: every strategy written before it stays valid, and the host
-        would refuse them all if the number moved."""
-        assert contract.CONTRACT_VERSION == 5
+        would refuse them all if the number moved.
+
+        The bare number is here on purpose, and it is the reason this cannot
+        grow quietly: a contract bump has to come past this test, and whoever
+        updates it has to be able to say the move was for a meaning that
+        changed rather than for a key that was added. It has moved once since
+        — to 6, when `position.disposals` narrowed from the security's whole
+        record to the current holding's sales — and the staged plan is still
+        not why.
+        """
+        assert contract.CONTRACT_VERSION == 6
         assert contract.validate_declaration(decl()) == []
         assert json.loads(json.dumps(payload([tranche()]))) == \
             payload([tranche()])

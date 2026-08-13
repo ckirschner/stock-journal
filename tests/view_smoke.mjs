@@ -57,8 +57,8 @@ run("S = __state;");
 run(`window.pywebview = { api: {
   preview_purchase: async (t) => (__state.__previews || {})[t]
     || { ok: false, error: "no preview captured for " + t },
-  preview_sale: async (t) => (__state.__sale_previews || {})[t]
-    || { ok: false, error: "no sale preview captured for " + t },
+  preview_sale: async (t, when) => (__state.__sale_previews || {})[t + "@" + when]
+    || { ok: false, error: "no sale preview captured for " + t + " on " + when },
   preview_backfill: async () => __state.__backfill
     || { ok: false, error: "no backfill preview captured" },
   get_coverage: async (t) => (__state.__coverage || {})[t]
@@ -104,6 +104,38 @@ for (const t of ["holdings", "previous", "ideas", "allocate", "strategy",
   check(t, t === "strategy" ? "strategyView()"
     : t === "data" ? "dataView()"
     : t === "allocate" ? "allocationView()" : "listView()");
+}
+// The list a journal works from, for the journals that have one. Guarded
+// rather than unconditional because the tab genuinely does not exist for a
+// strategy that screens for itself — which is the behaviour, not a gap — and
+// the empty case is drawn separately below so the branch a brand-new journal
+// sees is not the one branch nothing renders.
+if (state.list) {
+  run('tab = "list";');
+  check("list", "importedListView()");
+  check("list:empty", `(() => {
+    const was = S.list;
+    S.list = { ...was, current: null, rows: [], history: [] };
+    const html = importedListView(); S.list = was; return html;
+  })()`);
+  check("list:no-history", `(() => {
+    const was = S.list;
+    S.list = { ...was, history: [] };
+    const html = importedListView(); S.list = was; return html;
+  })()`);
+  check("list:untracked-row", `(() => {
+    const was = S.list;
+    S.list = { ...was, rows: [{ ticker: "ZZZZ", name: null, tracked: false,
+                                held: false, new: true, decision: null,
+                                passed_over: null }] };
+    const html = importedListView(); S.list = was; return html;
+  })()`);
+  check("list:no-floor", `(() => {
+    const was = S.list;
+    S.list = { ...was, current: { ...was.current, floor: null } };
+    const html = importedListView(); S.list = was; return html;
+  })()`);
+  run('tab = "holdings";');
 }
 // The allocation view's four standings, each rendered. Only one of them can
 // be true of any real journal, and the other three are exactly where an
@@ -224,6 +256,10 @@ const dlg = (label, code) => check(label,
              document.getElementById("dlgblurb").textContent,
              document.getElementById("dlgbody").innerHTML].join("\\n")`);
 dlg("dlg:settings", "dlgSettings()");
+if (state.list) {
+  dlg("dlg:importlist", "dlgImportList()");
+  dlg("dlg:passover", 'dlgPassOver("ZZZZ")');
+}
 dlg("dlg:newjournal", "dlgNewJournal()");
 dlg("dlg:renamejournal", "dlgRenameJournal()");
 // The one destructive dialog in the program. It has to say what goes, and it
@@ -240,6 +276,21 @@ if (holding) {
   await run(`dlgSell(find(${JSON.stringify(holding.ticker)}), "2026-03-02")`);
   check("dlg:sell-from-history",
         `document.getElementById("dlgbody").innerHTML`);
+  // The preview not answering must not stop a sale being recorded. Today's
+  // dialog falls back to the live payload, which for today IS the same
+  // figures — a screen that refuses to appear is a gate however it is
+  // described, and the sale has already happened.
+  //
+  // The body is emptied first, so what is checked is what THIS render put
+  // there. The stub's elements persist between runs, and a dialog that never
+  // opened would otherwise be asserted against the markup of the one before
+  // it — a check that passes precisely when the screen is missing.
+  run("__saved = __state.__sale_previews; __state.__sale_previews = {};"
+      + ' document.getElementById("dlgbody").innerHTML = "";');
+  await run(`dlgSell(find(${JSON.stringify(holding.ticker)}))`);
+  check("dlg:sell-no-preview",
+        `document.getElementById("dlgbody").innerHTML`);
+  run("__state.__sale_previews = __saved;");
 }
 
 // Entering a position out of your own records: the empty form, and the form
@@ -565,7 +616,24 @@ if (remembered) {
 }
 if (state.__sale_previews) {
   must.push(["dlg:sell-from-history", "not seen at the time",
-             "a backdated sale says what it is about to freeze was rebuilt"]);
+             "a backdated sale says what it is about to freeze was rebuilt"],
+            // Everything this dialog states about the position is a fact
+            // about the day in its own date field. It used to read the share
+            // count, the lot note and the reference close off the live
+            // payload — three sentences about today, against a picker set to
+            // 2026-03-02, the last of them a price it was inviting into a
+            // record that can never be corrected.
+            ["dlg:sell-from-history", "You held",
+             "a backdated sale says what was held on the day it is dated"],
+            ["dlg:sell-from-history", "2026-03-02",
+             "the count and the close it shows name the day they belong to"]);
+  mustNot.push(["dlg:sell-from-history", "You hold ",
+                "the live share count has no business on a backdated sale"]);
+  must.push(["dlg:sell", "You hold ",
+             "a sale recorded today says what is held today"],
+            ["dlg:sell-no-preview", "Shares sold",
+             "a preview that did not answer does not stop a sale being "
+             + "recorded"]);
 }
 if (state.__backfill) {
   must.push(

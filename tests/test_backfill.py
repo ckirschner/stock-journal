@@ -218,6 +218,121 @@ class TestABackdatedExitReconstructs:
                    for line in exit_["price"]["provenance"])
 
 
+class TestClosingOutMeansTheDayTheSaleIsDated:
+    """The other half of the same seam, and the half the verdict work left
+    behind. A backdated exit is judged with the data of its own day — and it
+    was still *sized* with today's, because "sell everything" was resolved
+    against the share count on the screen and the screen is standing in today.
+
+    Neither failure is loud. Where the position has been added to since, a
+    close-out that genuinely happened is refused over shares bought after it;
+    where it has been trimmed since, a smaller sale is written than the one
+    that happened, and the holding period it was supposed to close stays open
+    with a residue nobody ever owned.
+    """
+
+    def _held(self, api, cik, shares=100, when="2024-01-05"):
+        open_since("2019-01-01")
+        tracked(api, cik=cik)
+        assert api.open_position("SYN", shares, 10.0, when)["ok"]
+
+    def test_a_close_out_takes_what_was_held_then_not_what_is_held_now(
+            self, api):
+        """Bought a hundred in 2024, added fifty this year, and now recording
+        the exit that happened in between. Everything held on that day is a
+        hundred; today it is a hundred and fifty, and a sale for a hundred and
+        fifty is refused by the bound that stops a backfilled exit spending a
+        later holding — so the exit could not be recorded at all."""
+        self._held(api, cik=891)
+        assert api.open_position("SYN", 50, 12.0, "2026-01-10")["ok"]
+        r = api.sell_shares("SYN", "Hit valuation", 22.0, "2024-06-01")
+        assert r["ok"], r
+        sale = portfolio.lots(security(), "sell")[0]
+        assert sale["shares"] == 100.0
+        # ...and the fifty bought afterwards are untouched and still held.
+        assert r["remaining"] == 50.0
+
+    def test_a_close_out_is_refused_rather_than_quietly_made_smaller(
+            self, api):
+        """The silent direction. A hundred were held on the day being
+        recorded and sixty are held now, because forty were sold since. A
+        close-out sized from today writes a sixty-share sale into 2024 — under
+        the bound, so it records — and the holding it was meant to end carries
+        on with forty shares that were in fact sold two years later.
+
+        Sized from the day, the two entries contradict each other and the
+        refusal says so with both dates in it. You cannot have sold all
+        hundred in 2024 and forty of them again in 2026."""
+        self._held(api, cik=892)
+        assert api.sell_shares("SYN", "Risk limit", 30.0, "2026-06-01",
+                               40)["ok"]
+        r = api.sell_shares("SYN", "Panic", 12.0, "2024-06-01")
+        assert r["ok"] is False
+        assert "2024-06-01" in r["error"] and "100" in r["error"], r["error"]
+        assert "60" in r["error"] and "twice" in r["error"], r["error"]
+        # Not the bound's own message, which tells you to record the purchase
+        # the extra shares came from — the purchase is on the record, and a
+        # later sale is what spent it.
+        assert "cannot sell shares it was never told about" not in r["error"]
+        # Nothing was written: one sale on the record, the one that happened.
+        assert len(portfolio.lots(security(), "sell")) == 1
+
+    def test_the_preview_and_the_write_agree_about_what_everything_means(
+            self, api):
+        """One answer, not two that happen to agree. The dialog states the
+        count it is about to default to and the write resolves it again — from
+        the same reader on the same date, so a position that has been added to
+        cannot make the screen and the record disagree about the size of the
+        exit being recorded."""
+        self._held(api, cik=893)
+        assert api.open_position("SYN", 50, 12.0, "2026-01-10")["ok"]
+        p = api.preview_sale("SYN", "2024-06-01")
+        assert p["held"] == 100.0
+        assert api.sell_shares("SYN", "Hit valuation", 22.0,
+                               "2024-06-01")["ok"]
+        assert portfolio.lots(security(), "sell")[0]["shares"] == p["held"]
+
+    def test_the_preview_names_the_lots_a_sale_that_day_can_draw_on(self,
+                                                                    api):
+        """The dialog's note about which shares go first. The allocation stops
+        at the sale's own date, so a purchase made after it can supply
+        nothing — listing it would promise shares the write refuses."""
+        self._held(api, cik=894)
+        assert api.open_position("SYN", 50, 12.0, "2026-01-10")["ok"]
+        assert [l["date"] for l in api.preview_sale("SYN", "2024-06-01")
+                ["lots"]] == ["2024-01-05"]
+        assert [l["date"] for l in api.preview_sale(
+            "SYN", date.today().isoformat())["lots"]] \
+            == ["2024-01-05", "2026-01-10"]
+
+    def test_the_reference_close_belongs_to_the_day_being_recorded(self, api):
+        """The nearest this dialog can come to prefilling the wrong price. The
+        field is empty and always will be, but the close shown beside it was
+        the live one — last week's number offered as the reference for a sale
+        dated years back, into a record that can never be corrected."""
+        self._held(api, cik=895)
+        # The stored series holds one close, in 2026 (see `company`).
+        live = api.preview_sale("SYN", date.today().isoformat())["price"]
+        assert live["status"] == "known" and live["date"] == "2026-08-01"
+        old = api.preview_sale("SYN", "2024-06-01")["price"]
+        assert old["status"] == "absent", old
+        assert "2024-06-01" in old["reason"], old["reason"]
+
+    def test_nothing_held_on_the_day_refuses_rather_than_selling_today(
+            self, api):
+        """A date moved back before the position existed. There is nothing to
+        close out, and the message says which day held nothing rather than
+        silently recording whatever is held now."""
+        self._held(api, cik=896)
+        r = api.sell_shares("SYN", "Panic", 12.0, "2023-01-05")
+        assert r["ok"] is False
+        assert "2023-01-05" in r["error"], r["error"]
+        # The day's own refusal, not the bound's. "The sale is for 100" would
+        # name a figure the user never asked for — it came from today's screen.
+        assert "nothing to sell" in r["error"], r["error"]
+        assert portfolio.lots(security(), "sell") == []
+
+
 # -- the third thing that judged the past with the present -------------------
 
 class TestWhatTheJournalKnewOnADay:

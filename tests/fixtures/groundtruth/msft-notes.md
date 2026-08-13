@@ -59,3 +59,36 @@ printed form in the raw HTML a second time (all hits confirmed).
    Note 16 roll-forward 7,434 million). The cover figure was recorded per instructions.
 3. Signs: capex recorded negative (parentheses as printed). Balance-sheet debt recorded
    positive (printed without parentheses).
+
+---
+
+## Net property
+
+Both years, from the Balance Sheets, caption "Property and equipment, net of
+accumulated depreciation of $X and $Y" — the accumulated-depreciation figures
+are inside the caption itself, so the printed value is already net. FY2024:
+135,591 (accumulated depreciation 76,421); FY2017: 23,734 (accumulated
+depreciation 24,179). Both in millions, current-year column first on this
+filer's sheet.
+
+**This is the case that proves the plain element is not narrow, and it was
+first written up here as though it were.** Microsoft tags one undimensioned
+`us-gaap:PropertyPlantAndEquipmentNet` = 135,591 on the balance-sheet face,
+and a second, dimensioned `LeaseContractualTermAxis = FinanceLeaseMember`
+fact = 25,862 in the lease note. The second is inside the first, and the
+filing says so in words rather than leaving it to be worked out:
+
+> Finance leases are included in property and equipment, other current
+> liabilities, and other long-term liabilities in our consolidated balance
+> sheets.
+
+So nineteen percent of the figure served here is a finance-lease right-of-use
+asset. The operating-lease asset is genuinely separate — "Operating lease
+right-of-use assets" 18,961 is its own line directly below, under its own
+element — and nothing in the map reaches it.
+
+That matters because the concept map briefly refused the longer ASC 842
+element on the stated grounds that the plain one excluded leased assets. It
+does not, this filing is the proof, and the refusal would have made Target
+absent at four percent lease content while serving Microsoft at nineteen. See
+the note in `config/concept-map.yaml`.

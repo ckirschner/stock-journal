@@ -6,7 +6,7 @@ STRATEGY = {
     "name": "Silent version fixture",
     "summary": "Version 2 with a changelog that stops at 1.",
     "version": 2,
-    "contract": 5,
+    "contract": 6,
     "changelog": {1: "First version."},
     "states": [
         {"id": "nothing", "name": "Nothing", "render": "hold",

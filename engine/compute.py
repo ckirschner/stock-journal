@@ -1637,6 +1637,82 @@ def ev_to_ebit(ctx):
                     sorted(set(ev["cautions"] + _cautions_of(ebit))))
 
 
+def earnings_yield(ctx):
+    """Greenblatt's first half: operating profit against what the whole
+    business costs, price included and debts included.
+
+    Not `1 / ev_to_ebit`. Same arithmetic, and it is written out rather than
+    inverted because the two guards do not invert with it: `ev_to_ebit`
+    refuses a non-positive EBIT because a negative multiple sorts below every
+    real reading on a measure where lower is better, and that reasoning is
+    about the multiple rather than about the yield. Here a negative EBIT
+    gives a negative yield, which is the ordinary reading of a company
+    losing money at the operating line and sorts exactly where it belongs.
+    Only the denominator is refused.
+    """
+    ev = ctx.entry("enterprise_value")
+    if ev["status"] != "computed":
+        return ev
+    if ev["value"] <= 0:
+        return not_meaningful(
+            "earnings_yield", "enterprise value is zero or negative",
+            f"enterprise value is {ev['value']:,.0f}")
+    ebit = _ttm(ctx, "ebit")
+    if is_absent(ebit):
+        return _absent_result(ebit)
+    return computed(100.0 * ebit["value"] / ev["value"],
+                    ev["provenance"] + [_prov_point(ebit)],
+                    sorted(set(ev["cautions"] + _cautions_of(ebit))))
+
+
+def return_on_capital(ctx):
+    """Greenblatt's second half: operating profit against the capital the
+    business actually needs to earn it — working capital plus fixed assets,
+    and nothing else.
+
+    The denominator is his and not the ordinary invested-capital one. Debt
+    and equity are deliberately not in it: how a business is financed is a
+    question about its balance sheet, and this is a question about how good
+    the business is. Goodwill is not in it either, for the same reason — what
+    a previous owner overpaid tells you nothing about the return the assets
+    throw off.
+
+    Non-interest-bearing current liabilities come out because supplier credit
+    funds part of the working capital at no cost, and capital somebody else
+    is providing for free is not capital tied up. They are reached by
+    subtraction — current liabilities less the short-term borrowings inside
+    them — because no filer tags the residual directly. Where the borrowings
+    inside current liabilities cannot be separated, `short_term_debt` comes
+    back absent by its own zero_guard and so does this: a denominator that
+    silently kept the borrowings in would overstate capital and understate
+    the return by an unknown amount.
+    """
+    ebit = _ttm(ctx, "ebit")
+    if is_absent(ebit):
+        return _absent_result(ebit)
+    parts = {}
+    for iid in ("current_assets", "current_liabilities",
+                "cash_and_equivalents", "short_term_debt", "net_ppe"):
+        got = _instant(ctx, iid)
+        if is_absent(got):
+            return _absent_result(got)
+        parts[iid] = got
+    # Working capital as he defines it, then the fixed assets it works with.
+    working = ((parts["current_assets"]["value"]
+                - parts["cash_and_equivalents"]["value"])
+               - (parts["current_liabilities"]["value"]
+                  - parts["short_term_debt"]["value"]))
+    capital = working + parts["net_ppe"]["value"]
+    if capital <= 0:
+        return not_meaningful(
+            "return_on_capital", "tangible capital is zero or negative",
+            f"working capital and net fixed assets come to {capital:,.0f}")
+    return computed(
+        100.0 * ebit["value"] / capital,
+        [_prov_point(ebit)] + [_prov_point(p) for p in parts.values()],
+        _cautions_of(ebit, *parts.values()))
+
+
 def _quarterly_ratio_series(ctx, kind):
     """20 quarterly observations of EV/EBIT or P/E, each self-consistent on
     its own quarter's original filing, price and cover shares."""
@@ -2107,6 +2183,218 @@ def _prior_year_ttm(ctx, input_id):
                       f"{latest.period_of_report}, so a prior trailing "
                       "window cannot be assembled")
     return ctx.sb.ttm_at(input_id, target)
+
+
+def eps_change_yoy(ctx):
+    """Diluted EPS over the last twelve months against the twelve before it.
+
+    The same construction as `revenue_change_yoy`, on the same two branches
+    and for the same reasons, applied to the per-share figure.
+
+    It exists because entry and exit want opposite things from a growth
+    number. An entry test wants durability, which argues for a long window;
+    an exit wants timeliness, which argues for a short one. Every growth
+    exit in this bank before this one was a level on the same multi-year
+    rate the entry bought on — and a rate whose ends are three-year means
+    cannot fall below an exit level until the bad years have worked their
+    way into a mean, which is years after the business changed. This is the
+    current rate, and a company that has stopped growing says so here two
+    quarters after it stops.
+
+    Per share rather than in total, and that is a real limitation to know:
+    a company retiring stock fast enough shows growth here that the business
+    did not produce. The guard is that nothing exits on this figure alone —
+    see the growth exit in strategies/lynch, where revenue over the same two
+    windows has to agree before the exit fires.
+    """
+    latest = ctx.sb.latest_fi()
+    if latest is not None and latest.form in (
+            "10-K", "10-K/A", "10-KT", "10-KT/A"):
+        # Latest report is annual: both trailing windows are fiscal years, so
+        # the basis-checked annual window supplies them with every guard
+        # (restatement vintages, families, tiling) already applied.
+        w = _window(ctx, "diluted_eps", 2)
+        if is_absent(w):
+            return _absent_result(w)
+        ends = [p["end"] for p in w["points"]]
+        if w["values"][0] <= 0:
+            return not_meaningful(
+                "eps_change_yoy",
+                "diluted EPS over the earlier of the two windows is zero or "
+                "negative",
+                f"FY {ends[0]} is {w['values'][0]:,.2f}")
+        return computed((w["values"][1] / w["values"][0] - 1) * 100.0,
+                        [f"FY {ends[1]} against FY {ends[0]}, both from a "
+                         "basis-checked window"], w["cautions"])
+    now = _ttm(ctx, "diluted_eps")
+    if is_absent(now):
+        return _absent_result(now)
+    prior = _prior_year_ttm(ctx, "diluted_eps")
+    if is_absent(prior):
+        return _absent_result(prior)
+    if prior["value"] <= 0:
+        return not_meaningful(
+            "eps_change_yoy",
+            "diluted EPS over the earlier of the two windows is zero or "
+            "negative",
+            f"the trailing window to {prior.get('end')} is "
+            f"{prior['value']:,.2f}")
+    # The two trailing windows come from different filing vintages; apply the
+    # same basis discipline annual windows get.
+    fams = _families_of(now) | _families_of(prior)
+    if len(fams) > 1:
+        return not_meaningful(
+            "eps_change_yoy",
+            "the two windows resolve diluted EPS under different tag "
+            "families, or a fiscal year inside them was restated after the "
+            "earlier window's filings were prepared",
+            f"they resolve under {' and '.join(sorted(fams))}")
+    prior_filed = min((r.get("filed") or "")
+                      for r in (prior.get("legs") or [prior]))
+    for ev in ctx.sb._restatement_events(ctx.sb.annual_points("diluted_eps")):
+        if ev["restating_filed"] > prior_filed:
+            return not_meaningful(
+                "eps_change_yoy",
+                "the two windows resolve diluted EPS under different tag "
+                "families, or a fiscal year inside them was restated after "
+                "the earlier window's filings were prepared",
+                f"FY ending {ev['year_end']} was restated by filing "
+                f"{ev['restating_accession']}")
+    return computed((now["value"] / prior["value"] - 1) * 100.0,
+                    [f"TTM to {now.get('end')} against TTM to "
+                     f"{prior.get('end')}"],
+                    _cautions_of(now, prior))
+
+
+# --------------------------------------------------------------------------
+# what the earnings at the base of a growth window looked like
+#
+# Two published readings of the same two quantities `_appeared_rather_than_
+# grew` refuses a compound rate on. The gate above and the pair below are not
+# two statements of one rule and must not be read as one: the gate is the
+# host declining to serve a number it cannot stand behind, and these are the
+# figures themselves, served so that a strategy can hold its own opinion
+# about what they mean and a reader can see the arithmetic that produced it.
+#
+# The distinction matters because the answer is a category rather than a
+# fault. A company whose earnings multiplied off almost nothing while its
+# margin came back from almost nothing did not grow at a rate — it recovered,
+# and recovery has a ceiling that selling more does not. Naming that is more
+# useful to a reader than an absent growth rate, and it points at the right
+# question. What it is not is a fact about whether the company is good.
+#
+# Both are read over the eight fiscal years of net income the five-year
+# growth rates use, with means at each end, so a single distorted year at
+# either end moves them by a third of its distortion rather than by all of
+# it.
+# --------------------------------------------------------------------------
+
+def _base_and_end(ctx, input_id, ends=GROWTH_ENDS):
+    """The two three-year means at the ends of the five-year growth window,
+    with the same pair recomputed for each single year dropped out of them,
+    or an absence.
+
+    `outs` is {fiscal year: (base mean, end mean)} — the same one-out
+    arithmetic every averaged rate in this file uses, so a robustness reading
+    of these cannot disagree with one of a growth rate over the same window.
+    """
+    n = _growth_window(5, ends)
+    w = _window(ctx, input_id, n)
+    if is_absent(w):
+        return w
+    years = [p["end"] for p in w["points"]]
+    base, end, outs = _averaged_ends(w["values"], years, ends)
+    return {"base": base, "end": end, "years": years,
+            "outs": {y: (b, e) for y, b, e in outs},
+            "cautions": list(w["cautions"])}
+
+
+def earnings_base_share_5y(ctx):
+    """What the company earned at the base of the growth window, as a share
+    of what it earns at the end of it.
+
+    Under a tenth is the multiple half of what the growth gate refuses a
+    compound rate on, and on its own it is not a fault: a company whose
+    revenue multiplied about as fast as its earnings grew, and this reads
+    low for it. What it is on its own is a fact a strategy can hold an
+    opinion about, published so that one can.
+    """
+    ni = _base_and_end(ctx, "net_income")
+    if is_absent(ni):
+        return _absent_result(ni)
+    years = ni["years"]
+    if ni["end"] <= 0:
+        return not_meaningful(
+            "earnings_base_share_5y",
+            "mean net income over the three most recent fiscal years is zero "
+            "or negative",
+            f"FY {years[-GROWTH_ENDS]}..{years[-1]} means {ni['end']:,.0f}")
+    # A dropped year that empties the denominator is not offered. A negative
+    # end mean turns a share into a negative number, which on a
+    # higher-is-better measure reads as the base being tiny — the flattering
+    # answer arriving through the door marked robustness.
+    outs = [{"dropped": y, "value": b / e * 100.0}
+            for y, (b, e) in ni["outs"].items() if e > 0]
+    return computed(ni["base"] / ni["end"] * 100.0,
+                    [f"mean net income of FY {years[0]}.."
+                     f"{years[GROWTH_ENDS - 1]} ({ni['base']:,.0f}) against "
+                     f"FY {years[-GROWTH_ENDS]}..{years[-1]} "
+                     f"({ni['end']:,.0f})"],
+                    ni["cautions"], outs)
+
+
+def net_margin_base_share_5y(ctx):
+    """The margin the company earned at the base of the growth window, as a
+    share of the margin it earns at the end of it.
+
+    The other half of the same gate, and the scale-free one: it is a ratio of
+    two ratios, so it says the same thing to a company selling ten dollars
+    and one selling ten billion, and a split changes nothing about it.
+    """
+    ni = _base_and_end(ctx, "net_income")
+    if is_absent(ni):
+        return _absent_result(ni)
+    rev = _base_and_end(ctx, "revenue")
+    if is_absent(rev):
+        return _absent_result(rev)
+    if rev["years"] != ni["years"]:
+        return not_meaningful(
+            "net_margin_base_share_5y",
+            "revenue and net income resolve over different fiscal years",
+            f"net income over {ni['years'][0]}..{ni['years'][-1]} against "
+            f"revenue over {rev['years'][0]}..{rev['years'][-1]}")
+
+    def share(base_ni, end_ni, base_rev, end_rev):
+        if base_rev <= 0 or end_rev <= 0:
+            return None
+        end_margin = end_ni / end_rev
+        if end_margin <= 0:
+            return None
+        return (base_ni / base_rev) / end_margin * 100.0
+
+    value = share(ni["base"], ni["end"], rev["base"], rev["end"])
+    if value is None:
+        return not_meaningful(
+            "net_margin_base_share_5y",
+            "mean revenue at either end of the window is zero or negative, "
+            "or the margin over the three most recent fiscal years is",
+            f"mean revenue {rev['base']:,.0f} then and {rev['end']:,.0f} "
+            f"now, mean net income {ni['end']:,.0f} now")
+    outs = []
+    for y, (base_ni, end_ni) in ni["outs"].items():
+        if y not in rev["outs"]:
+            continue
+        base_rev, end_rev = rev["outs"][y]
+        one = share(base_ni, end_ni, base_rev, end_rev)
+        if one is not None:
+            outs.append({"dropped": y, "value": one})
+    years = ni["years"]
+    return computed(value,
+                    [f"net margin of FY {years[0]}..{years[GROWTH_ENDS - 1]} "
+                     f"({ni['base'] / rev['base'] * 100:,.2f}%) against FY "
+                     f"{years[-GROWTH_ENDS]}..{years[-1]} "
+                     f"({ni['end'] / rev['end'] * 100:,.2f}%)"],
+                    sorted(set(ni["cautions"] + rev["cautions"])), outs)
 
 
 def net_income_cagr_5y(ctx):
@@ -2907,10 +3195,13 @@ REGISTRY = {fn.__name__: fn for fn in (
     operating_income_ttm, market_cap, enterprise_value, pe_ttm, pe_3y_avg_eps,
     price_to_book, price_to_net_tangible_assets, graham_combined_multiple,
     owner_earnings_yield, ev_to_ebit, ev_ebit_to_own_5y_median,
+    earnings_yield, return_on_capital,
     pe_to_own_5y_median_pe, peg_trailing, dividend_adjusted_peg,
     dividend_yield, ncav_to_market_cap, net_cash_to_market_cap,
     revenue_cagr_5y, revenue_cagr_3y,
-    revenue_change_yoy, net_income_cagr_5y, eps_cagr_5y, eps_growth_10y,
+    revenue_change_yoy, eps_change_yoy,
+    earnings_base_share_5y, net_margin_base_share_5y,
+    net_income_cagr_5y, eps_cagr_5y, eps_growth_10y,
     ni_minus_revenue_cagr_spread_5y, eps_minus_revenue_cagr_spread_5y,
     inventory_minus_revenue_growth_yoy, receivables_minus_revenue_growth_yoy,
     profitable_years_10y, consecutive_annual_loss_years,
@@ -2976,6 +3267,8 @@ CADENCE = {
     "eps_growth_10y": "annual",
     "ni_minus_revenue_cagr_spread_5y": "annual",
     "eps_minus_revenue_cagr_spread_5y": "annual",
+    "earnings_base_share_5y": "annual",
+    "net_margin_base_share_5y": "annual",
     "profitable_years_10y": "annual",
     "consecutive_annual_loss_years": "annual",
     "consecutive_dividend_years": "annual",
@@ -3007,11 +3300,12 @@ CADENCE = {
     "price_to_net_tangible_assets": "quarterly",
     "graham_combined_multiple": "quarterly",
     "owner_earnings_yield": "quarterly", "ev_to_ebit": "quarterly",
+    "earnings_yield": "quarterly", "return_on_capital": "quarterly",
     "ev_ebit_to_own_5y_median": "quarterly",
     "pe_to_own_5y_median_pe": "quarterly", "peg_trailing": "quarterly",
     "dividend_adjusted_peg": "quarterly", "dividend_yield": "quarterly",
     "ncav_to_market_cap": "quarterly", "net_cash_to_market_cap": "quarterly",
-    "revenue_change_yoy": "quarterly",
+    "revenue_change_yoy": "quarterly", "eps_change_yoy": "quarterly",
     "inventory_minus_revenue_growth_yoy": "quarterly",
     "receivables_minus_revenue_growth_yoy": "quarterly",
     "diluted_share_count_change_ttm": "quarterly",

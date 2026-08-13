@@ -329,8 +329,23 @@ word, and what has been done with spare cash are questions you answer
 yourself, in writing, and an unanswered one blocks a purchase rather than
 being read as agreement.
 
-**Neither of them counts its tests, and that is the most consequential thing
-about how both are built.** A rule set with nine second-tier tests where seven
+**`strategies/lynch/` is the third, and it is the first whose entry tests and
+exit tests are different measures.** It buys a company that is growing at a
+price that has not paid for the growth yet, and sells when the growth stops
+or when the price runs past it. The split is the point: an entry test wants
+durability, which argues for a long window, and an exit wants timeliness,
+which argues for a short one — so it buys on a five-year rate measured
+between three-year averages at each end, and sells on the trailing twelve
+months against the twelve before. A company that stops growing exits about
+two quarters later rather than several years later. It declares twelve
+states and twenty-nine settings, and two of them are unlike anything in the
+other two bundles: price can end a position here, which Buffett's refuses to
+let happen, and a company whose earnings *appeared* rather than grew — a
+recovery off almost nothing — is named as a turnaround rather than reported
+as unanswerable.
+
+**None of the three counts its tests, and that is the most consequential
+thing about how all of them are built.** A rule set with nine second-tier tests where seven
 must pass sounds like a standard and is not one, because the nine are not nine
 pieces of evidence. Cash flow margin and cash conversion are two readings of
 the same cash; three balance-sheet ratios are three readings of one balance
@@ -354,6 +369,36 @@ reading first: against a realistic universe his tests return nothing for years
 at a time, that is the method working, and the answer it gives is to hold more
 in something safe rather than to lower a threshold.
 
+### A strategy that does not screen
+
+Three of the four shipped strategies answer *should I buy this*. One answers
+*is it time*.
+
+Greenblatt's Magic Formula ranks the whole market on two figures and hands
+back the best thirty or fifty names. That first half is a screener, it needs a
+universe this program does not have, and it is free on his own site. The half
+that is a journal is what you do next: buy five to seven of them every couple
+of months so the whole portfolio does not rest on one entry point, hold each
+about a year, sell, pull a fresh list, replace.
+
+So a journal running it works from a **list you import**. Paste what the
+screen gave you and say what day you pulled it; the journal records which list
+and when, keeps every earlier one, and never rewrites any of them. From then
+on a name is a buy because it is on the current list and there is room to
+start another — not because anything here judged it — and it is a sell because
+a year has passed. A name that comes back on a later list is held rather than
+sold and bought again, and its year runs from that list's day.
+
+The import screen, the tab and the blocked verdict that asks for a list appear
+only for a journal whose strategy said it works from one. A Graham journal is
+never asked and never sees them.
+
+Earnings yield and return on capital are computed and shown beside every
+verdict in such a journal, and they decide nothing. They are there so the page
+can say why a name reached a list. Where it *ranked* is not shown and cannot
+be — a rank is a statement about the three thousand companies it was measured
+against, and none of those are in your journal.
+
 ### Seeing it work without any of your own data
 
 **Data → Load sample journals** creates one journal of invented companies
@@ -364,6 +409,14 @@ has run out on, one that grew to half the account and is deliberately left
 alone, a business that quietly stopped being worth owning, a verdict that
 refuses to decide until you have answered something, a purchase made against
 the signal and one made without one.
+
+The fourth is a different shape and is deliberately **mid-build**: two lists a
+year apart, five names started a few at a time, one that has gone all the way
+round the loop and been sold at its anniversary, one that came back on the
+second list and had its year restarted, and one bought against the signal
+because a friend liked it. Twenty of its twenty-five places are still empty,
+which is not the tool having stopped — it is what the first year of that
+method looks like.
 
 They are separate journals because a journal has exactly one strategy and it
 does not change. Loading them together is the fastest way to see what that
@@ -836,11 +889,17 @@ strategies/               one directory per strategy; discovered, not listed
   graham/                 buys a statistical discount: strategy.py, values.yaml
   buffett/                buys a wonderful business, and asks you three
                           questions no filing can answer
+  lynch/                  buys growth the price has not paid for yet; buys on
+                          a five-year rate and sells on the current one
+  magic-formula/          screens nothing at all: works from a ranked list you
+                          import yourself, buys a few names at a time, and
+                          sells each after about a year
 data.template/            one demonstration journal per strategy — invented
                           companies, invented figures
 tools/sample_kit.py       the shared machinery every sample is built with
-tools/make_sample.py      builds them by driving the real API, and refuses to
-                          write one if a story stops being true
+tools/make_*_sample.py    one per strategy; builds them by driving the real
+                          API, and refuses to write one if a story stops
+                          being true
 tools/contract_reference.py
                           regenerates the reference tables in the strategy
                           documentation from the host's own tables
@@ -858,6 +917,8 @@ engine/                   no UI imports live here
   journals.py             the journal collection, the rule-change record and
                           the record of answers you changed
   bank.py                 the metric bank
+  lists.py                the dated set of securities a journal imported,
+                          for a strategy whose choosing happened elsewhere
   dated.py                append, date, never edit — the one mechanic under
                           every record below
   judgements.py           the per-security questions no filing answers

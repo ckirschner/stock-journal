@@ -25,6 +25,7 @@ everything else, and a test that cannot run must say so rather than pass.
 import json
 import shutil
 import subprocess
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -226,14 +227,18 @@ def _state(strategies, answers=ANSWERS) -> dict:
         for s in state["securities"]}
     for ticker, preview in state["__previews"].items():
         assert preview["ok"], (ticker, preview)
-    # The sale dialog renders from a backend reply too, once its date is in
-    # the past — which is exactly when what it freezes stops being what is on
-    # the screen today. Captured for the same reason as the purchase preview.
+    # The sale dialog renders from a backend reply too, and on every date
+    # rather than only a past one: how many shares were held, which lots they
+    # were and what the security closed at are all facts about the day being
+    # recorded, and the dialog has a date picker in it. Keyed by ticker AND
+    # day, because serving one day's reply for another is exactly the
+    # wrong-clock reading the dialog stopped making.
     state["__sale_previews"] = {
-        s["ticker"]: api.preview_sale(s["ticker"], "2026-03-02")
-        for s in state["securities"]}
-    for ticker, preview in state["__sale_previews"].items():
-        assert preview["ok"], (ticker, preview)
+        f'{s["ticker"]}@{when}': api.preview_sale(s["ticker"], when)
+        for s in state["securities"]
+        for when in (date.today().isoformat(), "2026-03-02")}
+    for key, preview in state["__sale_previews"].items():
+        assert preview["ok"], (key, preview)
     # And the backfill form after a check has come back: rows carrying a
     # verdict each, including one nothing could be rebuilt for.
     state["__backfill_rows"] = [

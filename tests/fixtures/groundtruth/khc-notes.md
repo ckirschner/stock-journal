@@ -136,3 +136,17 @@ this filer it is in the intangibles note, not on the cash flow face. Which
 statement a fact was presented on plays no part in resolution, so it costs
 nothing — but it is the first thing anyone auditing the mapping will wonder
 about, and Target tags it the same way.
+
+---
+
+## Net property
+
+FY2018, Consolidated Balance Sheets, caption "Property, plant and equipment,
+net": 7,078, in millions, December 29 2018 column. The prior column reads 7,061
+for December 30 2017 and is a restated figure — this filing is the restatement,
+which is why the property note carries a further table reconciling 7,120 as
+previously reported to 7,061.
+
+The 7,078 is the one served, and the restatement is the reason to read the
+column header rather than the position: the "As Restated" heading on this sheet
+spans the prior-year column only.

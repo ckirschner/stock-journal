@@ -6,7 +6,7 @@ STRATEGY = {
     "name": "Twin A",
     "summary": "Claims the id twin, as twin-b does.",
     "version": 1,
-    "contract": 5,
+    "contract": 6,
     "changelog": {1: "First version."},
     "states": [
         {"id": "nothing", "name": "Nothing", "render": "hold",

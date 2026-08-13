@@ -540,7 +540,7 @@ STRATEGY = {
                "Sells when the business breaks — never when the price gets "
                "high, and never because time has passed.",
     "version": 5,
-    "contract": 5,
+    "contract": 6,
     "declines": DECLINES,
     "limits": LIMITS,
     "changelog": {

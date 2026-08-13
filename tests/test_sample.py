@@ -48,8 +48,36 @@ BUFFETT = {
     "BRAMBR": ("cannot-screen", "unknown"),
 }
 
-EXTRA = {"graham": {"LOWFD"}, "buffett": set()}
-STORIES = {"graham": GRAHAM, "buffett": BUFFETT}
+LYNCH = {
+    "DUNSFOLD": ("hold", "hold"),
+    "ORRELL": ("room-for-more", "commit"),
+    "HAVERTY": ("one-reading-past", "hold"),
+    "PELSALL": ("hold", "hold"),
+    "CASTERTON": ("cannot-watch", "unknown"),
+    "BRINDLE": ("worth-buying", "commit"),
+    "ALDBURY": ("worth-buying", "commit"),
+    "KETTLEBY": ("not-established-as-a-grower", "hold"),
+    "MOSSGIEL": ("not-growth-at-this-price", "hold"),
+    "TREWIN": ("cannot-screen", "unknown"),
+}
+
+MAGIC = {
+    "MARLBK": ("not-on-your-list", "hold"),
+    "BRAMLY": ("time-is-up", "close"),
+    "FENWCK": ("back-on-the-list", "hold"),
+    "TARRNT": ("still-running", "hold"),
+    "WOOLSN": ("still-running", "hold"),
+    "KINVER": ("still-running", "hold"),
+    "HALSTD": ("still-running", "hold"),
+    "ODDGLY": ("buy-it", "commit"),
+    "SUTTBY": ("buy-it", "commit"),
+    "CRANWL": ("not-on-your-list", "hold"),
+}
+
+EXTRA = {"graham": {"LOWFD"}, "buffett": set(), "lynch": set(),
+         "magic-formula": set()}
+STORIES = {"graham": GRAHAM, "buffett": BUFFETT, "lynch": LYNCH,
+           "magic-formula": MAGIC}
 
 
 @pytest.fixture
@@ -89,10 +117,12 @@ def securities_of(api, strategy_id):
 class TestBothLand:
     def test_one_journal_per_strategy(self, loaded):
         _api, result = loaded
-        assert result["journals"] == 2
-        assert result["n"] == 20
-        assert set(result["names"]) == {"Sample — Graham", "Sample — Buffett"}
-        assert len(journals.list_journals()) == 2
+        assert result["journals"] == 4
+        assert result["n"] == 40
+        assert set(result["names"]) == {"Sample — Graham", "Sample — Buffett",
+                                        "Sample — Lynch",
+                                        "Sample — Magic Formula"}
+        assert len(journals.list_journals()) == 4
 
     def test_each_is_stamped_with_its_own_strategy(self, loaded):
         api, _ = loaded
@@ -103,20 +133,22 @@ class TestBothLand:
             # The one answer each asks for, so the size rules can run at all.
             assert journal["inputs"]["free-cash"] > 0
 
-    def test_neither_pours_into_the_other(self, loaded):
+    def test_none_pours_into_another(self, loaded):
         """A journal has one strategy, so the securities of one sample must
-        never appear in the other's journal. Sharing them would judge each
+        never appear in another's journal. Sharing them would judge each
         company by rules its story was never about."""
         api, _ = loaded
-        graham = set(securities_of(api, "graham"))
-        buffett = set(securities_of(api, "buffett"))
-        assert graham & buffett == set()
+        seen = set()
+        for strategy_id in STORIES:
+            tickers = set(securities_of(api, strategy_id))
+            assert tickers & seen == set(), strategy_id
+            seen |= tickers
 
     def test_it_never_touches_a_journal_that_is_already_here(self, loaded):
         api, _ = loaded
         again = api.load_sample()
         assert again["ok"]
-        assert len(journals.list_journals()) == 4
+        assert len(journals.list_journals()) == 2 * len(STORIES)
 
 
 @pytest.mark.parametrize("strategy_id", sorted(STORIES))

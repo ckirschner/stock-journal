@@ -123,6 +123,22 @@ from types import MappingProxyType
 #    value must now say where its number came from, the context is handed
 #    over frozen rather than copied, `position.months_held` joins HOST_FACTS,
 #    and the state cap moves to 16.
+# 6: `position.disposals` is the current holding's sales, not the security's
+#    whole record. It used to span every holding period while sitting beside
+#    `held`, `shares`, `opened`, `market_value` and `weight`, all of which are
+#    about the run you are in now — and the contract said so in as many words,
+#    so a v5 strategy asking "have I sold this before" was reading exactly
+#    what it was told to read. Under v6 the same key, the same type and the
+#    same entries answer a narrower question: a name closed out and bought
+#    back comes back empty where it used to come back with the sale that
+#    closed it. Nothing raises and nothing looks wrong. That is the quietest
+#    break there is, which is what this number is for.
+#
+#    The old scope is not replaced by a filter, because the entries could
+#    never carry one: a disposal has a date and a share count, and neither
+#    says which holding it ended. What the security has sold across every
+#    period is an analytics question and will arrive, if a strategy ever
+#    needs it, under a name that says so.
 #
 # Deliberately NOT bumped for what a position's baselines and a staged commit
 # added. A strategy may now cite how a measure has moved since a purchase
@@ -150,7 +166,7 @@ from types import MappingProxyType
 # existed cannot ask for the other form and cannot be handed it by accident,
 # so the meaning that moved is reachable only from a citation that names it,
 # and a strategy that names nothing is owed no version.
-CONTRACT_VERSION = 5
+CONTRACT_VERSION = 6
 
 # A strategy may declare at most this many states. The cap is deliberate:
 # states are user-facing vocabulary, and complexity must not creep back in
@@ -400,6 +416,14 @@ STATE_FIXES = MappingProxyType({
                    "prove you wrong, in your own words. Where a strategy "
                    "will not act again until a fresh view has been taken, "
                    "this is where taking it is recorded."}),
+    "list": MappingProxyType({
+        "label": "Import a list",
+        "where": "the list this journal works from",
+        "cites": None,
+        "explain": "The dated set of securities a screen run somewhere else "
+                   "handed you. Where a strategy works from a list rather "
+                   "than from a screen of its own, this is where a fresh one "
+                   "is imported and every earlier one stays on the record."}),
 })
 
 # States the host itself may produce when no strategy verdict exists. They
@@ -912,6 +936,49 @@ HOST_FACTS = MappingProxyType({
         "separate figure — see \"Industry\" — because several codes cover "
         "businesses whose accounts have nothing in common, and the raw code "
         "on its own would look more decisive than it is."),
+    "security.on_list": _fact(
+        "On your current list", "yes_no", ("security", "on_list"),
+        "Whether this security is one of the names on the list your journal "
+        "is currently working from.\n\n"
+        "It is a fact about your list and not a judgement about the company. "
+        "Nothing here ranked anything: a screen run somewhere else returned "
+        "these names out of a universe of thousands, and where a name sits "
+        "within that ranking cannot be recovered from the list alone, "
+        "because the other two thousand nine hundred and seventy companies "
+        "it was ranked against are not here.\n\n"
+        "Absent where this journal has no list at all, which is a different "
+        "thing from a name that is not on one."),
+    "security.listed_on": _fact(
+        "Last on a list", "date", ("security", "listed_on"),
+        "The day the most recent list carrying this name was pulled.\n\n"
+        "It only moves forward. A name that appears on list after list is "
+        "affirmed by each of them, and importing an older list afterwards "
+        "cannot take that back — so a strategy counting a holding period "
+        "from the last time a name was chosen has a date that cannot go "
+        "backwards under it.\n\n"
+        "This is the pull date rather than the day it was typed in. Absent "
+        "where no list on record has ever carried this name."),
+    "list.pulled": _fact(
+        "List pulled", "date", ("list", "pulled"),
+        "The day the list this journal is currently working from was run.\n\n"
+        "You type it in when you import, because only you know it — the day "
+        "you got round to entering it is a different day and is kept "
+        "separately. Everything about how current the ranking is measures "
+        "from here, so a list pulled in March and imported in June is three "
+        "months old on the day it arrives, and says so."),
+    "list.age_months": _fact(
+        "Months since the list was pulled", "months", ("list", "age_months"),
+        "How many whole months old the ranking this journal is working from "
+        "is.\n\n"
+        "A screen is a photograph of prices and accounts on one day. The "
+        "prices have moved since and the accounts have been restated, so a "
+        "list that has been sitting for a year is not a list of the cheapest "
+        "companies any more — it is a list of the companies that were "
+        "cheapest then.\n\n"
+        "The host reports the number and holds no view about it. How stale "
+        "is too stale belongs to the strategy, which declares its own limit "
+        "and compares against this.", bare=True,
+        when_missing="this journal has no list, so there is nothing to age"),
     "position.weight": _fact(
         "Position weight", "percent", ("position", "weight"),
         "How much of your whole account this one holding is, as a "
@@ -1280,9 +1347,10 @@ def check_typed_value(spec: dict, value) -> str | None:
 
 _DECL_KEYS = {"id", "name", "summary", "version", "contract", "changelog",
               "states", "inputs", "values", "reference", "declines",
-              "limits"}
+              "limits", "list"}
 _DECLINE_KEYS = {"class", "because"}
 _LIMIT_KEYS = {"title", "body"}
+_LIST_KEYS = {"label", "explain", "source"}
 _STATE_KEYS = {"id", "name", "description", "render", "fix"}
 _FIELD_KEYS = {"id", "label", "type", "unit", "required", "min", "max",
                "explain", "options", "role", "when", "min_from", "max_from",
@@ -1360,17 +1428,22 @@ def _check_source(where: str, f: dict, errors: list) -> None:
 
     `name` is free text and has to be: the second strategy's source is a
     different document. A closed list would be wrong by the second bundle.
+
+    It answers for a declared value's number and for the list a strategy
+    works from, which are the two things in a declaration that come from
+    outside it. One checker rather than two, because two would be two shapes
+    that agree until somebody changes one of them.
     """
     source = f["source"]
     if not isinstance(source, dict) or set(source) != _SOURCE_KEYS:
         errors.append(
             f"{where}: `source` must be exactly "
-            "{name: where this number came from, reasoning: true if the "
+            "{name: where this came from, reasoning: true if the "
             "explanation is that source's too, false if the source states "
             "the level and the reasoning below is this strategy's own}.")
         return
     if not _is_text(source.get("name")):
-        errors.append(f"{where}: `source.name` must name where this number "
+        errors.append(f"{where}: `source.name` must name where this "
                       "came from, in words a reader could go and check — a "
                       "book and a chapter, a report, a piece of research, or "
                       "the strategy's own author.")
@@ -1768,6 +1841,63 @@ def _check_limits(decl: dict, errors: list) -> None:
                 "which is worse than not raising it.")
 
 
+def _check_list(decl: dict, errors: list) -> None:
+    """Whether this strategy works from a list somebody else chose.
+
+    Declared rather than inferred, and that is the whole point of it being
+    here. A journal only gets the import screen, the four `list.*` and
+    `security.*` facts and the blocked state that asks for one if its
+    strategy said it needs them — so a strategy that screens for itself never
+    shows its user a tab about a list, and the view never asks which strategy
+    is running in order to work that out. Inferring it from whether a
+    decision cited a list fact could not do that: `decide` is never called at
+    load, which is exactly what lets a setup screen be built before any
+    verdict exists.
+
+    Three keys and no logic. `label` is what the screen calls it, because
+    "your Magic Formula list" and "this quarter's shortlist" are different
+    things to a reader and the host has no business naming either. `explain`
+    says in plain language what the list is and where it comes from, for the
+    same reason every declared value carries one — a screen asking someone to
+    paste thirty tickers owes them a sentence about what they are pasting.
+    `source` is the attribution every declared number already carries, asked
+    here for the same reason: a list is the entire buy decision in a strategy
+    shaped like this one, and where it came from is the most load-bearing
+    fact on the page.
+
+    Nothing here says how many names, how often, or how stale is too stale.
+    Those are levels, they belong in `values` where a change to one lands on
+    the rule-change record, and a list declaration that carried them would be
+    a set of thresholds nothing could retune.
+    """
+    spec = decl.get("list")
+    if spec is None:
+        return
+    if not isinstance(spec, dict) or set(spec) != _LIST_KEYS:
+        errors.append(
+            "`list` must be exactly {label: what the screen calls it, "
+            "explain: plain language saying what it is and where it comes "
+            "from, source: where the list is pulled from}, or be left out "
+            "entirely by a strategy that screens for itself.")
+        return
+    if not _is_text(spec.get("label")):
+        errors.append("`list` needs a `label` — what this screen calls the "
+                      "list, in the strategy's own words.")
+    if not _is_text(spec.get("explain")):
+        errors.append(
+            "`list` needs an `explain`. A screen that asks someone to paste "
+            "thirty tickers without saying what they are pasting is the same "
+            "incomplete figure as a threshold with no explanation.")
+    _check_source("`list`", spec, errors)
+
+
+def declares_list(record: dict) -> bool:
+    """Whether a loaded strategy works from a list. The one reader of the
+    declaration, so the screen that offers it, the facts the host serves and
+    the gate in `evaluate` cannot come apart."""
+    return isinstance(record.get("list"), dict)
+
+
 def declined_classes(record: dict) -> dict:
     """{class id: why} for a loaded strategy. The one reader of `declines`,
     so a screen that wants to say what a strategy covers and the gate in
@@ -1904,6 +2034,7 @@ def validate_declaration(decl) -> list[str]:
 
     _check_declines(decl, errors)
     _check_limits(decl, errors)
+    _check_list(decl, errors)
     _check_fields("input", decl.get("inputs", []), errors)
     _check_fields("value", decl.get("values", []), errors)
     if isinstance(decl.get("inputs", []), list) \
