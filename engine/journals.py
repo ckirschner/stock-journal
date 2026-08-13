@@ -615,6 +615,53 @@ def measures_moved_at(journal: dict) -> list[str]:
             or c.get("restated")]
 
 
+def measures_incomparable(journal: dict, comparable) -> dict:
+    """Per measure, every recorded move that makes a reading taken before it
+    and a reading taken after it readings of different things::
+
+        {entry id: [{"seen", "field", "from", "to"},   # a stated field
+                    {"seen", "field"},                 # arithmetic, unsayable
+                    ...]}
+
+    `comparable` is the set of field names a move in which leaves two readings
+    comparable — `bank.COMPARABLE_FIELDS`. It is handed in rather than read
+    here for the reason `observe_measure_change` takes its definitions: this
+    module owns the shape of the record and holds no opinion about what a
+    measure is, and which fields survive a comparison is entirely the second
+    thing.
+
+    Anything not in that set counts, including a field this build has never
+    heard of. That is the safe direction: what it costs is a drift figure that
+    says why it cannot be worked out, and what the other default costs is a
+    five-year median subtracted from a three-year one and called drift.
+
+    A measure that was removed, or added, counts whole. A measure that went
+    and came back is not the same measure, and no field ever "moved" across
+    the gap for anything to notice.
+    """
+    out: dict[str, list] = {}
+    for change in journal.get(_MEASURES) or []:
+        seen = str(change.get("seen"))
+        for gone in change.get("removed") or []:
+            out.setdefault(gone["id"], []).append(
+                {"seen": seen, "field": "the measure was removed"})
+        for new in change.get("added") or []:
+            out.setdefault(new["id"], []).append(
+                {"seen": seen, "field": "the measure was added"})
+        for m in change.get("moved") or []:
+            if m["field"] in comparable:
+                continue
+            out.setdefault(m["id"], []).append(
+                {"seen": seen, "field": m["field"],
+                 "from": m.get("from"), "to": m.get("to")})
+        for r in change.get("restated") or []:
+            if r["field"] in comparable:
+                continue
+            out.setdefault(r["id"], []).append(
+                {"seen": seen, "field": r["field"]})
+    return out
+
+
 def _named(definition: dict, fallback: str) -> str:
     """What a measure is called, for a record a person reads. The id is what
     the record is keyed on and is never what it is read by."""

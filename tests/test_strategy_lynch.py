@@ -38,7 +38,7 @@ cannot drift from the real one.
 
 import pytest
 
-from conftest import industry_node
+from conftest import industry_node, redefined_since
 
 from engine import context, contract
 from engine import strategy_floor, strategy_loader, strategy_values
@@ -828,3 +828,45 @@ class TestAgainstAContextTheHostActuallyBuilds:
                                     {}, record=lynch)
         for mid in MEASURES:
             assert mid in ctx["measures"], mid
+
+
+class TestWhatARedefinedMeasureCostsThisStrategy:
+    """Nothing, and that is worth pinning rather than assuming.
+
+    Lynch cites how five-year EPS growth has moved since the first purchase,
+    and cites it for the reader alone — no comparator, no threshold, nothing
+    branching on the answer. So a redefinition takes the figure off that one
+    row, with the reason in its place, and every verdict this strategy can
+    reach is the verdict it reached before.
+
+    The row still appears. A citation that vanished would take with it the
+    only sign that the question was ever asked.
+    """
+
+    def holding(self, lynch):
+        return build(lynch, known=dict(CLEARS_EXITS), held=True,
+                     opened="2026-01-05", weight=3.0)
+
+    def test_no_verdict_moves(self, lynch):
+        held = self.holding(lynch)
+        before = contract.evaluate(lynch, held)
+        after = contract.evaluate(lynch,
+                                  redefined_since(held, "eps_cagr_5y"))
+        assert before["state"] == after["state"]
+        assert before["render"] == after["render"]
+        assert before["reason"]["rule"] == after["reason"]["rule"]
+        assert before["reason"]["summary"] == after["reason"]["summary"]
+
+    def test_the_row_stays_and_carries_the_reason(self, lynch):
+        after = contract.evaluate(lynch,
+                                  redefined_since(self.holding(lynch),
+                                                  "eps_cagr_5y"))
+        [row] = [r for r in after["reason"]["evidence"]
+                 if r["subject"]["kind"] == "change"]
+        assert row["observed"]["status"] == "absent"
+        assert "value" not in row["observed"]
+        assert "not worked out to the same definition" in \
+            row["observed"]["reason"]
+        # Noted, never failed: a figure nobody could work out has not shown
+        # that growth held and has not shown that it broke.
+        assert row["outcome"] == "noted"

@@ -31,6 +31,7 @@ drift from the real one.
 import pytest
 
 from conftest import entered, filer, filing, dur, balance_face, \
+    redefined_since, \
     industry_node
 
 from engine import context, contract, facts_store, judgements
@@ -1442,3 +1443,66 @@ class TestTheCompaniesItWillNotJudge:
     def test_an_ordinary_business_is_untouched(self, buffett):
         result = contract.evaluate(buffett, build(buffett, known=CLEARS_ENTRY))
         assert result["produced_by"] == "strategy"
+
+
+class TestWhatARedefinedMeasureCostsThisStrategy:
+    """One measure — return on invested capital — and the whole of what a
+    moved definition costs Buffett rides on it.
+
+    The return-on-capital exit is compound on purpose: returns must have
+    fallen by a third of what they were AND be under an absolute floor.
+    Only the first half measures back to a purchase, so only the first half
+    can be withheld when the definition moves — and the exit requires both,
+    so withholding one ends it. This strategy then has four exits instead of
+    five, and the one it loses is the one it is named for: a wonderful
+    business that stopped being wonderful.
+
+    Nothing happens while returns are clear of the floor. The compound test
+    answers "clear" on the absolute half alone, so a redefinition costs
+    exactly nothing until the day the floor is broken — which is the day it
+    would have mattered.
+    """
+
+    def holding(self, buffett, roic, was=None):
+        return build(buffett, known={**CLEARS_EXITS, "roic_median_5y": roic},
+                     series={"roic_median_5y": [(d, roic) for d in
+                                                ("2025-06-30", "2025-09-30",
+                                                 "2025-12-31", "2026-03-31")]},
+                     held=True, opened="2026-01-05", weight=3.0,
+                     judged=SAID_YES,
+                     bought={"first": {"roic_median_5y": was or roic},
+                             "last": {"roic_median_5y": was or roic}})
+
+    def test_nothing_moves_while_returns_are_clear_of_the_floor(self,
+                                                                buffett):
+        held = self.holding(buffett, 18.0)
+        before = contract.evaluate(buffett, held)
+        after = contract.evaluate(buffett,
+                                  redefined_since(held, "roic_median_5y"))
+        assert before["state"]["id"] == after["state"]["id"] == \
+            "room-for-more"
+        assert before["reason"]["summary"] == after["reason"]["summary"]
+
+    def test_the_exit_it_is_named_for_can_no_longer_fire(self, buffett):
+        """Returns halved and under the floor: both halves failed, and the
+        position closes. With the drift half withheld it does not — and the
+        summary says one test could not be worked out rather than counting
+        it as clear, which is the difference between a rule that has stopped
+        firing and a rule that has quietly started passing."""
+        held = self.holding(buffett, 6.0, was=12.0)
+        before = contract.evaluate(buffett, held)
+        assert (before["state"]["id"], before["render"]) == \
+            ("business-broken", "close")
+
+        after = contract.evaluate(buffett,
+                                  redefined_since(held, "roic_median_5y"))
+        assert after["render"] == "hold"
+        assert "1 could not be worked out and is listed below as unknown " \
+            "rather than as passing" in after["reason"]["summary"]
+
+    def test_the_other_four_exits_still_run(self, buffett):
+        held = self.holding(buffett, 6.0, was=12.0)
+        after = contract.evaluate(buffett,
+                                  redefined_since(held, "roic_median_5y"))
+        assert "All 4 exit tests that could be run came back clear" in \
+            after["reason"]["summary"]

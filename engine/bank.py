@@ -719,54 +719,131 @@ def _conditions(entry, form: str) -> list:
             if isinstance(item, dict) and item.get(form) is not None]
 
 
+def _estimator(e) -> dict:
+    return e.get("estimator") or {}
+
+
+def _window(e) -> dict:
+    w = _estimator(e).get("window")
+    return w if isinstance(w, dict) else {}
+
+
+def _response(e) -> dict:
+    return e.get("response") or {}
+
+
+def _marks(e):
+    r = _response(e)
+    return list(r.get("marks") or []) if r else None
+
+
+# ---------------------------------------------------------------------------
+# One row per field a definition carries, and everything about that field in
+# one place: where it is read from, how a change to it is RECORDED, and
+# whether a change to it leaves two readings COMPARABLE.
+#
+# Three lists keyed by the same names would be three lists that come apart,
+# and the second and third columns answer questions that look alike and are
+# not. Recording asks *can the host state what moved* — a number can, a
+# formula cannot. Comparability asks *would two readings taken either side of
+# this be readings of the same thing* — and the two cut the fields in
+# genuinely different places:
+#
+#   `observations read` is STATED and INCOMPARABLE. A five-year median and a
+#   three-year one are both perfectly sayable and are not the same measure.
+#   This is the case that put the gate here at all.
+#
+#   `what the formula refuses on` is RESTATED and COMPARABLE. A condition
+#   moving changes WHEN a value is absent, never what it is when present — so
+#   either one side is absent already, or both were worked out by the same
+#   arithmetic.
+#
+# So reusing the recording split for comparability would have missed the
+# motivating case and gated four that never needed it.
+#
+# COMPARABLE is the narrow list on purpose. A field this build does not know
+# is treated as breaking comparability, which is the safe direction: the cost
+# is a drift row that says why it cannot be worked out, and the cost of the
+# other default is a five-year median subtracted from a three-year one and
+# reported as drift.
+# ---------------------------------------------------------------------------
+
+STATED, RESTATED = "states", "restates"
+COMPARABLE, INCOMPARABLE = "comparable", "incomparable"
+
+_FIELDS = (
+    # field, read from, recorded as, and whether readings stay comparable
+    ("name", lambda e: e.get("label"), STATED, COMPARABLE),
+    ("answered by", lambda e: e.get("kind"), STATED, INCOMPARABLE),
+    ("unit", lambda e: e.get("unit"), STATED, INCOMPARABLE),
+    ("format", lambda e: e.get("format"), STATED, COMPARABLE),
+    ("favourable direction", lambda e: e.get("polarity"), STATED, COMPARABLE),
+    ("how it is read",
+     lambda e: _estimator(e).get("kind"), STATED, INCOMPARABLE),
+    ("observations read",
+     lambda e: _estimator(e).get("observations"), STATED, INCOMPARABLE),
+    # What a reading is JUDGED AGAINST, which robustness is derived from. It
+    # decides what a leave-one-out re-read means and not what the reading is,
+    # and a leave-one-out is computed live from today's filings either way.
+    ("judged against",
+     lambda e: _window(e).get("statistic"), STATED, COMPARABLE),
+    ("observations judged against",
+     lambda e: _window(e).get("observations"), STATED, COMPARABLE),
+    ("built on",
+     lambda e: list((e.get("inputs") or {}).get("entries") or []),
+     STATED, INCOMPARABLE),
+    # A number the formula needs and this file does not fix — the strategy
+    # supplies it. No shipped entry declares one today; it is recorded anyway,
+    # because the first one that does would otherwise arrive with nobody
+    # watching, and an entry silently gaining a knob a strategy turns is
+    # precisely what this record is for.
+    ("parameters",
+     lambda e: [str((p or {}).get("id")) for p in (e.get("parameters") or [])
+                if isinstance(p, dict)], STATED, INCOMPARABLE),
+    # The union across every industry condition, not one row per condition:
+    # what the host acts on is the SET of classes this measure refuses for,
+    # and "no longer declines insurance" is the statement a reader needs.
+    # Which sentence went with which class is prose, and prose is not on this
+    # record. Comparable for the reason the data conditions are: a class
+    # arriving makes today inapplicable and a class leaving means there was no
+    # reading to freeze, so the two sides are never both present and
+    # differently worked out.
+    ("does not describe",
+     lambda e: sorted(_classes_named(e)), STATED, COMPARABLE),
+    ("marks it accepts", _marks, STATED, INCOMPARABLE),
+    ("prose", lambda e: _response(e).get("prose"), STATED, COMPARABLE),
+    ("unmarked reads as",
+     lambda e: _response(e).get("unmarked"), STATED, COMPARABLE),
+    ("how it is worked out",
+     lambda e: _digest((e.get("derivation") or {}).get("formula"),
+                       (e.get("derivation") or {}).get("window")),
+     RESTATED, INCOMPARABLE),
+    ("what the formula refuses on",
+     lambda e: _digest(*[c["data"] for c in _conditions(e, "data")]),
+     RESTATED, COMPARABLE),
+    ("what nothing here can settle",
+     lambda e: _digest(*[p for c in _conditions(e, "undetected")
+                         for p in (c["undetected"], c.get("needs"))]),
+     RESTATED, COMPARABLE),
+    ("the question you answer",
+     lambda e: _digest(e.get("question")), RESTATED, INCOMPARABLE),
+)
+
+# The fields whose movement leaves a frozen reading and a live one comparable.
+# Anything else — including a field added to the table above and any field
+# this build has never heard of — makes them incomparable. See
+# journals.measures_incomparable and context._baseline_of.
+COMPARABLE_FIELDS = frozenset(
+    field for field, _, _, compares in _FIELDS if compares == COMPARABLE)
+
+
 def _definition(entry) -> dict:
     """One entry's rule-bearing state: what it computes, what it refuses on,
     how it is read, and what it does not describe."""
     e = to_plain(entry)
-    est = e.get("estimator") or {}
-    window = est.get("window") if isinstance(est.get("window"), dict) else {}
-    response = e.get("response") or {}
-    states = {
-        "name": e.get("label"),
-        "answered by": e.get("kind"),
-        "unit": e.get("unit"),
-        "format": e.get("format"),
-        "favourable direction": e.get("polarity"),
-        "how it is read": est.get("kind"),
-        "observations read": est.get("observations"),
-        "judged against": window.get("statistic"),
-        "observations judged against": window.get("observations"),
-        "built on": list((e.get("inputs") or {}).get("entries") or []),
-        # A number the formula needs and this file does not fix — the strategy
-        # supplies it. No shipped entry declares one today; it is recorded
-        # anyway, because the first one that does would otherwise arrive with
-        # nobody watching, and an entry silently gaining a knob a strategy
-        # turns is precisely what this record is for.
-        "parameters": [str((p or {}).get("id")) for p in
-                       (e.get("parameters") or []) if isinstance(p, dict)],
-        # The union across every industry condition, not one row per
-        # condition: what the host acts on is the SET of classes this measure
-        # refuses for, and "no longer declines insurance" is the statement a
-        # reader needs. Which sentence went with which class is prose, and
-        # prose is not on this record.
-        "does not describe": sorted(_classes_named(e)),
-    }
-    if response:
-        states["marks it accepts"] = list(response.get("marks") or [])
-        states["prose"] = response.get("prose")
-        states["unmarked reads as"] = response.get("unmarked")
-    restates = {
-        "how it is worked out": _digest((e.get("derivation") or {})
-                                        .get("formula"),
-                                        (e.get("derivation") or {})
-                                        .get("window")),
-        "what the formula refuses on": _digest(
-            *[c["data"] for c in _conditions(e, "data")]),
-        "what nothing here can settle": _digest(
-            *[p for c in _conditions(e, "undetected")
-              for p in (c["undetected"], c.get("needs"))]),
-        "the question you answer": _digest(e.get("question")),
-    }
+    states, restates = {}, {}
+    for field, reads, record, _ in _FIELDS:
+        (states if record == STATED else restates)[field] = reads(e)
     # A field the entry does not declare is left out rather than written down
     # as nothing. Absence is absence — and every journal on the machine keeps
     # a copy of this, so two hundred nulls is two hundred nulls per journal

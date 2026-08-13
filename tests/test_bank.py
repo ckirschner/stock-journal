@@ -398,3 +398,83 @@ class TestEveryRecordedFieldComesFromSomewhere:
             e = self.entry()
             edit(e)
             assert bank._definition(e) == bank._definition(self.entry())
+
+
+class TestWhichFieldsSurviveAComparison:
+    """Whether a change to a field leaves two readings of the measure
+    comparable is a claim about arithmetic, and it decides whether a rule that
+    measures back to a purchase goes on working. Written out in full so that
+    moving one is a decision somebody makes and argues for, rather than a
+    line edited while doing something else.
+
+    It is deliberately NOT the recording split. That one asks whether the host
+    can state what moved; this one asks whether two readings are of the same
+    thing, and the two cut the fields in different places — see the table in
+    engine/bank.py.
+    """
+
+    # field -> whether a move in it leaves a frozen reading and a live one
+    # comparable, with the reason where it is not obvious.
+    COMPARES = {
+        # A different window, a different statistic, a different formula, a
+        # different unit, a different set of ingredients, a different surface
+        # answering it: each one makes the two numbers answers to different
+        # questions.
+        "answered by": bank.INCOMPARABLE,
+        "unit": bank.INCOMPARABLE,
+        "how it is read": bank.INCOMPARABLE,
+        "observations read": bank.INCOMPARABLE,
+        "built on": bank.INCOMPARABLE,
+        "parameters": bank.INCOMPARABLE,
+        "marks it accepts": bank.INCOMPARABLE,
+        "how it is worked out": bank.INCOMPARABLE,
+        "the question you answer": bank.INCOMPARABLE,
+        # What a measure is called, how it prints, which way is favourable,
+        # and what a judgement asks of the reader beside its mark: none of
+        # them is in the arithmetic.
+        "name": bank.COMPARABLE,
+        "format": bank.COMPARABLE,
+        "favourable direction": bank.COMPARABLE,
+        "prose": bank.COMPARABLE,
+        "unmarked reads as": bank.COMPARABLE,
+        # The window a reading is JUDGED against, which decides what a
+        # leave-one-out re-read means — and a leave-one-out is worked out
+        # live from today's filings, never against a frozen figure.
+        "judged against": bank.COMPARABLE,
+        "observations judged against": bank.COMPARABLE,
+        # The three that decide WHEN a value is absent rather than what it is
+        # when present. Either one side is absent already, or both were
+        # worked out by the same arithmetic — there is no case where both are
+        # present and differently derived.
+        "does not describe": bank.COMPARABLE,
+        "what the formula refuses on": bank.COMPARABLE,
+        "what nothing here can settle": bank.COMPARABLE,
+    }
+
+    def test_every_field_says_whether_it_survives_a_comparison(self):
+        declared = {field: compares for field, _, _, compares in bank._FIELDS}
+        assert declared == self.COMPARES
+
+    def test_the_narrow_list_is_the_one_that_is_written_down(self):
+        """Fail closed. A field added to the table and not thought about is
+        treated as breaking a comparison, which shows up as a drift figure
+        saying why it cannot be worked out — noticed. The other default
+        subtracts two different measures and is not."""
+        assert bank.COMPARABLE_FIELDS == {
+            f for f, c in self.COMPARES.items() if c == bank.COMPARABLE}
+        assert "a field from some later build" not in bank.COMPARABLE_FIELDS
+
+    def test_the_two_splits_are_not_the_same_split(self):
+        """If they were, the gate could have reused the recording one — and
+        it would have missed the case that put it there. Asserted in both
+        directions, because either overlap would mean one of the two tables
+        is answering the other's question."""
+        recorded = {field: half for field, _, half, _ in bank._FIELDS}
+        stated_but_incomparable = {
+            f for f, half in recorded.items()
+            if half == bank.STATED and f not in bank.COMPARABLE_FIELDS}
+        restated_but_comparable = {
+            f for f, half in recorded.items()
+            if half == bank.RESTATED and f in bank.COMPARABLE_FIELDS}
+        assert "observations read" in stated_but_incomparable
+        assert "what the formula refuses on" in restated_but_comparable

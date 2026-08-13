@@ -193,6 +193,23 @@ changed will not load; bump the version and the changelog is the account.
 Edit a definition in place and the version beside it does not move — so the
 record says so, and asks *you* for the sentence.
 
+**And a figure frozen under the old definition is not measured against one
+worked out under the new.** Some rules ask how far a measure has moved since
+you bought — the reading frozen onto that purchase, taken from the reading
+now. If the definition moved in between, those are readings of two different
+things, and the difference between them is a distance in nothing. So the
+frozen figure is withheld rather than shown with a warning beside it: a
+caution is read by a person and ignored by the arithmetic, and a rule fires on
+the arithmetic. The comparison reads absent, naming the day the measure
+changed and what changed.
+
+Only a redefinition does this. A renamed measure, a corrected format, a
+reworded condition — none of them makes two readings readings of different
+things, and taking a working rule off a holding because somebody fixed a typo
+would be its own kind of wrong. What it costs is worth knowing before you edit
+anything: it does not heal, because the purchase it is measured against cannot
+be re-frozen. Closing the position and opening it again is what re-anchors it.
+
 ### Your judgement, per security
 
 Some of what decides an investment is not in the filings: whether a moat

@@ -1158,6 +1158,22 @@ Cited as `{"measure": "<id>", "since": "<anchor>"}`.
 | `first-purchase` | since you first bought | the purchase that took this holding up from nothing |
 <!-- end: baseline-anchors -->
 
+**A move can come back unknown because the measure itself moved.** The reading
+at the purchase is frozen; the reading now is worked out today. If what the
+measure *means* changed in between — a different window, a different formula —
+the two are readings of different things and the distance between them is a
+distance in nothing, so the host withholds the frozen figure and the citation
+reads absent with the reason. That is not a gap a fetch can close and it does
+not close by itself: only closing the position and opening it again re-anchors
+what the holding is measured against.
+
+Nothing is asked of you for it. Handle an unknown here exactly as you handle
+every other unknown — never as a pass, never as a zero. What is worth knowing
+before you build a rule on a baseline is that this is the one absence a
+long-held position can acquire without anything about the company changing,
+and a rule that treats it as a demand will make that demand of every holding
+at once.
+
 ### How a move from a baseline is counted
 
 <!-- generated: change-forms -->

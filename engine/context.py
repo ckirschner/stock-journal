@@ -248,7 +248,7 @@ from datetime import date
 from . import bank as bank_mod
 from . import compute, contract, dated, dataview
 from . import industry as industry_mod
-from . import judgements, lists, portfolio, tickermap
+from . import journals, judgements, lists, portfolio, tickermap
 
 # Series stop at the same number of filing boundaries the sell-confirmation
 # view uses; the truncated flag says when older boundaries exist.
@@ -815,7 +815,57 @@ _NO_HOLDING = ("no position is held, so there is no purchase to measure "
                "from")
 
 
-def _baseline_of(lot, anchor) -> dict:
+def _moved_since(rows, frozen) -> list:
+    """The recorded moves that landed after a purchase's figures were frozen,
+    oldest first. Nothing where the record cannot be placed against a stamp —
+    a purchase frozen before this program kept a stamp cannot be told from one
+    frozen yesterday, and guessing which is the failure this whole comparison
+    is being guarded against.
+    """
+    froze = str(frozen or "")
+    if not froze:
+        return []
+    return [r for r in rows if str(r.get("seen") or "") > froze]
+
+
+def _redefined(rows, frozen) -> str | None:
+    """Why a frozen reading cannot be measured against today's, or None where
+    it can.
+
+    Named at the length it is because a figure that silently disappears
+    teaches nothing. It says which day the definition moved, what moved, and
+    what follows — a reader who sees an exit stop firing has to be able to
+    find out that the exit did not stop firing, the comparison did.
+    """
+    moves = _moved_since(rows, frozen)
+    if not moves:
+        return None
+    first = moves[0]
+    day = str(first["seen"])[:10]
+    what = (f'{first["field"]} moved from {_said(first["from"])} to '
+            f'{_said(first["to"])}' if "to" in first
+            else f'{first["field"]} changed')
+    again = ("" if len(moves) == 1 else
+             ", and once more since" if len(moves) == 2 else
+             f", and {len(moves) - 1} more times since")
+    return (f"this was worked out on {str(frozen)[:10]} and what the measure "
+            f"means moved after that — on {day}, {what}{again} — so the "
+            "reading frozen then and the reading now were not worked out to "
+            "the same definition, and the distance between them would not be "
+            "a distance in one measure")
+
+
+def _said(v) -> str:
+    """A value as the reason names it. A field that was not declared is not a
+    value, and "moved from None" reads as a number somebody chose."""
+    if v is None:
+        return "nothing"
+    if isinstance(v, (list, tuple)):
+        return ", ".join(str(x) for x in v) if v else "nothing"
+    return str(v)
+
+
+def _baseline_of(lot, anchor, redefined=None) -> dict:
     """One anchor purchase, as a strategy reads it: the day, and every figure
     that was frozen onto that decision.
 
@@ -831,6 +881,22 @@ def _baseline_of(lot, anchor) -> dict:
     two would otherwise read identically — "no reading of this was on record"
     said thirty times over — and one of them is a gap in the data while the
     other is a gap in the journal, which point at different fixes.
+
+    **A figure whose measure was redefined after it was frozen is absent, and
+    it is absent HERE rather than qualified downstream.** What this feeds is
+    a subtraction: today's reading minus this one, reported as how far the
+    business has moved since you bought. If the definition moved in between,
+    the two are readings of different things and the difference is not a
+    distance in anything — a five-year median taken from a three-year one,
+    with a rule firing on the answer. Principle 4 is explicit that a caution
+    is read by a person and ignored by the arithmetic, so where a value
+    cannot be right it is not qualified, it is withheld: the strategy is
+    never handed the number it would have subtracted.
+
+    `redefined` is `journals.measures_incomparable(...)` — per measure, the
+    recorded moves that break comparability. None means no record was
+    available to check against, which is the ordinary case for a context
+    built without a journal and never suppresses anything.
     """
     if lot is None:
         return _absent(_NO_HOLDING)
@@ -840,16 +906,20 @@ def _baseline_of(lot, anchor) -> dict:
             f'the purchase on {lot.get("date")} that is {anchor["means"]} has '
             "no frozen record of what was true then, so there is nothing to "
             "measure against")
+    frozen = snapshot.get("frozen")
     measures = {}
     for eid, v in (snapshot.get("metrics") or {}).items():
-        if isinstance(v, dict) and "value" in v:
-            measures[eid] = _known(v["value"], v.get("source") or "frozen",
-                                   v.get("cautions"), v.get("provenance"))
+        if not (isinstance(v, dict) and "value" in v):
+            continue
+        why = _redefined((redefined or {}).get(eid) or [], frozen)
+        measures[eid] = _absent(why) if why else _known(
+            v["value"], v.get("source") or "frozen",
+            v.get("cautions"), v.get("provenance"))
     return {"status": "known", "date": lot.get("date"), "lot": lot.get("id"),
             "measures": measures}
 
 
-def _baselines(security, today) -> dict:
+def _baselines(security, today, redefined=None) -> dict:
     """The two moments a rule about a holding can measure from.
 
     Both, always, and never one averaged out of the other. See
@@ -870,13 +940,14 @@ def _baselines(security, today) -> dict:
     first, last = (buys[0], buys[-1]) if buys else (None, None)
     return {
         "first-purchase": _baseline_of(
-            first, contract.BASELINE_ANCHORS["first-purchase"]),
+            first, contract.BASELINE_ANCHORS["first-purchase"], redefined),
         "last-purchase": _baseline_of(
-            last, contract.BASELINE_ANCHORS["last-purchase"]),
+            last, contract.BASELINE_ANCHORS["last-purchase"], redefined),
     }
 
 
-def _position(security, today, as_of, account_value) -> dict:
+def _position(security, today, as_of, account_value,
+              redefined=None) -> dict:
     """The lot history as a strategy reads it: every acquisition with what
     remains of it, what this holding has sold, and not one figure about cost.
 
@@ -909,7 +980,7 @@ def _position(security, today, as_of, account_value) -> dict:
         # which is why they are separate keys rather than one read two ways.
         "last_purchase": bought[-1]["date"] if bought else None,
         "purchases": len(bought),
-        "baselines": _baselines(security, today),
+        "baselines": _baselines(security, today, redefined),
         # Whole months from `opened` to the clock's today, counted by the
         # host's own month arithmetic. It is here so that a strategy with a
         # holding period in it does not have to write that arithmetic again:
@@ -1129,8 +1200,16 @@ def build_context(security: dict, journal_securities: list | None,
         "measures": _measures(security, cik, tickers, as_of, today, snap),
         "price": _price(security, cik, str(security.get("ticker") or ""),
                         as_of, today),
+        # Every measure this journal has recorded being redefined, so a
+        # figure frozen under an older definition is never subtracted from a
+        # reading taken under a newer one. Derived once for the whole build
+        # rather than per lot: it is one walk of the journal's own record, and
+        # a context that read it twice could gate one anchor and not the
+        # other.
         "position": _position(security, today, as_of,
-                              folio["account_value"]),
+                              folio["account_value"],
+                              journals.measures_incomparable(
+                                  journal or {}, bank_mod.COMPARABLE_FIELDS)),
         "portfolio": folio,
         "list": _list(journal, today, as_of),
         "values": values or {},

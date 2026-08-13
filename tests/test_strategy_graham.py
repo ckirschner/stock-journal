@@ -32,6 +32,7 @@ from datetime import date
 import pytest
 
 from conftest import entered, filer, filing, dur, balance_face, \
+    redefined_since, \
     industry_node
 
 from engine import context, contract, facts_store, strategy_loader
@@ -1281,3 +1282,67 @@ class TestTheCompaniesItWillNotJudge:
         row = next(e for e in result["reason"]["evidence"]
                    if e["subject"]["id"] == "security.industry")
         assert row["observed"]["value"] == "Depository and lending"
+
+
+def drift_measures(record):
+    """The measures this bundle watches for drift, taken from the running
+    strategy rather than from a list in this file — so a measure added to the
+    table has to arrive in the test that says what redefining one costs."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "graham_under_test", record["dir"] + "/strategy.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return [row[0] for row in mod.DRIFT]
+
+
+class TestWhatARedefinedMeasureCostsThisStrategy:
+    """Graham is the strategy a moved definition costs the most, and the cost
+    is worth being able to see rather than meeting it on a Tuesday.
+
+    Five measures are watched for drift against both anchors — ten
+    comparisons. The host withholds a frozen figure whose measure was
+    redefined after it was frozen, because the subtraction underneath would
+    be a five-year median taken from a three-year one; and this strategy's
+    own answer to a comparison nobody could make is that nothing more goes
+    in. So editing any one of those five definitions takes every existing
+    holding from "add" to "hold", and leaves it there until the position is
+    closed and opened again — which is the only thing that re-anchors what it
+    is measured against.
+
+    Never a sale and never an exit: the state is reached only after every
+    exit came back clear, and it renders `hold`.
+    """
+
+    def holding(self, graham):
+        return build(graham, known={**CLEARS_ENTRY,
+                                    "consecutive_annual_loss_years": 0},
+                     held=True, opened="2026-01-05", weight=3.0)
+
+    def test_it_still_adds_while_every_comparison_can_be_made(self, graham):
+        """The control, and the reason the rest of this means anything."""
+        out = contract.evaluate(graham, self.holding(graham))
+        assert (out["state"]["id"], out["render"]) == ("add", "commit")
+
+    def test_any_one_of_them_stops_it_adding_and_says_why(self, graham):
+        watched = drift_measures(graham)
+        assert len(watched) == 5, watched
+        for measure in watched:
+            out = contract.evaluate(
+                graham, redefined_since(self.holding(graham), measure))
+            assert (out["state"]["id"], out["render"]) == ("hold", "hold"), \
+                (measure, out["state"]["id"])
+            assert out["reason"]["rule"] == "drift-unreadable", measure
+            # Both anchors, so the count a reader is given is the true one.
+            assert "2 of the 10 comparisons" in out["reason"]["summary"], \
+                measure
+
+    def test_nothing_it_can_sell_on_is_touched(self, graham):
+        """Every exit reads today's figure against a level, and none of them
+        measures back to a purchase. A redefined measure cannot stop this
+        strategy closing a position — only adding to one."""
+        out = contract.evaluate(
+            graham, redefined_since(self.holding(graham),
+                                    *drift_measures(graham)))
+        assert "All 8 exit tests that could be run came back clear" in \
+            out["reason"]["summary"]

@@ -514,3 +514,23 @@ class TestAgainstAContextTheHostActuallyBuilds:
         assert result["state"]["id"] == "waiting-on-a-list"
         assert result["state"]["fix"] == "list"
         assert result["reason"]["rule"] == "no-list-to-buy-from"
+
+
+def test_no_rule_here_measures_back_to_a_purchase(magic):
+    """So a redefined measure costs this strategy nothing, and the reason is
+    structural rather than lucky: its only exit is a clock. It never asks how
+    far anything has moved since you bought, so there is no frozen figure for
+    a moved definition to make incomparable.
+
+    Read off the running bundle rather than asserted as prose, because the
+    day somebody adds a drift rule here is the day this stops being true and
+    the cost has to be worked out again.
+    """
+    import ast
+    import pathlib
+    tree = ast.parse((pathlib.Path(magic["dir"]) / "strategy.py").read_text())
+    cites_a_baseline = [
+        node.lineno for node in ast.walk(tree) if isinstance(node, ast.Dict)
+        and "since" in [k.value for k in node.keys
+                        if isinstance(k, ast.Constant)]]
+    assert cites_a_baseline == [], cites_a_baseline
