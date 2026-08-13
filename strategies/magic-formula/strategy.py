@@ -270,7 +270,7 @@ STRATEGY = {
                "and sells each after about a year. It never judges a company "
                "— the list already did that.",
     "version": 1,
-    "contract": 6,
+    "contract": 7,
     "declines": DECLINES,
     "limits": LIMITS,
 

@@ -43,10 +43,33 @@ schema: ledger.metric-bank/1
 #                 setting a strategy states.
 #
 #                 Where a measure combines legs read differently, the kind
-#                 names the noisiest one: the leg a new filing replaces. A
-#                 price divided by a three-year average earnings is `instant`,
-#                 because the price is a new number every day and the average
-#                 is not.
+#                 names the noisiest one: the leg a new reading replaces. A
+#                 price divided by a three-year average earnings is `quoted`,
+#                 because the price is a new number every session and the
+#                 average is not.
+#
+#                 `window` is the other half of that, and it exists because
+#                 the kind was answering two questions. The kind says what
+#                 one more READING can do, which decides how many readings a
+#                 breach needs and which series they come from. Whether one
+#                 fiscal YEAR could be carrying the answer is a different
+#                 question, and on exactly the measures the noisiest-leg rule
+#                 is for, the two come apart: a price over a three-year mean
+#                 gets a wholly new reading every session AND has a window
+#                 one year can carry.
+#
+#                 So where the kind does not already name a window, an entry
+#                 may declare the one it is judged against:
+#
+#                   window:
+#                     statistic: median | averaged | range | cumulative
+#                     observations: <whole number ≥ 2>
+#
+#                 Declare it when the computation forms leave-one-out
+#                 readings — that IS the statement that a year can be
+#                 dropped, and a test refuses one made in the code and
+#                 nowhere a reader can see. Never beside a kind that already
+#                 names a window; that is one fact declared twice.
 #
 # polarity        Which direction is favourable, as an intrinsic property of
 #                 the measure. NEVER a statement about any particular level.
@@ -265,7 +288,7 @@ entries:
       observations: 5
     label: Return on equity above return on invested capital, 5-year
     unit: percentage_points
-    format: "+0.0"
+    format: "+0.0 pp"
     polarity: lower_is_better
     derivation:
       formula: |
@@ -382,6 +405,9 @@ entries:
     kind: computed
     estimator:
       kind: instant
+      window:
+        statistic: averaged
+        observations: 5
     label: Total debt to average free cash flow, 5-year
     unit: times
     format: "0.0x"
@@ -715,7 +741,7 @@ entries:
   - id: altman_z_score
     kind: computed
     estimator:
-      kind: instant
+      kind: quoted
     label: Altman Z-score
     unit: score
     format: "0.00"
@@ -848,10 +874,12 @@ entries:
           original — which for a property company is at or below zero because
           the law requires nearly all earnings to be paid out, so the change
           that makes the variant fairer elsewhere makes it harsher here.
-      - data: total liabilities are zero
+      - data: total liabilities are zero or negative
         because: |
           A company that owes nothing has no denominator for the equity term —
-          and no solvency question either.
+          and no solvency question either. A total below zero is not a
+          smaller debt but an unreadable balance sheet, and the equity term
+          over it would come back negative on a higher-is-better score.
 
   # ===========================================================================
   # Margins, cash generation and earnings quality
@@ -1074,6 +1102,9 @@ entries:
     kind: computed
     estimator:
       kind: trailing
+      window:
+        statistic: median
+        observations: 3
     label: Gross margin versus its own three-year median
     unit: percentage_points
     format: "+0.0 pp"
@@ -1262,7 +1293,7 @@ entries:
   - id: fcf_yield_on_ev
     kind: computed
     estimator:
-      kind: instant
+      kind: quoted
     label: Free cash flow yield on enterprise value
     unit: percent
     format: "0.0%"
@@ -1609,7 +1640,7 @@ entries:
   - id: market_cap
     kind: computed
     estimator:
-      kind: instant
+      kind: quoted
     label: Market capitalization
     unit: usd
     format: "$0,0"
@@ -1706,7 +1737,7 @@ entries:
   - id: enterprise_value
     kind: computed
     estimator:
-      kind: instant
+      kind: quoted
     label: Enterprise value
     unit: usd
     format: "$0,0"
@@ -1747,7 +1778,7 @@ entries:
   - id: pe_ttm
     kind: computed
     estimator:
-      kind: instant
+      kind: quoted
     label: Price to earnings, trailing twelve months
     unit: times
     format: "0.0x"
@@ -1807,7 +1838,7 @@ entries:
   - id: pe_3y_avg_eps
     kind: computed
     estimator:
-      kind: instant
+      kind: quoted
     label: Price to earnings on three-year average EPS
     unit: times
     format: "0.0x"
@@ -1865,7 +1896,7 @@ entries:
   - id: price_to_book
     kind: computed
     estimator:
-      kind: instant
+      kind: quoted
     label: Price to book
     unit: times
     format: "0.00x"
@@ -1910,7 +1941,7 @@ entries:
   - id: price_to_net_tangible_assets
     kind: computed
     estimator:
-      kind: instant
+      kind: quoted
     label: Price to net tangible assets
     unit: times
     format: "0.00x"
@@ -1953,7 +1984,7 @@ entries:
   - id: graham_combined_multiple
     kind: computed
     estimator:
-      kind: instant
+      kind: quoted
     label: Graham combined multiple
     unit: ratio
     format: "0.0"
@@ -1995,7 +2026,7 @@ entries:
   - id: owner_earnings_yield
     kind: computed
     estimator:
-      kind: instant
+      kind: quoted
     label: Owner earnings yield
     unit: percent
     format: "0.0%"
@@ -2060,7 +2091,7 @@ entries:
   - id: owner_earnings_yield_on_ev
     kind: computed
     estimator:
-      kind: instant
+      kind: quoted
     label: Owner earnings yield on enterprise value
     unit: percent
     format: "0.0%"
@@ -2159,7 +2190,7 @@ entries:
   - id: ev_to_ebit
     kind: computed
     estimator:
-      kind: instant
+      kind: quoted
     label: Enterprise value to EBIT
     unit: times
     format: "0.0x"
@@ -2244,7 +2275,7 @@ entries:
   - id: earnings_yield
     kind: computed
     estimator:
-      kind: instant
+      kind: quoted
     label: Earnings yield
     unit: percent
     format: "0.0%"
@@ -2439,7 +2470,7 @@ entries:
   - id: ev_ebit_to_own_5y_median
     kind: computed
     estimator:
-      kind: instant
+      kind: quoted
     label: EV/EBIT versus its own five-year median
     unit: times_own_median
     format: "0.00x"
@@ -2491,7 +2522,7 @@ entries:
   - id: pe_to_own_5y_median_pe
     kind: computed
     estimator:
-      kind: instant
+      kind: quoted
     label: P/E versus its own five-year median P/E
     unit: times_own_median
     format: "0.00x"
@@ -2537,7 +2568,7 @@ entries:
   - id: peg_trailing
     kind: computed
     estimator:
-      kind: instant
+      kind: quoted
     label: PEG ratio, trailing
     unit: ratio
     format: "0.00"
@@ -2590,7 +2621,7 @@ entries:
   - id: dividend_adjusted_peg
     kind: computed
     estimator:
-      kind: instant
+      kind: quoted
     label: Dividend-adjusted PEG
     unit: ratio
     format: "0.00"
@@ -2638,7 +2669,7 @@ entries:
   - id: dividend_yield
     kind: computed
     estimator:
-      kind: instant
+      kind: quoted
     label: Dividend yield
     unit: percent
     format: "0.00%"
@@ -2671,7 +2702,7 @@ entries:
   - id: ncav_to_market_cap
     kind: computed
     estimator:
-      kind: instant
+      kind: quoted
     label: Net current asset value over market capitalization
     unit: ratio
     format: "0.00"
@@ -2716,7 +2747,7 @@ entries:
   - id: net_cash_to_market_cap
     kind: computed
     estimator:
-      kind: instant
+      kind: quoted
     label: Net cash over market capitalization
     unit: ratio
     format: "0.00"
@@ -2961,7 +2992,7 @@ entries:
   - id: revenue_change_yoy
     kind: computed
     estimator:
-      kind: endpoint
+      kind: trailing
     label: Revenue change, year over year
     unit: percent
     format: "+0.0%"
@@ -2969,6 +3000,9 @@ entries:
     derivation:
       formula: |
         revenue (TTM) ÷ revenue (prior year TTM) − 1
+
+        Where the most recent report is annual, both windows are fiscal
+        years, taken from a basis-checked annual window.
       window: trailing twelve months against the prior trailing twelve months
     inputs:
       filings:
@@ -2985,9 +3019,24 @@ entries:
         Deep cyclicals at a genuine trough post large declines that are the
         setup rather than the problem. Distinguishing a cyclical trough from a
         structural collapse in the numbers alone isn't reliably possible.
-        Acquisitions and divestitures move this without organic change.
+        Acquisitions and divestitures move this without organic change. A
+        single weak quarter moves a trailing twelve months by roughly a
+        quarter of itself.
       attribution: |
         Standard. Used here as a survival check rather than a growth check.
+    not_meaningful_when:
+      - data: revenue over the earlier of the two windows is zero or negative
+        because: |
+          A rate of change from nothing has no scale, and a rate of change
+          from a negative total is worse than none: a contra-revenue
+          restatement can tag revenue below zero, and a company whose revenue
+          fell further from there produces a large positive number here.
+      - data: the two windows resolve revenue under different tag families, or
+          a fiscal year inside them was restated after the earlier window's
+          filings were prepared
+        because: |
+          The comparison would mix two definitions of the figure, which is a
+          definition change dressed as growth.
 
   - id: eps_change_yoy
     kind: computed
@@ -3183,7 +3232,8 @@ entries:
           different amounts depending on the age of the portfolio at each
           end.
       - data: mean revenue at either end of the window is zero or negative, or
-          the margin over the three most recent fiscal years is
+          the margin over the three most recent fiscal years is zero or
+          negative
         because: |
           There is no end margin for the base one to be a share of, and a
           negative one would print a negative share — which on a
@@ -3850,7 +3900,7 @@ entries:
   - id: diluted_share_count_change_ttm
     kind: computed
     estimator:
-      kind: endpoint
+      kind: trailing
     label: Diluted share count change, trailing twelve months
     unit: percent
     format: "+0.0%"

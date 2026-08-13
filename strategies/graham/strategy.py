@@ -19,14 +19,18 @@ settlement, one inventory build, and a measure crosses a line because of
 something that happened once — and a tool whose purpose is preventing panic
 decisions must not use its own authority to cause one. What it takes to
 believe a crossed line is asked of the host, which knows how each of these
-eight measures is read. Seven of them are readings at a moment — a balance
-sheet is one morning's photograph, and a multiple against a price is a new
-number every day — so a second filing genuinely says something the first
-did not, and the report's two consecutive filings stand. The eighth counts
-annual reports, and a level of two losing years already means two annual
-filings; asking for two filings on top of it would be asking for a third
-year. A crossed line that is not yet established is a state of its own, so
-the user can see the rule declining to panic rather than seeing nothing at
+eight measures is read. Seven of them are readings at a moment, so a second
+reading genuinely says something the first did not, and the report's two
+readings stand — but they are not all read from the same place. The four
+safety tests come off a balance sheet, which is one morning's photograph and
+changes when a report is filed; the three discount tests are multiples
+against a share price, which is a new number every session. Both wait for a
+second reading; what differs is how long that takes, and the host counts each
+on its own series rather than making a price wait on an accounting one. The
+eighth counts annual reports, and a level of two losing years already means
+two annual filings; asking for two filings on top of it would be asking for a
+third year. A crossed line that is not yet established is a state of its own,
+so the user can see the rule declining to panic rather than seeing nothing at
 all.
 
 **There is a clock.** Sell after two years regardless of what happened. No
@@ -512,11 +516,29 @@ STRATEGY = {
                "what its assets and its typical earnings justify, and sells "
                "when that gap closes, when the balance sheet stops being "
                "safe, or when two years are up — whichever comes first.",
-    "version": 8,
-    "contract": 6,
+    "version": 9,
+    "contract": 7,
     "declines": DECLINES,
     "limits": LIMITS,
     "changelog": {
+    9: "THE THREE DISCOUNT EXITS NOW ACT IN DAYS RATHER THAN IN QUARTERS. No "
+       "level moved.\n\n"
+       "`exit-pe-3y-avg`, `exit-price-to-book` and `exit-combined-multiple` "
+       "are multiples against a share price, and this file has said since it "
+       "was written that such a thing is a new number every day. The host "
+       "was counting filings anyway, so the discount closing — the event "
+       "this method exists to catch — could take a quarter to register while "
+       "the price that closed it moved every session. They now take two "
+       "trading days.\n\n"
+       "The five safety exits are unchanged. A current ratio, the two debt "
+       "tests and the Z-score come off a balance sheet, which is one "
+       "morning's photograph and changes when a report is filed; the run of "
+       "losing years counts annual reports, as it always did.\n\n"
+       "One consequence worth knowing: a position whose price runs up now "
+       "reaches `discount-closed` in about two days, where it used to trip "
+       "the position-weight trim first and close months later. The trim was "
+       "never the intended answer to a closed discount — it fired because "
+       "the exit was slow.",
         8: "A SECOND EXPERT REVIEW READ THE REPORT THIS STRATEGY WAS BUILT "
            "FROM AND DISPUTED IT. This version is that review's "
            "corrections, and every one of them changes what this strategy "
@@ -2275,12 +2297,26 @@ def _established_on(found) -> str:
             ways.add("on the current reading, which is all a measure this "
                      "smooth can be asked for")
         elif f["needs"] == 1:
-            ways.add("on the newest filing")
+            ways.add(f"on the newest {f['estimator']['counts_one']}")
         else:
-            ways.add(f"on {f['needs']} consecutive filings")
+            ways.add(f"on {f['needs']} consecutive "
+                     f"{f['estimator']['counts']}")
     if len(ways) != 1:
         return " each on the evidence its own measure can carry"
     return " " + ways.pop()
+
+
+def _waiting_unit(waiting) -> str:
+    """The host's word for what these breaches are waiting on.
+
+    Never "filings". Which series a breach is counted in is a property of the
+    measure and the host derives it, so this asks rather than assumes — a
+    valuation multiple is confirmed over trading days and a balance-sheet
+    ratio over filings, and a single sentence covering both has to say
+    "readings" rather than pick one and be wrong about the other.
+    """
+    nouns = {f["estimator"]["counts"] for f in waiting}
+    return nouns.pop() if len(nouns) == 1 else "readings"
 
 
 def _on_a_holding(ctx):
@@ -2414,13 +2450,13 @@ def _on_a_holding(ctx):
                 "summary": (
                     f"{len(waiting)} exit level has been crossed on the "
                     "current reading and has not yet been crossed on "
-                    "enough consecutive filings to act on. Nothing is owed "
-                    "from you today."
+                    f"enough consecutive {_waiting_unit(waiting)} to act "
+                    "on. Nothing is owed from you today."
                     if len(waiting) == 1 else
                     f"{len(waiting)} exit levels have been crossed on the "
                     "current reading and have not yet been crossed on "
-                    "enough consecutive filings to act on. Nothing is owed "
-                    "from you today."),
+                    f"enough consecutive {_waiting_unit(waiting)} to act "
+                    "on. Nothing is owed from you today."),
                 "evidence": evidence, "groups": groups, "note": note,
             },
         }

@@ -286,6 +286,36 @@ def close_on(doc: dict, ticker: str, date: str, reach_days: int | None = None):
     return None
 
 
+def splits_between(doc: dict, ticker: str, after: str, upto: str) -> list:
+    """[[date, factor], ...] — the split events for ONE instrument that fall
+    strictly after `after` and on or before `upto`, oldest first.
+
+    This is what makes a share count and a close comparable. A cover count is
+    shares outstanding on the day the cover states, and a close is a price on
+    its own day; a split between the two restates one of them and not the
+    other, and the product is wrong by the factor. It is stored — the whole
+    reason this file keeps raw rows and events side by side rather than an
+    adjusted series — and until now nothing read it.
+
+    Strictly after, because a split effective ON the counting date is already
+    in the count the cover states. On or before `upto`, because a split after
+    the close has not touched that close.
+
+    A factor that is not a positive number is returned anyway. Whether a
+    malformed event should stop a reading is the caller's question, and the
+    honest answer at this level is that an event we cannot read is still an
+    event: pretending it is not there is the direction that produces a
+    confident wrong number.
+    """
+    key = series_key(doc, ticker)
+    if key is None:
+        return []
+    lo, hi = str(after or "")[:10], str(upto or "")[:10]
+    return [[e[0], e[2] if len(e) > 2 else None]
+            for e in doc["series"][key].get("events") or []
+            if str(e[1]) == "split" and lo < str(e[0])[:10] <= hi]
+
+
 def latest_close(doc: dict, ticker: str):
     """(date, close) of the newest held row for ONE instrument, or None.
     Staleness is the caller's question to ask — the date is right there."""

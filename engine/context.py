@@ -332,9 +332,15 @@ def _current_values(security, cik, tickers, registry_ids, as_of, snap=None):
 
 
 def _series_for(filings, prices, symbols, today, ind=None):
-    """{entry id: series dict} for every entry with a filing cadence, all
-    entries of a cadence sharing one pinned context per boundary so the
-    series is cheap to assemble and every reading obeys the same clock.
+    """{entry id: series dict} for every entry with a clock, all entries on
+    one clock sharing one pinned context per boundary so the series is cheap
+    to assemble and every reading obeys the same clock.
+
+    Three clocks, and the third is the one that is not a filing. A measure
+    carrying a quoted price gains a new reading every session, so its
+    boundaries are trading days: the same shape, the same pinning, the same
+    counting downstream. What differs is only which series says when a new
+    reading exists — see compute.trading_boundaries and contract.CLOCKS.
 
     The identity history goes to every boundary context, so a point read at a
     2019 filing is judged against what the SEC called this filer then. A
@@ -345,10 +351,13 @@ def _series_for(filings, prices, symbols, today, ind=None):
              if str(f.get("filed") or "")[:10]
              and str(f.get("filed") or "")[:10] <= today]
     out = {}
-    for cadence in ("annual", "quarterly"):
+    for cadence in compute.CADENCES:
         eids = [e for e, c in compute.CADENCE.items()
                 if c == cadence and e in compute.REGISTRY]
-        bounds = compute.confirmation_boundaries(dated, cadence)
+        bounds = (compute.trading_boundaries(prices, symbols, today,
+                                             limit=SERIES_BOUNDARY_CAP)
+                  if cadence == compute.DAILY
+                  else compute.confirmation_boundaries(dated, cadence))
         take = bounds[-SERIES_BOUNDARY_CAP:]
         contexts = []
         for b in take:
@@ -388,6 +397,11 @@ def _series_for(filings, prices, symbols, today, ind=None):
                 })
             if points:
                 note = None
+            elif cadence == compute.DAILY:
+                note = ("no closes are stored for this security on or before "
+                        f"{today} — this measure carries a market price, so "
+                        "its readings are trading days; fetch price history "
+                        "to build them")
             elif not dated:
                 note = ("no filing data is stored for this security on or "
                         f"before {today} — fetch data to build its history")

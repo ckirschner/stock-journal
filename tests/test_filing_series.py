@@ -259,7 +259,17 @@ def _rich_company():
         fs.append(filing(f"K{year}", "10-K", f"{year + 1}-02-20", end, facts))
     q_end = "2025-03-31"
     fs.append(filing("Q1-2025", "10-Q", "2025-05-10", q_end,
-                     [dur("us-gaap:Revenues", "2025-01-01", q_end, 260)]
+                     [dur("us-gaap:Revenues", "2025-01-01", q_end, 260),
+                      # A cover share count, so the price-bearing formulas
+                      # reach a price instead of refusing above it. Without
+                      # one, every entry on the session clock bails at
+                      # `_cover_shares` and the probe below reports that it
+                      # touched only filing helpers — a derivation that
+                      # agrees with the wrong answer because the fixture was
+                      # too thin to disagree.
+                      {**inst("dei:EntityCommonStockSharesOutstanding",
+                              q_end, 50.0, stmt=None),
+                       "unit": "shares", "currency": None}]
                      + balance_face(q_end, extra=[
                          inst("us-gaap:AssetsCurrent", q_end, 210),
                          inst("us-gaap:LiabilitiesCurrent", q_end, 105),
@@ -270,13 +280,23 @@ def _rich_company():
 class TestCadence:
     def test_every_computed_entry_declares_a_cadence(self):
         assert set(CADENCE) == set(REGISTRY)
-        assert set(CADENCE.values()) <= {"annual", "quarterly"}
+        assert set(CADENCE.values()) <= {"annual", "quarterly", "daily"}
 
-    def test_declared_cadence_matches_the_helpers_the_formula_touches(self):
+    def test_declared_cadence_matches_what_the_formula_touches(self):
         """The table is a claim about each formula; this derives the fact
-        from the formula itself. An entry that consults trailing-twelve-month
-        or balance-sheet machinery gains new inputs from a quarterly report;
-        one that consults only annual series does not."""
+        from the formula itself.
+
+        Three clocks now, and the price one is deliberately NOT derived
+        here. Running a formula only shows what it reached before it
+        refused, and every price-bearing entry refuses somewhere above its
+        price on a fixture missing one input — `altman_z_score` needs an
+        EBIT it has not got, and comes back looking price-free. A derivation
+        that goes blind exactly when the fixture thins is one that agrees
+        with a wrong declaration, so the price leg is settled statically by
+        `compute.price_driven_entries` and enforced at bank load. This
+        checks the filing arm, where the helpers are called at the top of
+        every formula and running it is the honest test.
+        """
         doc = price_store.load(2)
         price_store.merge_series(doc, "SYN", "tiingo",
                                  [["2025-05-12", 100.0, 0]], [])
@@ -290,6 +310,8 @@ class TestCadence:
                 fn(ctx)
             except Exception:       # noqa: BLE001 — touches already recorded
                 pass
+            if CADENCE[eid] == "daily":
+                continue            # settled statically; see the docstring
             q = rec.touched & _QUARTERLY_HELPERS
             a = rec.touched & _ANNUAL_HELPERS
             if not q and not a:

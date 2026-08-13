@@ -54,7 +54,7 @@ STRATEGY = {
                "question only you can answer. Every number in it is "
                "invented and it is not investment logic.",
     "version": 2,
-    "contract": 6,
+    "contract": 7,
     "changelog": {
         1: "First version. Two knockouts and three core tests of which some "
            "number must pass, one exit on interest coverage confirmed across "

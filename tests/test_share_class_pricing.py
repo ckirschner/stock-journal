@@ -513,3 +513,91 @@ class TestTheCrossCheckPricesTheSameThing:
         row = out["checks"][0]
         assert row["status"] == "skipped"
         assert "common stock" in row["note"]
+
+
+class TestASplitBetweenTheCountAndTheClose:
+    """A share count and a close are only multipliable while no split sits
+    between them.
+
+    The cover states shares outstanding on one day; the close is a price on
+    another. A two-for-one in the gap doubles the count and halves the price,
+    and the filer restates the count only at its next filing — so until then
+    market cap is out by the factor, in the direction that makes the company
+    look cheap. `price_store` has stored the split events since it was
+    written, and nothing read them.
+
+    Absent rather than cautioned, and that is the whole point: this figure
+    reaches P/E, price-to-book, the Graham combined multiple and every yield,
+    three of which close a position. A caution is read by a person and
+    ignored by the arithmetic.
+    """
+
+    COUNT, COUNTED_ON = 1.0e9, "2026-01-20"
+
+    def _filings(self):
+        end = "2025-12-31"
+        facts = balance_face(end) + [
+            {**inst("dei:EntityCommonStockSharesOutstanding", self.COUNTED_ON,
+                    self.COUNT, stmt=None),
+             "unit": "shares", "currency": None},
+        ]
+        return [filing("K1", "10-K", "2026-02-10", end, facts),
+                cover(("us-gaap:CommonStockMember", "ACME",
+                       "Common Stock, $0.01 par value"),
+                      accession="C-1", filed="2026-02-10")]
+
+    def _ctx(self, cik, *, splits=(), close=("2026-03-02", 50.0)):
+        doc = price_store.load(cik)
+        price_store.merge_series(doc, "ACME", "test",
+                                 [[close[0], close[1], 100]],
+                                 [list(s) for s in splits])
+        return compute.Ctx(self._filings(), doc,
+                           instruments.company_symbols(self._filings(),
+                                                       ["ACME"]),
+                           today="2026-03-02", industry=no_filer())
+
+    def test_without_a_split_the_count_and_the_close_multiply(self):
+        r = self._ctx(801).entry("market_cap")
+        assert r["status"] == "computed"
+        assert r["value"] == 1.0e9 * 50.0
+
+    def test_a_split_between_the_two_makes_the_figure_absent(self):
+        """The 2-for-1 case, priced post-split against a pre-split count: the
+        product is half the truth, and half of a valuation multiple is the
+        difference between a discount and a fair price."""
+        r = self._ctx(802, splits=(["2026-02-17", "split", 2.0],)).entry(
+            "market_cap")
+        assert r["status"] == "absent"
+        assert "split on 2026-02-17" in r["reason"]
+        assert self.COUNTED_ON in r["reason"] and "2026-03-02" in r["reason"]
+        # never the wrong number with a warning beside it
+        assert r.get("value") is None
+
+    def test_a_split_before_the_count_is_already_in_it(self):
+        """Strictly after. A split effective on or before the day the cover
+        speaks for is reflected in the count the cover states, so it is not a
+        straddle and refusing on it would take market cap away from every
+        company that has ever split."""
+        r = self._ctx(803, splits=(["2026-01-05", "split", 2.0],)).entry(
+            "market_cap")
+        assert r["status"] == "computed"
+
+    def test_a_split_after_the_close_has_not_touched_that_close(self):
+        r = self._ctx(804, splits=(["2026-03-30", "split", 2.0],)).entry(
+            "market_cap")
+        assert r["status"] == "computed"
+
+    def test_a_dividend_event_is_not_a_split(self):
+        """Only splits restate a share count. A cash dividend moves the price
+        and leaves the count alone, so it is not a basis mismatch."""
+        r = self._ctx(805, splits=(["2026-02-17", "dividend", 0.5],)).entry(
+            "market_cap")
+        assert r["status"] == "computed"
+
+    def test_everything_priced_off_market_cap_goes_absent_with_it(self):
+        """The reason the guard sits at the multiplication and not at each
+        consumer: one refusal, and the twenty entries that carry a price
+        inherit it rather than each remembering to ask."""
+        ctx = self._ctx(806, splits=(["2026-02-17", "split", 2.0],))
+        for eid in ("market_cap", "price_to_book", "enterprise_value"):
+            assert ctx.entry(eid)["status"] == "absent", eid

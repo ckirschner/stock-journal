@@ -134,14 +134,22 @@ def _industry_classes() -> str:
 
 def _estimators() -> str:
     return _table(
-        ["`kind`", "reads as", "filings a breach needs",
+        ["`kind`", "reads as", "a breach needs", "counted in",
          "must survive dropping a year"],
         [(f"`{k}`", v["label"], v["confirmations"],
+          contract.CLOCKS[v["clock"]]["noun"],
           {"no": "—", "always": "yes",
            "short-window":
                f'under {contract.BREAKDOWN_OBSERVATIONS} observations'}
           [v["robustness"]])
          for k, v in contract.ESTIMATORS.items()])
+
+
+def _clocks() -> str:
+    return _table(
+        ["`clock`", "counts", "which are"],
+        [(f"`{k}`", v["noun"], v["means"])
+         for k, v in contract.CLOCKS.items()])
 
 
 def _robustness() -> str:
@@ -193,6 +201,7 @@ BLOCKS = {
     "baseline-anchors": _baseline_anchors,
     "change-forms": _change_forms,
     "estimators": _estimators,
+    "clocks": _clocks,
     "robustness": _robustness,
     "industry-classes": _industry_classes,
     "input-roles": _input_roles,

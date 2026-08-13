@@ -539,11 +539,26 @@ STRATEGY = {
                "and only at a price that leaves something on the table. "
                "Sells when the business breaks — never when the price gets "
                "high, and never because time has passed.",
-    "version": 5,
-    "contract": 6,
+    "version": 6,
+    "contract": 7,
     "declines": DECLINES,
     "limits": LIMITS,
     "changelog": {
+    6: "`exit-debt-to-fcf` NOW ASKS WHETHER ONE YEAR IS CARRYING THE BREACH. "
+       "No level moved, and this exit is now HARDER to fire, not easier.\n\n"
+       "The measure is debt at one balance-sheet date over five fiscal years "
+       "of free cash flow averaged. The host classified it by its noisiest "
+       "leg — the balance-sheet instant, which is right, and which is why it "
+       "still takes two filings — and that also decided, silently, that no "
+       "single year could be carrying it. It has a five-year window "
+       "underneath, and one very bad year in it can push the ratio past this "
+       "level on its own. The computation had been working out the "
+       "year-dropped readings all along and nothing could ask for them.\n\n"
+       "So a breach that clears when its worst year is dropped no longer "
+       "ends the position; it waits, and says so. If you were relying on "
+       "this exit acting on a single bad year, the honest place for that is "
+       "the level: say what borrowing you will accept against normal cash "
+       "generation. The other four exits are unchanged.",
         5: "A SECOND EXPERT REVIEW READ THE REPORT THIS STRATEGY WAS BUILT "
            "FROM AND DISPUTED IT. This version is that review's corrections, "
            "and it changes what this strategy will buy more than any version "
@@ -1906,13 +1921,27 @@ def _confirmed_on(broken):
             ways.add(" on a reading a single year cannot have moved, so "
                      "there is nothing to wait for")
         elif f["needs"] == 1:
-            ways.add(" on the newest filing")
+            ways.add(f" on the newest {f['estimator']['counts_one']}")
         else:
-            ways.add(f" on {f['needs']} consecutive filings, so this is a "
-                     "change and not a wobble")
+            ways.add(f" on {f['needs']} consecutive "
+                     f"{f['estimator']['counts']}, so this is a change "
+                     "and not a wobble")
     if len(ways) != 1:
         return " each on the evidence its own measure can carry"
     return ways.pop()
+
+
+def _waiting_unit(waiting) -> str:
+    """The host's word for what these breaches are waiting on.
+
+    Never "filings". Which series a breach is counted in is a property of the
+    measure and the host derives it, so this asks rather than assumes — a
+    valuation multiple is confirmed over trading days and a balance-sheet
+    ratio over filings, and a single sentence covering both has to say
+    "readings" rather than pick one and be wrong about the other.
+    """
+    nouns = {f["estimator"]["counts"] for f in waiting}
+    return nouns.pop() if len(nouns) == 1 else "readings"
 
 
 def _exit_evidence(group, states):
@@ -2352,8 +2381,9 @@ def _on_a_holding(ctx):
                     + ("has" if len(waiting) == 1 else "have")
                     + " been crossed on the current reading and "
                     + ("has" if len(waiting) == 1 else "have")
-                    + " not yet been crossed on enough consecutive filings "
-                      "to act on. Nothing is owed from you today."),
+                    + " not yet been crossed on enough consecutive "
+                    + _waiting_unit(waiting)
+                    + " to act on. Nothing is owed from you today."),
                 "evidence": evidence, "groups": groups,
             },
         }

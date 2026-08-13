@@ -148,6 +148,50 @@ def _check_rendering(entry) -> list:
     return problems
 
 
+def _check_window(eid, kind, window) -> list:
+    """Everything wrong with one entry's `window`.
+
+    `window` says what a measure's reading is JUDGED AGAINST, where that is a
+    window of fiscal years and the kind names something else. It exists
+    because `kind` answers "what can one more reading do" and robustness
+    answers "could one fiscal year be carrying this", and on a measure whose
+    legs run at different speeds those are different questions — see
+    contract.WINDOW_STATISTICS.
+
+    Refused on a kind that already names a window, because then there would
+    be two places to say one thing and they would come apart. That is the
+    failure this file exists to refuse, and it has happened here before.
+    """
+    from .contract import WINDOW_STATISTICS       # local: bank loads first
+    if kind in WINDOW_STATISTICS:
+        return [f"{eid}: a {kind} estimator already names the window it "
+                "reads, and `observations` says how long it is. A second "
+                "`window` beside it is the same fact declared twice, which "
+                "is how the two come to disagree."]
+    if not isinstance(window, dict):
+        return [f"{eid}: `window` is a mapping of `statistic` and "
+                "`observations` — what this reading is judged against."]
+    unknown = set(window) - {"statistic", "observations"}
+    if unknown:
+        return [f"{eid}: a window carries `statistic` and `observations` and "
+                "nothing else; found " + ", ".join(sorted(unknown)) + "."]
+    stat = str(window.get("statistic") or "")
+    if stat not in WINDOW_STATISTICS:
+        return [f'{eid}: `window.statistic` is "{stat or "nothing"}", which '
+                "is not one of " + ", ".join(WINDOW_STATISTICS)
+                + " — how the fiscal years this reading is judged against "
+                  "are summarised. Adding one is a host change in "
+                  "engine/contract.py."]
+    obs = window.get("observations")
+    if not isinstance(obs, int) or isinstance(obs, bool) or obs < 2:
+        return [f"{eid}: `window.observations` counts the annual "
+                "observations in the window, so it is a whole number of at "
+                "least two — a three-point median and a five-point one do "
+                "not resist an outlier equally, and that is the whole reason "
+                "this is declared."]
+    return []
+
+
 def _check_estimator(entry) -> list:
     """Everything wrong with one entry's estimator declaration.
 
@@ -170,10 +214,16 @@ def _check_estimator(entry) -> list:
         return [f'{eid} declares estimator kind "{kind or "nothing"}", which '
                 f'is not one of {", ".join(ESTIMATORS)}. Adding a kind is a '
                 "host change in engine/contract.py, never a new word here."]
-    unknown = set(node) - {"kind", "observations"}
+    unknown = set(node) - {"kind", "observations", "window"}
     if unknown:
-        return [f"{eid}: an estimator carries `kind` and `observations` and "
-                "nothing else; found " + ", ".join(sorted(unknown)) + "."]
+        return [f"{eid}: an estimator carries `kind`, `observations` and "
+                "`window` and nothing else; found "
+                + ", ".join(sorted(unknown)) + "."]
+    window = node.get("window")
+    if window is not None:
+        problems = _check_window(eid, kind, window)
+        if problems:
+            return problems
     obs = node.get("observations")
     if obs is not None and (not isinstance(obs, int) or isinstance(obs, bool)
                             or obs < 2):
@@ -435,6 +485,59 @@ def _check_propagation(entries) -> list:
     return problems
 
 
+_QUOTED = "quoted"
+
+
+def _check_clock(entries) -> list:
+    """Every entry whose estimator kind disagrees with whether its formula
+    reads a price.
+
+    The one contradiction between a declaration and the arithmetic under it
+    that can be settled exactly, so it is settled here rather than pinned by
+    a test: which clock a breach is confirmed on follows from it, and an
+    entry that gets it wrong is either an exit waiting a quarter on a number
+    that moves every session, or one firing on two sessions of a figure that
+    only changes when a filing arrives. Both are quiet.
+
+    It is a refusal at load and not a lint because the bank is a file on the
+    user's machine that this program re-reads when its mtime moves. A rule
+    that only runs under pytest is not in force where the file is edited.
+
+    Silent for anything the host cannot resolve — an entry with no formula,
+    or a compute module that will not parse. This check is here to catch a
+    wrong word, never to be the reason nothing loads.
+    """
+    try:
+        from . import compute                     # local: compute reads this
+        priced = compute.price_driven_entries()
+        known = set(compute.REGISTRY)
+    except Exception:                             # noqa: BLE001
+        return []
+    problems = []
+    for e in entries:
+        eid = str(e.get("id"))
+        if eid not in known:
+            continue
+        kind = str((e.get("estimator") or {}).get("kind") or "")
+        if not kind:
+            continue                              # _check_estimator has it
+        if eid in priced and kind != _QUOTED:
+            problems.append(
+                f'{eid} is declared "{kind}", but its computation reads a '
+                "quoted price — so it has a new reading every session, and a "
+                f'"{kind}" reading is confirmed over filings. A breach of it '
+                "would wait a quarter while the thing being watched moved "
+                f'every day. Declare `kind: {_QUOTED}`.')
+        elif eid not in priced and kind == _QUOTED:
+            problems.append(
+                f'{eid} is declared "{_QUOTED}", which says a market price '
+                "is in it and its readings are trading days — and its "
+                "computation reads no price. Confirming it over sessions "
+                "would count the same filing figure once a day. Declare the "
+                "kind that names the leg a new filing replaces.")
+    return problems
+
+
 def load_bank(name: str = "metric-bank"):
     path = bank_path(name)
     if not path.exists():
@@ -457,7 +560,7 @@ def load_bank(name: str = "metric-bank"):
     problems = [p for e in entries
                 for p in _check_estimator(e) + _check_applicability(e)
                 + _check_rendering(e)]
-    problems += _check_propagation(entries)
+    problems += _check_propagation(entries) + _check_clock(entries)
     if problems:
         raise ValueError(f"{path.name} cannot be loaded:\n  "
                          + "\n  ".join(problems))
@@ -487,11 +590,27 @@ def bank_view(name: str = "metric-bank") -> dict:
     already carrying `form: {id, means}` and its own text under `states`, and
     the view renders what it is given rather than deciding what a form is.
     """
-    from .contract import INDUSTRY_CLASSES         # local: bank loads first
+    from .contract import ESTIMATORS, CLOCKS      # local: bank loads first
+    from .contract import INDUSTRY_CLASSES
     doc = load_bank(name)
     out = []
     for e in (doc.get("entries") or []):
         plain = to_plain(e)
+        # The estimator's words resolve here, for the reason the class names
+        # below already do: those words are the host's, and a second copy in
+        # the interface is a copy that drifts. It had. ui/app.js carried a
+        # hand-typed twin of these labels, it was missing `cumulative`, and
+        # the one measure declaring that kind rendered the bare word on the
+        # Metrics page — a reader shown a key instead of a sentence. A kind
+        # added to engine/contract.py now arrives with its own words.
+        est = plain.get("estimator")
+        if isinstance(est, dict) and est.get("kind") in ESTIMATORS:
+            spec = ESTIMATORS[est["kind"]]
+            est["label"] = spec["label"]
+            est["means"] = spec["means"]
+            est["explain"] = spec["explain"]
+            est["counts"] = CLOCKS[spec["clock"]]["noun"]
+            est["confirmations"] = spec["confirmations"]
         for item in (plain.get("not_meaningful_when") or []):
             form = next((k for k in _NMW_FORMS if k in item), None)
             if form is None:

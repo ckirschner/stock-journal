@@ -2275,16 +2275,6 @@ const UNIT_WORD = {
    evidence a breach of somebody's level needs, so a reader who sees an exit
    fire on one reading has to be able to find out why here. The words are the
    host's own (engine/contract.py, ESTIMATORS) said in plain language. */
-const ESTIMATOR_WORD = {
-  instant: "read at one date",
-  trailing: "a trailing window",
-  endpoint: "two readings, one at each end",
-  averaged: "means at both ends",
-  median: "the middle of a window",
-  range: "the spread across a window",
-  count: "a count of annual reports",
-  assessed: "assessed, not measured",
-};
 
 function bankCard(e) {
   const pol = e.polarity === "higher_is_better" ? "higher is better"
@@ -2296,7 +2286,7 @@ function bankCard(e) {
       <span class="req">${esc(e.kind || "")}</span>
       ${pol ? `<span class="req">${esc(pol)}</span>` : ""}
       ${e.unit ? `<span class="req">${esc(UNIT_WORD[e.unit] || e.unit)}</span>` : ""}
-      ${e.estimator ? `<span class="req">${esc(ESTIMATOR_WORD[e.estimator.kind] || e.estimator.kind)}</span>` : ""}</div>`;
+      ${e.estimator ? `<span class="req" title="${esc(e.estimator.means || "")}">${esc(e.estimator.label || e.estimator.kind)}</span>` : ""}</div>`;
   if (x.plain) h += `<div class="pe-desc">${prose(x.plain)}</div>`;
   if (e.polarity_note) h += `<div class="pe-block"><i>Why no direction</i>
     <div class="pe-why" style="margin-top:0">${prose(e.polarity_note)}</div></div>`;
