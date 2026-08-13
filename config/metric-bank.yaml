@@ -2794,6 +2794,215 @@ entries:
       attribution: |
         Standard. Used here as a survival check rather than a growth check.
 
+  - id: eps_change_yoy
+    kind: computed
+    estimator:
+      kind: trailing
+    label: Diluted EPS change, year over year
+    unit: percent
+    format: "+0.0%"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        diluted EPS (TTM) ÷ diluted EPS (prior year TTM) − 1
+
+        Where the most recent report is annual, both windows are fiscal
+        years, taken from a basis-checked annual window.
+      window: trailing twelve months against the prior trailing twelve months
+    inputs:
+      filings:
+        - diluted earnings per share
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        How much more the company is earning per share than it was a year ago.
+        This is the growth rate as it stands today, not the average of the
+        last several years — it is the number that changes when a company
+        stops growing, and it changes about two quarters afterwards rather
+        than several years afterwards.
+      misfires: |
+        Per share rather than in total, so a company retiring stock quickly
+        shows growth here that the business did not produce. Read it beside
+        revenue over the same two windows. A single weak quarter moves a
+        trailing twelve months by roughly a quarter of itself, and an
+        acquisition or a disposal moves both windows without anything
+        changing organically. A prior-year window that is zero or negative
+        has no rate from it at all.
+      attribution: |
+        Lynch. His sell discipline for a company bought for its growth was
+        that it stopped growing — which is a statement about the rate now,
+        not about the average of the last five years.
+    not_meaningful_when:
+      - industry: [real-estate]
+        because: |
+          The accounts charge depreciation against buildings every year as
+          though they were wearing out, and well-kept property mostly does
+          not. Earnings per share carry that charge like any other earnings
+          figure, and a change in them tracks the depreciation schedule and
+          the timing of building sales as much as the business. The industry
+          uses funds from operations instead, and this program does not
+          compute it.
+      - data: diluted EPS over the earlier of the two windows is zero or
+          negative
+        because: |
+          A rate of change from a loss has no interpretation as growth: a
+          company going from a loss to a smaller loss and one going from a
+          loss to a profit produce the same arithmetic, and neither is a
+          growth rate.
+      - data: the two windows resolve diluted EPS under different tag
+          families, or a fiscal year inside them was restated after the
+          earlier window's filings were prepared
+        because: |
+          The comparison would mix two definitions of the figure, which is a
+          definition change dressed as growth.
+
+  - id: earnings_base_share_5y
+    kind: computed
+    estimator:
+      kind: averaged
+      observations: 8
+    label: Earnings at the base of the growth window, as a share of earnings now
+    unit: percent
+    format: "0.0%"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        base = mean( net income, the 3 fiscal years ending 5 years before the
+                     most recent 3 )
+        end  = mean( net income, the most recent 3 fiscal years )
+
+        value = base ÷ end
+      window: eight fiscal years, three-year means at each end, five years
+        centre to centre — the same window the five-year growth rates use
+    inputs:
+      filings:
+        - net income
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        How much the company was earning at the start of the period a growth
+        rate is measured over, compared with what it earns at the end of it.
+        At 40% it earned two fifths then of what it earns now; at 2% it was
+        earning almost nothing, and what looks like growth is mostly the
+        distance from almost nothing.
+
+        This is published because a compound growth rate cannot tell the two
+        apart on its own. A company going from 1 to 100 and a company going
+        from 40 to 100 can carry rates that look alike over enough years, and
+        only one of them describes a business that was already working.
+      misfires: |
+        Low on its own is not a fault. A company whose sales multiplied as
+        fast as its earnings reads low here and grew — read it beside
+        [net_margin_base_share_5y], which is what separates a business
+        selling far more from one whose margin came back from nothing. A
+        single depressed year at the base end is diluted by the three-year
+        mean rather than removed by it, which is what the dropped-year
+        reading is for.
+      attribution: |
+        The second expert review's, at
+        dev_reference_docs/ledger-default-profiles-addendum.md, which sets out
+        why a floor on a growth rate's base cannot be denominated in cents of
+        earnings per share — a three-for-one split turns a 30-cent base into
+        10 and changes nothing about the business — and has to be a ratio of
+        two accounting quantities from the same period instead.
+    not_meaningful_when:
+      - industry: [real-estate]
+        because: |
+          Reported profit here is struck after depreciation on buildings,
+          which is an accounting convention rather than a cost being
+          incurred. Both ends of this ratio carry it, and they do not cancel:
+          the charge depends on when the buildings were bought and when they
+          were sold, so the shape of the record is the depreciation schedule
+          as much as the business.
+      - data: mean net income over the three most recent fiscal years is zero
+          or negative
+        because: |
+          There is no end for the base to be a share of. A company losing
+          money now is not a company whose growth window needs checking; it
+          is a company losing money, which the earnings measures say directly.
+      - data: fewer than eight fiscal years of net income are available on one
+          accounting basis
+        because: |
+          The window cannot be constructed, and it is deliberately the same
+          window the growth rates use rather than a shorter one — a figure
+          answering for a different span than the rate it qualifies would be
+          worse than no figure.
+
+  - id: net_margin_base_share_5y
+    kind: computed
+    estimator:
+      kind: averaged
+      observations: 8
+    label: Net margin at the base of the growth window, as a share of the margin now
+    unit: percent
+    format: "0.0%"
+    polarity: higher_is_better
+    derivation:
+      formula: |
+        base margin = mean(net income, base 3 FYs) ÷ mean(revenue, base 3 FYs)
+        end margin  = mean(net income, last 3 FYs) ÷ mean(revenue, last 3 FYs)
+
+        value = base margin ÷ end margin
+      window: eight fiscal years, three-year means at each end, five years
+        centre to centre — the same window the five-year growth rates use
+    inputs:
+      filings:
+        - net income
+        - revenue
+      prices: []
+      entries: []
+    explanation:
+      plain: |
+        How profitable each dollar of sales was at the start of the period a
+        growth rate is measured over, compared with how profitable it is at
+        the end. A business that scaled up keeps roughly the margin it had,
+        or improves it a little: going from 8% to 12% over five years reads
+        as 67% here and is ordinary operating leverage. A business whose
+        margin came back from nothing — 0.5% to 8% — reads as 6%, and its
+        earnings did not grow so much as appear.
+
+        It is a ratio of two ratios, so it says the same thing to a company
+        selling ten dollars and one selling ten billion, and a share split
+        cannot move it.
+      misfires: |
+        A company that genuinely expanded its margin a great deal while also
+        growing fast reads low here and is not recovering from anything —
+        which is why this is read beside [earnings_base_share_5y] rather
+        than alone. Businesses whose revenue was restated between the two
+        ends (the ASC 606 gross-to-net change is the common one) have a
+        margin step in the record that is a definition change.
+      attribution: |
+        The second expert review's, at
+        dev_reference_docs/ledger-default-profiles-addendum.md, which proposes
+        exactly this test — base-period net margin against end-period net
+        margin — as the scale-free way to ask whether a growth window had a
+        real business at the start of it.
+    not_meaningful_when:
+      - industry: [real-estate]
+        because: |
+          The profit on top of both margins is struck after depreciation on
+          buildings, which is an accounting convention rather than a cost
+          being incurred, so both margins understate by design and by
+          different amounts depending on the age of the portfolio at each
+          end.
+      - data: mean revenue at either end of the window is zero or negative, or
+          the margin over the three most recent fiscal years is
+        because: |
+          There is no end margin for the base one to be a share of, and a
+          negative one would print a negative share — which on a
+          higher-is-better measure reads as the base being tiny.
+      - data: revenue and net income resolve over different fiscal years
+        because: |
+          The two margins would describe different periods, which is not a
+          comparison.
+      - data: fewer than eight fiscal years of revenue or of net income are
+          available on one accounting basis
+        because: |
+          The window cannot be constructed, and it is deliberately the same
+          window the growth rates use rather than a shorter one.
+
   - id: net_income_cagr_5y
     kind: computed
     estimator:

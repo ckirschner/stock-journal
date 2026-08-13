@@ -1,0 +1,6059 @@
+{
+ "built": "2026-08-12T19:49:24+00:00",
+ "as_of": "2026-08-12",
+ "free_cash": 30000.0,
+ "strategy": "lynch",
+ "securities": [
+  {
+   "ticker": "DUNSFOLD",
+   "name": "Dunsfold Diagnostics",
+   "added": "2026-08-12",
+   "price": 74.0,
+   "lots": [
+    {
+     "id": "l1",
+     "seq": 1,
+     "kind": "buy",
+     "date": "2021-05-17",
+     "recorded": "2021-05-17T12:00:00-04:00",
+     "shares": 700.0,
+     "price": 9.8,
+     "override": null,
+     "unreconstructed": null,
+     "snapshot": {
+      "frozen": "2021-05-17T12:00:00-04:00",
+      "decision": {
+       "render": "commit",
+       "tier": "position",
+       "state": {
+        "id": "worth-buying",
+        "name": "Worth buying, at this price",
+        "description": "Every test this strategy will not bend has passed, and all four questions it asks about the business are answered.\n\nThat is a claim about the price and the growth together, and neither on its own. A company growing quickly at a price that has already paid for the growth is not a buy here, and neither is a cheap company that has stopped growing. The size is an equal share of the names this strategy runs at once.",
+        "fix": null
+       },
+       "payload": {
+        "size": {
+         "unit": "weight",
+         "value": 12.5
+        },
+        "condition": null,
+        "plan": null
+       },
+       "reason": {
+        "rule": "growth-not-yet-paid-for",
+        "summary": "All 5 tests this strategy will not bend passed, and all four questions about the company are answered — 8 of the 8 tests behind them passed. The size is 12.5% of the account, set by an equal share of your places.",
+        "evidence": [
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "earnings_base_share_5y",
+           "reads": "earnings_base_share_5y",
+           "label": "Earnings at the base of the growth window, as a share of earnings now",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 46.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2021-05-10"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 10,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-earnings-base-share",
+            "label": "Least the company may have earned at the start of its growth window, as a share of what it earns now",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "base"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "net_margin_base_share_5y",
+           "reads": "net_margin_base_share_5y",
+           "label": "Net margin at the base of the growth window, as a share of the margin now",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 79.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2021-05-10"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 50,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-margin-base-share",
+            "label": "Least the margin may have been at the start of the growth window, as a share of the margin now",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "base"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "peg_trailing",
+           "reads": "peg_trailing",
+           "label": "PEG ratio, trailing",
+           "unit": "ratio",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 0.61,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2021-05-10"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 1.0,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-peg",
+            "label": "Highest price against growth it will pay",
+            "unit": "ratio"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "eps_cagr_5y",
+           "reads": "eps_cagr_5y",
+           "label": "Diluted EPS CAGR, 5-year",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 24.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2021-05-10"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 10,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-eps-growth",
+            "label": "Slowest growth it will buy",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "eps_cagr_5y",
+           "reads": "eps_cagr_5y",
+           "label": "Diluted EPS CAGR, 5-year",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 24.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2021-05-10"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 35,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-eps-growth",
+            "label": "Fastest growth it will buy",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "debt_to_equity",
+           "reads": "debt_to_equity",
+           "label": "Debt to equity",
+           "unit": "ratio",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 0.24,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2021-05-10"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 0.5,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-debt-to-equity",
+            "label": "Highest debt against equity",
+            "unit": "ratio"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "eps_minus_revenue_cagr_spread_5y",
+           "reads": "eps_minus_revenue_cagr_spread_5y",
+           "label": "Diluted EPS CAGR minus revenue CAGR, 5-year",
+           "unit": "percentage_points",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 5.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2021-05-10"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 10,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-growth-spread",
+            "label": "Most that profit growth may outrun sales growth",
+            "unit": "percentage_points"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "dividend_adjusted_peg",
+           "reads": "dividend_adjusted_peg",
+           "label": "Dividend-adjusted PEG",
+           "unit": "ratio",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 0.61,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2021-05-10"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 1.0,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-dividend-adjusted-peg",
+            "label": "Highest price against growth plus yield",
+            "unit": "ratio"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "price"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "pe_to_own_5y_median_pe",
+           "reads": "pe_to_own_5y_median_pe",
+           "label": "P/E versus its own five-year median P/E",
+           "unit": "times_own_median",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 0.78,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2021-05-10"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 1.0,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-pe-to-own-median",
+            "label": "Highest price against what this company usually costs",
+            "unit": "times_own_median"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "price"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "revenue_cagr_3y",
+           "reads": "revenue_cagr_3y",
+           "label": "Revenue CAGR, 3-year",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 19.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2021-05-10"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 5,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-revenue-growth",
+            "label": "Slowest sales growth it will buy",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "growing"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "inventory_minus_revenue_growth_yoy",
+           "reads": "inventory_minus_revenue_growth_yoy",
+           "label": "Inventory growth minus revenue growth, year over year",
+           "unit": "percentage_points",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 1.2,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2021-05-10"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 5,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-inventory-spread",
+            "label": "Most that stock may pile up faster than sales grow",
+            "unit": "percentage_points"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "real"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "receivables_minus_revenue_growth_yoy",
+           "reads": "receivables_minus_revenue_growth_yoy",
+           "label": "Receivables growth minus revenue growth, year over year",
+           "unit": "percentage_points",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 2.4,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2021-05-10"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 5,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-receivables-spread",
+            "label": "Most that unpaid invoices may grow faster than sales",
+            "unit": "percentage_points"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "real"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "gross_margin_change_3y",
+           "reads": "gross_margin_change_3y",
+           "label": "Gross margin change over three years",
+           "unit": "percentage_points",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 0.6,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2021-05-10"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": -2,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-gross-margin-change",
+            "label": "Most the margin may have fallen in three years",
+            "unit": "percentage_points"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "real"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "interest_coverage",
+           "reads": "interest_coverage",
+           "label": "Interest coverage",
+           "unit": "times",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 17.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2021-05-10"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 5,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-interest-coverage",
+            "label": "Lowest interest cover",
+            "unit": "times"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "survives"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "fcf_ttm",
+           "reads": "fcf_ttm",
+           "label": "Free cash flow, trailing twelve months",
+           "unit": "usd",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 38000000.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2021-05-10"
+           ]
+          },
+          "test": {
+           "comparator": "above",
+           "phrase": "above",
+           "threshold": 0,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-free-cash-flow",
+            "label": "Least spare cash it will accept",
+            "unit": "usd"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "survives"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "net_cash_to_market_cap",
+           "reads": "net_cash_to_market_cap",
+           "label": "Net cash over market capitalization",
+           "unit": "ratio",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 0.05,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2021-05-10"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 0,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-net-cash",
+            "label": "Least net cash it likes to see",
+            "unit": "ratio"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "bonus"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "insider_net_buying_6m",
+           "reads": "insider_net_buying_6m",
+           "label": "Insider net buying, trailing six months",
+           "unit": "shares",
+           "explain": null
+          },
+          "observed": {
+           "status": "absent",
+           "reason": "no filing data is stored for this security — fetch data first",
+           "source": "measure"
+          },
+          "test": {
+           "comparator": "above",
+           "phrase": "above",
+           "threshold": 0,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-insider-buying",
+            "label": "Least insider buying it likes to see",
+            "unit": "shares"
+           },
+           "absent": null
+          },
+          "outcome": "unknown",
+          "group": "bonus"
+         },
+         {
+          "subject": {
+           "kind": "fact",
+           "id": "portfolio.slots_occupied",
+           "reads": null,
+           "label": "Positions held",
+           "unit": "count",
+           "explain": "How many separate securities this journal currently holds. A strategy that runs a fixed number of positions at once measures against this to know whether there is room for another."
+          },
+          "observed": {
+           "status": "known",
+           "value": 0,
+           "source": "fact",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": {
+           "comparator": "below",
+           "phrase": "below",
+           "threshold": 8,
+           "threshold_from": {
+            "kind": "value",
+            "id": "portfolio-slots",
+            "label": "Names held at once",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "sizing"
+         },
+         {
+          "subject": {
+           "kind": "value",
+           "id": "portfolio-slots",
+           "reads": null,
+           "label": "Names held at once",
+           "unit": "count",
+           "explain": "How many separate companies this strategy holds at one time. Each first purchase takes an equal share of the account, so eight names means about twelve and a half percent each, and once every place is taken a new candidate is told there is no room rather than being talked down.\n\nEight sits toward the top of the three-to-ten range Lynch gave individual investors for a small portfolio. His argument against going wider is that diversifying into companies you know nothing about buys you nothing, and his argument against going narrower is that however carefully you choose, one of them will be hit by something nobody could have seen. The top of the range rather than the bottom because five names is a concentration somebody should arrive at deliberately and not one a tool should hand them by default.\n\nThe number matters more here than on a strategy that holds for decades. This method's arithmetic is that one or two large winners pay for a majority that did not work — so cutting the list makes it likelier that no position in it is a large winner, which is the way this style fails rather than a risk it takes.\n\nPast about fifteen you are holding more companies than you can follow closely enough to notice when one of their stories changes, and noticing that is the entire exit discipline here.\n\nThis figure and the cap below are the only two here that do not come from the expert report — it was never asked about sizing."
+          },
+          "observed": {
+           "status": "known",
+           "value": 8,
+           "source": "value",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "sizing"
+         },
+         {
+          "subject": {
+           "kind": "value",
+           "id": "position-weight-cap",
+           "reads": null,
+           "label": "Most this will put into one name",
+           "unit": "percent",
+           "explain": "The largest share of your account this strategy will take a single holding up to **by buying more of it**.\n\nIt is a limit on your purchases, not on the position. If a holding multiplies until it is half the account, nothing here tells you to trim it — this strategy has no trim, on purpose, because a position that got large by rising is precisely what the method is trying to produce. What this number does is stop you *adding* past it.\n\nTwenty-five percent is twice the share a first purchase takes, so a company can be added to twice as its story keeps proving out, and it is far short of the forty percent the Buffett strategy in this program will commit to one name. That difference is the point rather than a matter of taste. Buffett's concentration rests on a judgement about a business that is meant to hold for decades; this strategy's holding periods are measured in quarters to a few years and its exits fire on things that can change in one filing, so a position sized for a decade of conviction is sized wrong here.\n\n**Lynch published no such figure and none is claimed for him.** He advised individuals on how many companies to hold and not on how much to put in one. This number is this file's, derived from the slot count above, and it is the one in this strategy with the least behind it.\n\nIt needs your free cash to be answered in settings, because a share of the account cannot be worked out without knowing what the account is. Unanswered, the size rules report that they could not be run."
+          },
+          "observed": {
+           "status": "known",
+           "value": 25,
+           "source": "value",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "sizing"
+         },
+         {
+          "subject": {
+           "kind": "stated",
+           "id": null,
+           "reads": null,
+           "label": "Size this buy",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 12.5,
+           "source": "stated",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "sizing"
+         }
+        ],
+        "groups": [
+         {
+          "id": "base",
+          "name": "What it looked like when the growth started",
+          "requires": "noted",
+          "test": null,
+          "members": 2,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "noted"
+         },
+         {
+          "id": "knockouts",
+          "name": "Tests this strategy will not bend",
+          "requires": "all",
+          "test": null,
+          "members": 5,
+          "tested": 5,
+          "passed": 5,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "price",
+          "name": "What you are paying for the growth",
+          "requires": "at_least",
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 1,
+           "threshold_from": {
+            "kind": "value",
+            "id": "price-tests-required",
+            "label": "Price tests that must pass, of two",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "members": 2,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "growing",
+          "name": "Whether the top line is growing",
+          "requires": "all",
+          "test": null,
+          "members": 1,
+          "tested": 1,
+          "passed": 1,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "real",
+          "name": "Whether the growth is real or manufactured",
+          "requires": "at_least",
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 2,
+           "threshold_from": {
+            "kind": "value",
+            "id": "quality-tests-required",
+            "label": "Tests of whether the growth is real that must pass, of three",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "members": 3,
+          "tested": 3,
+          "passed": 3,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "survives",
+          "name": "Whether it survives a stumble",
+          "requires": "all",
+          "test": null,
+          "members": 2,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "bonus",
+          "name": "Reported, never blocking",
+          "requires": "noted",
+          "test": null,
+          "members": 2,
+          "tested": 2,
+          "passed": 1,
+          "failed": 0,
+          "unknown": 1,
+          "outcome": "noted"
+         },
+         {
+          "id": "sizing",
+          "name": "Room in the list, and how much",
+          "requires": "all",
+          "test": null,
+          "members": 4,
+          "tested": 1,
+          "passed": 1,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         }
+        ],
+        "note": null
+       },
+       "produced_by": "strategy",
+       "strategy": {
+        "id": "lynch",
+        "name": "Lynch",
+        "version": 1,
+        "values_version": 1,
+        "contract": 6
+       }
+      },
+      "strategy": {
+       "id": "lynch",
+       "name": "Lynch",
+       "version": 1,
+       "values_version": 1,
+       "contract": 6
+      },
+      "metrics": {
+       "earnings_base_share_5y": {
+        "value": 46.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2021-05-10"
+        ]
+       },
+       "net_margin_base_share_5y": {
+        "value": 79.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2021-05-10"
+        ]
+       },
+       "peg_trailing": {
+        "value": 0.61,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2021-05-10"
+        ]
+       },
+       "eps_cagr_5y": {
+        "value": 24.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2021-05-10"
+        ]
+       },
+       "debt_to_equity": {
+        "value": 0.24,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2021-05-10"
+        ]
+       },
+       "eps_minus_revenue_cagr_spread_5y": {
+        "value": 5.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2021-05-10"
+        ]
+       },
+       "dividend_adjusted_peg": {
+        "value": 0.61,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2021-05-10"
+        ]
+       },
+       "pe_to_own_5y_median_pe": {
+        "value": 0.78,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2021-05-10"
+        ]
+       },
+       "revenue_cagr_3y": {
+        "value": 19.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2021-05-10"
+        ]
+       },
+       "inventory_minus_revenue_growth_yoy": {
+        "value": 1.2,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2021-05-10"
+        ]
+       },
+       "receivables_minus_revenue_growth_yoy": {
+        "value": 2.4,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2021-05-10"
+        ]
+       },
+       "gross_margin_change_3y": {
+        "value": 0.6,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2021-05-10"
+        ]
+       },
+       "interest_coverage": {
+        "value": 17.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2021-05-10"
+        ]
+       },
+       "fcf_ttm": {
+        "value": 38000000.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2021-05-10"
+        ]
+       },
+       "net_cash_to_market_cap": {
+        "value": 0.05,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2021-05-10"
+        ]
+       },
+       "eps_change_yoy": {
+        "value": 26.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2021-05-10"
+        ]
+       },
+       "revenue_change_yoy": {
+        "value": 20.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2021-05-10"
+        ]
+       }
+      },
+      "price": null,
+      "price_source": null,
+      "price_date": null,
+      "price_ticker": null,
+      "evaluation": {
+       "basis": "reconstructed",
+       "as_of": "2021-05-17",
+       "filings_by_then": 0,
+       "newest_filed": null,
+       "priced": null,
+       "manual_on_record": [
+        "debt_to_equity",
+        "dividend_adjusted_peg",
+        "earnings_base_share_5y",
+        "eps_cagr_5y",
+        "eps_change_yoy",
+        "eps_minus_revenue_cagr_spread_5y",
+        "fcf_ttm",
+        "gross_margin_change_3y",
+        "interest_coverage",
+        "inventory_minus_revenue_growth_yoy",
+        "net_cash_to_market_cap",
+        "net_margin_base_share_5y",
+        "pe_to_own_5y_median_pe",
+        "peg_trailing",
+        "receivables_minus_revenue_growth_yoy",
+        "revenue_cagr_3y",
+        "revenue_change_yoy"
+       ],
+       "manual_withheld": [],
+       "note": "no company is linked to this ticker, so no stored filing or price from 2021-05-17 could be consulted; 17 hand-entered values on record by 2021-05-17; judged by Lynch v1 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; this journal was created on 2024-01-02, so it held no answers on 2021-05-17 — free cash, and every figure measured against the account, are absent rather than taken from what you have told it since"
+      },
+      "thesis": null,
+      "valuation": null,
+      "recollection": null
+     }
+    }
+   ],
+   "judgements": [],
+   "hand_entered": [
+    {
+     "seq": 1,
+     "id": "earnings_base_share_5y",
+     "value": 46.0,
+     "recorded": "2021-05-10T12:00:00-04:00"
+    },
+    {
+     "seq": 2,
+     "id": "net_margin_base_share_5y",
+     "value": 79.0,
+     "recorded": "2021-05-10T12:00:00-04:00"
+    },
+    {
+     "seq": 3,
+     "id": "peg_trailing",
+     "value": 0.61,
+     "recorded": "2021-05-10T12:00:00-04:00"
+    },
+    {
+     "seq": 4,
+     "id": "eps_cagr_5y",
+     "value": 24.0,
+     "recorded": "2021-05-10T12:00:00-04:00"
+    },
+    {
+     "seq": 5,
+     "id": "debt_to_equity",
+     "value": 0.24,
+     "recorded": "2021-05-10T12:00:00-04:00"
+    },
+    {
+     "seq": 6,
+     "id": "eps_minus_revenue_cagr_spread_5y",
+     "value": 5.0,
+     "recorded": "2021-05-10T12:00:00-04:00"
+    },
+    {
+     "seq": 7,
+     "id": "dividend_adjusted_peg",
+     "value": 0.61,
+     "recorded": "2021-05-10T12:00:00-04:00"
+    },
+    {
+     "seq": 8,
+     "id": "pe_to_own_5y_median_pe",
+     "value": 0.78,
+     "recorded": "2021-05-10T12:00:00-04:00"
+    },
+    {
+     "seq": 9,
+     "id": "revenue_cagr_3y",
+     "value": 19.0,
+     "recorded": "2021-05-10T12:00:00-04:00"
+    },
+    {
+     "seq": 10,
+     "id": "inventory_minus_revenue_growth_yoy",
+     "value": 1.2,
+     "recorded": "2021-05-10T12:00:00-04:00"
+    },
+    {
+     "seq": 11,
+     "id": "receivables_minus_revenue_growth_yoy",
+     "value": 2.4,
+     "recorded": "2021-05-10T12:00:00-04:00"
+    },
+    {
+     "seq": 12,
+     "id": "gross_margin_change_3y",
+     "value": 0.6,
+     "recorded": "2021-05-10T12:00:00-04:00"
+    },
+    {
+     "seq": 13,
+     "id": "interest_coverage",
+     "value": 17.0,
+     "recorded": "2021-05-10T12:00:00-04:00"
+    },
+    {
+     "seq": 14,
+     "id": "fcf_ttm",
+     "value": 38000000.0,
+     "recorded": "2021-05-10T12:00:00-04:00"
+    },
+    {
+     "seq": 15,
+     "id": "net_cash_to_market_cap",
+     "value": 0.05,
+     "recorded": "2021-05-10T12:00:00-04:00"
+    },
+    {
+     "seq": 16,
+     "id": "eps_change_yoy",
+     "value": 26.0,
+     "recorded": "2021-05-10T12:00:00-04:00"
+    },
+    {
+     "seq": 17,
+     "id": "revenue_change_yoy",
+     "value": 20.0,
+     "recorded": "2021-05-10T12:00:00-04:00"
+    },
+    {
+     "seq": 18,
+     "id": "peg_trailing",
+     "value": 0.94,
+     "recorded": "2026-08-04T12:00:00-04:00"
+    },
+    {
+     "seq": 19,
+     "id": "eps_cagr_5y",
+     "value": 23.0,
+     "recorded": "2026-08-04T12:00:00-04:00"
+    },
+    {
+     "seq": 20,
+     "id": "eps_minus_revenue_cagr_spread_5y",
+     "value": 4.0,
+     "recorded": "2026-08-04T12:00:00-04:00"
+    },
+    {
+     "seq": 21,
+     "id": "dividend_adjusted_peg",
+     "value": 0.94,
+     "recorded": "2026-08-04T12:00:00-04:00"
+    },
+    {
+     "seq": 22,
+     "id": "pe_to_own_5y_median_pe",
+     "value": 0.97,
+     "recorded": "2026-08-04T12:00:00-04:00"
+    },
+    {
+     "seq": 23,
+     "id": "revenue_cagr_3y",
+     "value": 18.0,
+     "recorded": "2026-08-04T12:00:00-04:00"
+    },
+    {
+     "seq": 24,
+     "id": "eps_change_yoy",
+     "value": 21.0,
+     "recorded": "2026-08-04T12:00:00-04:00"
+    },
+    {
+     "seq": 25,
+     "id": "revenue_change_yoy",
+     "value": 17.0,
+     "recorded": "2026-08-04T12:00:00-04:00"
+    }
+   ],
+   "thesis": [
+    {
+     "seq": 1,
+     "thesis": "A bench-top analyser sold once and then fed with consumables for a decade. The machine is the loss leader and nobody swaps one out mid-study.",
+     "falsifier": "The consumable gets a generic, or a competitor's machine takes a study protocol.",
+     "reason": "",
+     "recorded": "2026-08-04T12:00:00-04:00"
+    }
+   ],
+   "valuations": [],
+   "notes": [
+    {
+     "date": "2024-02-11T12:00:00-05:00",
+     "text": "Up more than fourfold. The journal has stopped offering to add and has never once suggested trimming. Read the strategy page: that is the design, not an oversight."
+    },
+    {
+     "date": "2026-08-04T12:00:00-04:00",
+     "text": "Two fifths of the account. Every instinct says take some off and the whole reason I wrote the rules down first was that this instinct is usually wrong — four of the other seven names went nowhere, and this is the one that paid for them."
+    },
+    {
+     "date": "2021-05-17T12:00:00-04:00",
+     "text": "Recorded from history: 1 purchase, dated 2021-05-17. Each was judged against the data available on its own day, not against today's."
+    }
+   ],
+   "lot_seq": 1
+  },
+  {
+   "ticker": "ORRELL",
+   "name": "Orrell Fastenings",
+   "added": "2026-08-12",
+   "price": 58.0,
+   "lots": [
+    {
+     "id": "l1",
+     "seq": 1,
+     "kind": "buy",
+     "date": "2024-04-09",
+     "recorded": "2024-04-09T12:00:00-04:00",
+     "shares": 300.0,
+     "price": 41.3,
+     "override": null,
+     "unreconstructed": null,
+     "snapshot": {
+      "frozen": "2024-04-09T12:00:00-04:00",
+      "decision": {
+       "render": "commit",
+       "tier": "position",
+       "state": {
+        "id": "worth-buying",
+        "name": "Worth buying, at this price",
+        "description": "Every test this strategy will not bend has passed, and all four questions it asks about the business are answered.\n\nThat is a claim about the price and the growth together, and neither on its own. A company growing quickly at a price that has already paid for the growth is not a buy here, and neither is a cheap company that has stopped growing. The size is an equal share of the names this strategy runs at once.",
+        "fix": null
+       },
+       "payload": {
+        "size": {
+         "unit": "weight",
+         "value": 12.5
+        },
+        "condition": null,
+        "plan": null
+       },
+       "reason": {
+        "rule": "growth-not-yet-paid-for",
+        "summary": "All 5 tests this strategy will not bend passed, and all four questions about the company are answered — 8 of the 8 tests behind them passed. The size is 12.5% of the account, set by an equal share of your places.",
+        "evidence": [
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "earnings_base_share_5y",
+           "reads": "earnings_base_share_5y",
+           "label": "Earnings at the base of the growth window, as a share of earnings now",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 46.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-04-02"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 10,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-earnings-base-share",
+            "label": "Least the company may have earned at the start of its growth window, as a share of what it earns now",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "base"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "net_margin_base_share_5y",
+           "reads": "net_margin_base_share_5y",
+           "label": "Net margin at the base of the growth window, as a share of the margin now",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 79.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-04-02"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 50,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-margin-base-share",
+            "label": "Least the margin may have been at the start of the growth window, as a share of the margin now",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "base"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "peg_trailing",
+           "reads": "peg_trailing",
+           "label": "PEG ratio, trailing",
+           "unit": "ratio",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 0.71,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-04-02"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 1.0,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-peg",
+            "label": "Highest price against growth it will pay",
+            "unit": "ratio"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "eps_cagr_5y",
+           "reads": "eps_cagr_5y",
+           "label": "Diluted EPS CAGR, 5-year",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 18.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-04-02"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 10,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-eps-growth",
+            "label": "Slowest growth it will buy",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "eps_cagr_5y",
+           "reads": "eps_cagr_5y",
+           "label": "Diluted EPS CAGR, 5-year",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 18.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-04-02"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 35,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-eps-growth",
+            "label": "Fastest growth it will buy",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "debt_to_equity",
+           "reads": "debt_to_equity",
+           "label": "Debt to equity",
+           "unit": "ratio",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 0.24,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-04-02"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 0.5,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-debt-to-equity",
+            "label": "Highest debt against equity",
+            "unit": "ratio"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "eps_minus_revenue_cagr_spread_5y",
+           "reads": "eps_minus_revenue_cagr_spread_5y",
+           "label": "Diluted EPS CAGR minus revenue CAGR, 5-year",
+           "unit": "percentage_points",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 5.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-04-02"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 10,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-growth-spread",
+            "label": "Most that profit growth may outrun sales growth",
+            "unit": "percentage_points"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "dividend_adjusted_peg",
+           "reads": "dividend_adjusted_peg",
+           "label": "Dividend-adjusted PEG",
+           "unit": "ratio",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 0.7,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-04-02"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 1.0,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-dividend-adjusted-peg",
+            "label": "Highest price against growth plus yield",
+            "unit": "ratio"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "price"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "pe_to_own_5y_median_pe",
+           "reads": "pe_to_own_5y_median_pe",
+           "label": "P/E versus its own five-year median P/E",
+           "unit": "times_own_median",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 0.84,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-04-02"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 1.0,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-pe-to-own-median",
+            "label": "Highest price against what this company usually costs",
+            "unit": "times_own_median"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "price"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "revenue_cagr_3y",
+           "reads": "revenue_cagr_3y",
+           "label": "Revenue CAGR, 3-year",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 13.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-04-02"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 5,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-revenue-growth",
+            "label": "Slowest sales growth it will buy",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "growing"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "inventory_minus_revenue_growth_yoy",
+           "reads": "inventory_minus_revenue_growth_yoy",
+           "label": "Inventory growth minus revenue growth, year over year",
+           "unit": "percentage_points",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 1.2,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-04-02"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 5,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-inventory-spread",
+            "label": "Most that stock may pile up faster than sales grow",
+            "unit": "percentage_points"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "real"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "receivables_minus_revenue_growth_yoy",
+           "reads": "receivables_minus_revenue_growth_yoy",
+           "label": "Receivables growth minus revenue growth, year over year",
+           "unit": "percentage_points",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 2.4,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-04-02"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 5,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-receivables-spread",
+            "label": "Most that unpaid invoices may grow faster than sales",
+            "unit": "percentage_points"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "real"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "gross_margin_change_3y",
+           "reads": "gross_margin_change_3y",
+           "label": "Gross margin change over three years",
+           "unit": "percentage_points",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 0.6,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-04-02"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": -2,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-gross-margin-change",
+            "label": "Most the margin may have fallen in three years",
+            "unit": "percentage_points"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "real"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "interest_coverage",
+           "reads": "interest_coverage",
+           "label": "Interest coverage",
+           "unit": "times",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 17.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-04-02"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 5,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-interest-coverage",
+            "label": "Lowest interest cover",
+            "unit": "times"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "survives"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "fcf_ttm",
+           "reads": "fcf_ttm",
+           "label": "Free cash flow, trailing twelve months",
+           "unit": "usd",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 38000000.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-04-02"
+           ]
+          },
+          "test": {
+           "comparator": "above",
+           "phrase": "above",
+           "threshold": 0,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-free-cash-flow",
+            "label": "Least spare cash it will accept",
+            "unit": "usd"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "survives"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "net_cash_to_market_cap",
+           "reads": "net_cash_to_market_cap",
+           "label": "Net cash over market capitalization",
+           "unit": "ratio",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 0.05,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-04-02"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 0,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-net-cash",
+            "label": "Least net cash it likes to see",
+            "unit": "ratio"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "bonus"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "insider_net_buying_6m",
+           "reads": "insider_net_buying_6m",
+           "label": "Insider net buying, trailing six months",
+           "unit": "shares",
+           "explain": null
+          },
+          "observed": {
+           "status": "absent",
+           "reason": "no filing data is stored for this security — fetch data first",
+           "source": "measure"
+          },
+          "test": {
+           "comparator": "above",
+           "phrase": "above",
+           "threshold": 0,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-insider-buying",
+            "label": "Least insider buying it likes to see",
+            "unit": "shares"
+           },
+           "absent": null
+          },
+          "outcome": "unknown",
+          "group": "bonus"
+         },
+         {
+          "subject": {
+           "kind": "fact",
+           "id": "portfolio.slots_occupied",
+           "reads": null,
+           "label": "Positions held",
+           "unit": "count",
+           "explain": "How many separate securities this journal currently holds. A strategy that runs a fixed number of positions at once measures against this to know whether there is room for another."
+          },
+          "observed": {
+           "status": "known",
+           "value": 1,
+           "source": "fact",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": {
+           "comparator": "below",
+           "phrase": "below",
+           "threshold": 8,
+           "threshold_from": {
+            "kind": "value",
+            "id": "portfolio-slots",
+            "label": "Names held at once",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "sizing"
+         },
+         {
+          "subject": {
+           "kind": "value",
+           "id": "portfolio-slots",
+           "reads": null,
+           "label": "Names held at once",
+           "unit": "count",
+           "explain": "How many separate companies this strategy holds at one time. Each first purchase takes an equal share of the account, so eight names means about twelve and a half percent each, and once every place is taken a new candidate is told there is no room rather than being talked down.\n\nEight sits toward the top of the three-to-ten range Lynch gave individual investors for a small portfolio. His argument against going wider is that diversifying into companies you know nothing about buys you nothing, and his argument against going narrower is that however carefully you choose, one of them will be hit by something nobody could have seen. The top of the range rather than the bottom because five names is a concentration somebody should arrive at deliberately and not one a tool should hand them by default.\n\nThe number matters more here than on a strategy that holds for decades. This method's arithmetic is that one or two large winners pay for a majority that did not work — so cutting the list makes it likelier that no position in it is a large winner, which is the way this style fails rather than a risk it takes.\n\nPast about fifteen you are holding more companies than you can follow closely enough to notice when one of their stories changes, and noticing that is the entire exit discipline here.\n\nThis figure and the cap below are the only two here that do not come from the expert report — it was never asked about sizing."
+          },
+          "observed": {
+           "status": "known",
+           "value": 8,
+           "source": "value",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "sizing"
+         },
+         {
+          "subject": {
+           "kind": "value",
+           "id": "position-weight-cap",
+           "reads": null,
+           "label": "Most this will put into one name",
+           "unit": "percent",
+           "explain": "The largest share of your account this strategy will take a single holding up to **by buying more of it**.\n\nIt is a limit on your purchases, not on the position. If a holding multiplies until it is half the account, nothing here tells you to trim it — this strategy has no trim, on purpose, because a position that got large by rising is precisely what the method is trying to produce. What this number does is stop you *adding* past it.\n\nTwenty-five percent is twice the share a first purchase takes, so a company can be added to twice as its story keeps proving out, and it is far short of the forty percent the Buffett strategy in this program will commit to one name. That difference is the point rather than a matter of taste. Buffett's concentration rests on a judgement about a business that is meant to hold for decades; this strategy's holding periods are measured in quarters to a few years and its exits fire on things that can change in one filing, so a position sized for a decade of conviction is sized wrong here.\n\n**Lynch published no such figure and none is claimed for him.** He advised individuals on how many companies to hold and not on how much to put in one. This number is this file's, derived from the slot count above, and it is the one in this strategy with the least behind it.\n\nIt needs your free cash to be answered in settings, because a share of the account cannot be worked out without knowing what the account is. Unanswered, the size rules report that they could not be run."
+          },
+          "observed": {
+           "status": "known",
+           "value": 25,
+           "source": "value",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "sizing"
+         },
+         {
+          "subject": {
+           "kind": "stated",
+           "id": null,
+           "reads": null,
+           "label": "Size this buy",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 12.5,
+           "source": "stated",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "sizing"
+         }
+        ],
+        "groups": [
+         {
+          "id": "base",
+          "name": "What it looked like when the growth started",
+          "requires": "noted",
+          "test": null,
+          "members": 2,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "noted"
+         },
+         {
+          "id": "knockouts",
+          "name": "Tests this strategy will not bend",
+          "requires": "all",
+          "test": null,
+          "members": 5,
+          "tested": 5,
+          "passed": 5,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "price",
+          "name": "What you are paying for the growth",
+          "requires": "at_least",
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 1,
+           "threshold_from": {
+            "kind": "value",
+            "id": "price-tests-required",
+            "label": "Price tests that must pass, of two",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "members": 2,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "growing",
+          "name": "Whether the top line is growing",
+          "requires": "all",
+          "test": null,
+          "members": 1,
+          "tested": 1,
+          "passed": 1,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "real",
+          "name": "Whether the growth is real or manufactured",
+          "requires": "at_least",
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 2,
+           "threshold_from": {
+            "kind": "value",
+            "id": "quality-tests-required",
+            "label": "Tests of whether the growth is real that must pass, of three",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "members": 3,
+          "tested": 3,
+          "passed": 3,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "survives",
+          "name": "Whether it survives a stumble",
+          "requires": "all",
+          "test": null,
+          "members": 2,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "bonus",
+          "name": "Reported, never blocking",
+          "requires": "noted",
+          "test": null,
+          "members": 2,
+          "tested": 2,
+          "passed": 1,
+          "failed": 0,
+          "unknown": 1,
+          "outcome": "noted"
+         },
+         {
+          "id": "sizing",
+          "name": "Room in the list, and how much",
+          "requires": "all",
+          "test": null,
+          "members": 4,
+          "tested": 1,
+          "passed": 1,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         }
+        ],
+        "note": null
+       },
+       "produced_by": "strategy",
+       "strategy": {
+        "id": "lynch",
+        "name": "Lynch",
+        "version": 1,
+        "values_version": 1,
+        "contract": 6
+       }
+      },
+      "strategy": {
+       "id": "lynch",
+       "name": "Lynch",
+       "version": 1,
+       "values_version": 1,
+       "contract": 6
+      },
+      "metrics": {
+       "earnings_base_share_5y": {
+        "value": 46.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2024-04-02"
+        ]
+       },
+       "net_margin_base_share_5y": {
+        "value": 79.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2024-04-02"
+        ]
+       },
+       "peg_trailing": {
+        "value": 0.71,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2024-04-02"
+        ]
+       },
+       "eps_cagr_5y": {
+        "value": 18.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2024-04-02"
+        ]
+       },
+       "debt_to_equity": {
+        "value": 0.24,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2024-04-02"
+        ]
+       },
+       "eps_minus_revenue_cagr_spread_5y": {
+        "value": 5.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2024-04-02"
+        ]
+       },
+       "dividend_adjusted_peg": {
+        "value": 0.7,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2024-04-02"
+        ]
+       },
+       "pe_to_own_5y_median_pe": {
+        "value": 0.84,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2024-04-02"
+        ]
+       },
+       "revenue_cagr_3y": {
+        "value": 13.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2024-04-02"
+        ]
+       },
+       "inventory_minus_revenue_growth_yoy": {
+        "value": 1.2,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2024-04-02"
+        ]
+       },
+       "receivables_minus_revenue_growth_yoy": {
+        "value": 2.4,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2024-04-02"
+        ]
+       },
+       "gross_margin_change_3y": {
+        "value": 0.6,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2024-04-02"
+        ]
+       },
+       "interest_coverage": {
+        "value": 17.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2024-04-02"
+        ]
+       },
+       "fcf_ttm": {
+        "value": 38000000.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2024-04-02"
+        ]
+       },
+       "net_cash_to_market_cap": {
+        "value": 0.05,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2024-04-02"
+        ]
+       },
+       "eps_change_yoy": {
+        "value": 19.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2024-04-02"
+        ]
+       },
+       "revenue_change_yoy": {
+        "value": 14.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2024-04-02"
+        ]
+       }
+      },
+      "price": null,
+      "price_source": null,
+      "price_date": null,
+      "price_ticker": null,
+      "evaluation": {
+       "basis": "reconstructed",
+       "as_of": "2024-04-09",
+       "filings_by_then": 0,
+       "newest_filed": null,
+       "priced": null,
+       "manual_on_record": [
+        "debt_to_equity",
+        "dividend_adjusted_peg",
+        "earnings_base_share_5y",
+        "eps_cagr_5y",
+        "eps_change_yoy",
+        "eps_minus_revenue_cagr_spread_5y",
+        "fcf_ttm",
+        "gross_margin_change_3y",
+        "interest_coverage",
+        "inventory_minus_revenue_growth_yoy",
+        "net_cash_to_market_cap",
+        "net_margin_base_share_5y",
+        "pe_to_own_5y_median_pe",
+        "peg_trailing",
+        "receivables_minus_revenue_growth_yoy",
+        "revenue_cagr_3y",
+        "revenue_change_yoy"
+       ],
+       "manual_withheld": [],
+       "note": "no company is linked to this ticker, so no stored filing or price from 2024-04-09 could be consulted; 17 hand-entered values on record by 2024-04-09; judged by Lynch v1 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+      },
+      "thesis": null,
+      "valuation": null,
+      "recollection": null
+     }
+    }
+   ],
+   "judgements": [],
+   "hand_entered": [
+    {
+     "seq": 1,
+     "id": "earnings_base_share_5y",
+     "value": 46.0,
+     "recorded": "2024-04-02T12:00:00-04:00"
+    },
+    {
+     "seq": 2,
+     "id": "net_margin_base_share_5y",
+     "value": 79.0,
+     "recorded": "2024-04-02T12:00:00-04:00"
+    },
+    {
+     "seq": 3,
+     "id": "peg_trailing",
+     "value": 0.71,
+     "recorded": "2024-04-02T12:00:00-04:00"
+    },
+    {
+     "seq": 4,
+     "id": "eps_cagr_5y",
+     "value": 18.0,
+     "recorded": "2024-04-02T12:00:00-04:00"
+    },
+    {
+     "seq": 5,
+     "id": "debt_to_equity",
+     "value": 0.24,
+     "recorded": "2024-04-02T12:00:00-04:00"
+    },
+    {
+     "seq": 6,
+     "id": "eps_minus_revenue_cagr_spread_5y",
+     "value": 5.0,
+     "recorded": "2024-04-02T12:00:00-04:00"
+    },
+    {
+     "seq": 7,
+     "id": "dividend_adjusted_peg",
+     "value": 0.7,
+     "recorded": "2024-04-02T12:00:00-04:00"
+    },
+    {
+     "seq": 8,
+     "id": "pe_to_own_5y_median_pe",
+     "value": 0.84,
+     "recorded": "2024-04-02T12:00:00-04:00"
+    },
+    {
+     "seq": 9,
+     "id": "revenue_cagr_3y",
+     "value": 13.0,
+     "recorded": "2024-04-02T12:00:00-04:00"
+    },
+    {
+     "seq": 10,
+     "id": "inventory_minus_revenue_growth_yoy",
+     "value": 1.2,
+     "recorded": "2024-04-02T12:00:00-04:00"
+    },
+    {
+     "seq": 11,
+     "id": "receivables_minus_revenue_growth_yoy",
+     "value": 2.4,
+     "recorded": "2024-04-02T12:00:00-04:00"
+    },
+    {
+     "seq": 12,
+     "id": "gross_margin_change_3y",
+     "value": 0.6,
+     "recorded": "2024-04-02T12:00:00-04:00"
+    },
+    {
+     "seq": 13,
+     "id": "interest_coverage",
+     "value": 17.0,
+     "recorded": "2024-04-02T12:00:00-04:00"
+    },
+    {
+     "seq": 14,
+     "id": "fcf_ttm",
+     "value": 38000000.0,
+     "recorded": "2024-04-02T12:00:00-04:00"
+    },
+    {
+     "seq": 15,
+     "id": "net_cash_to_market_cap",
+     "value": 0.05,
+     "recorded": "2024-04-02T12:00:00-04:00"
+    },
+    {
+     "seq": 16,
+     "id": "eps_change_yoy",
+     "value": 19.0,
+     "recorded": "2024-04-02T12:00:00-04:00"
+    },
+    {
+     "seq": 17,
+     "id": "revenue_change_yoy",
+     "value": 14.0,
+     "recorded": "2024-04-02T12:00:00-04:00"
+    },
+    {
+     "seq": 18,
+     "id": "peg_trailing",
+     "value": 0.88,
+     "recorded": "2026-08-06T12:00:00-04:00"
+    },
+    {
+     "seq": 19,
+     "id": "eps_cagr_5y",
+     "value": 17.0,
+     "recorded": "2026-08-06T12:00:00-04:00"
+    },
+    {
+     "seq": 20,
+     "id": "dividend_adjusted_peg",
+     "value": 0.86,
+     "recorded": "2026-08-06T12:00:00-04:00"
+    },
+    {
+     "seq": 21,
+     "id": "pe_to_own_5y_median_pe",
+     "value": 0.95,
+     "recorded": "2026-08-06T12:00:00-04:00"
+    },
+    {
+     "seq": 22,
+     "id": "revenue_cagr_3y",
+     "value": 12.5,
+     "recorded": "2026-08-06T12:00:00-04:00"
+    },
+    {
+     "seq": 23,
+     "id": "eps_change_yoy",
+     "value": 15.0,
+     "recorded": "2026-08-06T12:00:00-04:00"
+    },
+    {
+     "seq": 24,
+     "id": "revenue_change_yoy",
+     "value": 11.0,
+     "recorded": "2026-08-06T12:00:00-04:00"
+    }
+   ],
+   "thesis": [
+    {
+     "seq": 1,
+     "thesis": "Fixings specified into an aerospace maintenance manual, reordered without a decision being made, growing with the installed fleet.",
+     "falsifier": "An airframe programme requalifies its fasteners, or the aftermarket goes to a distributor's own brand.",
+     "reason": "",
+     "recorded": "2026-08-06T12:00:00-04:00"
+    }
+   ],
+   "valuations": [],
+   "notes": [
+    {
+     "date": "2026-08-06T12:00:00-04:00",
+     "text": "Still growing and still not expensive against the growth. The journal says there is room. Whether this is the best home for the next pound is a question about the whole list rather than about this company."
+    },
+    {
+     "date": "2024-04-09T12:00:00-04:00",
+     "text": "Recorded from history: 1 purchase, dated 2024-04-09. Each was judged against the data available on its own day, not against today's."
+    }
+   ],
+   "lot_seq": 1
+  },
+  {
+   "ticker": "HAVERTY",
+   "name": "Haverty Tooling",
+   "added": "2026-08-12",
+   "price": 26.5,
+   "lots": [
+    {
+     "id": "l1",
+     "seq": 1,
+     "kind": "buy",
+     "date": "2023-06-19",
+     "recorded": "2023-06-19T12:00:00-04:00",
+     "shares": 400.0,
+     "price": 21.4,
+     "override": null,
+     "unreconstructed": null,
+     "snapshot": {
+      "frozen": "2023-06-19T12:00:00-04:00",
+      "decision": {
+       "render": "commit",
+       "tier": "position",
+       "state": {
+        "id": "worth-buying",
+        "name": "Worth buying, at this price",
+        "description": "Every test this strategy will not bend has passed, and all four questions it asks about the business are answered.\n\nThat is a claim about the price and the growth together, and neither on its own. A company growing quickly at a price that has already paid for the growth is not a buy here, and neither is a cheap company that has stopped growing. The size is an equal share of the names this strategy runs at once.",
+        "fix": null
+       },
+       "payload": {
+        "size": {
+         "unit": "weight",
+         "value": 12.5
+        },
+        "condition": null,
+        "plan": null
+       },
+       "reason": {
+        "rule": "growth-not-yet-paid-for",
+        "summary": "All 5 tests this strategy will not bend passed, and all four questions about the company are answered — 8 of the 8 tests behind them passed. The size is 12.5% of the account, set by an equal share of your places.",
+        "evidence": [
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "earnings_base_share_5y",
+           "reads": "earnings_base_share_5y",
+           "label": "Earnings at the base of the growth window, as a share of earnings now",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 46.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2023-06-12"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 10,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-earnings-base-share",
+            "label": "Least the company may have earned at the start of its growth window, as a share of what it earns now",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "base"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "net_margin_base_share_5y",
+           "reads": "net_margin_base_share_5y",
+           "label": "Net margin at the base of the growth window, as a share of the margin now",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 79.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2023-06-12"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 50,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-margin-base-share",
+            "label": "Least the margin may have been at the start of the growth window, as a share of the margin now",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "base"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "peg_trailing",
+           "reads": "peg_trailing",
+           "label": "PEG ratio, trailing",
+           "unit": "ratio",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 0.66,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2023-06-12"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 1.0,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-peg",
+            "label": "Highest price against growth it will pay",
+            "unit": "ratio"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "eps_cagr_5y",
+           "reads": "eps_cagr_5y",
+           "label": "Diluted EPS CAGR, 5-year",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 21.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2023-06-12"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 10,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-eps-growth",
+            "label": "Slowest growth it will buy",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "eps_cagr_5y",
+           "reads": "eps_cagr_5y",
+           "label": "Diluted EPS CAGR, 5-year",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 21.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2023-06-12"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 35,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-eps-growth",
+            "label": "Fastest growth it will buy",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "debt_to_equity",
+           "reads": "debt_to_equity",
+           "label": "Debt to equity",
+           "unit": "ratio",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 0.24,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2023-06-12"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 0.5,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-debt-to-equity",
+            "label": "Highest debt against equity",
+            "unit": "ratio"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "eps_minus_revenue_cagr_spread_5y",
+           "reads": "eps_minus_revenue_cagr_spread_5y",
+           "label": "Diluted EPS CAGR minus revenue CAGR, 5-year",
+           "unit": "percentage_points",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 5.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2023-06-12"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 10,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-growth-spread",
+            "label": "Most that profit growth may outrun sales growth",
+            "unit": "percentage_points"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "dividend_adjusted_peg",
+           "reads": "dividend_adjusted_peg",
+           "label": "Dividend-adjusted PEG",
+           "unit": "ratio",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 0.66,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2023-06-12"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 1.0,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-dividend-adjusted-peg",
+            "label": "Highest price against growth plus yield",
+            "unit": "ratio"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "price"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "pe_to_own_5y_median_pe",
+           "reads": "pe_to_own_5y_median_pe",
+           "label": "P/E versus its own five-year median P/E",
+           "unit": "times_own_median",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 0.81,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2023-06-12"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 1.0,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-pe-to-own-median",
+            "label": "Highest price against what this company usually costs",
+            "unit": "times_own_median"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "price"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "revenue_cagr_3y",
+           "reads": "revenue_cagr_3y",
+           "label": "Revenue CAGR, 3-year",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 17.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2023-06-12"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 5,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-revenue-growth",
+            "label": "Slowest sales growth it will buy",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "growing"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "inventory_minus_revenue_growth_yoy",
+           "reads": "inventory_minus_revenue_growth_yoy",
+           "label": "Inventory growth minus revenue growth, year over year",
+           "unit": "percentage_points",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 1.2,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2023-06-12"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 5,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-inventory-spread",
+            "label": "Most that stock may pile up faster than sales grow",
+            "unit": "percentage_points"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "real"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "receivables_minus_revenue_growth_yoy",
+           "reads": "receivables_minus_revenue_growth_yoy",
+           "label": "Receivables growth minus revenue growth, year over year",
+           "unit": "percentage_points",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 2.4,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2023-06-12"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 5,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-receivables-spread",
+            "label": "Most that unpaid invoices may grow faster than sales",
+            "unit": "percentage_points"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "real"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "gross_margin_change_3y",
+           "reads": "gross_margin_change_3y",
+           "label": "Gross margin change over three years",
+           "unit": "percentage_points",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 0.6,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2023-06-12"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": -2,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-gross-margin-change",
+            "label": "Most the margin may have fallen in three years",
+            "unit": "percentage_points"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "real"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "interest_coverage",
+           "reads": "interest_coverage",
+           "label": "Interest coverage",
+           "unit": "times",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 17.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2023-06-12"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 5,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-interest-coverage",
+            "label": "Lowest interest cover",
+            "unit": "times"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "survives"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "fcf_ttm",
+           "reads": "fcf_ttm",
+           "label": "Free cash flow, trailing twelve months",
+           "unit": "usd",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 38000000.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2023-06-12"
+           ]
+          },
+          "test": {
+           "comparator": "above",
+           "phrase": "above",
+           "threshold": 0,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-free-cash-flow",
+            "label": "Least spare cash it will accept",
+            "unit": "usd"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "survives"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "net_cash_to_market_cap",
+           "reads": "net_cash_to_market_cap",
+           "label": "Net cash over market capitalization",
+           "unit": "ratio",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 0.05,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2023-06-12"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 0,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-net-cash",
+            "label": "Least net cash it likes to see",
+            "unit": "ratio"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "bonus"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "insider_net_buying_6m",
+           "reads": "insider_net_buying_6m",
+           "label": "Insider net buying, trailing six months",
+           "unit": "shares",
+           "explain": null
+          },
+          "observed": {
+           "status": "absent",
+           "reason": "no filing data is stored for this security — fetch data first",
+           "source": "measure"
+          },
+          "test": {
+           "comparator": "above",
+           "phrase": "above",
+           "threshold": 0,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-insider-buying",
+            "label": "Least insider buying it likes to see",
+            "unit": "shares"
+           },
+           "absent": null
+          },
+          "outcome": "unknown",
+          "group": "bonus"
+         },
+         {
+          "subject": {
+           "kind": "fact",
+           "id": "portfolio.slots_occupied",
+           "reads": null,
+           "label": "Positions held",
+           "unit": "count",
+           "explain": "How many separate securities this journal currently holds. A strategy that runs a fixed number of positions at once measures against this to know whether there is room for another."
+          },
+          "observed": {
+           "status": "known",
+           "value": 1,
+           "source": "fact",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": {
+           "comparator": "below",
+           "phrase": "below",
+           "threshold": 8,
+           "threshold_from": {
+            "kind": "value",
+            "id": "portfolio-slots",
+            "label": "Names held at once",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "sizing"
+         },
+         {
+          "subject": {
+           "kind": "value",
+           "id": "portfolio-slots",
+           "reads": null,
+           "label": "Names held at once",
+           "unit": "count",
+           "explain": "How many separate companies this strategy holds at one time. Each first purchase takes an equal share of the account, so eight names means about twelve and a half percent each, and once every place is taken a new candidate is told there is no room rather than being talked down.\n\nEight sits toward the top of the three-to-ten range Lynch gave individual investors for a small portfolio. His argument against going wider is that diversifying into companies you know nothing about buys you nothing, and his argument against going narrower is that however carefully you choose, one of them will be hit by something nobody could have seen. The top of the range rather than the bottom because five names is a concentration somebody should arrive at deliberately and not one a tool should hand them by default.\n\nThe number matters more here than on a strategy that holds for decades. This method's arithmetic is that one or two large winners pay for a majority that did not work — so cutting the list makes it likelier that no position in it is a large winner, which is the way this style fails rather than a risk it takes.\n\nPast about fifteen you are holding more companies than you can follow closely enough to notice when one of their stories changes, and noticing that is the entire exit discipline here.\n\nThis figure and the cap below are the only two here that do not come from the expert report — it was never asked about sizing."
+          },
+          "observed": {
+           "status": "known",
+           "value": 8,
+           "source": "value",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "sizing"
+         },
+         {
+          "subject": {
+           "kind": "value",
+           "id": "position-weight-cap",
+           "reads": null,
+           "label": "Most this will put into one name",
+           "unit": "percent",
+           "explain": "The largest share of your account this strategy will take a single holding up to **by buying more of it**.\n\nIt is a limit on your purchases, not on the position. If a holding multiplies until it is half the account, nothing here tells you to trim it — this strategy has no trim, on purpose, because a position that got large by rising is precisely what the method is trying to produce. What this number does is stop you *adding* past it.\n\nTwenty-five percent is twice the share a first purchase takes, so a company can be added to twice as its story keeps proving out, and it is far short of the forty percent the Buffett strategy in this program will commit to one name. That difference is the point rather than a matter of taste. Buffett's concentration rests on a judgement about a business that is meant to hold for decades; this strategy's holding periods are measured in quarters to a few years and its exits fire on things that can change in one filing, so a position sized for a decade of conviction is sized wrong here.\n\n**Lynch published no such figure and none is claimed for him.** He advised individuals on how many companies to hold and not on how much to put in one. This number is this file's, derived from the slot count above, and it is the one in this strategy with the least behind it.\n\nIt needs your free cash to be answered in settings, because a share of the account cannot be worked out without knowing what the account is. Unanswered, the size rules report that they could not be run."
+          },
+          "observed": {
+           "status": "known",
+           "value": 25,
+           "source": "value",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "sizing"
+         },
+         {
+          "subject": {
+           "kind": "stated",
+           "id": null,
+           "reads": null,
+           "label": "Size this buy",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 12.5,
+           "source": "stated",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "sizing"
+         }
+        ],
+        "groups": [
+         {
+          "id": "base",
+          "name": "What it looked like when the growth started",
+          "requires": "noted",
+          "test": null,
+          "members": 2,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "noted"
+         },
+         {
+          "id": "knockouts",
+          "name": "Tests this strategy will not bend",
+          "requires": "all",
+          "test": null,
+          "members": 5,
+          "tested": 5,
+          "passed": 5,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "price",
+          "name": "What you are paying for the growth",
+          "requires": "at_least",
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 1,
+           "threshold_from": {
+            "kind": "value",
+            "id": "price-tests-required",
+            "label": "Price tests that must pass, of two",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "members": 2,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "growing",
+          "name": "Whether the top line is growing",
+          "requires": "all",
+          "test": null,
+          "members": 1,
+          "tested": 1,
+          "passed": 1,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "real",
+          "name": "Whether the growth is real or manufactured",
+          "requires": "at_least",
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 2,
+           "threshold_from": {
+            "kind": "value",
+            "id": "quality-tests-required",
+            "label": "Tests of whether the growth is real that must pass, of three",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "members": 3,
+          "tested": 3,
+          "passed": 3,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "survives",
+          "name": "Whether it survives a stumble",
+          "requires": "all",
+          "test": null,
+          "members": 2,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "bonus",
+          "name": "Reported, never blocking",
+          "requires": "noted",
+          "test": null,
+          "members": 2,
+          "tested": 2,
+          "passed": 1,
+          "failed": 0,
+          "unknown": 1,
+          "outcome": "noted"
+         },
+         {
+          "id": "sizing",
+          "name": "Room in the list, and how much",
+          "requires": "all",
+          "test": null,
+          "members": 4,
+          "tested": 1,
+          "passed": 1,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         }
+        ],
+        "note": null
+       },
+       "produced_by": "strategy",
+       "strategy": {
+        "id": "lynch",
+        "name": "Lynch",
+        "version": 1,
+        "values_version": 1,
+        "contract": 6
+       }
+      },
+      "strategy": {
+       "id": "lynch",
+       "name": "Lynch",
+       "version": 1,
+       "values_version": 1,
+       "contract": 6
+      },
+      "metrics": {
+       "earnings_base_share_5y": {
+        "value": 46.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2023-06-12"
+        ]
+       },
+       "net_margin_base_share_5y": {
+        "value": 79.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2023-06-12"
+        ]
+       },
+       "peg_trailing": {
+        "value": 0.66,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2023-06-12"
+        ]
+       },
+       "eps_cagr_5y": {
+        "value": 21.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2023-06-12"
+        ]
+       },
+       "debt_to_equity": {
+        "value": 0.24,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2023-06-12"
+        ]
+       },
+       "eps_minus_revenue_cagr_spread_5y": {
+        "value": 5.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2023-06-12"
+        ]
+       },
+       "dividend_adjusted_peg": {
+        "value": 0.66,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2023-06-12"
+        ]
+       },
+       "pe_to_own_5y_median_pe": {
+        "value": 0.81,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2023-06-12"
+        ]
+       },
+       "revenue_cagr_3y": {
+        "value": 17.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2023-06-12"
+        ]
+       },
+       "inventory_minus_revenue_growth_yoy": {
+        "value": 1.2,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2023-06-12"
+        ]
+       },
+       "receivables_minus_revenue_growth_yoy": {
+        "value": 2.4,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2023-06-12"
+        ]
+       },
+       "gross_margin_change_3y": {
+        "value": 0.6,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2023-06-12"
+        ]
+       },
+       "interest_coverage": {
+        "value": 17.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2023-06-12"
+        ]
+       },
+       "fcf_ttm": {
+        "value": 38000000.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2023-06-12"
+        ]
+       },
+       "net_cash_to_market_cap": {
+        "value": 0.05,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2023-06-12"
+        ]
+       },
+       "eps_change_yoy": {
+        "value": 22.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2023-06-12"
+        ]
+       },
+       "revenue_change_yoy": {
+        "value": 18.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2023-06-12"
+        ]
+       }
+      },
+      "price": null,
+      "price_source": null,
+      "price_date": null,
+      "price_ticker": null,
+      "evaluation": {
+       "basis": "reconstructed",
+       "as_of": "2023-06-19",
+       "filings_by_then": 0,
+       "newest_filed": null,
+       "priced": null,
+       "manual_on_record": [
+        "debt_to_equity",
+        "dividend_adjusted_peg",
+        "earnings_base_share_5y",
+        "eps_cagr_5y",
+        "eps_change_yoy",
+        "eps_minus_revenue_cagr_spread_5y",
+        "fcf_ttm",
+        "gross_margin_change_3y",
+        "interest_coverage",
+        "inventory_minus_revenue_growth_yoy",
+        "net_cash_to_market_cap",
+        "net_margin_base_share_5y",
+        "pe_to_own_5y_median_pe",
+        "peg_trailing",
+        "receivables_minus_revenue_growth_yoy",
+        "revenue_cagr_3y",
+        "revenue_change_yoy"
+       ],
+       "manual_withheld": [],
+       "note": "no company is linked to this ticker, so no stored filing or price from 2023-06-19 could be consulted; 17 hand-entered values on record by 2023-06-19; judged by Lynch v1 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; this journal was created on 2024-01-02, so it held no answers on 2023-06-19 — free cash, and every figure measured against the account, are absent rather than taken from what you have told it since"
+      },
+      "thesis": null,
+      "valuation": null,
+      "recollection": null
+     }
+    }
+   ],
+   "judgements": [],
+   "hand_entered": [
+    {
+     "seq": 1,
+     "id": "earnings_base_share_5y",
+     "value": 46.0,
+     "recorded": "2023-06-12T12:00:00-04:00"
+    },
+    {
+     "seq": 2,
+     "id": "net_margin_base_share_5y",
+     "value": 79.0,
+     "recorded": "2023-06-12T12:00:00-04:00"
+    },
+    {
+     "seq": 3,
+     "id": "peg_trailing",
+     "value": 0.66,
+     "recorded": "2023-06-12T12:00:00-04:00"
+    },
+    {
+     "seq": 4,
+     "id": "eps_cagr_5y",
+     "value": 21.0,
+     "recorded": "2023-06-12T12:00:00-04:00"
+    },
+    {
+     "seq": 5,
+     "id": "debt_to_equity",
+     "value": 0.24,
+     "recorded": "2023-06-12T12:00:00-04:00"
+    },
+    {
+     "seq": 6,
+     "id": "eps_minus_revenue_cagr_spread_5y",
+     "value": 5.0,
+     "recorded": "2023-06-12T12:00:00-04:00"
+    },
+    {
+     "seq": 7,
+     "id": "dividend_adjusted_peg",
+     "value": 0.66,
+     "recorded": "2023-06-12T12:00:00-04:00"
+    },
+    {
+     "seq": 8,
+     "id": "pe_to_own_5y_median_pe",
+     "value": 0.81,
+     "recorded": "2023-06-12T12:00:00-04:00"
+    },
+    {
+     "seq": 9,
+     "id": "revenue_cagr_3y",
+     "value": 17.0,
+     "recorded": "2023-06-12T12:00:00-04:00"
+    },
+    {
+     "seq": 10,
+     "id": "inventory_minus_revenue_growth_yoy",
+     "value": 1.2,
+     "recorded": "2023-06-12T12:00:00-04:00"
+    },
+    {
+     "seq": 11,
+     "id": "receivables_minus_revenue_growth_yoy",
+     "value": 2.4,
+     "recorded": "2023-06-12T12:00:00-04:00"
+    },
+    {
+     "seq": 12,
+     "id": "gross_margin_change_3y",
+     "value": 0.6,
+     "recorded": "2023-06-12T12:00:00-04:00"
+    },
+    {
+     "seq": 13,
+     "id": "interest_coverage",
+     "value": 17.0,
+     "recorded": "2023-06-12T12:00:00-04:00"
+    },
+    {
+     "seq": 14,
+     "id": "fcf_ttm",
+     "value": 38000000.0,
+     "recorded": "2023-06-12T12:00:00-04:00"
+    },
+    {
+     "seq": 15,
+     "id": "net_cash_to_market_cap",
+     "value": 0.05,
+     "recorded": "2023-06-12T12:00:00-04:00"
+    },
+    {
+     "seq": 16,
+     "id": "eps_change_yoy",
+     "value": 22.0,
+     "recorded": "2023-06-12T12:00:00-04:00"
+    },
+    {
+     "seq": 17,
+     "id": "revenue_change_yoy",
+     "value": 18.0,
+     "recorded": "2023-06-12T12:00:00-04:00"
+    },
+    {
+     "seq": 18,
+     "id": "peg_trailing",
+     "value": 0.74,
+     "recorded": "2026-08-07T12:00:00-04:00"
+    },
+    {
+     "seq": 19,
+     "id": "eps_cagr_5y",
+     "value": 16.0,
+     "recorded": "2026-08-07T12:00:00-04:00"
+    },
+    {
+     "seq": 20,
+     "id": "dividend_adjusted_peg",
+     "value": 0.74,
+     "recorded": "2026-08-07T12:00:00-04:00"
+    },
+    {
+     "seq": 21,
+     "id": "pe_to_own_5y_median_pe",
+     "value": 0.66,
+     "recorded": "2026-08-07T12:00:00-04:00"
+    },
+    {
+     "seq": 22,
+     "id": "revenue_cagr_3y",
+     "value": 10.0,
+     "recorded": "2026-08-07T12:00:00-04:00"
+    },
+    {
+     "seq": 23,
+     "id": "inventory_minus_revenue_growth_yoy",
+     "value": 4.1,
+     "recorded": "2026-08-07T12:00:00-04:00"
+    },
+    {
+     "seq": 24,
+     "id": "gross_margin_change_3y",
+     "value": -1.4,
+     "recorded": "2026-08-07T12:00:00-04:00"
+    },
+    {
+     "seq": 25,
+     "id": "eps_change_yoy",
+     "value": 1.8,
+     "recorded": "2026-08-07T12:00:00-04:00"
+    },
+    {
+     "seq": 26,
+     "id": "revenue_change_yoy",
+     "value": 0.4,
+     "recorded": "2026-08-07T12:00:00-04:00"
+    }
+   ],
+   "thesis": [
+    {
+     "seq": 1,
+     "thesis": "Cutting tools for a machining market growing with reshored manufacturing, sold through distributors who reorder monthly.",
+     "falsifier": "Order growth flattening for two quarters while the tool inventory keeps building.",
+     "reason": "",
+     "recorded": "2026-08-07T12:00:00-04:00"
+    }
+   ],
+   "valuations": [],
+   "notes": [
+    {
+     "date": "2026-08-07T12:00:00-04:00",
+     "text": "The falsifier I wrote in 2023 is the thing that happened. Earnings up under two percent, sales up almost nothing, and the five-year rate still says sixteen — which is exactly the problem the trailing exit exists to solve."
+    },
+    {
+     "date": "2026-08-09T12:00:00-04:00",
+     "text": "The journal says one reading is not enough and it is right in general and stuck in particular: it confirms breaches by counting filings, and I type these numbers in by hand, so there are none to count. It will sit here saying the same thing forever. That is on me and my record-keeping, not on the rule — but it is worth knowing that this journal will never tell me to sell anything."
+    },
+    {
+     "date": "2023-06-19T12:00:00-04:00",
+     "text": "Recorded from history: 1 purchase, dated 2023-06-19. Each was judged against the data available on its own day, not against today's."
+    }
+   ],
+   "lot_seq": 1
+  },
+  {
+   "ticker": "PELSALL",
+   "name": "Pelsall Ceramics",
+   "added": "2026-08-12",
+   "price": 45.0,
+   "lots": [
+    {
+     "id": "l1",
+     "seq": 1,
+     "kind": "buy",
+     "date": "2024-09-10",
+     "recorded": "2024-09-10T12:00:00-04:00",
+     "shares": 250.0,
+     "price": 28.6,
+     "override": null,
+     "unreconstructed": null,
+     "snapshot": {
+      "frozen": "2024-09-10T12:00:00-04:00",
+      "decision": {
+       "render": "commit",
+       "tier": "position",
+       "state": {
+        "id": "worth-buying",
+        "name": "Worth buying, at this price",
+        "description": "Every test this strategy will not bend has passed, and all four questions it asks about the business are answered.\n\nThat is a claim about the price and the growth together, and neither on its own. A company growing quickly at a price that has already paid for the growth is not a buy here, and neither is a cheap company that has stopped growing. The size is an equal share of the names this strategy runs at once.",
+        "fix": null
+       },
+       "payload": {
+        "size": {
+         "unit": "weight",
+         "value": 12.5
+        },
+        "condition": null,
+        "plan": null
+       },
+       "reason": {
+        "rule": "growth-not-yet-paid-for",
+        "summary": "All 5 tests this strategy will not bend passed, and all four questions about the company are answered — 8 of the 8 tests behind them passed. The size is 12.5% of the account, set by an equal share of your places.",
+        "evidence": [
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "earnings_base_share_5y",
+           "reads": "earnings_base_share_5y",
+           "label": "Earnings at the base of the growth window, as a share of earnings now",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 46.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-09-03"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 10,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-earnings-base-share",
+            "label": "Least the company may have earned at the start of its growth window, as a share of what it earns now",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "base"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "net_margin_base_share_5y",
+           "reads": "net_margin_base_share_5y",
+           "label": "Net margin at the base of the growth window, as a share of the margin now",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 79.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-09-03"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 50,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-margin-base-share",
+            "label": "Least the margin may have been at the start of the growth window, as a share of the margin now",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "base"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "peg_trailing",
+           "reads": "peg_trailing",
+           "label": "PEG ratio, trailing",
+           "unit": "ratio",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 0.79,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-09-03"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 1.0,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-peg",
+            "label": "Highest price against growth it will pay",
+            "unit": "ratio"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "eps_cagr_5y",
+           "reads": "eps_cagr_5y",
+           "label": "Diluted EPS CAGR, 5-year",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 16.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-09-03"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 10,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-eps-growth",
+            "label": "Slowest growth it will buy",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "eps_cagr_5y",
+           "reads": "eps_cagr_5y",
+           "label": "Diluted EPS CAGR, 5-year",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 16.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-09-03"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 35,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-eps-growth",
+            "label": "Fastest growth it will buy",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "debt_to_equity",
+           "reads": "debt_to_equity",
+           "label": "Debt to equity",
+           "unit": "ratio",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 0.24,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-09-03"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 0.5,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-debt-to-equity",
+            "label": "Highest debt against equity",
+            "unit": "ratio"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "eps_minus_revenue_cagr_spread_5y",
+           "reads": "eps_minus_revenue_cagr_spread_5y",
+           "label": "Diluted EPS CAGR minus revenue CAGR, 5-year",
+           "unit": "percentage_points",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 5.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-09-03"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 10,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-growth-spread",
+            "label": "Most that profit growth may outrun sales growth",
+            "unit": "percentage_points"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "dividend_adjusted_peg",
+           "reads": "dividend_adjusted_peg",
+           "label": "Dividend-adjusted PEG",
+           "unit": "ratio",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 0.78,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-09-03"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 1.0,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-dividend-adjusted-peg",
+            "label": "Highest price against growth plus yield",
+            "unit": "ratio"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "price"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "pe_to_own_5y_median_pe",
+           "reads": "pe_to_own_5y_median_pe",
+           "label": "P/E versus its own five-year median P/E",
+           "unit": "times_own_median",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 0.88,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-09-03"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 1.0,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-pe-to-own-median",
+            "label": "Highest price against what this company usually costs",
+            "unit": "times_own_median"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "price"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "revenue_cagr_3y",
+           "reads": "revenue_cagr_3y",
+           "label": "Revenue CAGR, 3-year",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 12.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-09-03"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 5,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-revenue-growth",
+            "label": "Slowest sales growth it will buy",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "growing"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "inventory_minus_revenue_growth_yoy",
+           "reads": "inventory_minus_revenue_growth_yoy",
+           "label": "Inventory growth minus revenue growth, year over year",
+           "unit": "percentage_points",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 1.2,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-09-03"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 5,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-inventory-spread",
+            "label": "Most that stock may pile up faster than sales grow",
+            "unit": "percentage_points"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "real"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "receivables_minus_revenue_growth_yoy",
+           "reads": "receivables_minus_revenue_growth_yoy",
+           "label": "Receivables growth minus revenue growth, year over year",
+           "unit": "percentage_points",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 2.4,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-09-03"
+           ]
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 5,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-receivables-spread",
+            "label": "Most that unpaid invoices may grow faster than sales",
+            "unit": "percentage_points"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "real"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "gross_margin_change_3y",
+           "reads": "gross_margin_change_3y",
+           "label": "Gross margin change over three years",
+           "unit": "percentage_points",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 0.6,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-09-03"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": -2,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-gross-margin-change",
+            "label": "Most the margin may have fallen in three years",
+            "unit": "percentage_points"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "real"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "interest_coverage",
+           "reads": "interest_coverage",
+           "label": "Interest coverage",
+           "unit": "times",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 17.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-09-03"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 5,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-interest-coverage",
+            "label": "Lowest interest cover",
+            "unit": "times"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "survives"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "fcf_ttm",
+           "reads": "fcf_ttm",
+           "label": "Free cash flow, trailing twelve months",
+           "unit": "usd",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 38000000.0,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-09-03"
+           ]
+          },
+          "test": {
+           "comparator": "above",
+           "phrase": "above",
+           "threshold": 0,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-free-cash-flow",
+            "label": "Least spare cash it will accept",
+            "unit": "usd"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "survives"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "net_cash_to_market_cap",
+           "reads": "net_cash_to_market_cap",
+           "label": "Net cash over market capitalization",
+           "unit": "ratio",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 0.05,
+           "source": "measure",
+           "cautions": [],
+           "provenance": [
+            "entered by hand on 2024-09-03"
+           ]
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 0,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-net-cash",
+            "label": "Least net cash it likes to see",
+            "unit": "ratio"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "bonus"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "insider_net_buying_6m",
+           "reads": "insider_net_buying_6m",
+           "label": "Insider net buying, trailing six months",
+           "unit": "shares",
+           "explain": null
+          },
+          "observed": {
+           "status": "absent",
+           "reason": "no filing data is stored for this security — fetch data first",
+           "source": "measure"
+          },
+          "test": {
+           "comparator": "above",
+           "phrase": "above",
+           "threshold": 0,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-insider-buying",
+            "label": "Least insider buying it likes to see",
+            "unit": "shares"
+           },
+           "absent": null
+          },
+          "outcome": "unknown",
+          "group": "bonus"
+         },
+         {
+          "subject": {
+           "kind": "fact",
+           "id": "portfolio.slots_occupied",
+           "reads": null,
+           "label": "Positions held",
+           "unit": "count",
+           "explain": "How many separate securities this journal currently holds. A strategy that runs a fixed number of positions at once measures against this to know whether there is room for another."
+          },
+          "observed": {
+           "status": "known",
+           "value": 3,
+           "source": "fact",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": {
+           "comparator": "below",
+           "phrase": "below",
+           "threshold": 8,
+           "threshold_from": {
+            "kind": "value",
+            "id": "portfolio-slots",
+            "label": "Names held at once",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "outcome": "pass",
+          "group": "sizing"
+         },
+         {
+          "subject": {
+           "kind": "value",
+           "id": "portfolio-slots",
+           "reads": null,
+           "label": "Names held at once",
+           "unit": "count",
+           "explain": "How many separate companies this strategy holds at one time. Each first purchase takes an equal share of the account, so eight names means about twelve and a half percent each, and once every place is taken a new candidate is told there is no room rather than being talked down.\n\nEight sits toward the top of the three-to-ten range Lynch gave individual investors for a small portfolio. His argument against going wider is that diversifying into companies you know nothing about buys you nothing, and his argument against going narrower is that however carefully you choose, one of them will be hit by something nobody could have seen. The top of the range rather than the bottom because five names is a concentration somebody should arrive at deliberately and not one a tool should hand them by default.\n\nThe number matters more here than on a strategy that holds for decades. This method's arithmetic is that one or two large winners pay for a majority that did not work — so cutting the list makes it likelier that no position in it is a large winner, which is the way this style fails rather than a risk it takes.\n\nPast about fifteen you are holding more companies than you can follow closely enough to notice when one of their stories changes, and noticing that is the entire exit discipline here.\n\nThis figure and the cap below are the only two here that do not come from the expert report — it was never asked about sizing."
+          },
+          "observed": {
+           "status": "known",
+           "value": 8,
+           "source": "value",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "sizing"
+         },
+         {
+          "subject": {
+           "kind": "value",
+           "id": "position-weight-cap",
+           "reads": null,
+           "label": "Most this will put into one name",
+           "unit": "percent",
+           "explain": "The largest share of your account this strategy will take a single holding up to **by buying more of it**.\n\nIt is a limit on your purchases, not on the position. If a holding multiplies until it is half the account, nothing here tells you to trim it — this strategy has no trim, on purpose, because a position that got large by rising is precisely what the method is trying to produce. What this number does is stop you *adding* past it.\n\nTwenty-five percent is twice the share a first purchase takes, so a company can be added to twice as its story keeps proving out, and it is far short of the forty percent the Buffett strategy in this program will commit to one name. That difference is the point rather than a matter of taste. Buffett's concentration rests on a judgement about a business that is meant to hold for decades; this strategy's holding periods are measured in quarters to a few years and its exits fire on things that can change in one filing, so a position sized for a decade of conviction is sized wrong here.\n\n**Lynch published no such figure and none is claimed for him.** He advised individuals on how many companies to hold and not on how much to put in one. This number is this file's, derived from the slot count above, and it is the one in this strategy with the least behind it.\n\nIt needs your free cash to be answered in settings, because a share of the account cannot be worked out without knowing what the account is. Unanswered, the size rules report that they could not be run."
+          },
+          "observed": {
+           "status": "known",
+           "value": 25,
+           "source": "value",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "sizing"
+         },
+         {
+          "subject": {
+           "kind": "stated",
+           "id": null,
+           "reads": null,
+           "label": "Size this buy",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "known",
+           "value": 12.5,
+           "source": "stated",
+           "cautions": [],
+           "provenance": []
+          },
+          "test": null,
+          "outcome": "noted",
+          "group": "sizing"
+         }
+        ],
+        "groups": [
+         {
+          "id": "base",
+          "name": "What it looked like when the growth started",
+          "requires": "noted",
+          "test": null,
+          "members": 2,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "noted"
+         },
+         {
+          "id": "knockouts",
+          "name": "Tests this strategy will not bend",
+          "requires": "all",
+          "test": null,
+          "members": 5,
+          "tested": 5,
+          "passed": 5,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "price",
+          "name": "What you are paying for the growth",
+          "requires": "at_least",
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 1,
+           "threshold_from": {
+            "kind": "value",
+            "id": "price-tests-required",
+            "label": "Price tests that must pass, of two",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "members": 2,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "growing",
+          "name": "Whether the top line is growing",
+          "requires": "all",
+          "test": null,
+          "members": 1,
+          "tested": 1,
+          "passed": 1,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "real",
+          "name": "Whether the growth is real or manufactured",
+          "requires": "at_least",
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 2,
+           "threshold_from": {
+            "kind": "value",
+            "id": "quality-tests-required",
+            "label": "Tests of whether the growth is real that must pass, of three",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "members": 3,
+          "tested": 3,
+          "passed": 3,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "survives",
+          "name": "Whether it survives a stumble",
+          "requires": "all",
+          "test": null,
+          "members": 2,
+          "tested": 2,
+          "passed": 2,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         },
+         {
+          "id": "bonus",
+          "name": "Reported, never blocking",
+          "requires": "noted",
+          "test": null,
+          "members": 2,
+          "tested": 2,
+          "passed": 1,
+          "failed": 0,
+          "unknown": 1,
+          "outcome": "noted"
+         },
+         {
+          "id": "sizing",
+          "name": "Room in the list, and how much",
+          "requires": "all",
+          "test": null,
+          "members": 4,
+          "tested": 1,
+          "passed": 1,
+          "failed": 0,
+          "unknown": 0,
+          "outcome": "pass"
+         }
+        ],
+        "note": null
+       },
+       "produced_by": "strategy",
+       "strategy": {
+        "id": "lynch",
+        "name": "Lynch",
+        "version": 1,
+        "values_version": 1,
+        "contract": 6
+       }
+      },
+      "strategy": {
+       "id": "lynch",
+       "name": "Lynch",
+       "version": 1,
+       "values_version": 1,
+       "contract": 6
+      },
+      "metrics": {
+       "earnings_base_share_5y": {
+        "value": 46.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2024-09-03"
+        ]
+       },
+       "net_margin_base_share_5y": {
+        "value": 79.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2024-09-03"
+        ]
+       },
+       "peg_trailing": {
+        "value": 0.79,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2024-09-03"
+        ]
+       },
+       "eps_cagr_5y": {
+        "value": 16.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2024-09-03"
+        ]
+       },
+       "debt_to_equity": {
+        "value": 0.24,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2024-09-03"
+        ]
+       },
+       "eps_minus_revenue_cagr_spread_5y": {
+        "value": 5.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2024-09-03"
+        ]
+       },
+       "dividend_adjusted_peg": {
+        "value": 0.78,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2024-09-03"
+        ]
+       },
+       "pe_to_own_5y_median_pe": {
+        "value": 0.88,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2024-09-03"
+        ]
+       },
+       "revenue_cagr_3y": {
+        "value": 12.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2024-09-03"
+        ]
+       },
+       "inventory_minus_revenue_growth_yoy": {
+        "value": 1.2,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2024-09-03"
+        ]
+       },
+       "receivables_minus_revenue_growth_yoy": {
+        "value": 2.4,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2024-09-03"
+        ]
+       },
+       "gross_margin_change_3y": {
+        "value": 0.6,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2024-09-03"
+        ]
+       },
+       "interest_coverage": {
+        "value": 17.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2024-09-03"
+        ]
+       },
+       "fcf_ttm": {
+        "value": 38000000.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2024-09-03"
+        ]
+       },
+       "net_cash_to_market_cap": {
+        "value": 0.05,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2024-09-03"
+        ]
+       },
+       "eps_change_yoy": {
+        "value": 17.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2024-09-03"
+        ]
+       },
+       "revenue_change_yoy": {
+        "value": 12.0,
+        "source": "manual",
+        "cautions": [],
+        "provenance": [
+         "entered by hand on 2024-09-03"
+        ]
+       }
+      },
+      "price": null,
+      "price_source": null,
+      "price_date": null,
+      "price_ticker": null,
+      "evaluation": {
+       "basis": "reconstructed",
+       "as_of": "2024-09-10",
+       "filings_by_then": 0,
+       "newest_filed": null,
+       "priced": null,
+       "manual_on_record": [
+        "debt_to_equity",
+        "dividend_adjusted_peg",
+        "earnings_base_share_5y",
+        "eps_cagr_5y",
+        "eps_change_yoy",
+        "eps_minus_revenue_cagr_spread_5y",
+        "fcf_ttm",
+        "gross_margin_change_3y",
+        "interest_coverage",
+        "inventory_minus_revenue_growth_yoy",
+        "net_cash_to_market_cap",
+        "net_margin_base_share_5y",
+        "pe_to_own_5y_median_pe",
+        "peg_trailing",
+        "receivables_minus_revenue_growth_yoy",
+        "revenue_cagr_3y",
+        "revenue_change_yoy"
+       ],
+       "manual_withheld": [],
+       "note": "no company is linked to this ticker, so no stored filing or price from 2024-09-10 could be consulted; 17 hand-entered values on record by 2024-09-10; judged by Lynch v1 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+      },
+      "thesis": null,
+      "valuation": null,
+      "recollection": null
+     }
+    }
+   ],
+   "judgements": [],
+   "hand_entered": [
+    {
+     "seq": 1,
+     "id": "earnings_base_share_5y",
+     "value": 46.0,
+     "recorded": "2024-09-03T12:00:00-04:00"
+    },
+    {
+     "seq": 2,
+     "id": "net_margin_base_share_5y",
+     "value": 79.0,
+     "recorded": "2024-09-03T12:00:00-04:00"
+    },
+    {
+     "seq": 3,
+     "id": "peg_trailing",
+     "value": 0.79,
+     "recorded": "2024-09-03T12:00:00-04:00"
+    },
+    {
+     "seq": 4,
+     "id": "eps_cagr_5y",
+     "value": 16.0,
+     "recorded": "2024-09-03T12:00:00-04:00"
+    },
+    {
+     "seq": 5,
+     "id": "debt_to_equity",
+     "value": 0.24,
+     "recorded": "2024-09-03T12:00:00-04:00"
+    },
+    {
+     "seq": 6,
+     "id": "eps_minus_revenue_cagr_spread_5y",
+     "value": 5.0,
+     "recorded": "2024-09-03T12:00:00-04:00"
+    },
+    {
+     "seq": 7,
+     "id": "dividend_adjusted_peg",
+     "value": 0.78,
+     "recorded": "2024-09-03T12:00:00-04:00"
+    },
+    {
+     "seq": 8,
+     "id": "pe_to_own_5y_median_pe",
+     "value": 0.88,
+     "recorded": "2024-09-03T12:00:00-04:00"
+    },
+    {
+     "seq": 9,
+     "id": "revenue_cagr_3y",
+     "value": 12.0,
+     "recorded": "2024-09-03T12:00:00-04:00"
+    },
+    {
+     "seq": 10,
+     "id": "inventory_minus_revenue_growth_yoy",
+     "value": 1.2,
+     "recorded": "2024-09-03T12:00:00-04:00"
+    },
+    {
+     "seq": 11,
+     "id": "receivables_minus_revenue_growth_yoy",
+     "value": 2.4,
+     "recorded": "2024-09-03T12:00:00-04:00"
+    },
+    {
+     "seq": 12,
+     "id": "gross_margin_change_3y",
+     "value": 0.6,
+     "recorded": "2024-09-03T12:00:00-04:00"
+    },
+    {
+     "seq": 13,
+     "id": "interest_coverage",
+     "value": 17.0,
+     "recorded": "2024-09-03T12:00:00-04:00"
+    },
+    {
+     "seq": 14,
+     "id": "fcf_ttm",
+     "value": 38000000.0,
+     "recorded": "2024-09-03T12:00:00-04:00"
+    },
+    {
+     "seq": 15,
+     "id": "net_cash_to_market_cap",
+     "value": 0.05,
+     "recorded": "2024-09-03T12:00:00-04:00"
+    },
+    {
+     "seq": 16,
+     "id": "eps_change_yoy",
+     "value": 17.0,
+     "recorded": "2024-09-03T12:00:00-04:00"
+    },
+    {
+     "seq": 17,
+     "id": "revenue_change_yoy",
+     "value": 12.0,
+     "recorded": "2024-09-03T12:00:00-04:00"
+    },
+    {
+     "seq": 18,
+     "id": "peg_trailing",
+     "value": 1.45,
+     "recorded": "2026-08-05T12:00:00-04:00"
+    },
+    {
+     "seq": 19,
+     "id": "eps_cagr_5y",
+     "value": 15.0,
+     "recorded": "2026-08-05T12:00:00-04:00"
+    },
+    {
+     "seq": 20,
+     "id": "dividend_adjusted_peg",
+     "value": 1.42,
+     "recorded": "2026-08-05T12:00:00-04:00"
+    },
+    {
+     "seq": 21,
+     "id": "pe_to_own_5y_median_pe",
+     "value": 1.31,
+     "recorded": "2026-08-05T12:00:00-04:00"
+    },
+    {
+     "seq": 22,
+     "id": "revenue_cagr_3y",
+     "value": 11.0,
+     "recorded": "2026-08-05T12:00:00-04:00"
+    },
+    {
+     "seq": 23,
+     "id": "eps_change_yoy",
+     "value": 14.0,
+     "recorded": "2026-08-05T12:00:00-04:00"
+    },
+    {
+     "seq": 24,
+     "id": "revenue_change_yoy",
+     "value": 10.0,
+     "recorded": "2026-08-05T12:00:00-04:00"
+    }
+   ],
+   "thesis": [
+    {
+     "seq": 1,
+     "thesis": "Technical ceramics for semiconductor tooling, where the part is a rounding error in the machine and a catastrophe if it fails.",
+     "falsifier": "A customer qualifies a second source, or the fab build cycle turns down.",
+     "reason": "",
+     "recorded": "2026-08-05T12:00:00-04:00"
+    }
+   ],
+   "valuations": [],
+   "notes": [
+    {
+     "date": "2026-08-05T12:00:00-04:00",
+     "text": "Re-rated hard. The journal will not buy more and will not sell it either — the exit sits at twice the level that would buy, and it is nowhere near that. Two different questions with two different answers, which is what I wanted written down in advance."
+    },
+    {
+     "date": "2024-09-10T12:00:00-04:00",
+     "text": "Recorded from history: 1 purchase, dated 2024-09-10. Each was judged against the data available on its own day, not against today's."
+    }
+   ],
+   "lot_seq": 1
+  },
+  {
+   "ticker": "CASTERTON",
+   "name": "Casterton Papers",
+   "added": "2026-08-12",
+   "price": 33.0,
+   "lots": [
+    {
+     "id": "l1",
+     "seq": 1,
+     "kind": "buy",
+     "date": "2023-11-08",
+     "recorded": "2023-11-08T12:00:00-05:00",
+     "shares": 200.0,
+     "price": 27.1,
+     "override": null,
+     "unreconstructed": {
+      "date": "2023-11-08",
+      "as_of": "2023-11-08",
+      "state": "Not enough to go on",
+      "why": "13 of the tests that decide this could not be worked out from the data on record, and the ones that could do not settle it either way.",
+      "strategy": {
+       "id": "lynch",
+       "name": "Lynch",
+       "version": 1,
+       "values_version": 1,
+       "contract": 6
+      },
+      "missing": [
+       {
+        "key": "value:min-earnings-base-share",
+        "label": "Least the company may have earned at the start of its growth window, as a share of what it earns now"
+       },
+       {
+        "key": "value:min-margin-base-share",
+        "label": "Least the margin may have been at the start of the growth window, as a share of the margin now"
+       },
+       {
+        "key": "value:max-peg",
+        "label": "Highest price against growth it will pay"
+       },
+       {
+        "key": "value:min-eps-growth",
+        "label": "Slowest growth it will buy"
+       },
+       {
+        "key": "value:max-eps-growth",
+        "label": "Fastest growth it will buy"
+       },
+       {
+        "key": "value:max-debt-to-equity",
+        "label": "Highest debt against equity"
+       },
+       {
+        "key": "value:max-growth-spread",
+        "label": "Most that profit growth may outrun sales growth"
+       },
+       {
+        "key": "value:max-dividend-adjusted-peg",
+        "label": "Highest price against growth plus yield"
+       },
+       {
+        "key": "value:max-pe-to-own-median",
+        "label": "Highest price against what this company usually costs"
+       },
+       {
+        "key": "value:min-revenue-growth",
+        "label": "Slowest sales growth it will buy"
+       },
+       {
+        "key": "value:max-inventory-spread",
+        "label": "Most that stock may pile up faster than sales grow"
+       },
+       {
+        "key": "value:max-receivables-spread",
+        "label": "Most that unpaid invoices may grow faster than sales"
+       },
+       {
+        "key": "value:min-gross-margin-change",
+        "label": "Most the margin may have fallen in three years"
+       },
+       {
+        "key": "value:min-interest-coverage",
+        "label": "Lowest interest cover"
+       },
+       {
+        "key": "value:min-free-cash-flow",
+        "label": "Least spare cash it will accept"
+       },
+       {
+        "key": "value:min-net-cash",
+        "label": "Least net cash it likes to see"
+       },
+       {
+        "key": "value:min-insider-buying",
+        "label": "Least insider buying it likes to see"
+       }
+      ],
+      "note": "no company is linked to this ticker, so no stored filing or price from 2023-11-08 could be consulted; judged by Lynch v1 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; this journal was created on 2024-01-02, so it held no answers on 2023-11-08 — free cash, and every figure measured against the account, are absent rather than taken from what you have told it since"
+     },
+     "snapshot": {
+      "frozen": "2023-11-08T12:00:00-05:00",
+      "decision": {
+       "render": "unknown",
+       "tier": "evaluation",
+       "state": {
+        "id": "cannot-screen",
+        "name": "Not enough to go on",
+        "description": "Some of the figures this strategy needs are missing, and the ones that are present do not settle it either way. A missing number is not a pass and it is not a failure, so nothing is claimed. The reasons below say which figures are absent and why.\n\nThis is commoner here than you might expect and it is not a fault. The growth rates need eight fiscal years of accounts on one basis, and a company that listed five years ago simply does not have them yet — which is a fact about the record rather than about the company.",
+        "fix": null
+       },
+       "payload": {},
+       "reason": {
+        "rule": "screen-incomplete",
+        "summary": "13 of the tests that decide this could not be worked out from the data on record, and the ones that could do not settle it either way.",
+        "evidence": [
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "earnings_base_share_5y",
+           "reads": "earnings_base_share_5y",
+           "label": "Earnings at the base of the growth window, as a share of earnings now",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "absent",
+           "reason": "no filing data is stored for this security — fetch data first",
+           "source": "measure"
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 10,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-earnings-base-share",
+            "label": "Least the company may have earned at the start of its growth window, as a share of what it earns now",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "unknown",
+          "group": "base"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "net_margin_base_share_5y",
+           "reads": "net_margin_base_share_5y",
+           "label": "Net margin at the base of the growth window, as a share of the margin now",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "absent",
+           "reason": "no filing data is stored for this security — fetch data first",
+           "source": "measure"
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 50,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-margin-base-share",
+            "label": "Least the margin may have been at the start of the growth window, as a share of the margin now",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "unknown",
+          "group": "base"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "peg_trailing",
+           "reads": "peg_trailing",
+           "label": "PEG ratio, trailing",
+           "unit": "ratio",
+           "explain": null
+          },
+          "observed": {
+           "status": "absent",
+           "reason": "no filing data is stored for this security — fetch data first",
+           "source": "measure"
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 1.0,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-peg",
+            "label": "Highest price against growth it will pay",
+            "unit": "ratio"
+           },
+           "absent": null
+          },
+          "outcome": "unknown",
+          "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "eps_cagr_5y",
+           "reads": "eps_cagr_5y",
+           "label": "Diluted EPS CAGR, 5-year",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "absent",
+           "reason": "no filing data is stored for this security — fetch data first",
+           "source": "measure"
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 10,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-eps-growth",
+            "label": "Slowest growth it will buy",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "unknown",
+          "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "eps_cagr_5y",
+           "reads": "eps_cagr_5y",
+           "label": "Diluted EPS CAGR, 5-year",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "absent",
+           "reason": "no filing data is stored for this security — fetch data first",
+           "source": "measure"
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 35,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-eps-growth",
+            "label": "Fastest growth it will buy",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "unknown",
+          "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "debt_to_equity",
+           "reads": "debt_to_equity",
+           "label": "Debt to equity",
+           "unit": "ratio",
+           "explain": null
+          },
+          "observed": {
+           "status": "absent",
+           "reason": "no filing data is stored for this security — fetch data first",
+           "source": "measure"
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 0.5,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-debt-to-equity",
+            "label": "Highest debt against equity",
+            "unit": "ratio"
+           },
+           "absent": null
+          },
+          "outcome": "unknown",
+          "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "eps_minus_revenue_cagr_spread_5y",
+           "reads": "eps_minus_revenue_cagr_spread_5y",
+           "label": "Diluted EPS CAGR minus revenue CAGR, 5-year",
+           "unit": "percentage_points",
+           "explain": null
+          },
+          "observed": {
+           "status": "absent",
+           "reason": "no filing data is stored for this security — fetch data first",
+           "source": "measure"
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 10,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-growth-spread",
+            "label": "Most that profit growth may outrun sales growth",
+            "unit": "percentage_points"
+           },
+           "absent": null
+          },
+          "outcome": "unknown",
+          "group": "knockouts"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "dividend_adjusted_peg",
+           "reads": "dividend_adjusted_peg",
+           "label": "Dividend-adjusted PEG",
+           "unit": "ratio",
+           "explain": null
+          },
+          "observed": {
+           "status": "absent",
+           "reason": "no filing data is stored for this security — fetch data first",
+           "source": "measure"
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 1.0,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-dividend-adjusted-peg",
+            "label": "Highest price against growth plus yield",
+            "unit": "ratio"
+           },
+           "absent": null
+          },
+          "outcome": "unknown",
+          "group": "price"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "pe_to_own_5y_median_pe",
+           "reads": "pe_to_own_5y_median_pe",
+           "label": "P/E versus its own five-year median P/E",
+           "unit": "times_own_median",
+           "explain": null
+          },
+          "observed": {
+           "status": "absent",
+           "reason": "no filing data is stored for this security — fetch data first",
+           "source": "measure"
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 1.0,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-pe-to-own-median",
+            "label": "Highest price against what this company usually costs",
+            "unit": "times_own_median"
+           },
+           "absent": null
+          },
+          "outcome": "unknown",
+          "group": "price"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "revenue_cagr_3y",
+           "reads": "revenue_cagr_3y",
+           "label": "Revenue CAGR, 3-year",
+           "unit": "percent",
+           "explain": null
+          },
+          "observed": {
+           "status": "absent",
+           "reason": "no filing data is stored for this security — fetch data first",
+           "source": "measure"
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 5,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-revenue-growth",
+            "label": "Slowest sales growth it will buy",
+            "unit": "percent"
+           },
+           "absent": null
+          },
+          "outcome": "unknown",
+          "group": "growing"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "inventory_minus_revenue_growth_yoy",
+           "reads": "inventory_minus_revenue_growth_yoy",
+           "label": "Inventory growth minus revenue growth, year over year",
+           "unit": "percentage_points",
+           "explain": null
+          },
+          "observed": {
+           "status": "absent",
+           "reason": "no filing data is stored for this security — fetch data first",
+           "source": "measure"
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 5,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-inventory-spread",
+            "label": "Most that stock may pile up faster than sales grow",
+            "unit": "percentage_points"
+           },
+           "absent": null
+          },
+          "outcome": "unknown",
+          "group": "real"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "receivables_minus_revenue_growth_yoy",
+           "reads": "receivables_minus_revenue_growth_yoy",
+           "label": "Receivables growth minus revenue growth, year over year",
+           "unit": "percentage_points",
+           "explain": null
+          },
+          "observed": {
+           "status": "absent",
+           "reason": "no filing data is stored for this security — fetch data first",
+           "source": "measure"
+          },
+          "test": {
+           "comparator": "at_most",
+           "phrase": "at most",
+           "threshold": 5,
+           "threshold_from": {
+            "kind": "value",
+            "id": "max-receivables-spread",
+            "label": "Most that unpaid invoices may grow faster than sales",
+            "unit": "percentage_points"
+           },
+           "absent": null
+          },
+          "outcome": "unknown",
+          "group": "real"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "gross_margin_change_3y",
+           "reads": "gross_margin_change_3y",
+           "label": "Gross margin change over three years",
+           "unit": "percentage_points",
+           "explain": null
+          },
+          "observed": {
+           "status": "absent",
+           "reason": "no filing data is stored for this security — fetch data first",
+           "source": "measure"
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": -2,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-gross-margin-change",
+            "label": "Most the margin may have fallen in three years",
+            "unit": "percentage_points"
+           },
+           "absent": null
+          },
+          "outcome": "unknown",
+          "group": "real"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "interest_coverage",
+           "reads": "interest_coverage",
+           "label": "Interest coverage",
+           "unit": "times",
+           "explain": null
+          },
+          "observed": {
+           "status": "absent",
+           "reason": "no filing data is stored for this security — fetch data first",
+           "source": "measure"
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 5,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-interest-coverage",
+            "label": "Lowest interest cover",
+            "unit": "times"
+           },
+           "absent": null
+          },
+          "outcome": "unknown",
+          "group": "survives"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "fcf_ttm",
+           "reads": "fcf_ttm",
+           "label": "Free cash flow, trailing twelve months",
+           "unit": "usd",
+           "explain": null
+          },
+          "observed": {
+           "status": "absent",
+           "reason": "no filing data is stored for this security — fetch data first",
+           "source": "measure"
+          },
+          "test": {
+           "comparator": "above",
+           "phrase": "above",
+           "threshold": 0,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-free-cash-flow",
+            "label": "Least spare cash it will accept",
+            "unit": "usd"
+           },
+           "absent": null
+          },
+          "outcome": "unknown",
+          "group": "survives"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "net_cash_to_market_cap",
+           "reads": "net_cash_to_market_cap",
+           "label": "Net cash over market capitalization",
+           "unit": "ratio",
+           "explain": null
+          },
+          "observed": {
+           "status": "absent",
+           "reason": "no filing data is stored for this security — fetch data first",
+           "source": "measure"
+          },
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 0,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-net-cash",
+            "label": "Least net cash it likes to see",
+            "unit": "ratio"
+           },
+           "absent": null
+          },
+          "outcome": "unknown",
+          "group": "bonus"
+         },
+         {
+          "subject": {
+           "kind": "measure",
+           "id": "insider_net_buying_6m",
+           "reads": "insider_net_buying_6m",
+           "label": "Insider net buying, trailing six months",
+           "unit": "shares",
+           "explain": null
+          },
+          "observed": {
+           "status": "absent",
+           "reason": "no filing data is stored for this security — fetch data first",
+           "source": "measure"
+          },
+          "test": {
+           "comparator": "above",
+           "phrase": "above",
+           "threshold": 0,
+           "threshold_from": {
+            "kind": "value",
+            "id": "min-insider-buying",
+            "label": "Least insider buying it likes to see",
+            "unit": "shares"
+           },
+           "absent": null
+          },
+          "outcome": "unknown",
+          "group": "bonus"
+         }
+        ],
+        "groups": [
+         {
+          "id": "base",
+          "name": "What it looked like when the growth started",
+          "requires": "noted",
+          "test": null,
+          "members": 2,
+          "tested": 2,
+          "passed": 0,
+          "failed": 0,
+          "unknown": 2,
+          "outcome": "noted"
+         },
+         {
+          "id": "knockouts",
+          "name": "Tests this strategy will not bend",
+          "requires": "all",
+          "test": null,
+          "members": 5,
+          "tested": 5,
+          "passed": 0,
+          "failed": 0,
+          "unknown": 5,
+          "outcome": "unknown"
+         },
+         {
+          "id": "price",
+          "name": "What you are paying for the growth",
+          "requires": "at_least",
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 1,
+           "threshold_from": {
+            "kind": "value",
+            "id": "price-tests-required",
+            "label": "Price tests that must pass, of two",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "members": 2,
+          "tested": 2,
+          "passed": 0,
+          "failed": 0,
+          "unknown": 2,
+          "outcome": "unknown"
+         },
+         {
+          "id": "growing",
+          "name": "Whether the top line is growing",
+          "requires": "all",
+          "test": null,
+          "members": 1,
+          "tested": 1,
+          "passed": 0,
+          "failed": 0,
+          "unknown": 1,
+          "outcome": "unknown"
+         },
+         {
+          "id": "real",
+          "name": "Whether the growth is real or manufactured",
+          "requires": "at_least",
+          "test": {
+           "comparator": "at_least",
+           "phrase": "at least",
+           "threshold": 2,
+           "threshold_from": {
+            "kind": "value",
+            "id": "quality-tests-required",
+            "label": "Tests of whether the growth is real that must pass, of three",
+            "unit": "count"
+           },
+           "absent": null
+          },
+          "members": 3,
+          "tested": 3,
+          "passed": 0,
+          "failed": 0,
+          "unknown": 3,
+          "outcome": "unknown"
+         },
+         {
+          "id": "survives",
+          "name": "Whether it survives a stumble",
+          "requires": "all",
+          "test": null,
+          "members": 2,
+          "tested": 2,
+          "passed": 0,
+          "failed": 0,
+          "unknown": 2,
+          "outcome": "unknown"
+         },
+         {
+          "id": "bonus",
+          "name": "Reported, never blocking",
+          "requires": "noted",
+          "test": null,
+          "members": 2,
+          "tested": 2,
+          "passed": 0,
+          "failed": 0,
+          "unknown": 2,
+          "outcome": "noted"
+         }
+        ],
+        "note": null
+       },
+       "produced_by": "strategy",
+       "strategy": {
+        "id": "lynch",
+        "name": "Lynch",
+        "version": 1,
+        "values_version": 1,
+        "contract": 6
+       }
+      },
+      "strategy": {
+       "id": "lynch",
+       "name": "Lynch",
+       "version": 1,
+       "values_version": 1,
+       "contract": 6
+      },
+      "metrics": {},
+      "price": null,
+      "price_source": null,
+      "price_date": null,
+      "price_ticker": null,
+      "evaluation": {
+       "basis": "reconstructed",
+       "as_of": "2023-11-08",
+       "filings_by_then": 0,
+       "newest_filed": null,
+       "priced": null,
+       "manual_on_record": [],
+       "manual_withheld": [],
+       "note": "no company is linked to this ticker, so no stored filing or price from 2023-11-08 could be consulted; judged by Lynch v1 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; this journal was created on 2024-01-02, so it held no answers on 2023-11-08 — free cash, and every figure measured against the account, are absent rather than taken from what you have told it since"
+      },
+      "thesis": null,
+      "valuation": null,
+      "recollection": {
+       "text": "No figures on record for this. What I remember is buying it because the speciality paper line had two customers who could not qualify anyone else inside a year.",
+       "written": "2023-11-08T12:00:00-05:00"
+      }
+     }
+    }
+   ],
+   "judgements": [],
+   "hand_entered": [],
+   "thesis": [],
+   "valuations": [],
+   "notes": [
+    {
+     "date": "2026-08-03T12:00:00-04:00",
+     "text": "Entered from an old statement. No figures in for it, so the journal is honest about having nothing to say. It is not telling me to hold — it is telling me it cannot tell."
+    },
+    {
+     "date": "2023-11-08T12:00:00-05:00",
+     "text": "Recorded from history: 1 purchase, dated 2023-11-08. Each was judged against the data available on its own day, not against today's. 1 of these could not have a verdict reconstructed, so none is recorded against it."
+    }
+   ],
+   "lot_seq": 1
+  },
+  {
+   "ticker": "BRINDLE",
+   "name": "Brindle Water Systems",
+   "added": "2026-08-12",
+   "price": 39.5,
+   "lots": [],
+   "judgements": [],
+   "hand_entered": [
+    {
+     "seq": 1,
+     "id": "earnings_base_share_5y",
+     "value": 46.0,
+     "recorded": "2026-08-10T12:00:00-04:00"
+    },
+    {
+     "seq": 2,
+     "id": "net_margin_base_share_5y",
+     "value": 79.0,
+     "recorded": "2026-08-10T12:00:00-04:00"
+    },
+    {
+     "seq": 3,
+     "id": "peg_trailing",
+     "value": 0.79,
+     "recorded": "2026-08-10T12:00:00-04:00"
+    },
+    {
+     "seq": 4,
+     "id": "eps_cagr_5y",
+     "value": 21.0,
+     "recorded": "2026-08-10T12:00:00-04:00"
+    },
+    {
+     "seq": 5,
+     "id": "debt_to_equity",
+     "value": 0.24,
+     "recorded": "2026-08-10T12:00:00-04:00"
+    },
+    {
+     "seq": 6,
+     "id": "eps_minus_revenue_cagr_spread_5y",
+     "value": 5.0,
+     "recorded": "2026-08-10T12:00:00-04:00"
+    },
+    {
+     "seq": 7,
+     "id": "dividend_adjusted_peg",
+     "value": 0.79,
+     "recorded": "2026-08-10T12:00:00-04:00"
+    },
+    {
+     "seq": 8,
+     "id": "pe_to_own_5y_median_pe",
+     "value": 0.88,
+     "recorded": "2026-08-10T12:00:00-04:00"
+    },
+    {
+     "seq": 9,
+     "id": "revenue_cagr_3y",
+     "value": 16.0,
+     "recorded": "2026-08-10T12:00:00-04:00"
+    },
+    {
+     "seq": 10,
+     "id": "inventory_minus_revenue_growth_yoy",
+     "value": 1.2,
+     "recorded": "2026-08-10T12:00:00-04:00"
+    },
+    {
+     "seq": 11,
+     "id": "receivables_minus_revenue_growth_yoy",
+     "value": 2.4,
+     "recorded": "2026-08-10T12:00:00-04:00"
+    },
+    {
+     "seq": 12,
+     "id": "gross_margin_change_3y",
+     "value": 0.6,
+     "recorded": "2026-08-10T12:00:00-04:00"
+    },
+    {
+     "seq": 13,
+     "id": "interest_coverage",
+     "value": 17.0,
+     "recorded": "2026-08-10T12:00:00-04:00"
+    },
+    {
+     "seq": 14,
+     "id": "fcf_ttm",
+     "value": 38000000.0,
+     "recorded": "2026-08-10T12:00:00-04:00"
+    },
+    {
+     "seq": 15,
+     "id": "net_cash_to_market_cap",
+     "value": 0.05,
+     "recorded": "2026-08-10T12:00:00-04:00"
+    },
+    {
+     "seq": 16,
+     "id": "eps_change_yoy",
+     "value": 20.0,
+     "recorded": "2026-08-10T12:00:00-04:00"
+    },
+    {
+     "seq": 17,
+     "id": "revenue_change_yoy",
+     "value": 15.0,
+     "recorded": "2026-08-10T12:00:00-04:00"
+    },
+    {
+     "seq": 18,
+     "id": "insider_net_buying_6m",
+     "value": 42000.0,
+     "recorded": "2026-08-10T12:00:00-04:00"
+    }
+   ],
+   "thesis": [],
+   "valuations": [],
+   "notes": [
+    {
+     "date": "2026-08-10T12:00:00-04:00",
+     "text": "Two directors bought in the open market in June. Nothing here computes that — I read it off the filings myself and typed it in, which is what the blank row was asking for. It decides nothing on its own and I would not have looked at the company without it."
+    }
+   ]
+  },
+  {
+   "ticker": "ALDBURY",
+   "name": "Aldbury Household",
+   "added": "2026-08-12",
+   "price": 61.2,
+   "lots": [],
+   "judgements": [],
+   "hand_entered": [
+    {
+     "seq": 1,
+     "id": "earnings_base_share_5y",
+     "value": 61.0,
+     "recorded": "2026-08-09T12:00:00-04:00"
+    },
+    {
+     "seq": 2,
+     "id": "net_margin_base_share_5y",
+     "value": 88.0,
+     "recorded": "2026-08-09T12:00:00-04:00"
+    },
+    {
+     "seq": 3,
+     "id": "peg_trailing",
+     "value": 0.95,
+     "recorded": "2026-08-09T12:00:00-04:00"
+    },
+    {
+     "seq": 4,
+     "id": "eps_cagr_5y",
+     "value": 11.0,
+     "recorded": "2026-08-09T12:00:00-04:00"
+    },
+    {
+     "seq": 5,
+     "id": "debt_to_equity",
+     "value": 0.24,
+     "recorded": "2026-08-09T12:00:00-04:00"
+    },
+    {
+     "seq": 6,
+     "id": "eps_minus_revenue_cagr_spread_5y",
+     "value": 4.5,
+     "recorded": "2026-08-09T12:00:00-04:00"
+    },
+    {
+     "seq": 7,
+     "id": "dividend_adjusted_peg",
+     "value": 0.72,
+     "recorded": "2026-08-09T12:00:00-04:00"
+    },
+    {
+     "seq": 8,
+     "id": "pe_to_own_5y_median_pe",
+     "value": 1.18,
+     "recorded": "2026-08-09T12:00:00-04:00"
+    },
+    {
+     "seq": 9,
+     "id": "revenue_cagr_3y",
+     "value": 6.5,
+     "recorded": "2026-08-09T12:00:00-04:00"
+    },
+    {
+     "seq": 10,
+     "id": "inventory_minus_revenue_growth_yoy",
+     "value": 1.2,
+     "recorded": "2026-08-09T12:00:00-04:00"
+    },
+    {
+     "seq": 11,
+     "id": "receivables_minus_revenue_growth_yoy",
+     "value": 2.4,
+     "recorded": "2026-08-09T12:00:00-04:00"
+    },
+    {
+     "seq": 12,
+     "id": "gross_margin_change_3y",
+     "value": 0.6,
+     "recorded": "2026-08-09T12:00:00-04:00"
+    },
+    {
+     "seq": 13,
+     "id": "interest_coverage",
+     "value": 17.0,
+     "recorded": "2026-08-09T12:00:00-04:00"
+    },
+    {
+     "seq": 14,
+     "id": "fcf_ttm",
+     "value": 38000000.0,
+     "recorded": "2026-08-09T12:00:00-04:00"
+    },
+    {
+     "seq": 15,
+     "id": "net_cash_to_market_cap",
+     "value": -0.09,
+     "recorded": "2026-08-09T12:00:00-04:00"
+    },
+    {
+     "seq": 16,
+     "id": "eps_change_yoy",
+     "value": 10.0,
+     "recorded": "2026-08-09T12:00:00-04:00"
+    },
+    {
+     "seq": 17,
+     "id": "revenue_change_yoy",
+     "value": 6.0,
+     "recorded": "2026-08-09T12:00:00-04:00"
+    }
+   ],
+   "thesis": [],
+   "valuations": [],
+   "notes": [
+    {
+     "date": "2026-08-09T12:00:00-04:00",
+     "text": "Not a fast grower and not meant to be. Eleven percent and a three percent yield is fourteen a year against a multiple of ten, and the journal reads that on the dividend-adjusted test because the plain one cannot see the yield at all."
+    },
+    {
+     "date": "2026-08-09T12:00:00-04:00",
+     "text": "It also fails the test against its own history and still passes the group, and the row showing net debt fails and blocks nothing. Both of those are the rules I set, working — not the tool being lenient."
+    }
+   ]
+  },
+  {
+   "ticker": "KETTLEBY",
+   "name": "Kettleby Foundries",
+   "added": "2026-08-12",
+   "price": 12.8,
+   "lots": [],
+   "judgements": [],
+   "hand_entered": [
+    {
+     "seq": 1,
+     "id": "earnings_base_share_5y",
+     "value": 2.6,
+     "recorded": "2026-08-08T12:00:00-04:00"
+    },
+    {
+     "seq": 2,
+     "id": "net_margin_base_share_5y",
+     "value": 4.9,
+     "recorded": "2026-08-08T12:00:00-04:00"
+    },
+    {
+     "seq": 3,
+     "id": "debt_to_equity",
+     "value": 0.44,
+     "recorded": "2026-08-08T12:00:00-04:00"
+    },
+    {
+     "seq": 4,
+     "id": "revenue_cagr_3y",
+     "value": 5.5,
+     "recorded": "2026-08-08T12:00:00-04:00"
+    },
+    {
+     "seq": 5,
+     "id": "interest_coverage",
+     "value": 6.2,
+     "recorded": "2026-08-08T12:00:00-04:00"
+    },
+    {
+     "seq": 6,
+     "id": "fcf_ttm",
+     "value": 4100000.0,
+     "recorded": "2026-08-08T12:00:00-04:00"
+    },
+    {
+     "seq": 7,
+     "id": "inventory_minus_revenue_growth_yoy",
+     "value": 3.0,
+     "recorded": "2026-08-08T12:00:00-04:00"
+    },
+    {
+     "seq": 8,
+     "id": "receivables_minus_revenue_growth_yoy",
+     "value": 1.8,
+     "recorded": "2026-08-08T12:00:00-04:00"
+    },
+    {
+     "seq": 9,
+     "id": "gross_margin_change_3y",
+     "value": 7.4,
+     "recorded": "2026-08-08T12:00:00-04:00"
+    },
+    {
+     "seq": 10,
+     "id": "pe_to_own_5y_median_pe",
+     "value": 0.71,
+     "recorded": "2026-08-08T12:00:00-04:00"
+    },
+    {
+     "seq": 11,
+     "id": "net_cash_to_market_cap",
+     "value": -0.22,
+     "recorded": "2026-08-08T12:00:00-04:00"
+    },
+    {
+     "seq": 12,
+     "id": "eps_change_yoy",
+     "value": 96.0,
+     "recorded": "2026-08-08T12:00:00-04:00"
+    },
+    {
+     "seq": 13,
+     "id": "revenue_change_yoy",
+     "value": 6.0,
+     "recorded": "2026-08-08T12:00:00-04:00"
+    }
+   ],
+   "thesis": [],
+   "valuations": [],
+   "notes": [
+    {
+     "date": "2026-08-08T12:00:00-04:00",
+     "text": "Profits up forty-fold in five years and the journal will not call it growth. It is right: sales are up a quarter and the margin went from almost nothing to eight percent, so what has happened is a recovery finishing, not a company getting bigger."
+    },
+    {
+     "date": "2026-08-08T12:00:00-04:00",
+     "text": "This may well still be a good investment. What it is not is the kind of company any test in this journal was built to judge, and the verdict says which question I should be asking instead — whether the balance sheet survives long enough for the recovery to finish."
+    }
+   ]
+  },
+  {
+   "ticker": "MOSSGIEL",
+   "name": "Mossgiel Robotics",
+   "added": "2026-08-12",
+   "price": 88.4,
+   "lots": [],
+   "judgements": [],
+   "hand_entered": [
+    {
+     "seq": 1,
+     "id": "earnings_base_share_5y",
+     "value": 46.0,
+     "recorded": "2026-08-11T12:00:00-04:00"
+    },
+    {
+     "seq": 2,
+     "id": "net_margin_base_share_5y",
+     "value": 79.0,
+     "recorded": "2026-08-11T12:00:00-04:00"
+    },
+    {
+     "seq": 3,
+     "id": "peg_trailing",
+     "value": 1.55,
+     "recorded": "2026-08-11T12:00:00-04:00"
+    },
+    {
+     "seq": 4,
+     "id": "eps_cagr_5y",
+     "value": 27.0,
+     "recorded": "2026-08-11T12:00:00-04:00"
+    },
+    {
+     "seq": 5,
+     "id": "debt_to_equity",
+     "value": 0.24,
+     "recorded": "2026-08-11T12:00:00-04:00"
+    },
+    {
+     "seq": 6,
+     "id": "eps_minus_revenue_cagr_spread_5y",
+     "value": 5.0,
+     "recorded": "2026-08-11T12:00:00-04:00"
+    },
+    {
+     "seq": 7,
+     "id": "dividend_adjusted_peg",
+     "value": 1.55,
+     "recorded": "2026-08-11T12:00:00-04:00"
+    },
+    {
+     "seq": 8,
+     "id": "pe_to_own_5y_median_pe",
+     "value": 1.42,
+     "recorded": "2026-08-11T12:00:00-04:00"
+    },
+    {
+     "seq": 9,
+     "id": "revenue_cagr_3y",
+     "value": 22.0,
+     "recorded": "2026-08-11T12:00:00-04:00"
+    },
+    {
+     "seq": 10,
+     "id": "inventory_minus_revenue_growth_yoy",
+     "value": 1.2,
+     "recorded": "2026-08-11T12:00:00-04:00"
+    },
+    {
+     "seq": 11,
+     "id": "receivables_minus_revenue_growth_yoy",
+     "value": 2.4,
+     "recorded": "2026-08-11T12:00:00-04:00"
+    },
+    {
+     "seq": 12,
+     "id": "gross_margin_change_3y",
+     "value": 0.6,
+     "recorded": "2026-08-11T12:00:00-04:00"
+    },
+    {
+     "seq": 13,
+     "id": "interest_coverage",
+     "value": 17.0,
+     "recorded": "2026-08-11T12:00:00-04:00"
+    },
+    {
+     "seq": 14,
+     "id": "fcf_ttm",
+     "value": 38000000.0,
+     "recorded": "2026-08-11T12:00:00-04:00"
+    },
+    {
+     "seq": 15,
+     "id": "net_cash_to_market_cap",
+     "value": 0.05,
+     "recorded": "2026-08-11T12:00:00-04:00"
+    },
+    {
+     "seq": 16,
+     "id": "eps_change_yoy",
+     "value": 26.0,
+     "recorded": "2026-08-11T12:00:00-04:00"
+    },
+    {
+     "seq": 17,
+     "id": "revenue_change_yoy",
+     "value": 21.0,
+     "recorded": "2026-08-11T12:00:00-04:00"
+    }
+   ],
+   "thesis": [],
+   "valuations": [],
+   "notes": [
+    {
+     "date": "2026-08-11T12:00:00-04:00",
+     "text": "The best company on this list and the journal will not buy it. Growing at twenty-seven percent on a multiple of forty-two, which means three years of the growth is already in the price. Not a criticism of the company — it is the reason to wait."
+    }
+   ]
+  },
+  {
+   "ticker": "TREWIN",
+   "name": "Trewin Robotics Components",
+   "added": "2026-08-12",
+   "price": 24.6,
+   "lots": [],
+   "judgements": [],
+   "hand_entered": [
+    {
+     "seq": 1,
+     "id": "earnings_base_share_5y",
+     "value": 46.0,
+     "recorded": "2026-08-02T12:00:00-04:00"
+    },
+    {
+     "seq": 2,
+     "id": "net_margin_base_share_5y",
+     "value": 79.0,
+     "recorded": "2026-08-02T12:00:00-04:00"
+    },
+    {
+     "seq": 3,
+     "id": "debt_to_equity",
+     "value": 0.24,
+     "recorded": "2026-08-02T12:00:00-04:00"
+    },
+    {
+     "seq": 4,
+     "id": "pe_to_own_5y_median_pe",
+     "value": 0.93,
+     "recorded": "2026-08-02T12:00:00-04:00"
+    },
+    {
+     "seq": 5,
+     "id": "revenue_cagr_3y",
+     "value": 13.0,
+     "recorded": "2026-08-02T12:00:00-04:00"
+    },
+    {
+     "seq": 6,
+     "id": "inventory_minus_revenue_growth_yoy",
+     "value": 1.2,
+     "recorded": "2026-08-02T12:00:00-04:00"
+    },
+    {
+     "seq": 7,
+     "id": "receivables_minus_revenue_growth_yoy",
+     "value": 2.4,
+     "recorded": "2026-08-02T12:00:00-04:00"
+    },
+    {
+     "seq": 8,
+     "id": "gross_margin_change_3y",
+     "value": 0.6,
+     "recorded": "2026-08-02T12:00:00-04:00"
+    },
+    {
+     "seq": 9,
+     "id": "interest_coverage",
+     "value": 17.0,
+     "recorded": "2026-08-02T12:00:00-04:00"
+    },
+    {
+     "seq": 10,
+     "id": "fcf_ttm",
+     "value": 38000000.0,
+     "recorded": "2026-08-02T12:00:00-04:00"
+    },
+    {
+     "seq": 11,
+     "id": "net_cash_to_market_cap",
+     "value": 0.05,
+     "recorded": "2026-08-02T12:00:00-04:00"
+    },
+    {
+     "seq": 12,
+     "id": "eps_change_yoy",
+     "value": 17.0,
+     "recorded": "2026-08-02T12:00:00-04:00"
+    },
+    {
+     "seq": 13,
+     "id": "revenue_change_yoy",
+     "value": 13.0,
+     "recorded": "2026-08-02T12:00:00-04:00"
+    }
+   ],
+   "thesis": [],
+   "valuations": [],
+   "notes": [
+    {
+     "date": "2026-08-02T12:00:00-04:00",
+     "text": "Listed four years ago, so there are not eight years of accounts to measure a five-year growth rate between. The journal says it cannot tell rather than guessing, which is the only honest answer — a missing number is not a pass and it is not a failure. It will be answerable in 2030 and not before."
+    }
+   ]
+  }
+ ]
+}

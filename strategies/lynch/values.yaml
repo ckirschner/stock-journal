@@ -1,0 +1,117 @@
+# Shipped defaults for Lynch's declared values.
+#
+# What each of these MEANS, why it sits where it does and where it misfires
+# lives in strategy.py beside the declaration. This file holds only the
+# numbers, so they can be read, compared and changed without touching logic
+# — and so a change to one of them is a recordable event rather than a diff
+# in a source file nobody reads.
+#
+# THE PROVENANCE HERE IS FOUR SOURCES, and that is the first thing to know
+# before checking any number below:
+#
+#   the report    the expert report commissioned for this strategy, by way of
+#                 the transcription at
+#                 dev_reference_docs/legacy-profiles/lynch.yaml. Most numbers
+#                 here are its, verbatim.
+#   the review    a second expert review of that report, held at
+#                 dev_reference_docs/ledger-default-profiles-addendum.md,
+#                 which disputes it. Five values below take the review's
+#                 number or its measure against the report's, and each says
+#                 so in its own `explain`.
+#   Lynch         his own documented advice to individual investors, for the
+#                 one thing the report was never asked about — how many names
+#                 to hold.
+#   this author   the two counts saying how many of a group of near-duplicate
+#                 tests must pass, the sales growth floor that had to move
+#                 when the earnings floor did, and the cap on adding to one
+#                 name, which Lynch never published.
+#
+# Every value's own `source` field says which, and that is where to look
+# rather than here.
+#
+# Two numbers here are deliberately the same as two constants inside the
+# metric bank — `min-earnings-base-share` and `min-margin-base-share` sit at
+# the levels the bank refuses a five-year growth rate on. That agreement is
+# not enforced anywhere and is not meant to be: the bank is declining to
+# serve a number it cannot stand behind, and these are this strategy saying
+# what it thinks a turnaround looks like. Moving them here is allowed, lands
+# on the rule-change record, and parts the two deliberately.
+#
+# Bump `version` whenever any number here moves. That is what makes the
+# change appear on the rule-change record of every journal running this
+# strategy, with a before and an after.
+version: 1
+
+values:
+
+  # How the tests roll up.
+  #
+  # Only the two groups whose members are near-readings of one another carry
+  # a count. There is no setting for the groups that demand all of their
+  # rows: "both of these must pass" is not a level anybody can retune without
+  # changing what the group means.
+  price-tests-required: 1
+  quality-tests-required: 2
+
+  # How much, and how many. Eight names where Graham holds twenty and Buffett
+  # ten; a cap at twenty-five where Graham stops at ten and Buffett will go
+  # to forty. Only the first of those two is Lynch's.
+  #
+  # There is no holding period here and that is deliberate: nothing in this
+  # strategy closes a position for having been owned a long time. Its exits
+  # are things the business or the price does.
+  portfolio-slots: 8
+  position-weight-cap: 25
+
+  # Was there a business at the base of the growth window? Reported, and
+  # acted on only when BOTH fail — either alone fires on companies that grew
+  # perfectly ordinarily.
+  min-earnings-base-share: 10
+  min-margin-base-share: 50
+
+  # The four knockouts, in five numbers. The growth band is one test and two
+  # comparisons; the floor is the review's, against the report's 15.
+  max-peg: 1.0
+  min-eps-growth: 10
+  max-eps-growth: 35
+  max-debt-to-equity: 0.5
+  max-growth-spread: 10
+
+  # The seven tests behind the four questions.
+  #
+  # What you are paying for the growth — one of these two is enough
+  max-dividend-adjusted-peg: 1.0
+  max-pe-to-own-median: 1.0
+  # Whether the top line is growing. 5 and not the report's 10: see its
+  # `explain`, and put it back to 10 if you put the earnings floor back to 15.
+  min-revenue-growth: 5
+  # Whether the growth is real or manufactured — two of these three is enough
+  max-inventory-spread: 5
+  max-receivables-spread: 5
+  min-gross-margin-change: -2
+  # Whether it survives a stumble
+  min-interest-coverage: 5
+  min-free-cash-flow: 0
+
+  # Reported, never blocking. Nothing in this program computes insider
+  # buying; the row exists so a reader can look it up and enter it.
+  min-net-cash: 0
+  min-insider-buying: 0
+
+  # The seven exits.
+  #
+  # The growth exit is on the trailing twelve months rather than on the
+  # five-year rate the entry buys on — the level is the report's and the
+  # measure under it is the review's. Sales have to agree before it fires.
+  exit-eps-growth: 8
+  exit-revenue-growth: 3
+  # Two valuation exits in the report; one here. The P/E against its own
+  # five-year median at 1.75 is not below, and stays an entry test.
+  exit-peg: 2.0
+  exit-debt-to-equity: 1.0
+  exit-interest-coverage: 3
+  # At least nothing, where the buy test is above nothing. Breaking even does
+  # not force the sale of something already owned.
+  exit-free-cash-flow: 0
+  exit-inventory-spread: 20
+  exit-receivables-spread: 20

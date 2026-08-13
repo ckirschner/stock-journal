@@ -691,7 +691,7 @@ class TestTheShippedStrategiesDecline:
         nothing to whoever chose it. The branch where the gate does not fire
         is exercised by a fixture bundle instead — see `indifferent`."""
         loaded, _ = strategy_loader.discover()
-        assert sorted(loaded) == ["buffett", "graham"]
+        assert sorted(loaded) == ["buffett", "graham", "lynch"]
         for record in loaded.values():
             assert set(contract.declined_classes(record)) == {
                 DEPOSIT, INSURE, PROPERTY}

@@ -329,8 +329,23 @@ word, and what has been done with spare cash are questions you answer
 yourself, in writing, and an unanswered one blocks a purchase rather than
 being read as agreement.
 
-**Neither of them counts its tests, and that is the most consequential thing
-about how both are built.** A rule set with nine second-tier tests where seven
+**`strategies/lynch/` is the third, and it is the first whose entry tests and
+exit tests are different measures.** It buys a company that is growing at a
+price that has not paid for the growth yet, and sells when the growth stops
+or when the price runs past it. The split is the point: an entry test wants
+durability, which argues for a long window, and an exit wants timeliness,
+which argues for a short one — so it buys on a five-year rate measured
+between three-year averages at each end, and sells on the trailing twelve
+months against the twelve before. A company that stops growing exits about
+two quarters later rather than several years later. It declares twelve
+states and twenty-nine settings, and two of them are unlike anything in the
+other two bundles: price can end a position here, which Buffett's refuses to
+let happen, and a company whose earnings *appeared* rather than grew — a
+recovery off almost nothing — is named as a turnaround rather than reported
+as unanswerable.
+
+**None of the three counts its tests, and that is the most consequential
+thing about how all of them are built.** A rule set with nine second-tier tests where seven
 must pass sounds like a standard and is not one, because the nine are not nine
 pieces of evidence. Cash flow margin and cash conversion are two readings of
 the same cash; three balance-sheet ratios are three readings of one balance
@@ -836,11 +851,14 @@ strategies/               one directory per strategy; discovered, not listed
   graham/                 buys a statistical discount: strategy.py, values.yaml
   buffett/                buys a wonderful business, and asks you three
                           questions no filing can answer
+  lynch/                  buys growth the price has not paid for yet; buys on
+                          a five-year rate and sells on the current one
 data.template/            one demonstration journal per strategy — invented
                           companies, invented figures
 tools/sample_kit.py       the shared machinery every sample is built with
-tools/make_sample.py      builds them by driving the real API, and refuses to
-                          write one if a story stops being true
+tools/make_*_sample.py    one per strategy; builds them by driving the real
+                          API, and refuses to write one if a story stops
+                          being true
 tools/contract_reference.py
                           regenerates the reference tables in the strategy
                           documentation from the host's own tables
