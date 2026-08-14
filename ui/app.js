@@ -1154,7 +1154,13 @@ function judgementSection(s) {
     return `<div class="pentry">
       <div class="pe-head"><b>${esc(j.label)}</b><code>${esc(j.id)}</code>
         <span class="chip ${cls}">${esc(word)}</span>
-        ${j.cited ? "" : '<span class="req">not currently asked</span>'}</div>
+        ${j.withdrawn ? '<span class="req">no longer in the definitions</span>'
+          : j.cited ? "" : '<span class="req">not currently asked</span>'}</div>
+      ${j.withdrawn
+        ? `<div class="greynote">The metric bank no longer asks this, so nothing
+             is standing on it and no strategy can read it. Your answer is kept
+             below, in the words it was asked in.</div>`
+        : ""}
       ${j.unsupported
         ? `<div class="greynote">${esc(j.unsupported)}</div>`
         : j.mark
@@ -1167,9 +1173,17 @@ function judgementSection(s) {
         ${older.map((a) => `<div class="pe-sub" style="margin-top:8px">
           <b>${esc((MARK_CHIP[a.mark] || ["Marked"])[0])}</b> on
           ${esc(String(a.recorded).slice(0, 10))}</div>
-          <div class="pe-why" style="margin-top:0">${prose(a.reasoning)}</div>`).join("")}
+          <div class="pe-why" style="margin-top:0">${prose(a.reasoning)}</div>
+          ${/* The question THAT answer was given to, where it is not the one
+                standing above. Printing today's wording over an old mark
+                presents it as an answer to something that may never have been
+                asked in those words, and the reasoning underneath is the
+                user's account of a question they can no longer see. */
+            a.question && a.question !== j.question
+              ? `<div class="pe-sub" style="margin-top:0"><em>asked as:</em>
+                   ${prose(a.question)}</div>` : ""}`).join("")}
       </details>
-      ${j.unsupported ? "" : `<div class="toolbar" style="justify-content:flex-start;margin-top:8px">
+      ${j.unsupported || j.withdrawn ? "" : `<div class="toolbar" style="justify-content:flex-start;margin-top:8px">
         <button class="btn${j.mark ? "" : " primary"}" data-act="judge" data-jid="${esc(j.id)}">${
           j.mark ? "Reassess" : "Answer this"}</button></div>`}
     </div>`;
@@ -3165,12 +3179,19 @@ function dlgMetrics(s) {
     if (past.length) {
       mine += `<details class="whybox"><summary>${past.length} earlier entr${past.length === 1 ? "y" : "ies"}</summary>
         ${past.map((e) => `<div class="pe-sub">${esc(String(e.recorded).slice(0, 10))} —
-          ${e.value === null ? "cleared" : `<b>${esc(fmtBank(e.value, m.format))}</b>`}</div>`).join("")}
+          ${e.value === null ? "cleared" : `<b>${esc(fmtBank(e.value,
+            e.format !== undefined ? e.format : m.format))}</b>`}${
+            /* Under the format IT was entered under. `undefined` is a record
+               written before figures carried one; an explicit null is the bank
+               having declared none, and must not fall through to today's. */
+            e.unit && e.unit !== m.unit ? ` <span class="u">${esc(e.unit)}</span>` : ""}</div>`).join("")}
         <p class="hint">Nothing was overwritten. Each save that changed something added an entry, and a
         reconstruction for a past day reads the one that was standing then.</p></details>`;
     }
     body += `<div class="metric-input"><div>${esc(m.label)}
-      <div class="u">${esc(m.unit || "")} · ${m.cited ? "read by the strategy for this security"
+      <div class="u">${esc(m.unit || "")} · ${m.withdrawn
+        ? "no longer in the definitions — kept so you can see it and clear it"
+        : m.cited ? "read by the strategy for this security"
         : "not currently read — kept because a value was recorded"}</div>${compNote}${mine}</div>
       <input name="m_${m.id}" type="number" step="any" value="${(m.entered || {}).value ?? ""}"></div>`;
   });

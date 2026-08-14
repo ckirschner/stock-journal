@@ -145,7 +145,19 @@ def checked(entry_id: str, value):
     cannot be reached.
     """
     if entry_id not in bank_mod.meta():
-        raise ValueError(f'"{entry_id}" is not in the metric bank.')
+        # A measure the bank no longer defines may be CLEARED and never set.
+        # Refusing both left the one case that matters unreachable: a figure
+        # typed under an entry somebody later deleted goes on being served
+        # into every new frozen snapshot, and the only control that could take
+        # it back was refused on the grounds that the measure does not exist.
+        # Withdrawing it is precisely the thing that is still meaningful about
+        # a measure that does not exist.
+        if value in (None, "", "—"):
+            return None
+        raise ValueError(
+            f'"{entry_id}" is not in the metric bank. A value already '
+            "recorded for it can be cleared, but a new one cannot be entered "
+            "against a measure nothing defines.")
     if judgements.is_judgement(entry_id):
         raise ValueError(
             f'"{entry_id}" is a judgement you make about this security, not '
@@ -179,4 +191,59 @@ def record(security: dict, entry_id: str, value) -> dict | None:
     if figure is None and (current is None or current.get("value") is None):
         return None
 
-    return dated.append(security, KEY, {"id": entry_id, "value": figure})
+    return dated.append(security, KEY, {"id": entry_id, "value": figure,
+                                        **entered_as(entry_id, current)})
+
+
+# What the bank said this measure WAS, on the day the figure was typed. The
+# same freeze the citation subject already makes, on the other record the user
+# writes — and the same defect it was made against, reproduced here exactly: a
+# 10.4 entered as a multiple prints as "10.4%" after somebody corrects the
+# unit, because the row is rendered from `bank.meta()` taken this render.
+#
+# Whose figure it is decides which words are right. A number the user typed
+# was typed under a label, a unit and a format, and the entry is dated and
+# never edited — so re-rendering it under today's is the record answering a
+# question it was not asked.
+#
+# It matters more than the judgement case because the row is also the only
+# way to WITHDRAW the figure. Deleting the bank entry used to drop the row
+# from the values dialog entirely, and the figure went on being served into
+# every new frozen snapshot from a record the user could no longer see or
+# reach — which is the one shape of this that is not merely a display
+# problem.
+def entered_as(entry_id: str, previous: dict | None = None) -> dict:
+    """The bank's rendering words for one measure, as they stand now.
+
+    `previous` is the entry standing before this one, and it is used only
+    where the bank no longer defines the measure at all — a withdrawal, since
+    nothing else can be written then. Carrying its words forward keeps the
+    clearing row readable beside the figure it clears; taking today's blank
+    would make the last entry on the record the one that says least.
+    """
+    m = bank_mod.meta().get(entry_id)
+    if m is None:
+        return {k: (previous or {}).get(k)
+                for k in ("label", "unit", "format", "plain")} \
+            if isinstance(previous, dict) else {}
+    return {"label": m.get("label") or entry_id, "unit": m.get("unit"),
+            "format": m.get("format"), "plain": m.get("plain")}
+
+
+def shown_as(entry: dict | None, live: dict | None, entry_id: str) -> dict:
+    """How to print a hand-entered figure: the words frozen onto it where it
+    carries them, the live bank only where it does not.
+
+    Presence of the KEY decides, never truthiness. `format: None` is the bank
+    declaring none — a yes/no carries no format and running one through a
+    format prints a 1 — and it must not fall through to whatever the file
+    says today. A record with no `label` key at all predates this.
+    """
+    out = {"label": entry_id, "unit": None, "format": None, "plain": None}
+    out.update({k: v for k, v in (live or {}).items() if k in out})
+    for field in ("label", "unit", "format", "plain"):
+        if isinstance(entry, dict) and field in entry:
+            out[field] = entry[field]
+    out["id"] = entry_id
+    out["withdrawn"] = live is None
+    return out

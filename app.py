@@ -492,23 +492,39 @@ class Api:
         screen. One sentence, one home — two copies of a caution drift until
         they disagree about what they are warning of.
         """
-        answered = {a["id"] for a in (security.get("judgements") or [])
-                    if isinstance(a, dict) and a.get("id")}
+        answered = [a["id"] for a in (security.get("judgements") or [])
+                    if isinstance(a, dict) and a.get("id")]
+        live = judgements.questions()
         seen = judgements.observations(security)
+        # Driven by the bank AND by the record, not by the bank alone. The
+        # `answered` set used to sit inside this loop as a gate, where it could
+        # only keep an id the bank still offered and never add one the bank had
+        # dropped — so deleting an entry, or flipping its `kind` to `computed`,
+        # took the mark, the reasoning and the whole history off the screen
+        # with nothing said. The words for such a row come off the answer
+        # itself; see judgements.as_asked.
+        ids = list(live) + [e for e in answered if e not in live]
         out = []
-        for eid, q in judgements.questions().items():
+        for eid in ids:
+            q = live.get(eid)
             if eid not in asked and eid not in answered:
                 continue
+            standing = judgements.in_force(security, eid) or {}
+            asked_as = judgements.as_asked(standing, q, eid)
             # Where the host cannot serve the question at all, it reports no
             # answer — even if one is on record. The strategy was told the
             # measure is absent, and a screen showing "Passed" beside a
             # verdict that says "can't say" is the two halves of the program
             # disagreeing about the same fact in front of the reader. The
             # record itself is untouched and still travels in `history`.
-            standing = ({} if q["unsupported"]
-                        else judgements.in_force(security, eid) or {})
+            #
+            # A question the bank no longer asks is the same case: the answer
+            # is shown as what it was and not as what is standing, because
+            # nothing is standing.
+            if (q or {}).get("unsupported") or asked_as["withdrawn"]:
+                standing = {}
             out.append({
-                **q,
+                **asked_as,
                 "cited": eid in asked,
                 "mark": standing.get("mark"),
                 "reasoning": standing.get("reasoning"),
@@ -723,9 +739,19 @@ class Api:
                             "history": thesis_mod.history(s)}
             s["_valuation"] = {**valuation.standing(s, today=today),
                                "history": valuation.history(s)}
+            # A row per measure this security has something to show for, in
+            # the words that measure was ENTERED under rather than today's.
+            #
+            # The membership test used to be `mid in bank_meta`, which meant a
+            # bank entry deleted, or flipped from computed to qualitative,
+            # took the row away — and with it the figure, its history, and the
+            # only control that can withdraw it. The figure kept being served
+            # into every new frozen snapshot from a record the user could no
+            # longer reach. So a measure the bank has dropped keeps its row as
+            # long as something was typed for it, and says it was dropped.
             s["_inputs"] = [
-                {"id": mid, **{k: bank_meta[mid][k]
-                               for k in ("label", "unit", "format", "plain")},
+                {**hand_entered.shown_as(hand_entered.in_force(s, mid),
+                                         bank_meta.get(mid), mid),
                  "cited": mid in cited,
                  # What was entered by hand for this measure, and when — plus
                  # everything entered before it. A value that was retyped the
@@ -733,8 +759,9 @@ class Api:
                  # earlier one renders too.
                  "entered": hand_entered.reading(s, mid),
                  "entries": hand_entered.history(s, mid)}
-                for mid in shown if mid in bank_meta
-                and bank_meta[mid].get("kind") == "computed"]
+                for mid in shown
+                if (bank_meta.get(mid) or {}).get("kind") == "computed"
+                or (mid not in bank_meta and hand_entered.history(s, mid))]
             s["_computed"] = {
                 eid: {"status": r.get("status"), "value": r.get("value"),
                       "reason": r.get("reason"),
