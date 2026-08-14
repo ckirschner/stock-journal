@@ -106,6 +106,7 @@ KEY = "cash_record"
 KINDS = MappingProxyType({
     "opening": MappingProxyType({
         "label": "Opening balance",
+        "one": "opening balance",
         "plural": "opening balances",
         "direction": 1,
         "flow": "opening",
@@ -118,6 +119,7 @@ KINDS = MappingProxyType({
     }),
     "deposit": MappingProxyType({
         "label": "Deposit",
+        "one": "deposit",
         "plural": "deposits",
         "direction": 1,
         "flow": "external",
@@ -128,6 +130,7 @@ KINDS = MappingProxyType({
     }),
     "withdrawal": MappingProxyType({
         "label": "Withdrawal",
+        "one": "withdrawal",
         "plural": "withdrawals",
         "direction": -1,
         "flow": "external",
@@ -136,10 +139,12 @@ KINDS = MappingProxyType({
                  "smaller and it is not a loss.",
     }),
     "dividend": MappingProxyType({
-        # Not "dividend receiveds". The plural is declared beside the label
-        # because English does not follow from it, and a sentence built by
-        # adding an "s" gets this one wrong every time there is more than one.
+        # Not "dividend receiveds". Both forms of the noun are declared
+        # beside the label because neither follows from it — English does not,
+        # and a column heading is not a noun a sentence can use: "1 bought
+        # shares" is what reusing the label produces.
         "label": "Dividend received",
+        "one": "dividend received",
         "plural": "dividends received",
         "direction": 1,
         "flow": "earned",
@@ -150,6 +155,7 @@ KINDS = MappingProxyType({
     }),
     "bought": MappingProxyType({
         "label": "Bought shares",
+        "one": "purchase",
         "plural": "purchases",
         "direction": -1,
         "flow": "internal",
@@ -161,6 +167,7 @@ KINDS = MappingProxyType({
     }),
     "sold": MappingProxyType({
         "label": "Sold shares",
+        "one": "sale",
         "plural": "sales",
         "direction": 1,
         "flow": "internal",
@@ -180,7 +187,7 @@ OPENING = "opening"
 # reads wrong and nothing that notices. Named here, by the code that consumes
 # them, so a new field arrives with its own line rather than being trusted to
 # whoever adds the next kind.
-_KIND_FIELDS = ("label", "plural", "direction", "flow", "means",
+_KIND_FIELDS = ("label", "one", "plural", "direction", "flow", "means",
                 "recorded_by")
 
 
@@ -517,8 +524,7 @@ def _counted(got) -> str:
         if e.get("kind") == OPENING:
             continue
         tally[e["kind"]] = tally.get(e["kind"], 0) + 1
-    parts = [f"{n} " + (KINDS[k]["label"].lower() if n == 1
-                        else KINDS[k]["plural"].lower())
+    parts = [f"{n} " + KINDS[k]["one" if n == 1 else "plural"]
              for k, n in tally.items()]
     if not parts:
         return "and nothing recorded since"

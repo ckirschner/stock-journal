@@ -95,7 +95,8 @@ class TestTheTableIsTheEnforcement:
         machine of whoever adds the next kind. The shipped table passes it —
         which is the import doing the checking, not this test."""
         cash.check_kinds(cash.KINDS)
-        for field in ("label", "plural", "direction", "flow", "means"):
+        for field in ("label", "one", "plural", "direction", "flow",
+                      "means", "recorded_by"):
             broken = {"deposit": {k: v for k, v in cash.KINDS["deposit"].items()
                                   if k != field}}
             with pytest.raises(RuntimeError, match="does not declare"):
@@ -130,7 +131,8 @@ class TestADividendIsNotADeposit:
         either being edited — which is the guarantee, so it is exercised
         rather than asserted in prose."""
         extra = dict(cash.KINDS)
-        extra["interest"] = {"label": "Interest", "plural": "interest",
+        extra["interest"] = {"label": "Interest", "one": "interest",
+                             "plural": "interest",
                              "direction": 1, "flow": "earned",
                              "recorded_by": "you",
                              "means": "invented for this test"}
@@ -247,6 +249,8 @@ class TestMoneyThatWentIntoAPosition:
         rows = cash.ledger(j)
         assert [(r["kind"], r["balance"]) for r in rows] == [
             ("opening", 50_000.0), ("bought", 40_000.0), ("sold", 46_000.0)]
+        assert "then 1 purchase and 1 sale" in \
+            " ".join(cash.balance(j)["provenance"])
         assert rows[1]["note"] == "100 ACME at $100.00"
         assert rows[1]["recorded_by"] == "the journal"
 
