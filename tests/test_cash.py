@@ -57,6 +57,15 @@ class TestTheBalanceIsDerived:
         assert "$50,000.00 opening balance on 2026-01-02" in said
         assert "1 deposit" in said
 
+    def test_the_derivation_pluralises_from_the_table_not_by_adding_an_s(self):
+        """"2 dividend receiveds" is what a sentence built by adding a letter
+        produces, and this one is read by somebody checking a balance."""
+        j = doc(50_000.0, "2026-01-02",
+                ("dividend", 10.0, "2026-02-01"),
+                ("dividend", 20.0, "2026-03-01"))
+        assert "2 dividends received" in \
+            " ".join(cash.balance(j)["provenance"])
+
     def test_a_running_balance_is_derived_per_entry_and_never_stored(self):
         j = doc(50_000.0, "2026-01-02",
                 ("deposit", 10_000.0, "2026-02-01"),
@@ -99,7 +108,7 @@ class TestADividendIsNotADeposit:
         either being edited — which is the guarantee, so it is exercised
         rather than asserted in prose."""
         extra = dict(cash.KINDS)
-        extra["interest"] = {"label": "Interest", "verb": "paid",
+        extra["interest"] = {"label": "Interest", "plural": "interest",
                              "direction": 1, "flow": "earned",
                              "means": "invented for this test"}
         original = cash.KINDS

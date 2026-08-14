@@ -99,7 +99,7 @@ KEY = "cash_record"
 KINDS = MappingProxyType({
     "opening": MappingProxyType({
         "label": "Opening balance",
-        "verb": "was in the account",
+        "plural": "opening balances",
         "direction": 1,
         "flow": "opening",
         "means": "what this account held on the day the record starts. Every "
@@ -108,7 +108,7 @@ KINDS = MappingProxyType({
     }),
     "deposit": MappingProxyType({
         "label": "Deposit",
-        "verb": "paid in",
+        "plural": "deposits",
         "direction": 1,
         "flow": "external",
         "means": "money you moved into the account from somewhere else. It "
@@ -117,15 +117,18 @@ KINDS = MappingProxyType({
     }),
     "withdrawal": MappingProxyType({
         "label": "Withdrawal",
-        "verb": "taken out",
+        "plural": "withdrawals",
         "direction": -1,
         "flow": "external",
         "means": "money you moved out of the account. It makes the account "
                  "smaller and it is not a loss.",
     }),
     "dividend": MappingProxyType({
+        # Not "dividend receiveds". The plural is declared beside the label
+        # because English does not follow from it, and a sentence built by
+        # adding an "s" gets this one wrong every time there is more than one.
         "label": "Dividend received",
-        "verb": "paid out to you",
+        "plural": "dividends received",
         "direction": 1,
         "flow": "earned",
         "means": "cash a holding paid you. It makes the account bigger and it "
@@ -354,7 +357,8 @@ def _counted(got) -> str:
         if e.get("kind") == OPENING:
             continue
         tally[e["kind"]] = tally.get(e["kind"], 0) + 1
-    parts = [f'{n} {KINDS[k]["label"].lower()}' + ("" if n == 1 else "s")
+    parts = [f"{n} " + (KINDS[k]["label"].lower() if n == 1
+                        else KINDS[k]["plural"].lower())
              for k, n in tally.items()]
     return ", plus ".join(parts) if parts else "nothing since"
 
@@ -468,7 +472,7 @@ def ledger(journal: dict, as_of: str | None = None) -> list:
     running total is a second opinion about a fact the entries already settle,
     and the two come apart the first time one is written without it.
     """
-    got, start, refusal = _to(journal, as_of)
+    got, _start, refusal = _to(journal, as_of)
     if refusal:
         return []
     running, out = 0.0, []
@@ -476,6 +480,5 @@ def ledger(journal: dict, as_of: str | None = None) -> list:
         spec = KINDS[e["kind"]]
         running = round(running + spec["direction"] * float(e["amount"]), 2)
         out.append({**e, "label": spec["label"], "flow": spec["flow"],
-                    "direction": spec["direction"], "balance": running,
-                    "opening_day": start["date"]})
+                    "direction": spec["direction"], "balance": running})
     return out
