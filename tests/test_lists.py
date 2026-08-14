@@ -300,10 +300,32 @@ def magic():
     return record
 
 
-def journal_with(*imports):
+def journal_with(written_on, *imports, written=None):
+    """A journal holding these imports, each written down on a stated day.
+
+    The writing day has to be stated, and it is the whole reason this takes a
+    fixture. Two dates describe an import and only one of them is a date a
+    caller can supply: `pulled_on` is what the list says about itself, and
+    `recorded` is when this journal learned of it, stamped by the host at the
+    moment of writing because a record that could be backdated is not a
+    record. `history` walks the second one — a reconstruction must not see a
+    list imported after the day being rebuilt — so an import recorded at the
+    moment a test runs is invisible to every `as_of` before today.
+
+    That is not a subtlety these tests can leave implicit, because it does not
+    fail when it is wrong. It waits. Every test below reads a fixed past day,
+    so they all passed for as long as the fixed day was today and went red
+    overnight — two of them loudly, and two of them by quietly asserting
+    against a list nothing could see.
+
+    So the default is the pull day, which is the ordinary case: you import a
+    screen's output on the day you ran it. `written` states otherwise, for the
+    one test whose entire point is that the two dates are different.
+    """
     j = {"securities": []}
     for pulled, tickers in imports:
-        lists.record(j, pulled, tickers)
+        with written_on(written or pulled):
+            lists.record(j, pulled, tickers)
     return j
 
 
@@ -318,8 +340,9 @@ class TestTheFactsTheHostServes:
         assert ctx["security"]["on_list"]["status"] == "absent"
         assert ctx["security"]["listed_on"]["status"] == "absent"
 
-    def test_membership_and_age_are_served_off_the_current_list(self, magic):
-        j = journal_with(("2026-06-01", ["ACME"]))
+    def test_membership_and_age_are_served_off_the_current_list(
+            self, magic, written_on):
+        j = journal_with(written_on, ("2026-06-01", ["ACME"]))
         ctx = context.build_context({"ticker": "ACME", "lots": []}, [],
                                     strategy_values.resolve(magic)["values"],
                                     {}, as_of="2026-08-13", record=magic,
@@ -329,8 +352,9 @@ class TestTheFactsTheHostServes:
         assert ctx["security"]["on_list"]["value"] is True
         assert ctx["security"]["listed_on"]["value"] == "2026-06-01"
 
-    def test_every_list_fact_is_citable_and_resolves(self, magic):
-        j = journal_with(("2026-06-01", ["ACME"]))
+    def test_every_list_fact_is_citable_and_resolves(self, magic,
+                                                     written_on):
+        j = journal_with(written_on, ("2026-06-01", ["ACME"]))
         ctx = context.build_context({"ticker": "ACME", "lots": []}, [],
                                     strategy_values.resolve(magic)["values"],
                                     {}, as_of="2026-08-13", record=magic,
@@ -341,9 +365,12 @@ class TestTheFactsTheHostServes:
             assert contract.test(ctx, {"fact": fid}) == contract.NOTED
 
     def test_the_age_a_rule_reads_is_measured_from_the_pull(self, magic,
-                                                            monkeypatch):
-        monkeypatch.setattr(dated, "stamp", lambda: "2026-08-01T12:00:00+00:00")
-        j = journal_with(("2026-02-01", ["ACME"]))
+                                                            written_on):
+        # Pulled in February, typed in in August. The two readings are six
+        # months apart on purpose — a helper that wrote every import on its
+        # own pull day would collapse them and this would prove nothing.
+        j = journal_with(written_on, ("2026-02-01", ["ACME"]),
+                         written="2026-08-01")
         ctx = context.build_context({"ticker": "ACME", "lots": []}, [],
                                     strategy_values.resolve(magic)["values"],
                                     {}, as_of="2026-08-13", record=magic,
@@ -392,10 +419,11 @@ class TestTheBlockedVerdictAndWhoGetsIt:
         assert ctx["list"]["pulled"]["status"] == "absent"
         assert contract.evaluate(graham, ctx)["produced_by"] == "strategy"
 
-    def test_the_gate_and_the_row_read_the_same_node(self, magic):
+    def test_the_gate_and_the_row_read_the_same_node(self, magic,
+                                                     written_on):
         """A verdict blocked on a missing list beside evidence naming the
         list it is waiting for is the failure this pairing prevents."""
-        j = journal_with(("2026-06-01", ["ACME"]))
+        j = journal_with(written_on, ("2026-06-01", ["ACME"]))
         ctx = context.build_context({"ticker": "ACME", "lots": []}, [],
                                     strategy_values.resolve(magic)["values"],
                                     {}, as_of="2026-08-13", record=magic,
