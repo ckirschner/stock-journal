@@ -139,6 +139,36 @@ KINDS = MappingProxyType({
 
 OPENING = "opening"
 
+# Every field this module reads off a kind, checked at import against every
+# kind declared. It is the one thing that makes the table a table: the balance
+# reads `direction`, the return-facing split reads `flow`, the sentences read
+# `label` and `plural`, and a kind added without one of them would produce a
+# KeyError inside an arithmetic function — or, for `plural`, a sentence that
+# reads wrong and nothing that notices. Named here, by the code that consumes
+# them, so a new field arrives with its own line rather than being trusted to
+# whoever adds the next kind.
+_KIND_FIELDS = ("label", "plural", "direction", "flow", "means")
+
+
+def check_kinds(kinds) -> None:
+    """Refuse a kind that does not declare everything something reads.
+
+    A function rather than a loop at the bottom of the table, so the guarantee
+    can be exercised against a broken table — a check nobody has seen fail is
+    decoration.
+    """
+    for kind, spec in kinds.items():
+        short = [f for f in _KIND_FIELDS if spec.get(f) in (None, "")]
+        if short:
+            raise RuntimeError(
+                f'KINDS["{kind}"] does not declare {", ".join(short)}. Every '
+                "field here is read by something: the balance, the split "
+                "between money that arrived and money that was earned, or a "
+                "sentence somebody checks a figure against.")
+
+
+check_kinds(KINDS)
+
 # The kinds a user records after the record has been opened. Derived from the
 # table rather than listed again, so a kind added above cannot be left out of
 # the list the screens offer.

@@ -1317,6 +1317,32 @@ INPUT_ROLES = MappingProxyType({
     }),
 })
 
+
+# A role the host answers has to be able to say so, in one sentence, wherever
+# a screen explains why a field takes no answer. Checked here, at import,
+# rather than at the call that needs it: the alternative is a KeyError raised
+# out of a declaration check months later, on the machine of whoever added the
+# next role. There is no validator for this table because it is the host's own
+# — so this is the validator.
+def check_roles(roles) -> None:
+    """Refuse a role that says the host answers it and cannot say how.
+
+    A function rather than a loop under the table, so the guarantee can be
+    exercised against a broken table — a check nobody has seen fail is
+    decoration.
+    """
+    for role, spec in roles.items():
+        if spec.get("answered_by") == "host" and not spec.get("answered_how"):
+            raise RuntimeError(
+                f'INPUT_ROLES["{role}"] says the host answers it and does '
+                "not say how. `answered_how` is the sentence every screen "
+                "uses to explain why the field takes no answer; without it "
+                "they would each invent one.")
+
+
+check_roles(INPUT_ROLES)
+
+
 # Whether the user answers a role or the host does, defaulted for a role that
 # does not say. Read through this rather than off the key, so a role added
 # without the field behaves as the ordinary kind rather than raising.
@@ -1335,9 +1361,9 @@ def host_answered(record: dict) -> dict:
     out = {}
     for f in record.get("inputs", []) or []:
         role = f.get("role") if isinstance(f, dict) else None
-        if isinstance(role, str) and role in INPUT_ROLES \
-                and answered_by(role) == "host" and isinstance(f.get("id"),
-                                                               str):
+        if not (isinstance(role, str) and role in INPUT_ROLES):
+            continue
+        if answered_by(role) == "host" and isinstance(f.get("id"), str):
             out[f["id"]] = role
     return out
 
@@ -1353,6 +1379,7 @@ def user_answers(record: dict, answers: dict | None) -> dict:
     """
     keep = host_answered(record)
     return {k: v for k, v in (answers or {}).items() if k not in keep}
+
 
 # Exactly one of these names the subject of an evidence item.
 _SUBJECT_KEYS = ("measure", "fact", "input", "value", "label")

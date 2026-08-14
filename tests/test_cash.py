@@ -87,6 +87,26 @@ class TestTheBalanceIsDerived:
         assert not hasattr(cash, "edit") and not hasattr(cash, "delete")
 
 
+class TestTheTableIsTheEnforcement:
+    def test_a_kind_missing_a_field_something_reads_is_refused(self):
+        """Not a KeyError inside an arithmetic function months later, on the
+        machine of whoever adds the next kind. The shipped table passes it —
+        which is the import doing the checking, not this test."""
+        cash.check_kinds(cash.KINDS)
+        for field in ("label", "plural", "direction", "flow", "means"):
+            broken = {"deposit": {k: v for k, v in cash.KINDS["deposit"].items()
+                                  if k != field}}
+            with pytest.raises(RuntimeError, match="does not declare"):
+                cash.check_kinds(broken)
+
+    def test_a_host_answered_role_that_cannot_say_how_is_refused(self):
+        contract.check_roles(contract.INPUT_ROLES)
+        broken = {"cash": {k: v for k, v in contract.INPUT_ROLES["cash"].items()
+                           if k != "answered_how"}}
+        with pytest.raises(RuntimeError, match="does not say how"):
+            contract.check_roles(broken)
+
+
 class TestADividendIsNotADeposit:
     def test_the_split_is_reported_and_the_two_are_never_added_up(self):
         j = doc(50_000.0, "2026-01-02",
