@@ -663,10 +663,20 @@ def _aligned_windows(ctx, n, *input_ids):
 
 
 def _fcf_per_year(ctx, n):
+    """Free cash flow for each of the last n fiscal years.
+
+    Every bank entry reaching this is BUILT ON free cash flow and says so
+    under `inputs.entries`, even though none of them calls `ctx.entry` for it —
+    the entry answers a trailing twelve months and these answer fiscal years,
+    so the arithmetic is reproduced here rather than borrowed. `entries` is
+    what a refusal propagates along (see bank._check_propagation), and it is
+    a statement about what a measure depends on rather than about which
+    function call it makes. All four declared `[]`, which was not an omission
+    but a false sentence: it said an industry for which free cash flow means
+    nothing leaves these four untouched.
+    """
     wins = _aligned_windows(ctx, n, "cfo", "capex")
     if is_absent(wins):
-        if "capex" in str(wins.get("reason", "")) or "property" in str(wins.get("reason", "")):
-            return wins
         return wins
     cfo, capex = wins
     return {"values": [c - x for c, x in zip(cfo["values"], capex["values"])],
@@ -1417,6 +1427,34 @@ def fcf_yield_on_ev(ctx):
                     sorted(set(f["cautions"] + ev["cautions"])))
 
 
+# How small a profit may be against the sales that produced it before dividing
+# into it stops describing conversion. A hundredth.
+#
+# A ratio and not a floor in dollars, for the reason roic_median_5y's is: a
+# figure that refuses a corner shop and waves through a conglomerate is not a
+# test of anything. Against revenue rather than assets or equity, because the
+# bank's own account of this misfire says revenue — "a profit small enough to
+# be a rounding error against revenue makes a year's ratio enormous without
+# saying anything about conversion; the number is right and the reading is
+# not". That sentence has been in the file since the entry was written and
+# nothing performed it, which is the shape this whole gate exists to end.
+#
+# One per cent is a judgement and is worth naming as one. Ordinary businesses
+# earn five to fifteen per cent of revenue; the thinnest real industries —
+# grocers, distributors, airlines in a bad year — run one to two. Below one,
+# the denominator moves further in a quarter than it stands at, and a
+# conversion of twenty-two times says the profit nearly vanished rather than
+# that the cash was outstanding. The measured case that put this here read
+# 22.4x against a floor of 0.90.
+#
+# Applied per year and refusing the whole window, which is the shape
+# roic_median_5y already uses and the shape the condition beside this one
+# already argues for: a median discards an outlier, and a rounding-error year
+# is not reliably an outlier. Where the cash is small too, the year divides one
+# rounding error by another and lands somewhere ordinary.
+PROFIT_IS_A_ROUNDING_ERROR = 0.01
+
+
 def cash_conversion_median_5y(ctx):
     fcf = _fcf_per_year(ctx, 5)
     if is_absent(fcf):
@@ -1427,8 +1465,25 @@ def cash_conversion_median_5y(ctx):
     if fcf["years"] != [p["end"] for p in ni["points"]]:
         return _absent_result(absent("free cash flow and net income resolve "
                                      "over different fiscal years"))
+    # Revenue is not in the formula; it is what the bank's smallness test
+    # judges the denominator against, so it is required for the same reason
+    # every other input is, and for the reason roic_median_5y reads it — a
+    # gate that cannot be evaluated has not been passed.
+    rev = _window(ctx, "revenue", 5)
+    if is_absent(rev):
+        return _absent_result(absent(
+            "revenue over the same five fiscal years: " + rev["reason"]
+            + " — and whether the profit this divides by is a rounding error "
+              "is measured against revenue, so that test cannot be settled "
+              "either way"))
+    if [p["end"] for p in rev["points"]] != fcf["years"]:
+        return _absent_result(absent(
+            "revenue resolves over different fiscal years from free cash "
+            "flow, so the test of whether the profit is too small to divide "
+            "by would compare one year against another"))
     vals = []
-    for f, n, y in zip(fcf["values"], ni["values"], fcf["years"]):
+    for i, (f, n, y) in enumerate(zip(fcf["values"], ni["values"],
+                                      fcf["years"])):
         # Negative and not merely zero. A loss inverts the ratio rather than
         # undefining it: a company that lost money and burned cash divides
         # one negative by another and reads as a perfect converter, which is
@@ -1439,6 +1494,24 @@ def cash_conversion_median_5y(ctx):
                 "cash_conversion_median_5y",
                 "net income in any year of the window is zero or negative",
                 f"net income for FY ending {y} is {n:,.0f}")
+        # And the same refusal one step above zero. Any year, for the reason
+        # the condition above is any year: a tiny denominator does not have to
+        # land at an extreme where a median would discard it. Where the cash
+        # is small too, the year divides one rounding error by another and
+        # arrives at something like 1.2 — an unremarkable value, sitting in
+        # the middle of the sorted five, describing nothing.
+        r = rev["values"][i]
+        if not (r > 0):
+            return _absent_result(absent(
+                f"revenue for FY ending {y} is {r:,.0f}, so whether the "
+                "profit this divides by is a rounding error against it "
+                "cannot be settled"))
+        if n < PROFIT_IS_A_ROUNDING_ERROR * r:
+            return not_meaningful(
+                "cash_conversion_median_5y",
+                "net income (the denominator) is under 1% of revenue",
+                f"net income at FY ending {y} is {n:,.0f} against revenue of "
+                f"{r:,.0f}")
         vals.append(f / n)
     value, outs = _median_of(vals, fcf["years"])
     return computed(value,

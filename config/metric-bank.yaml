@@ -12,7 +12,7 @@ schema: ledger.metric-bank/1
 # this number moves. What the number decides is WHO OWES THE SENTENCE: bump it
 # and the changelog below is the account, leave it alone and the journal asks
 # the person who edited the file to write one.
-version: 2
+version: 3
 
 changelog:
   1: |
@@ -24,6 +24,23 @@ changelog:
     and this file did not say so, so the refusal cited a test nobody could
     look up. No formula, window, estimator or industry gate moved — what a
     rate computes, when it computes, is unchanged.
+  3: |
+    Cash conversion refuses a denominator that is a rounding error. Its own
+    misfires prose has said since it was written that a profit small enough to
+    be a rounding error against revenue makes the ratio enormous without
+    saying anything about conversion; nothing performed it, and a near-zero
+    profit cleared a 0.90 floor at 22.4x. The test is a ratio against revenue
+    rather than a figure in dollars, applied per year like the loss test
+    beside it.
+
+    Four measures that reproduce free cash flow — cash conversion, payout to
+    free cash flow, the free-cash-flow margin median and debt to average free
+    cash flow — now declare that they are built on it. They always were; the
+    empty declaration said an industry for which free cash flow means nothing
+    leaves them untouched, which was false, and it kept their gates
+    hand-maintained. No arithmetic moved and no value changes: a reading taken
+    before this is the same reading, and the `built on` row is this record
+    catching up with what the formulas already did.
 # =============================================================================
 # THE METRIC BANK
 # =============================================================================
@@ -481,7 +498,7 @@ entries:
         - cash from operating activities
         - capital expenditure
       prices: []
-      entries: []
+      entries: [fcf_ttm]
     explanation:
       plain: |
         How many years of the cash the business actually generates it would
@@ -1201,6 +1218,52 @@ entries:
         because: |
           Gross margin cannot be computed, so the comparison cannot be either.
 
+  # ===========================================================================
+  # FREE CASH FLOW, AND WHICH OF THESE A REIT BREAKS
+  #
+  # Nine entries below and above read cash from operations, seven of them
+  # against capital expenditure. Two carry a `real-estate` gate and the rest do
+  # not, and the set is deliberate rather than half-finished — so the reasoning
+  # is here, where the next person to notice the asymmetry will be standing.
+  #
+  # There are TWO causes and not one, which is the part that is easy to get
+  # wrong. "Any measure a REIT breaks" is not a category; what breaks and how
+  # is:
+  #
+  #   1. Depreciation-suppressed profit, as a DENOMINATOR. The accounts charge
+  #      depreciation against buildings as though they wear out and well-kept
+  #      property mostly does not, so reported profit is far below what the
+  #      business earns. Dividing INTO that profit inflates the answer for a
+  #      reason that is the depreciation schedule and nothing else.
+  #      → cash_conversion_median_5y, which is cash ÷ profit. Gated.
+  #
+  #   2. The distribution requirement. A REIT must pay out nearly all of its
+  #      taxable income to keep its tax status, so a high payout is the form of
+  #      the company rather than a warning about it.
+  #      → payout_to_fcf_median_5y. Gated, and NOT for reason 1 — it divides by
+  #      free cash flow, not by profit. A rule of the shape "anything dividing
+  #      by net income" would explain the first gate and miss this one
+  #      entirely, which is why both are written out.
+  #
+  # Neither cause reaches the other five. fcf_ttm, fcf_margin_ttm,
+  # fcf_margin_median_5y, fcf_yield_on_ev and total_debt_to_avg_fcf_5y all put
+  # free cash flow itself on one side and revenue, enterprise value or debt on
+  # the other. Profit is nowhere in them, and cash from operations is one of
+  # the more meaningful figures a REIT reports — it is the one the industry's
+  # own measure is built to recover. So they are ungated on purpose.
+  #
+  # In practice they are also mostly absent for such a filer, and for an
+  # honest reason rather than this one: capital expenditure resolves absent
+  # where a REIT tags property spending under real-estate captions this
+  # program refuses to guess at. That is an absence about the filing and would
+  # be the wrong thing to dress up as a statement about the industry.
+  #
+  # accruals_ratio is the one nearby measure this note does not settle. Net
+  # income is in its numerator rather than its denominator, so cause 1 does not
+  # apply as written, and it does compute for a REIT. Left as it is, named here
+  # so it is a question somebody asked rather than one nobody did.
+  # ===========================================================================
+
   - id: fcf_ttm
     kind: computed
     estimator:
@@ -1313,7 +1376,7 @@ entries:
         - payments to acquire property, plant and equipment
         - revenue
       prices: []
-      entries: []
+      entries: [fcf_ttm]
     explanation:
       plain: |
         Out of every hundred dollars of sales, how many end up as spendable
@@ -1419,7 +1482,7 @@ entries:
         - payments to acquire property, plant and equipment
         - net income
       prices: []
-      entries: []
+      entries: [fcf_ttm]
     explanation:
       plain: |
         Whether the reported profits turn into actual money. If a company
@@ -1484,6 +1547,20 @@ entries:
           five-point estimator into a four-point one, and a measure that
           becomes a weaker reading when the data thins is the same failure
           wearing a different coat.
+      - data: net income (the denominator) is under 1% of revenue
+        because: |
+          A profit small enough to be a rounding error against the sales that
+          produced it makes the ratio enormous without saying anything about
+          conversion. Twenty-two times does not mean the cash was
+          outstanding, it means the profit nearly vanished, and this measure
+          exists to describe the first.
+
+          Against revenue rather than a figure in dollars, because a floor
+          that refuses a corner shop and waves through a conglomerate is not
+          a test of anything. Any year, for the reason above: where the cash
+          is small too, the year divides one rounding error by another and
+          arrives somewhere unremarkable, in the middle of the sorted five,
+          describing nothing.
 
   - id: accruals_ratio
     kind: computed
@@ -1602,7 +1679,7 @@ entries:
         - net cash provided by operating activities
         - payments to acquire property, plant and equipment
       prices: []
-      entries: []
+      entries: [fcf_ttm]
     explanation:
       plain: |
         Whether the company is returning more cash than it produces.
