@@ -984,7 +984,7 @@ function cautionMark(cs, key) {
 const cautionBox = (cs, key) =>
   tipOpen === "q:" + key ? cautionLines(cs) : "";
 
-function evidenceRow(item, i) {
+function evidenceRow(item, i, mark) {
   const subj = item.subject || {};
   const obs = item.observed || {};
   const [word, cls] = OUTCOME[item.outcome] || [item.outcome, "s-none"];
@@ -1062,7 +1062,15 @@ function evidenceRow(item, i) {
      is also what renders a decision frozen onto a lot years ago: offering
      to answer that reads as though answering would change what an
      append-only record says. */
-  return `<div class="srow"><div class="sname">${esc(subj.label)}${at}${tip}</div>
+  /* A row the verdict was built on says so beside the name. Every closing
+     verdict cites all of its exits and so does one still waiting on
+     confirmation, so without this the two render identically and the
+     difference — which is the whole point of a confirmation rule — is
+     invisible. The word comes from the host marking the row, never from the
+     view working out which rows look decisive. */
+  const decided = mark
+    ? ' <span class="req">decided this</span>' : "";
+  return `<div class="srow"><div class="sname">${esc(subj.label)}${decided}${at}${tip}</div>
     <div class="scond">${val}${test}${why}${noLimit}${prov}${warn}${tipBox}</div>
     <div class="sstate"><span class="chip ${cls}">${esc(word)}</span></div></div>`;
 }
@@ -1113,7 +1121,11 @@ function evidenceList(decision, key) {
       open = item.group;
       if (open && by[open]) head = groupHead(by[open]);
     }
-    return head + evidenceRow(item, key + ":" + i);
+    /* Marked, because a closing verdict and one still waiting on
+       confirmation cite exactly the same rows and only one of them was
+       decided by any of them. */
+    return head + evidenceRow(item, key + ":" + i,
+                              item.rests_on ? "decided" : "");
   }).join("");
 }
 
@@ -1142,6 +1154,16 @@ function decisionSection(d, title) {
     <div class="hint" style="margin:8px 0 0">${prose((d.state || {}).description)}</div>
     <div class="rollup" style="margin-top:12px">
       <div class="pe-head"><b>${esc(r.summary || "")}</b></div>
+      ${/* What the verdict is built on, named by the host in the bank's own
+            words. The strategy cited ids; every label here is the same one
+            the row further down carries, which is the whole reason this
+            comes from the host at all — the two used to be a paraphrase kept
+            in a strategy and the bank's text on the row beneath it. */
+        (r.rests_on || []).length
+          ? `<div class="pe-th" style="margin-top:8px">${
+              (r.rests_on || []).length === 1 ? "What decided it" : "What decided it"}:
+              ${r.rests_on.map((x) => `<b>${esc(x.label || x.id)}</b>`).join(", ")}</div>`
+          : ""}
       <div class="pe-sub" style="margin-top:6px">${host
         ? "Produced by the journal itself, not by the strategy — no verdict exists to show."
         : `Rule <code>${esc(r.rule)}</code> inside ${esc((d.strategy || {}).name || "the strategy")}

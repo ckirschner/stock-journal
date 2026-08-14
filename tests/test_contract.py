@@ -1698,3 +1698,85 @@ class TestAStrategyCannotRestateTheHostsFigures:
         assert ctx["measures"]["fcf_ttm"]["current"]["status"] == "absent"
         assert ctx["position"]["shares"] == 3.0
         assert ctx["values"] == {}
+
+
+class TestAVerdictSaysWhichCitationsItRestsOn:
+    """Contract 8. The gap it closes is not cosmetic.
+
+    A closing verdict and one still waiting on confirmation cite exactly the
+    same rows — every exit, whichever fired — so anything reading the evidence
+    to explain a verdict could not tell them apart, and that difference is the
+    entire point of a confirmation rule. It was invisible in the data, which
+    is why a strategy that wanted to say which of five things broke kept a
+    hand-written clause for each of them with a fallback that printed the raw
+    bank id into the sentence telling somebody to sell.
+
+    Ids in, words out. The strategy names what it acted on; the host resolves
+    the label from the citation it already resolved, so the sentence and the
+    row beneath it cannot say different things.
+    """
+
+    CTX = {"contract": contract.CONTRACT_VERSION, "today": "2026-08-13",
+           "inputs": {}, "values": {}, "position": {}, "portfolio": {},
+           "measures": {
+               "fcf_ttm": {"current": {"status": "known", "value": 150.0,
+                                       "source": "computed"},
+                           "series": None},
+               "debt_to_equity": {"current": {"status": "known",
+                                              "value": 0.4,
+                                              "source": "computed"},
+                                  "series": None}}}
+
+    def _run(self, reason_extra):
+        def decide(ctx):
+            return {"state": "sit", "payload": {},
+                    "reason": {"rule": "always", "summary": "By design.",
+                               "evidence": [{"measure": "fcf_ttm"},
+                                            {"measure": "debt_to_equity"}],
+                               **reason_extra}}
+        return contract.evaluate(record(decide=decide), dict(self.CTX))
+
+    def test_a_verdict_that_names_nothing_rests_on_nothing(self):
+        out = self._run({})
+        assert out["reason"]["rests_on"] == []
+        assert not any(e.get("rests_on") for e in out["reason"]["evidence"])
+
+    def test_the_host_resolves_the_words_from_the_citation(self):
+        from engine import bank
+        out = self._run({"rests_on": ["fcf_ttm"]})
+        assert [r["label"] for r in out["reason"]["rests_on"]] == \
+            [bank.meta()["fcf_ttm"]["label"]]
+        assert [r["id"] for r in out["reason"]["rests_on"]] == ["fcf_ttm"]
+
+    def test_the_rows_it_rests_on_are_marked_and_the_others_are_not(self):
+        out = self._run({"rests_on": ["debt_to_equity"]})
+        marked = [e["subject"]["id"] for e in out["reason"]["evidence"]
+                  if e.get("rests_on")]
+        assert marked == ["debt_to_equity"]
+
+    def test_naming_something_it_did_not_cite_is_refused(self):
+        """A state can only be built on evidence the decision put forward.
+        The host resolves the words from the citation, so a name with no
+        citation behind it has no words and no figure — and inventing either
+        is the strategy speaking for the host, which is the thing this key
+        exists to stop."""
+        out = self._run({"rests_on": ["roe_median_5y"]})
+        assert out["state"]["id"] == "host:invalid-decision"
+        assert "did not cite" in out["reason"]["summary"]
+
+    def test_an_empty_list_is_refused_rather_than_meaning_nothing(self):
+        """An empty one states nothing, which is what leaving it out already
+        does — and two ways to say one thing is how they come apart."""
+        out = self._run({"rests_on": []})
+        assert out["state"]["id"] == "host:invalid-decision"
+
+    def test_naming_one_citation_twice_is_refused(self):
+        out = self._run({"rests_on": ["fcf_ttm", "fcf_ttm"]})
+        assert out["state"]["id"] == "host:invalid-decision"
+
+    def test_a_strategy_speaking_the_old_version_is_refused_at_load(self):
+        """The criterion for a bump, applied: a v7 bundle reading the rows to
+        work out what fired would be reading an answer that is not in them,
+        wrongly and silently."""
+        errors = contract.validate_declaration(decl(contract=7))
+        assert any("`contract` must be 8" in e for e in errors), errors

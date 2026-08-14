@@ -551,13 +551,17 @@ class TestTheContractVersionMovesOnlyForAMeaning:
         updates it has to be able to say the move was for a meaning that
         changed rather than for a key that was added. It has moved twice
         since — to 6, when `position.disposals` narrowed from the security's
-        whole record to the current holding's sales, and to 7, when
-        `confirm()` stopped counting filings for the twenty measures carrying
-        a quoted price and started counting the sessions they actually change
-        on. Both are the same test: the same key, the same shape, a different
-        question answered. The staged plan is still not why.
+        whole record to the current holding's sales; to 7, when `confirm()`
+        stopped counting filings for the twenty measures carrying a quoted
+        price and started counting the sessions they actually change on; and
+        to 8, when the evidence began saying which citations a verdict rests
+        on, because a closing verdict and one still waiting on confirmation
+        cite exactly the same exits and a bundle reading the rows to tell
+        them apart was reading an answer that was not there. All three are
+        the same test: the same key, the same shape, a different question
+        answered. The staged plan is still not why.
         """
-        assert contract.CONTRACT_VERSION == 7
+        assert contract.CONTRACT_VERSION == 8
         assert contract.validate_declaration(decl()) == []
         assert json.loads(json.dumps(payload([tranche()]))) == \
             payload([tranche()])

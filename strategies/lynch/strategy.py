@@ -632,7 +632,7 @@ STRATEGY = {
                "for the growth yet. Sells when the growth stops or when the "
                "price runs past it — and never because time has passed.",
     "version": 2,
-    "contract": 7,
+    "contract": 8,
     "declines": DECLINES,
     "limits": LIMITS,
     "changelog": {
@@ -1941,39 +1941,6 @@ def _exit_evidence(group, states):
     return out
 
 
-# What each exit is about, in a clause, for the one place a sentence has to be
-# built here rather than cited.
-#
-# These are this strategy's own paraphrases and not the bank's labels, which
-# is a compromise worth naming rather than hiding. A closing verdict has to
-# say which of five things broke, and "an exit test failed" is not that — but
-# the context hands a strategy a measure's value and not its label, so there
-# is no way to reach the host's own words from inside `decide`. Everywhere a
-# label matters the host supplies it: every row under the verdict is the
-# bank's own text. Only these few words are this file's, and a reader who
-# follows them lands on the real row.
-#
-# The gap is a request against the host rather than something to solve here,
-# and the failure mode if these drift is mild: a paraphrase that reads a
-# little differently from the row it points at.
-_BROKE = {
-    "debt_to_equity": "what it has borrowed against what its owners have in "
-                      "it",
-    "interest_coverage": "how far its profits cover the interest it owes",
-    "fcf_ttm": "whether it generates cash at all",
-    "inventory_minus_revenue_growth_yoy": "product piling up faster than it "
-                                          "sells",
-    "receivables_minus_revenue_growth_yoy": "sales booked and not collected",
-}
-
-
-def _named(indexes) -> str:
-    """The exits that fired, named in a sentence."""
-    names = [_BROKE.get(EXITS[i][0], EXITS[i][0]) for i in indexes]
-    if len(names) == 1:
-        return names[0]
-    return ", ".join(names[:-1]) + " and " + names[-1]
-
 
 # ---------------------------------------------------------------------------
 # the decision
@@ -2251,10 +2218,27 @@ def _on_a_holding(ctx):
                 + " been crossed on this reading without being confirmed "
                 "yet, and did not decide this.")
 
-    def closing(state, rule, summary):
+    def closing(state, rule, summary, rests_on=()):
+        """`rests_on` names the exits this state is actually built on.
+
+        Every closing verdict cites all seven, because a reader looking at
+        one wants the whole picture — which means the rows alone cannot say
+        which of them decided it, and a verdict still one reading short of
+        confirmation renders exactly the same rows. That difference is the
+        entire point of a confirmation rule, so it is stated rather than left
+        to be inferred.
+
+        Named by id, never in words. This file used to carry a clause per
+        measure it might mention, with a fallback that printed the raw bank id
+        into the sentence telling somebody to sell; the host resolves each
+        label now, in the words every row under this verdict already uses.
+        """
+        reason = {"rule": rule, "summary": summary + also_waiting(),
+                  "evidence": evidence, "groups": groups}
+        if rests_on:
+            reason["rests_on"] = [EXITS[i][0] for i in rests_on]
         return {"state": state, "payload": {"when": ctx["today"]},
-                "reason": {"rule": rule, "summary": summary + also_waiting(),
-                           "evidence": evidence, "groups": groups}}
+                "reason": reason}
 
     # The ladder, and the order is an argument. Solvency first, because it is
     # the only one of the three that can take the company away rather than the
@@ -2267,14 +2251,15 @@ def _on_a_holding(ctx):
         return closing(
             "story-broke", "exit-confirmed",
             ("A company bought for its growth has to survive long enough to "
-             "do the growing, and " + _named(broke) + " has gone wrong and "
-             "stayed wrong across more than one set of filings."
+             "do the growing, and one of the things that would stop it has "
+             "gone wrong and stayed wrong across more than one set of "
+             "filings."
              if len(broke) == 1 else
              "A company bought for its growth has to survive long enough to "
              "do the growing, and " + str(len(broke)) + " of the things that "
-             "would stop it have gone wrong and stayed wrong: "
-             + _named(broke) + ".")
-            + _confirmed_on([states[i] for i in broke]) + ".")
+             "would stop it have gone wrong and stayed wrong.")
+            + _confirmed_on([states[i] for i in broke]) + ".",
+            rests_on=broke)
 
     if GROWTH_EXIT in fired:
         return closing(
@@ -2282,7 +2267,8 @@ def _on_a_holding(ctx):
             "Earnings per share over the last twelve months have stopped "
             "growing fast enough to hold this position, on more than one set "
             "of filings, and sales over the same two windows agree. The "
-            "reason to own this was that it was growing. It is not.")
+            "reason to own this was that it was growing. It is not.",
+            rests_on=[GROWTH_EXIT])
 
     if PRICE_EXIT in fired:
         return closing(
@@ -2291,7 +2277,8 @@ def _on_a_holding(ctx):
             "reached the level that closes the position, on more than one set "
             "of filings. Nothing about the business has broken — the price "
             "has simply been paid in advance, and the years of return still "
-            "ahead of you are in it already.")
+            "ahead of you are in it already.",
+            rests_on=[PRICE_EXIT])
 
     if waiting:
         return {

@@ -627,11 +627,47 @@ class TestTheStoryBreaking:
             series={"debt_to_equity": failing_run(1.3)}
         )["state"]["id"] == "story-broke"
 
-    def test_the_verdict_names_what_broke(self, lynch):
+    def test_the_verdict_names_what_broke_in_the_banks_own_words(self, lynch):
+        """Cited, not written. This strategy used to keep a clause for each of
+        the five things that can break the story, with a fallback that printed
+        the raw bank id into the sentence telling somebody to sell. It names
+        the id now and the host supplies the label — the same one every row
+        under the verdict already carries."""
+        from engine import bank
         result = held_verdict(lynch, known={**CLEARS_EXITS,
                                             "fcf_ttm": -8_000_000.0},
                               series={"fcf_ttm": failing_run(-8_000_000.0)})
-        assert "generates cash" in result["reason"]["summary"]
+        rests = result["reason"]["rests_on"]
+        assert [r["id"] for r in rests] == ["fcf_ttm"]
+        assert rests[0]["label"] == bank.meta()["fcf_ttm"]["label"]
+        # and the summary carries no measure name of its own
+        assert "fcf" not in result["reason"]["summary"].lower()
+
+    def test_the_rows_it_rests_on_are_marked_apart_from_the_rest(self, lynch):
+        """The gap this closed. Every closing verdict cites all seven exits,
+        and a verdict still one reading short of confirmation cites the same
+        seven — so the rows alone could not say which of them decided it, and
+        that difference is the whole point of a confirmation rule."""
+        result = held_verdict(lynch, known={**CLEARS_EXITS,
+                                            "fcf_ttm": -8_000_000.0},
+                              series={"fcf_ttm": failing_run(-8_000_000.0)})
+        marked = [e["subject"]["id"] for e in result["reason"]["evidence"]
+                  if e.get("rests_on")]
+        assert marked == ["fcf_ttm"]
+        assert len(result["reason"]["evidence"]) > 1
+
+    def test_a_verdict_still_waiting_rests_on_nothing(self, lynch):
+        """The other side of the same fact. One reading past a threshold is
+        not a decision yet, so nothing is built on it."""
+        result = held_verdict(lynch, known={**CLEARS_EXITS,
+                                            "fcf_ttm": -8_000_000.0})
+        assert result["state"]["id"] == "one-reading-past"
+        assert result["reason"]["rests_on"] == []
+
+    def test_the_names_are_not_written_in_this_strategy_at_all(self, lynch):
+        import pathlib
+        src = pathlib.Path(lynch["dir"], "strategy.py").read_text()
+        assert "_BROKE" not in src
 
     def test_solvency_is_reported_ahead_of_the_price(self, lynch):
         """Both fired; the state says which decided it. Borrowing can take

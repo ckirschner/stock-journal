@@ -540,7 +540,7 @@ STRATEGY = {
                "Sells when the business breaks — never when the price gets "
                "high, and never because time has passed.",
     "version": 6,
-    "contract": 7,
+    "contract": 8,
     "declines": DECLINES,
     "limits": LIMITS,
     "changelog": {
@@ -2159,7 +2159,16 @@ def _on_a_candidate(ctx):
     if owed:
         return {
             "state": "judgement-owed",
-            "payload": {"needs": _needs(owed) + [
+            # No list of what is owed here. The host builds those lines
+            # from the questions this decision cited that came back
+            # unanswered — see contract._owed_by — in the bank's own words,
+            # which are the words the rows under this verdict and the
+            # section it sends the reader to already carry. This file used to
+            # keep a hand-written paraphrase of each of the three, with a
+            # fallback that printed the raw bank id, because the context
+            # handed over a value and not a label. It cites them instead now,
+            # which is what it should have been doing.
+            "payload": {"needs": [
                 "Answer them under \"Your judgement\" on this page. Each one "
                 "takes a pass or a fail and your reasoning in your own "
                 "words, and the reasoning is what makes the record worth "
@@ -2233,36 +2242,6 @@ def _on_a_candidate(ctx):
         },
     }
 
-
-# What each of the three is asking, in one clause, for the one place a
-# sentence has to be built here rather than cited.
-#
-# These are this strategy's own paraphrases and not the bank's text, which is
-# a compromise worth naming rather than hiding. A blocked verdict has to say
-# what is owed specifically enough to act on, and "answer the qualitative
-# measures" is not that — but the context hands a strategy a measure's value
-# and not its label, so there is no way to reach the host's own words from
-# inside `decide`. Everywhere a label matters the host supplies it: the rows
-# under this verdict, and the questions in full under "Your judgement" on the
-# same page, are the bank's own text. Only these five-word summaries are this
-# file's, and a reader who follows them lands on the real question.
-#
-# The gap is a request against the host rather than something to solve here,
-# and the failure mode if these drift is mild: a paraphrase that reads a
-# little differently from the question it points at.
-_ASKING = {
-    "moat_durability": "Whether the moat holds for another decade",
-    "management_integrity": "Whether management can be taken at their word",
-    "capital_allocation": "Whether spare cash has gone somewhere worth more "
-                          "than paying it out",
-}
-
-
-def _needs(owed):
-    """One sentence per unanswered question, named specifically enough to
-    act on. Falls back to the bank id, which is what the screen shows beside
-    it anyway, so a question added to the bank is never a blank line."""
-    return [f"{_ASKING.get(m, m)} — unanswered." for m in owed]
 
 
 # -- sizing ------------------------------------------------------------------
