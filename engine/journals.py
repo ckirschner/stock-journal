@@ -980,6 +980,41 @@ def record_words() -> dict:
     return {name: dict(spec["words"]) for name, spec in RECORDS.items()}
 
 
+def changes_recorded(journal: dict) -> dict:
+    """How far each change record had got when this was asked::
+
+        {"rules": 3, "measures": 1}
+
+    What a frozen evaluation records so it can say afterwards whether the
+    rules and the measure definitions behind it are the ones in force now.
+    A count rather than a copy, for the reason the measure baseline is folded
+    rather than stored: the definitions are fifty kilobytes and a snapshot a
+    week would put half a gigabyte of duplicated prose inside a file that
+    belongs to the user. A position in an append-only list identifies a state
+    exactly — nothing is ever removed from one — and both records fold
+    forward from a stamp that is never rewritten, so what was in force at
+    position n is recoverable from position n.
+
+    It also replaces a comparison that was quietly wrong. The one way a
+    frozen record could say anything about the definitions behind it was its
+    own wall-clock `frozen` string, compared against the `seen` stamps on the
+    measure record. Both are offset-aware now (see dated.stamp), and
+    offset-aware stamps do not sort as text — an evening's work west of
+    Greenwich sorts before a morning's work east of it. So the comparison
+    that decided whether a snapshot predated a redefinition was a string sort
+    over two calendars, and it went wrong silently, in the direction of
+    saying nothing had changed.
+
+    Keyed by the record's own word rather than the key of a list inside the
+    journal file, for the reason `record_words` separates the two: a frozen
+    record has no business naming a field in a document it does not own. Built
+    off RECORDS, so a third change record is carried by every snapshot taken
+    after it exists with nothing here to edit.
+    """
+    return {name: len(journal.get(spec["key"]) or [])
+            for name, spec in RECORDS.items()}
+
+
 def pending(journal: dict) -> list[dict]:
     """Every recorded change still owed a written reason, oldest first, each
     saying which record it sits on.

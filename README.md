@@ -733,6 +733,50 @@ journal. Each lot carries its own, so the detail page shows what was on
 screen at every entry beside today's verdict — you read the thesis holding or
 decaying rather than just a colour.
 
+### You can keep a day without spending anything
+
+A purchase freezes the whole evaluation. Watching a company for six months
+before buying it used to freeze nothing at all, so there was no record of what
+month one looked like, notes had nothing to anchor to, and "this has changed"
+had no *changed from what*.
+
+**Save a snapshot** on any security's page and the same object is written —
+the identical builder, the identical refusals — hung on the day instead of on
+a lot. It is what a note is anchored to and what a change since is measured
+against.
+
+**It is always today, and there is no way to say otherwise.** No date field,
+no `as_of`, nothing in the engine that would accept one. A purchase or a
+deposit is an event that really happened on a day; a snapshot is a reading
+taken by looking, and the only day it could belong to is the day somebody
+looked. A baseline you could mint retrospectively is not a baseline — it is a
+way to choose, after seeing today's answer, what today gets compared against.
+
+**It says what produced it.** The strategy, its version, its settings version,
+the contract it spoke, and where this journal's two change records stood when
+it was written. That last one is what lets a snapshot say afterwards that the
+rules or the measure definitions behind it have moved since — a position in an
+append-only list rather than a copy of fifty kilobytes of definitions, and
+rather than the timestamp comparison it replaces, which sorted two calendars
+as text and failed towards saying nothing had changed.
+
+**Discarding one is an entry, not a deletion.** Everything else here is
+append-only because it is evidence about a choice somebody made; a snapshot is
+a bookmark, nobody acted on it, and one taken by mistake is a mis-click rather
+than a lesson. So it can be let go of — and letting go of it appends the fact
+that it was discarded. It stops standing, it leaves the list, it stops being
+what a change since is measured against, and it never stops having existed.
+The snapshot somebody would most want gone without trace is the one showing
+what they saw before doing something they now regret.
+
+A candidate carrying a standing snapshot is not removed from the journal, for
+the same reason one carrying a lot is not: it holds a frozen verdict. Discard
+them and it removes like any other candidate.
+
+A snapshot is 7–22 KB depending on how much the strategy cites — almost all of
+it the evidence rows, which are the point. Thirty names kept monthly for a
+year is about 8 MB.
+
 ### Buying against the signal is recorded, not blocked
 
 The tool can't stop you and shouldn't try. It captures the state, the rule
@@ -1091,6 +1135,8 @@ engine/                   no UI imports live here
                           purchase, and never averages into anything
   hand_entered.py         numbers you read off a document this program
                           could not; clearing one is an entry, not a delete
+  snapshots.py            days you kept on purpose — the same frozen
+                          evaluation a purchase makes, with nothing bought
   portfolio.py            lot history, snapshots, the override log,
                           scorecards
   allocation.py           where capital goes across the journal: what may

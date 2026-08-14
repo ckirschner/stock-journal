@@ -235,6 +235,20 @@ def _state(strategies, answers=ANSWERS, redefine=None) -> dict:
         "I remember buying it for the buyback and then forgetting about it "
         "for five years.")["ok"]
 
+    # Two days kept on purpose and one of them let go of, so the saved-
+    # snapshot section renders both rows it has — a standing one and a
+    # discarded one — and the sentence about what a standing one costs a
+    # candidate has a candidate to appear on. BRDG is the idea; ACME is held,
+    # which is the other branch of that sentence.
+    kept = api.save_snapshot("ACME", "before the trim")
+    assert kept["ok"], kept
+    watched = api.save_snapshot("BRDG", "starting to watch this")
+    assert watched["ok"], watched
+    letgo = api.save_snapshot("BRDG")
+    assert letgo["ok"], letgo
+    assert api.discard_snapshot("BRDG", letgo["seq"],
+                                "saved it twice by mistake")["ok"]
+
     assert api.record_valuation(
         "ACME", "reverse_dcf",
         {"price": 20, "fcf_ttm": 4, "shares": 10,
@@ -289,6 +303,16 @@ def _state(strategies, answers=ANSWERS, redefine=None) -> dict:
     state["__backfill"] = api.preview_backfill("HIST",
                                                state["__backfill_rows"], "")
     assert state["__backfill"]["ok"], state["__backfill"]
+    # And the record behind each saved-snapshot row, which the page fetches
+    # only when one is opened. Captured here for the same reason the previews
+    # are: the branch that draws a frozen evaluation renders from a backend
+    # reply, so without one it is the branch that never runs.
+    state["__snapshots"] = {
+        f'{s["ticker"]}@{row["seq"]}': api.get_snapshot(s["ticker"],
+                                                        row["seq"])
+        for s in state["securities"] for row in s["_snapshots"]}
+    for key, got in state["__snapshots"].items():
+        assert got["ok"], (key, got)
     # The coverage panel loads the same way. Captured for the same reason,
     # and because without it every detail page in the harness rendered
     # "could not reach the app backend" where the panel should be.

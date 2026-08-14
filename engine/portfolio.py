@@ -147,6 +147,7 @@ def new_security(ticker: str, name: str) -> dict:
         "hand_entered": [],     # engine/hand_entered.py — numbers you read
         "thesis": [],           # engine/thesis.py — why you own it
         "valuations": [],       # engine/valuation.py — what it is worth
+        "snapshots": [],        # engine/snapshots.py — days you kept
         "notes": [],            # dated entries, appended, never edited
     }
 
@@ -393,7 +394,32 @@ def bucket_of(security: dict) -> str:
 
 
 def has_history(security: dict) -> bool:
-    return bool(security.get("lots"))
+    """Whether this security carries a frozen verdict, and so cannot be
+    dropped out of the journal.
+
+    Lots are the obvious half: a purchase or a sale is a decision that was
+    acted on, and removing the ticker would take the record of it away.
+
+    A saved snapshot is the other half and is the same object — the identical
+    frozen evaluation, built by `freeze`, differing only in that nobody spent
+    money on it. Something deliberately kept, and everything a note is
+    anchored to and every "what has changed since" is measured against. It
+    would go silently: the removal path checks this function and nothing
+    else, and a security carrying six months of saved days but no lot reads
+    as an idea nobody touched.
+
+    Not a dead end, and that is what makes refusing the right answer rather
+    than a warning: a snapshot can be discarded, and a security with every
+    snapshot discarded removes like any other candidate. Nothing frozen is
+    lost by accident; anything can still be got rid of on purpose.
+
+    Imported inside the call because snapshots.py reads `freeze` from here.
+    One direction is the real dependency — a record of frozen evaluations
+    needs the thing that freezes them — and this is the one fact that has to
+    travel back the other way.
+    """
+    from . import snapshots
+    return bool(security.get("lots")) or bool(snapshots.standing(security))
 
 
 # -- reading a decision ------------------------------------------------------
@@ -753,8 +779,54 @@ def _recollection(text, basis: str) -> dict | None:
     return {"text": text, "written": _stamp()}
 
 
-def _snapshot(decision, values, price_seen, evaluation,
-              thesis=None, valuation=None, recollection=None) -> dict:
+# What `changes_recorded` must look like to be frozen. Named here, by the
+# consumer, for the reason _VALUE_KEYS is: the producer is
+# journals.changes_recorded, and a caller passing its own dict — or the same
+# dict with a key renamed — would freeze a position nothing can join back to.
+_RECORDS_ARE_COUNTS = (
+    "Where the change records stood is journals.changes_recorded(journal) — "
+    "a count per record. A hand-built one can name a record this journal "
+    "does not keep, or count something else, and a frozen record cannot be "
+    "asked afterwards which it was.")
+
+
+def _changes_recorded(records):
+    """Refuse anything but a record of counts, and let absence be absence.
+
+    None is a real answer and means this entry does not say where the change
+    records stood — which is what every entry frozen before this existed says,
+    and nothing invents a position for one. A reader must handle that, so
+    there is no gain in refusing it here; what is worth refusing is a dict
+    that looks like an answer and is not.
+    """
+    if records is None:
+        return None
+    if not isinstance(records, dict) or not all(
+            isinstance(v, int) and not isinstance(v, bool) and v >= 0
+            for v in records.values()):
+        raise ValueError(_RECORDS_ARE_COUNTS)
+    return dict(records)
+
+
+def freeze(decision, values, price_seen, evaluation,
+           thesis=None, valuation=None, recollection=None,
+           changes_recorded=None) -> dict:
+    """Everything an evaluation was, at one moment, written once.
+
+    Three things call this and each wraps it differently: a purchase, which
+    hangs it on a lot beside what was bought; a sale, which hangs it on a lot
+    beside what was sold; and engine/snapshots.py, which hangs it on nothing
+    at all — a day somebody wanted to be able to come back to.
+
+    One builder rather than three, because the guarantee is about the frozen
+    object and not about who wanted it. A figure arriving without its
+    cautions, a thesis arriving as prose rather than as the version that was
+    standing, a position in the change records that was made up rather than
+    read — each of those is a permanent, uncorrectable wrong answer whichever
+    caller made it, and the refusals below are the same refusals for all
+    three. A second builder would be a second set, and the second set is
+    always the one that is missing a check.
+    """
     return {
         "frozen": _stamp(),
         # The decision, entire. Everything the screen showed — state, payload
@@ -804,6 +876,16 @@ def _snapshot(decision, values, price_seen, evaluation,
         # a record that could not tell them apart would let a case composed
         # with hindsight be read as the case that was made at the time.
         "recollection": copy.deepcopy(recollection),
+        # Where this journal's change records stood when this was frozen —
+        # the one thing that says afterwards whether the rules and the
+        # measure definitions behind it are the ones in force now. See
+        # journals.changes_recorded for why it is a position and not a copy.
+        #
+        # None where the caller could not say. Entries frozen before this
+        # field existed carry no key at all, and nothing converts them:
+        # inventing a position for a record that never stated one would be
+        # exactly the restatement this module exists to prevent.
+        "changes_recorded": _changes_recorded(changes_recorded),
     }
 
 
@@ -814,7 +896,8 @@ def add_lot(security: dict, decision: dict, shares: float, price: float,
             evaluation: dict | None = None,
             thesis: dict | None = None,
             valuation: dict | None = None,
-            recollection: str = "") -> dict:
+            recollection: str = "",
+            changes_recorded: dict | None = None) -> dict:
     """Record a purchase as its own lot, and freeze the decision that was on
     screen for it — or the one that could not be rebuilt for it.
 
@@ -848,6 +931,10 @@ def add_lot(security: dict, decision: dict, shares: float, price: float,
     `recollection` is what the user remembers thinking, on a purchase they
     are entering out of their own history. It is refused on a live purchase
     outright — see `_recollection` — and it is never the thesis.
+
+    `changes_recorded` is journals.changes_recorded(journal): where this
+    journal's change records stood, so the frozen decision can say later
+    whether the rules behind it are the ones in force now.
     """
     shares, price = float(shares), float(price)
     if shares <= 0:
@@ -875,8 +962,9 @@ def add_lot(security: dict, decision: dict, shares: float, price: float,
         # remember to split it.
         "override": None,
         "unreconstructed": None,
-        "snapshot": _snapshot(decision, values, price_seen, evaluation,
-                              thesis, valuation, remembered),
+        "snapshot": freeze(decision, values, price_seen, evaluation,
+                           thesis, valuation, remembered,
+                           changes_recorded),
     }
 
     how = recorded_as(decision, evaluation["basis"])
@@ -1066,7 +1154,8 @@ def sell_lots(security: dict, decision: dict | None, reason: str,
               price_seen: dict | None = None,
               evaluation: dict | None = None,
               thesis: dict | None = None,
-              override_reason: str = "") -> dict:
+              override_reason: str = "",
+              changes_recorded: dict | None = None) -> dict:
     """Record a sale against specific lots, keeping the ticker in the journal.
 
     A partial sale leaves the position open and the remaining lots intact; a
@@ -1249,8 +1338,9 @@ def sell_lots(security: dict, decision: dict | None, reason: str,
         # they are the same fact about the two halves of a trade and a reader
         # of one should not have to learn a second vocabulary for the other.
         "override": None,
-        "snapshot": _snapshot(decision, values, price_seen, evaluation,
-                              thesis=thesis),
+        "snapshot": freeze(decision, values, price_seen, evaluation,
+                           thesis=thesis,
+                           changes_recorded=changes_recorded),
     }
     if how in ("against", "without"):
         lot["override"] = {
