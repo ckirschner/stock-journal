@@ -32,8 +32,8 @@ import pytest
 from conftest import (balance_face, dur, filer, filing, inst, journal_for,
                       open_since, tie)
 
-from engine import bank, contract, facts_store, journals, price_store
-from engine import strategy_loader
+from engine import bank, contract, dated, facts_store, journals, price_store
+from engine import snapshots, strategy_loader
 
 import app as app_mod
 
@@ -242,6 +242,17 @@ def _state(strategies, answers=ANSWERS, redefine=None) -> dict:
     # which is the other branch of that sentence.
     kept = api.save_snapshot("ACME", "before the trim")
     assert kept["ok"], kept
+    # And a candidate whose snapshot record this build cannot read — the
+    # journal-restored-from-a-later-version case. It renders as a section
+    # saying so, and everything else on the page and in the payload has to be
+    # untouched: a record that took the window down with it is exactly the
+    # defect this branch exists to have drawn.
+    assert api.add_security("PIND", "Pinnock Industries")["ok"]
+    assert api.save_snapshot("PIND", "a day before the record moved on")["ok"]
+    doc = journals.load(journals.resolve_open())
+    pind = next(s for s in doc["securities"] if s["ticker"] == "PIND")
+    dated.append(pind, snapshots.KEY, {"kind": "pinned"})
+    journals.save(doc)
     watched = api.save_snapshot("BRDG", "starting to watch this")
     assert watched["ok"], watched
     letgo = api.save_snapshot("BRDG")
@@ -310,7 +321,7 @@ def _state(strategies, answers=ANSWERS, redefine=None) -> dict:
     state["__snapshots"] = {
         f'{s["ticker"]}@{row["seq"]}': api.get_snapshot(s["ticker"],
                                                         row["seq"])
-        for s in state["securities"] for row in s["_snapshots"]}
+        for s in state["securities"] for row in s["_snapshots"]["rows"]}
     for key, got in state["__snapshots"].items():
         assert got["ok"], (key, got)
     # The coverage panel loads the same way. Captured for the same reason,

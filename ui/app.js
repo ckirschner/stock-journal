@@ -1922,18 +1922,23 @@ function lotHistory(s) {
 
 /* What has moved since a snapshot was frozen, in the host's own words.
 
-   Read off the positions both sides record rather than off timestamps: a
-   snapshot says where each change record stood when it was written, the
-   journal says where they stand now, and the difference is a count of
-   entries. The wording comes from the host too — there is no list of which
-   change records exist in this file, so a third one arrives with its own
-   noun and needs nothing here. */
+   Read off positions rather than off timestamps: a snapshot says how far
+   each change record had got when it was written, and the host says which
+   positions in those records were a change to something a verdict reads.
+   Counting raw entries instead would put this line over a bank release that
+   only reworded a paragraph — which is why the host answers what a move is
+   and this only asks how many came later.
+
+   The wording comes from the host too. There is no list of which change
+   records exist in this file, so a third one arrives with its own noun and
+   needs nothing here. */
 function movedSince(snap) {
   const then = (snap || {}).changes_recorded;
-  const now = S.changes_recorded || {};
+  const real = S.changes_that_moved || {};
   if (!then) return "";
-  const moved = Object.keys(now)
-    .map((name) => [name, (now[name] || 0) - (then[name] || 0)])
+  const moved = Object.keys(real)
+    .map((name) => [name,
+                    (real[name] || []).filter((at) => at > (then[name] || 0)).length])
     .filter(([, n]) => n > 0)
     .map(([name, n]) => {
       const w = (S.change_records || {})[name] || {};
@@ -1995,7 +2000,19 @@ function snapshotRow(s, row) {
 }
 
 function snapshotHistory(s) {
-  const rows = s._snapshots || [];
+  const held = s._snapshots || {};
+  const rows = held.rows || [];
+  /* A record this version cannot read is a section, not a missing one. It
+     says so in the host's own sentence and nothing else on the page is
+     affected — the security still renders, the journal still opens, and the
+     saved days are still on disk. */
+  if (held.refusal) {
+    return `<section class="group"><div class="ghead"><h3>Saved snapshots</h3>
+        <span>cannot be read</span></div>
+      <div class="greynote" style="margin-top:8px">${esc(held.refusal)}</div>
+      <p class="hint">Nothing has been removed. This security cannot be removed from the
+      journal either, because what it is holding cannot be shown to you first.</p></section>`;
+  }
   if (!rows.length) return "";
   const kept = rows.filter((r) => !r.discarded).length;
   return `<section class="group"><div class="ghead"><h3>Saved snapshots</h3>
@@ -3771,7 +3788,7 @@ function dlgSnapshot(s) {
 }
 
 function dlgDiscardSnapshot(s, seq) {
-  const row = (s._snapshots || []).find((r) => String(r.seq) === String(seq));
+  const row = (((s._snapshots || {}).rows) || []).find((r) => String(r.seq) === String(seq));
   dialog({
     title: `Discard the snapshot from ${(row || {}).day || "that day"}`,
     blurb: "It stops counting — it leaves the list, and it stops being what "

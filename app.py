@@ -883,12 +883,14 @@ class Api:
             if record is None else None,
             rule_changes=list(journal.get("rule_changes") or []),
             measure_changes=list(journal.get("measure_changes") or []),
-            # Where those records stand now, in the same shape every frozen
-            # record says where they stood when IT was written. Both sides of
-            # that comparison come from one function, keyed by the record's
-            # own word, so the screen saying "the rules have moved since this
-            # was kept" never holds a list of which records exist.
-            changes_recorded=journals.changes_recorded(journal),
+            # Which positions in those records were a change to something a
+            # verdict reads. A frozen record says how far each record had got
+            # when it was written; this says which of the entries after that
+            # point mattered. Keyed by the record's own word, so the line
+            # saying "the rules have moved since you kept this" never holds a
+            # list of which records exist — and never counts a release that
+            # only reworded a paragraph.
+            changes_that_moved=journals.changes_that_moved(journal),
             input_changes=list(journal.get("input_changes") or []),
             pending_changes=journals.pending(journal),
             # What each record is, in the host's words. The banner asking for

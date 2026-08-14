@@ -179,7 +179,7 @@ class TestASnapshotCannotBeDated:
         idea(api)
         with written_on("2026-03-04"):
             save(api)
-        row = snapshots.summaries(security())[0]
+        row = snapshots.summaries(security())["rows"][0]
         assert row["day"] == "2026-03-04"
         entry = snapshots.standing(security())[0]
         assert dated.day_of(entry) == "2026-03-04"
@@ -215,6 +215,60 @@ class TestItIsFrozen:
 
         after = snapshots.standing(security())[0]["snapshot"]
         assert after == before
+
+    def test_the_figures_and_the_price_are_frozen_beside_the_verdict(self,
+                                                                     api):
+        """Not just the decision. A verdict cites what its own rules reach
+        for, which on some strategies is two host facts and no measure at
+        all — so a snapshot carrying a full evidence table and an EMPTY
+        figures map looks complete and is not, and the day somebody wanted to
+        come back to has none of the numbers on it.
+
+        The whole of what stops that is one line of argument wiring at the
+        call site, so it is asserted on the content and not on the shape.
+        """
+        idea(api)
+        save(api)
+        snap = snapshots.standing(security())[0]["snapshot"]
+        assert snap["metrics"], "no figures were frozen with the verdict"
+        assert "current_ratio" in snap["metrics"], sorted(snap["metrics"])
+        for eid, held in snap["metrics"].items():
+            assert set(held) >= {"value", "source", "cautions", "provenance"}
+        assert snap["price"] == 20.0
+        assert snap["price_ticker"] == "SYN"
+        assert snap["price_date"] == "2026-08-01"
+
+    def test_the_thesis_standing_that_day_is_frozen_with_it(self, api):
+        """The version that was standing, off its own record — the same thing
+        a purchase freezes, and for the same reason: a later amendment must
+        never present itself as the case that was being made on the day."""
+        idea(api)
+        assert api.amend_thesis("SYN", "A toll road.", "A rival appears.")["ok"]
+        save(api)
+        kept = snapshots.standing(security())[0]["snapshot"]["thesis"]
+        assert kept["thesis"] == "A toll road."
+        assert kept["seq"] and kept["recorded"], \
+            "the frozen thesis is not an entry off the record"
+
+        assert api.amend_thesis("SYN", "Not a toll road after all.",
+                                "A rival appears.", "Read the contracts.")["ok"]
+        again = snapshots.standing(security())[0]["snapshot"]["thesis"]
+        assert again["thesis"] == "A toll road.", \
+            "the amendment reached back into a record already written"
+
+    def test_a_caution_travels_into_the_frozen_figures(self, api):
+        """A record that loses its qualifier states the number as more
+        certain than it was, permanently — a snapshot can never be asked
+        again what was wrong with a figure it kept."""
+        idea(api)
+        save(api)
+        snap = snapshots.standing(security())[0]["snapshot"]
+        cautioned = {eid: v for eid, v in snap["metrics"].items()
+                     if v["cautions"]}
+        assert cautioned, \
+            "no frozen figure carries a caution, so nothing here is tested"
+        for eid, v in cautioned.items():
+            assert all(isinstance(c, str) and c for c in v["cautions"]), eid
 
     def test_the_whole_decision_is_kept_and_not_a_summary_of_it(self, api):
         """A row saying "Cheap enough" teaches nothing six months later. The
@@ -304,6 +358,80 @@ class TestItSaysWhichRulesWereInForce:
             assert snap["changes_recorded"] == {"rules": 0, "measures": 0}, \
                 f"the {write} path froze a record that cannot say what " \
                 "produced it"
+
+    def test_a_change_that_moved_nothing_is_not_reported_as_one(self, api):
+        """A position has to count every entry or it stops being a position.
+        What a READER is told cannot: both records carry entries that moved
+        nothing a verdict reads — a bank released again with only its wording
+        touched, a settings version bumped with no value behind it, the line a
+        journal writes the first time it can see the definitions at all.
+        Counting entries would put "the rules behind this have moved since you
+        kept it" over a rewritten paragraph, which is the line
+        `measures_moved_at` was filtered for in the first place.
+        """
+        idea(api)
+        save(api)
+        at = snapshots.standing(security())[0]["snapshot"]["changes_recorded"]
+        doc = journal()
+        # A release that moved nothing, exactly as the bank ships one.
+        definitions = journals.measures_baseline(doc)
+        definitions["version"] = (definitions.get("version") or 0) + 1
+        assert journals.observe_measure_change(doc, definitions) is not None
+        journals.save(doc)
+
+        assert journals.changes_recorded(doc)["measures"] > at["measures"], \
+            "the position did not move, so this proves nothing"
+        assert journals.measures_moved_at(doc) == []
+        after = journals.changes_that_moved(doc)
+        assert [n for n in after["measures"] if n > at["measures"]] == []
+        assert api.get_state()["changes_that_moved"] == after
+
+    def test_each_record_answers_for_itself_what_a_move_is(self, api,
+                                                           strategies):
+        """The two records disagree about it, and both are right. A strategy
+        whose LOGIC moved changed what it demands even though no declared
+        value did — its rules are code, and nothing here can say what the
+        code now asks. A settings version that moved with no value behind it
+        changed nothing at all. One predicate over both would be wrong for
+        one of them, so each declares its own and one function reads them.
+        """
+        idea(api)
+        save(api)
+        at = snapshots.standing(security())[0]["snapshot"]["changes_recorded"]
+        doc = journal()
+        record = journals.RECORDS["rules"]
+
+        # A settings version that moved with nothing behind it.
+        quiet = {"seq": 1, "kind": "settings", "moved": [],
+                 "notes": ["The settings version moved but no value this "
+                           "journal uses changed."]}
+        assert record["moved"](quiet) is False
+
+        # Logic moving, with no declared value touched.
+        logic = {"seq": 2, "kind": "logic", "moved": []}
+        assert record["moved"](logic) is True
+
+        doc["rule_changes"] = [quiet, logic]
+        after = journals.changes_that_moved(doc)
+        assert [n for n in after["rules"] if n > at["rules"]] == [2]
+
+    def test_a_change_that_did_move_something_is_reported(self, api):
+        idea(api)
+        save(api)
+        at = snapshots.standing(security())[0]["snapshot"]["changes_recorded"]
+        doc = journal()
+        definitions = journals.measures_baseline(doc)
+        definitions["version"] = (definitions.get("version") or 0) + 1
+        moved = next(iter(definitions["entries"]))
+        definitions["entries"][moved]["states"]["observations read"] = 3
+        assert journals.observe_measure_change(doc, definitions) is not None
+        journals.save(doc)
+
+        after = journals.changes_that_moved(doc)
+        assert [n for n in after["measures"] if n > at["measures"]], \
+            "a redefinition after this snapshot is not reported to its reader"
+        # And the two readings of "what moved" agree, because there is one.
+        assert len(journals.measures_moved_at(doc)) == len(after["measures"])
 
     def test_a_made_up_position_is_refused_and_absence_is_not(self):
         """None is a real answer — every entry frozen before this existed
@@ -438,7 +566,7 @@ class TestItIsTheJournalsSoItTravels:
 # -- reading it back ----------------------------------------------------------
 
 class TestReadingTheRecord:
-    def test_an_entry_this_build_cannot_place_makes_the_whole_read_refuse(
+    def test_an_entry_this_build_cannot_place_serves_nothing_partial(
             self, api):
         """The case is a journal restored from a bundle a later version
         wrote. Skipping is dangerous in both directions at once: an
@@ -447,21 +575,82 @@ class TestReadingTheRecord:
         itself as complete."""
         idea(api)
         save(api)
-        doc = journal()
-        s = next(x for x in doc["securities"] if x["ticker"] == "SYN")
+        s = security()
         dated.append(s, snapshots.KEY, {"kind": "pinned"})
-        with pytest.raises(ValueError) as e:
-            snapshots.history(s)
-        assert "later one" in str(e.value)
+        got = snapshots.read(s)
+        assert got["entries"] == [], "a partial record was served anyway"
+        assert "later one" in got["refusal"]
+        assert snapshots.unreadable(s) == got["refusal"]
 
-    def test_a_discard_naming_nothing_makes_the_read_refuse(self, api):
+    def test_a_discard_naming_nothing_is_the_same_refusal(self, api):
         idea(api)
         save(api)
         s = security()
         dated.append(s, snapshots.KEY, {"kind": "discarded", "discards": 404})
-        with pytest.raises(ValueError) as e:
-            snapshots.history(s)
-        assert "404" in str(e.value)
+        assert "404" in snapshots.unreadable(s)
+        assert snapshots.read(s)["entries"] == []
+
+    def test_an_unreadable_record_does_not_take_the_window_down(self, api):
+        """The refusal runs on every render, once per security, and
+        `get_state` produces the WHOLE application state in one call. Raised
+        rather than returned, one unplaceable entry on one security returned
+        an error instead of a payload: no securities, no journal list, no way
+        to open a different journal — a blank window, with the way out inside
+        the window that would not draw.
+        """
+        idea(api)
+        idea(api, "OTH")
+        save(api)
+        doc = journal()
+        s = next(x for x in doc["securities"] if x["ticker"] == "SYN")
+        dated.append(s, snapshots.KEY, {"kind": "pinned"})
+        journals.save(doc)
+
+        state = api.get_state()
+        assert state["ok"], state
+        assert {x["ticker"] for x in state["securities"]} == {"SYN", "OTH"}
+        assert state["journals"], "the journal list went with it"
+        bad = next(x for x in state["securities"] if x["ticker"] == "SYN")
+        assert bad["_snapshots"]["rows"] == []
+        assert "later one" in bad["_snapshots"]["refusal"]
+        # And the rest of the page is untouched.
+        assert bad["_decision"]["state"]["name"]
+        assert next(x for x in state["securities"]
+                    if x["ticker"] == "OTH")["_snapshots"]["refusal"] is None
+
+    def test_what_cannot_be_read_cannot_be_destroyed_or_added_to(self, api):
+        """An empty list means "nothing was saved" only when the record could
+        be read. Answering a question whose wrong answer destroys something
+        needs the two told apart."""
+        idea(api)
+        save(api)
+        doc = journal()
+        s = next(x for x in doc["securities"] if x["ticker"] == "SYN")
+        dated.append(s, snapshots.KEY, {"kind": "pinned"})
+        journals.save(doc)
+
+        assert portfolio.has_history(security()) is True
+        gone = api.remove_security("SYN")
+        assert gone["ok"] is False
+        assert security(), "it was removed anyway"
+        # And nothing new is written into a record nothing can show.
+        assert api.save_snapshot("SYN")["ok"] is False
+        assert api.discard_snapshot("SYN", 1)["ok"] is False
+        assert len(security()[snapshots.KEY]) == 2
+
+    def test_a_baseline_that_cannot_be_read_is_not_reported_as_none(self,
+                                                                    api):
+        """"There is no baseline" and "I cannot say what the baseline is"
+        would produce the same comparison, and one of them is a lie."""
+        idea(api)
+        save(api)
+        s = security()
+        assert snapshots.latest(s)["seq"] == 1
+        dated.append(s, snapshots.KEY, {"kind": "pinned"})
+        with pytest.raises(ValueError):
+            snapshots.latest(s)
+        with pytest.raises(ValueError):
+            snapshots.entry(s, 1)
 
     def test_the_list_ships_rows_and_never_the_records(self, api):
         """One frozen evaluation is kilobytes of evidence and `get_state`
@@ -471,7 +660,7 @@ class TestReadingTheRecord:
         save(api, note="worth a look")
         state = api.get_state()
         s = next(x for x in state["securities"] if x["ticker"] == "SYN")
-        row = s["_snapshots"][0]
+        row = s["_snapshots"]["rows"][0]
         assert row["note"] == "worth a look" and row["day"]
         assert "snapshot" not in row and "decision" not in row
         import json
@@ -494,7 +683,7 @@ class TestReadingTheRecord:
         save(api)
         s = security()
         s[snapshots.KEY][0]["snapshot"]["decision"]["state"]["name"] = "Kept"
-        assert snapshots.summaries(s)[0]["state"] == "Kept"
+        assert snapshots.summaries(s)["rows"][0]["state"] == "Kept"
 
 
 # -- it is not a gate ---------------------------------------------------------

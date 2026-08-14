@@ -413,13 +413,21 @@ def has_history(security: dict) -> bool:
     snapshot discarded removes like any other candidate. Nothing frozen is
     lost by accident; anything can still be got rid of on purpose.
 
+    A record this build cannot read counts too, and counts the same way. An
+    empty list means "nothing was saved" only when the record could be read;
+    otherwise it means "I cannot say", and the two must not produce the same
+    answer to a question whose wrong answer destroys something. Refusing is
+    the safe direction and the reversible one.
+
     Imported inside the call because snapshots.py reads `freeze` from here.
     One direction is the real dependency — a record of frozen evaluations
     needs the thing that freezes them — and this is the one fact that has to
     travel back the other way.
     """
     from . import snapshots
-    return bool(security.get("lots")) or bool(snapshots.standing(security))
+    return bool(security.get("lots")) \
+        or bool(snapshots.standing(security)) \
+        or bool(snapshots.unreadable(security))
 
 
 # -- reading a decision ------------------------------------------------------

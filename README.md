@@ -760,6 +760,14 @@ append-only list rather than a copy of fifty kilobytes of definitions, and
 rather than the timestamp comparison it replaces, which sorted two calendars
 as text and failed towards saying nothing had changed.
 
+The two halves of that comparison answer different questions on purpose. The
+frozen side keeps a *count*, because a position has to count every entry or it
+stops being one. What the reader is told skips the entries that moved nothing
+anybody reads — a bank released again with only its wording touched, a
+settings version bumped with no value behind it — because a line saying the
+rules have moved must not appear over a rewritten paragraph. Each record
+declares what a move is on it; one function reads that.
+
 **Discarding one is an entry, not a deletion.** Everything else here is
 append-only because it is evidence about a choice somebody made; a snapshot is
 a bookmark, nobody acted on it, and one taken by mistake is a mis-click rather
@@ -772,6 +780,14 @@ what they saw before doing something they now regret.
 A candidate carrying a standing snapshot is not removed from the journal, for
 the same reason one carrying a lot is not: it holds a frozen verdict. Discard
 them and it removes like any other candidate.
+
+**A record this build cannot read says so, on the page, and takes nothing
+with it.** If a journal comes back from a bundle a later version wrote, and
+one saved day is recorded in a way this version has no reading for, nothing
+partial is shown — skipping an entry could leave a snapshot standing that its
+owner retired. So that security's saved days are unavailable with a sentence
+saying why, that security cannot be removed while they are, and everything
+else renders exactly as it did.
 
 A snapshot is 7–22 KB depending on how much the strategy cites — almost all of
 it the evidence rows, which are the point. Thirty names kept monthly for a
