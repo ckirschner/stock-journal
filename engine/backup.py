@@ -111,9 +111,14 @@ def inspect_bundle(src: str | Path) -> dict:
         # reason again, and with one of its own: a saved snapshot is the only
         # frozen verdict in the file that is not attached to a purchase, so
         # it is the one a reader scanning for positions would not think to
-        # check for. Standing ones, not every entry — a discarded snapshot
-        # travels and is meant to, but a count that included it would say
-        # this bundle carries more than the restored journal will show.
+        # check for.
+        #
+        # Standing ones, not every entry — a discarded snapshot travels and is
+        # meant to, but a count that included it would say this bundle carries
+        # more than the restored journal will show. Which is also why a record
+        # this version cannot read counts as none: this figure is what the
+        # restored journal will be able to show you, not what the file holds,
+        # and the security's own page is where the difference is said.
         "snapshots": sum(len(snapshots.standing(s))
                          for d in docs for s in (d.get("securities") or [])),
         "names": [str(d.get("name") or d.get("id")) for d in docs],
