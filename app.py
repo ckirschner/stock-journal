@@ -221,6 +221,22 @@ class Api:
         }
 
     # -- strategies -------------------------------------------------------
+    @staticmethod
+    def _declared_input(f):
+        """One declared question, saying who answers it.
+
+        A field the host works out for itself is not a question for the user,
+        and a form has to be able to tell the two apart without knowing which
+        role it is looking at — free cash is the opening balance of a record,
+        not an answer, and a form that rendered it as a plain number field
+        would collect a figure the save then refuses. One reading of that, so
+        the setup screen and the settings screen cannot disagree about which
+        of their fields are questions.
+        """
+        spec = contract.INPUT_ROLES.get(f.get("role")) or {}
+        return {**f, "answered_by": contract.answered_by(f.get("role")),
+                "answered_how": spec.get("answered_how")}
+
     def _strategy_offer(self, record):
         """One strategy as the creation screen needs it: what it is, and the
         questions it will ask. The setup screen is generated from this, so a
@@ -231,16 +247,7 @@ class Api:
             "values_version": record.get("values_version"),
             "contract": record["contract"],
             "states": list(record["states"]),
-            # Every declared question, each saying who answers it. A field
-            # the host works out for itself is not a question for the user,
-            # and the setup screen has to be able to tell the two apart
-            # without knowing which role it is looking at — free cash is the
-            # opening balance of a record, not an answer, and a form that
-            # rendered it as a plain number field would collect a figure the
-            # save then refuses.
-            "inputs": [{**f, "answered_by": contract.answered_by(f.get("role")),
-                        "answered_how": (contract.INPUT_ROLES.get(f.get("role"))
-                                         or {}).get("answered_how")}
+            "inputs": [self._declared_input(f)
                        for f in (record.get("inputs") or [])],
             "roles": {k: dict(v) for k, v in contract.INPUT_ROLES.items()},
             # What it will not evaluate, and why, resolved into the host's
@@ -318,10 +325,7 @@ class Api:
             role = by_host.get(f["id"])
             answer = offered.get(role) if role else None
             inputs.append({
-                **f,
-                "answered_by": contract.answered_by(f.get("role")),
-                "answered_how": (contract.INPUT_ROLES.get(f.get("role"))
-                                 or {}).get("answered_how"),
+                **self._declared_input(f),
                 "value": (answer or {}).get("value") if role
                          else supplied.get(f["id"]),
                 # Why the host could not work it out, where it could not. An
@@ -340,7 +344,6 @@ class Api:
             "inputs": inputs,
             "input_problems": problems,
             "value_errors": list(chain["errors"]),
-            "roles": {k: dict(v) for k, v in contract.INPUT_ROLES.items()},
             "bundle": Path(record["dir"]).name,
             "reference": sorted(record.get("reference") or {}),
         }
