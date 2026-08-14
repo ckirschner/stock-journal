@@ -318,16 +318,22 @@ class TestTheTwoRecords:
                         if e["subject"]["id"] == fact)
 
         make(api)
-        hold(api, cik=company())      # 10 shares, priced at 20
+        hold(api, cik=company())      # 10 shares at 15, priced at 20
         frozen = journal()["securities"][0]["lots"][0]["snapshot"]["decision"]
+        # The purchase itself is netted off the cash the moment it is
+        # recorded, so what was frozen is the balance BEFORE it: 40,000. The
+        # figure the verdict was computed against is what the record says, not
+        # a number that stopped moving.
         assert figure(frozen, "portfolio.cash") == 40000.0
 
         spend(api, 39_000)
         again = journal()["securities"][0]["lots"][0]["snapshot"]["decision"]
         assert figure(again, "portfolio.cash") == 40000.0
-        # ...while today's verdict does move, which is the point
+        # ...while today's verdict does move, which is the point. 40,000 less
+        # the 150 the shares cost less the 39,000 withdrawn is 850, plus 200
+        # of stock.
         assert figure(decision_for(api.get_state()),
-                      "portfolio.account_value") == 1200.0
+                      "portfolio.account_value") == 1050.0
 
 
 class TestSizeBindingWorksEndToEnd:
@@ -337,10 +343,11 @@ class TestSizeBindingWorksEndToEnd:
         d = decision_for(api.get_state())
         assert d["produced_by"] == "strategy"
         cited = {e["subject"]["id"]: e for e in d["reason"]["evidence"]}
-        # 200 of an account of 40,200
-        assert cited["portfolio.account_value"]["observed"]["value"] == 40200.0
+        # 200 of stock, and cash of 40,000 less the 150 the shares cost — the
+        # money that went into the position is not still sitting in cash.
+        assert cited["portfolio.account_value"]["observed"]["value"] == 40050.0
         assert round(cited["position.weight"]["observed"]["value"], 6) == \
-            round(200 / 40200 * 100, 6)
+            round(200 / 40050 * 100, 6)
         assert cited["position.weight"]["outcome"] == "pass"
 
     def test_crossing_the_cap_moves_the_state_not_just_the_number(self, api):

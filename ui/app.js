@@ -2994,7 +2994,9 @@ function cashRecord() {
   const rows = (c.ledger || []).slice().reverse().map((e) => {
     const k = kinds[e.kind] || {};
     return `<tr><td>${esc(e.date)}</td>
-      <td>${esc(k.label || e.kind)}${e.note ? `<div class="greynote">${esc(e.note)}</div>` : ""}</td>
+      <td>${esc(k.label || e.kind)}${e.recorded_by && e.recorded_by !== "you"
+        ? ` <span class="dim" title="${esc(k.means || "")}">read off your lots</span>` : ""}
+        ${e.note ? `<div class="greynote">${esc(e.note)}</div>` : ""}</td>
       <td class="num">${e.direction < 0 ? "−" : "+"}${esc(money(e.amount))}</td>
       <td class="num dim">${esc(money(e.balance))}</td>
       <td class="dim hide-sm">${esc(String(e.recorded || "").slice(0, 10))}</td></tr>`;
@@ -3003,7 +3005,9 @@ function cashRecord() {
       <span>${(c.ledger || []).length} entr${(c.ledger || []).length === 1 ? "y" : "ies"}</span></div>
     <p class="hint">The balance is worked out from these, never typed. Money you paid in is not a gain and
     money a holding paid out is — which is why they are counted apart, and why the account can say how you
-    are doing rather than how much you have added.</p>
+    are doing rather than how much you have added. What you spent on shares and what you got back for them
+    are read off your own purchases and sales: the trade is already on the record, and typing the same money
+    twice is how two versions of it come to disagree.</p>
     <div class="facts">
       <div class="fact"><i>Free cash now</i><b>${amount(c.balance)}</b>${
         c.balance && c.balance.status !== "known"
@@ -3296,7 +3300,7 @@ function dlgCash(kind) {
     title: opened ? "Record money moving" : "Open the cash record",
     blurb: opened
       ? "Appended, never edited. A figure entered wrong is corrected by another entry saying so."
-      : "What the account holds in cash today. Everything after this is counted from it, so nothing can be dated before it.",
+      : "The cash the account held at the start of the day you choose. Everything from then on is counted against it, so nothing can be dated before it.",
     body: (opened ? "" : `<div class="notice quiet" style="margin:0 0 12px">
         <h4>Why this is a record and not a number</h4>
         <p>A single editable balance cannot tell money that arrived from money you made — add $10,000 to a
@@ -3305,12 +3309,12 @@ function dlgCash(kind) {
       + `<div class="field"><label for="f_kind">What happened</label>
          <select id="f_kind" name="kind">${opts}</select>
          <div class="help" id="kindhelp">${esc((kinds[chosen] || {}).means || "")}</div></div>`
-      + field("amount", "Amount", "", "In dollars, always positive. Which way the money went is what you chose above.", "number", 'step="any" min="0"')
+      + field("amount", "Amount", "", "In dollars and cents, always positive. Which way the money went is what you chose above.", "number", 'step="0.01" min="0"')
       + `<div class="field"><label for="f_when">Date</label>
          <input id="f_when" name="when" type="date" value="${esc(today)}" max="${esc(today)}"${floor}>
          <div class="help">The day the money moved, not the day you are typing it in.
          ${opened ? `This record opens on ${esc(opened.date)}; nothing can be dated before that.`
-                  : "A past date is fine — this is the day that balance was true."}</div></div>`
+                  : "A past date is fine — this is the day that balance was true, read at the start of it."}</div></div>`
       + area("note", "Note (optional)", "", "What it was. You will read it back beside the entry."),
     confirm: opened ? "Record it" : "Open the record",
     onConfirm: async (d) => {
@@ -3347,16 +3351,18 @@ function dlgNewJournal(chosenId) {
   const setup = asked.map((f) => declaredField(f, undefined, "in_")).join("");
   const opening = derived.map((f) => `<div class="field">
       <label for="f_opening_cash">${esc(f.label)} in the account now (optional)</label>
-      <input id="f_opening_cash" name="opening_cash" type="number" step="any" min="0" value="">
+      <input id="f_opening_cash" name="opening_cash" type="number" step="0.01" min="0" value="">
       <div class="help">This is not an answer that gets stored — it opens a record.
       From here the balance is worked out from what you record: deposits, withdrawals
-      and dividends received, each dated. That is what lets the journal tell money that
-      arrived from money you made.</div>
+      and dividends received, each dated — and from what your own purchases and sales
+      say went in and out. That is what lets the journal tell money that arrived from
+      money you made.</div>
       <div class="help">${esc(f.explain)}</div></div>
       <div class="field"><label for="f_opening_cash_on">As at</label>
       <input id="f_opening_cash_on" name="opening_cash_on" type="date" value="${esc(localToday())}" max="${esc(localToday())}">
-      <div class="help">The day that balance was true. Nothing can be recorded before it,
-      because the opening balance already accounts for everything up to it.</div></div>`).join("");
+      <div class="help">The cash your account held at the <b>start</b> of this day.
+      Nothing can be dated before it — everything earlier is already in the figure —
+      and anything you bought or sold on it or after counts against it.</div></div>`).join("");
   dialog({
     title: "New journal",
     blurb: "One journal, one strategy, chosen now and not changed later. Trading two strategies means two journals, the way it would mean two accounts.",

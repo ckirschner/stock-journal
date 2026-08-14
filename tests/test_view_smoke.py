@@ -588,10 +588,15 @@ def test_weight_reaches_the_screen_once_the_account_is_known(strategies):
     # from history, at the 31.00 hand-entered price, is 3,100 — a position
     # entered afterwards is still a position, and leaving it out of the
     # account would understate every weight measured against it. CLSD is
-    # closed and holds nothing. Against 40,000 of free cash that is an
-    # account of 43,600.
-    assert cited["portfolio.account_value"]["observed"]["value"] == 43600.0
-    assert round(weight["value"], 4) == round(320 / 43600 * 100, 4)
+    # closed and holds nothing.
+    #
+    # Free cash is 41,438: 40,000 opened on 2025-12-01, less what every
+    # purchase dated after it cost and plus what every sale fetched. That is
+    # the half a typed figure could never keep straight — a balance that did
+    # not move when shares were bought would report an account of 43,600 for
+    # one holding 45,038.
+    assert cited["portfolio.account_value"]["observed"]["value"] == 45038.0
+    assert round(weight["value"], 4) == round(320 / 45038 * 100, 4)
 
 
 def test_returns_and_scorecards_use_the_fetched_price(strategies):

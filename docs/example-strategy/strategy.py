@@ -203,12 +203,20 @@ STRATEGY = {
          # must record cash would be the host deciding how strategies work —
          # so an input says what the number IS, and the host then reports the
          # account value and every position weight built on it.
+         #
+         # This one the host ANSWERS as well as reports: it is worked out from
+         # the journal's cash record, so it cannot be `required` and no form
+         # offers it. The declaration is unchanged either way — a strategy
+         # says what it needs to know, and who knows it is the role's
+         # business.
          "explain": "Money in the account this journal covers that is not in "
-                    "any position. The journal adds it to what your holdings "
-                    "are worth to get the account total, and reports each "
-                    "position as a share of that. Leave it blank and those "
-                    "figures say they cannot be worked out rather than "
-                    "guessing at them."},
+                    "any position. You do not type it: the journal works it "
+                    "out from what you record moving, and from what your own "
+                    "lots say every purchase cost and every sale fetched. It "
+                    "adds that to what your holdings are worth to get the "
+                    "account total, and reports each position as a share of "
+                    "that. Until the record is opened those figures say they "
+                    "cannot be worked out rather than guessing at them."},
     ],
 
     "values": [

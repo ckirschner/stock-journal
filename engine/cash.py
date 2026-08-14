@@ -84,10 +84,17 @@ KEY = "cash_record"
 #   earned    the holdings produced it. It changes what the account is worth
 #             AND it is part of what the account made, so a return figure must
 #             not net it out.
+#   internal  it moved between the cash and the positions — you bought shares,
+#             or sold some. Cash changes and the account total does not, and
+#             neither does what the account earned. Nobody records these: the
+#             lots already are the record of them, and asking somebody to type
+#             the same ten thousand dollars twice teaches nothing. `recorded_by`
+#             says which side writes a kind, and the host writes these.
 #
 # Nothing below branches on a kind's name. The balance reads `direction`, the
-# return-facing split reads `flow`, and a kind added here arrives at both
-# without either being edited. That is the whole reason this is a table.
+# return-facing split reads `flow`, the screens read `recorded_by`, and a kind
+# added here arrives at all of them without any of them being edited. That is
+# the whole reason this is a table.
 #
 # Deliberately absent: an attribution to a security on a dividend. It is the
 # obvious next field and nothing would read it — the per-position returns are
@@ -102,15 +109,19 @@ KINDS = MappingProxyType({
         "plural": "opening balances",
         "direction": 1,
         "flow": "opening",
-        "means": "what this account held on the day the record starts. Every "
-                 "figure below is counted from it, so it is the one entry "
-                 "that has to come first.",
+        "recorded_by": "you",
+        "means": "the cash this account held at the START of the day the "
+                 "record begins. Everything below is counted from it, which "
+                 "is why nothing may be dated before it — and why anything "
+                 "you bought or sold on that day counts, rather than being "
+                 "assumed to be in the figure already.",
     }),
     "deposit": MappingProxyType({
         "label": "Deposit",
         "plural": "deposits",
         "direction": 1,
         "flow": "external",
+        "recorded_by": "you",
         "means": "money you moved into the account from somewhere else. It "
                  "makes the account bigger and it is not a gain — nothing you "
                  "did as an investor produced it.",
@@ -120,6 +131,7 @@ KINDS = MappingProxyType({
         "plural": "withdrawals",
         "direction": -1,
         "flow": "external",
+        "recorded_by": "you",
         "means": "money you moved out of the account. It makes the account "
                  "smaller and it is not a loss.",
     }),
@@ -131,9 +143,30 @@ KINDS = MappingProxyType({
         "plural": "dividends received",
         "direction": 1,
         "flow": "earned",
+        "recorded_by": "you",
         "means": "cash a holding paid you. It makes the account bigger and it "
                  "IS part of what the account earned — counting it as money "
                  "you put in would hide a real return.",
+    }),
+    "bought": MappingProxyType({
+        "label": "Bought shares",
+        "plural": "purchases",
+        "direction": -1,
+        "flow": "internal",
+        "recorded_by": "the journal",
+        "means": "cash that went into a position. The purchase is already on "
+                 "the record as a lot, so this is read off it rather than "
+                 "asked for — the account is worth the same either side of "
+                 "it, and what changes is which half of it is cash.",
+    }),
+    "sold": MappingProxyType({
+        "label": "Sold shares",
+        "plural": "sales",
+        "direction": 1,
+        "flow": "internal",
+        "recorded_by": "the journal",
+        "means": "cash that came out of a position. Read off the sale, for "
+                 "the same reason a purchase is.",
     }),
 })
 
@@ -147,7 +180,8 @@ OPENING = "opening"
 # reads wrong and nothing that notices. Named here, by the code that consumes
 # them, so a new field arrives with its own line rather than being trusted to
 # whoever adds the next kind.
-_KIND_FIELDS = ("label", "plural", "direction", "flow", "means")
+_KIND_FIELDS = ("label", "plural", "direction", "flow", "means",
+                "recorded_by")
 
 
 def check_kinds(kinds) -> None:
@@ -169,10 +203,12 @@ def check_kinds(kinds) -> None:
 
 check_kinds(KINDS)
 
-# The kinds a user records after the record has been opened. Derived from the
-# table rather than listed again, so a kind added above cannot be left out of
-# the list the screens offer.
-EVENT_KINDS = tuple(k for k in KINDS if k != OPENING)
+# What the user writes, and what the journal writes for itself. Derived from
+# the table rather than listed again, so a kind added above cannot be left out
+# of the list the screens offer or quietly become something a user can type.
+YOURS = tuple(k for k, v in KINDS.items() if v["recorded_by"] == "you")
+EVENT_KINDS = tuple(k for k in YOURS if k != OPENING)
+DERIVED_KINDS = tuple(k for k in KINDS if k not in YOURS)
 
 
 def kinds_view() -> dict:
@@ -259,26 +295,88 @@ def _amount(value, zero_is_a_figure: bool = False) -> float:
 
 # -- writing ------------------------------------------------------------------
 
-def entries(journal: dict) -> list:
-    """Every entry ever recorded, oldest first by the day the money moved.
-
-    Ordered by event day with the write order breaking ties, which is the
-    order a person reading a statement expects. Nothing about the balance
-    depends on it — a sum has no order — but the ledger a reader sees does,
-    and two entries dated the same day have to come out in the order they were
-    written or a running balance flickers between renders.
-    """
-    got = [dict(e) for e in (journal.get(KEY) or []) if isinstance(e, dict)]
-    got.sort(key=lambda e: (str(e.get("date") or ""), e.get("seq") or 0))
-    return got
-
-
 def opening(journal: dict) -> dict | None:
     """The entry this record starts from, or None where there is none."""
     for entry in journal.get(KEY) or []:
         if isinstance(entry, dict) and entry.get("kind") == OPENING:
             return dict(entry)
     return None
+
+
+def _from_lots(journal: dict, opened: str) -> list:
+    """Every trade that moved cash, read off the lots.
+
+    Nobody records these. A purchase is already a lot carrying its shares, its
+    price and its date, and asking somebody to type the same ten thousand
+    dollars again as a withdrawal would be asking for work that teaches
+    nothing and mislabels it — a withdrawal is money leaving the account, and
+    this money did not leave, it changed which half of the account it was in.
+
+    **Trades before the opening balance are not counted**, because the opening
+    balance is what the cash was at the START of its day and everything before
+    it is already in that figure. Everything on or after it counts, including
+    a trade dated on the opening day itself, which is the ordinary first
+    session and the case a rule reading "strictly after" would get wrong.
+
+    Priced at what the lot says it cost or fetched. Commission is not on the
+    record anywhere, so it is not here either — an approximation of it would
+    be a figure this program invented.
+    """
+    out = []
+    for sec in journal.get("securities") or []:
+        ticker = str(sec.get("ticker") or "")
+        for lot in (sec.get("lots") or []):
+            if not isinstance(lot, dict):
+                continue
+            kind = {"buy": "bought", "sell": "sold"}.get(lot.get("kind"))
+            day = str(lot.get("date") or "")[:10]
+            if kind is None or not day or day < opened:
+                continue
+            shares, price = lot.get("shares"), lot.get("price")
+            if not isinstance(shares, (int, float)) \
+                    or not isinstance(price, (int, float)):
+                continue
+            out.append({
+                "kind": kind,
+                "amount": round(float(shares) * float(price), 2),
+                "date": day,
+                "note": f'{float(shares):g} {ticker} at {_usd(float(price))}',
+                # No `seq` of the cash record's own: this is not on it. The
+                # lot's own sequence orders these against each other, and the
+                # sort below puts every derived row after the recorded ones
+                # of the same day — one stated rule rather than two records
+                # racing for the same slot.
+                "lot": lot.get("id"),
+                "lot_seq": lot.get("seq") or 0,
+                "recorded": lot.get("recorded"),
+                "derived": True,
+            })
+    return out
+
+
+def entries(journal: dict) -> list:
+    """Every entry that moved cash, oldest first by the day it moved.
+
+    Two sources, one list: what the user recorded, and what the lots already
+    say. They are merged here rather than added up separately so that
+    everything downstream — the balance, the split, the statement a reader
+    checks — reads one sequence and cannot disagree with another about it.
+
+    Ordered by event day, then by which source it came from, then by write
+    order. Nothing about the balance depends on the order — a sum has no
+    order — but the statement a reader sees does, and two entries on one day
+    have to come out the same way on every render.
+    """
+    start = opening(journal)
+    opened = str((start or {}).get("date") or "")[:10]
+    got = [dict(e) for e in (journal.get(KEY) or []) if isinstance(e, dict)]
+    if start is not None:
+        got += _from_lots(journal, opened)
+    got.sort(key=lambda e: (str(e.get("date") or ""),
+                            1 if e.get("derived") else 0,
+                            e.get("lot_seq") if e.get("derived")
+                            else e.get("seq") or 0))
+    return got
 
 
 def record(journal: dict, kind: str, amount, when=None, note: str = "") -> dict:
@@ -299,7 +397,12 @@ def record(journal: dict, kind: str, amount, when=None, note: str = "") -> dict:
     if spec is None:
         raise ValueError(
             f'"{kind}" is not something that happens to cash. This journal '
-            "records " + ", ".join(KINDS) + ".")
+            "records " + ", ".join(YOURS) + ".")
+    if spec["recorded_by"] != "you":
+        raise ValueError(
+            f'{spec["label"]} is not recorded here — the journal reads it off '
+            "your lots, because the trade is already on the record and typing "
+            "the same money twice is how the two come to disagree.")
     value = _amount(amount, zero_is_a_figure=kind == OPENING)
     day = portfolio.recorded_date(when, "cash entry")
     start = opening(journal)
@@ -346,6 +449,14 @@ def _to(journal: dict, as_of: str | None):
 
     Returns (entries, opening, refusal) — the refusal is a sentence where the
     record cannot answer for that day at all, and None where it can.
+
+    **An entry this build has no kind for makes the whole balance absent.**
+    It is the case a restored backup produces: a record written where a fourth
+    kind existed, read back where it does not. Summing around it would report
+    a total short by exactly the entries nobody could read, with nothing on the
+    screen saying so — and this figure is what the account and every weight
+    are built on. Principle 4 is explicit that a source which cannot be shown
+    to account for the whole leaves the value absent.
     """
     start = opening(journal)
     if start is None:
@@ -360,6 +471,19 @@ def _to(journal: dict, as_of: str | None):
             "was recorded about")
     got = [e for e in entries(journal)
            if day is None or str(e.get("date") or "")[:10] <= day]
+    unknown = sorted({str(e.get("kind")) for e in got
+                      if str(e.get("kind")) not in KINDS})
+    if unknown:
+        return [], start, (
+            "this journal's cash record holds "
+            + ("an entry" if len(unknown) == 1 else "entries")
+            + " this version cannot read — "
+            + ", ".join(f'"{k}"' for k in unknown)
+            + " — so what the account holds cannot be worked out without "
+              "leaving "
+            + ("it" if len(unknown) == 1 else "them")
+            + " out, which would report a balance short by exactly the "
+              "entries nobody could read. The record itself is untouched")
     return got, start, None
 
 
@@ -456,13 +580,15 @@ def movement(journal: dict, since: str | None = None,
     reading principle 4 permits — a source that demonstrably accounts for the
     whole is evidence a missing line is nil.
     """
-    start_entry = opening(journal)
-    if start_entry is None:
-        return {"contributed": _absent(NO_RECORD),
-                "withdrawn": _absent(NO_RECORD),
-                "earned": _absent(NO_RECORD),
-                "net_external": _absent(NO_RECORD),
-                "from": None, "until": None}
+    # Through the same reader the balance uses, so a record this build cannot
+    # fully account for refuses here too rather than raising out of the middle
+    # of a sum. `until` is the ceiling; the window's start is checked below.
+    _got, start_entry, refusal = _to(journal, until)
+    if refusal:
+        return {"contributed": _absent(refusal), "withdrawn": _absent(refusal),
+                "earned": _absent(refusal), "net_external": _absent(refusal),
+                "from": None if since is None else str(since)[:10],
+                "until": None if until is None else str(until)[:10]}
 
     opened = str(start_entry["date"])[:10]
     lo = opened if since is None else str(since)[:10]
@@ -515,10 +641,16 @@ def ledger(journal: dict, as_of: str | None = None) -> list:
     got, _start, refusal = _to(journal, as_of)
     if refusal:
         return []
-    running, out = 0.0, []
-    for e in got:
+    out = []
+    for i, e in enumerate(got):
         spec = KINDS[e["kind"]]
-        running = round(running + spec["direction"] * float(e["amount"]), 2)
+        # The same summation `balance` uses, over the prefix, rather than a
+        # running total accumulated here. Two derivations of one figure round
+        # differently the moment an amount has more than two decimal places,
+        # and the screen shows both — "Free cash now $100.00" over a statement
+        # whose last line reads $99.99.
         out.append({**e, "label": spec["label"], "flow": spec["flow"],
-                    "direction": spec["direction"], "balance": running})
+                    "recorded_by": spec["recorded_by"],
+                    "direction": spec["direction"],
+                    "balance": _sum(got[:i + 1])})
     return out

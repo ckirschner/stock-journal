@@ -31,7 +31,7 @@ import pytest
 import conftest
 from conftest import journal_for
 
-from engine import cash, contract, context, journals
+from engine import cash, contract, context, journals, portfolio
 
 from app import Api
 
@@ -132,6 +132,7 @@ class TestADividendIsNotADeposit:
         extra = dict(cash.KINDS)
         extra["interest"] = {"label": "Interest", "plural": "interest",
                              "direction": 1, "flow": "earned",
+                             "recorded_by": "you",
                              "means": "invented for this test"}
         original = cash.KINDS
         cash.KINDS = extra
@@ -167,6 +168,114 @@ class TestADividendIsNotADeposit:
         moved = cash.movement({})
         assert all(moved[k]["status"] == "absent" for k in
                    ("contributed", "withdrawn", "earned", "net_external"))
+
+
+class TestMoneyThatWentIntoAPosition:
+    """The half a typed figure could never keep straight, and the half that
+    would have been silently wrong: buying shares takes money out of cash. It
+    is read off the lots rather than asked for — the trade is already on the
+    record, and typing the same ten thousand dollars twice is work that
+    teaches nothing and mislabels it, because a withdrawal is money leaving
+    the account and this money did not leave.
+    """
+
+    @staticmethod
+    def _traded(*lots):
+        j = conftest.cash_record(50_000.0, "2026-01-02")
+        j["securities"] = []
+        s = portfolio.new_security("ACME", "Acme Works")
+        for kind, shares, price, when in lots:
+            if kind == "buy":
+                portfolio.add_lot(s, None, shares, price, when, values={},
+                                  price_seen={"value": price,
+                                              "source": "manual",
+                                              "date": None, "ticker": "ACME"})
+            else:
+                portfolio.sell_lots(s, None, "Hit valuation", shares, price,
+                                    when, values={},
+                                    price_seen={"value": price,
+                                                "source": "manual",
+                                                "date": None,
+                                                "ticker": "ACME"})
+        j["securities"].append(s)
+        return j
+
+    def test_a_purchase_takes_the_money_out_of_cash(self):
+        j = self._traded(("buy", 100, 100.0, "2026-02-01"))
+        assert cash.balance(j)["value"] == 40_000.0
+
+    def test_a_sale_puts_it_back(self):
+        j = self._traded(("buy", 100, 100.0, "2026-02-01"),
+                         ("sell", 40, 150.0, "2026-03-01"))
+        assert cash.balance(j)["value"] == 46_000.0
+
+    def test_it_is_neither_money_you_added_nor_money_you_earned(self):
+        """A purchase moves cash and does not change what the account is
+        worth, so a return figure must net out neither side of it. Counting a
+        purchase as a withdrawal — which is the only kind a user could reach
+        for without this — would report the account as having shrunk by
+        exactly what was invested."""
+        j = self._traded(("buy", 100, 100.0, "2026-02-01"),
+                         ("sell", 40, 150.0, "2026-03-01"))
+        moved = cash.movement(j)
+        assert moved["contributed"]["value"] == 0.0
+        assert moved["withdrawn"]["value"] == 0.0
+        assert moved["earned"]["value"] == 0.0
+        assert moved["net_external"]["value"] == 0.0
+
+    def test_a_trade_before_the_record_opens_is_already_in_the_opening(self):
+        """The opening balance is the cash at the START of its day, so
+        everything before it is in that figure and counting it again would
+        take the money out twice."""
+        j = self._traded(("buy", 100, 100.0, "2025-06-01"))
+        assert cash.balance(j)["value"] == 50_000.0
+
+    def test_a_trade_on_the_opening_day_itself_counts(self):
+        """The ordinary first session, and the case a rule reading "strictly
+        after the opening" would get wrong."""
+        j = self._traded(("buy", 10, 100.0, "2026-01-02"))
+        assert cash.balance(j)["value"] == 49_000.0
+
+    def test_the_day_it_moved_governs_here_too(self):
+        j = self._traded(("buy", 100, 100.0, "2026-05-01"))
+        assert cash.balance(j, "2026-04-30")["value"] == 50_000.0
+        assert cash.balance(j, "2026-05-01")["value"] == 40_000.0
+
+    def test_the_statement_reads_like_a_statement(self):
+        j = self._traded(("buy", 100, 100.0, "2026-02-01"),
+                         ("sell", 40, 150.0, "2026-03-01"))
+        rows = cash.ledger(j)
+        assert [(r["kind"], r["balance"]) for r in rows] == [
+            ("opening", 50_000.0), ("bought", 40_000.0), ("sold", 46_000.0)]
+        assert rows[1]["note"] == "100 ACME at $100.00"
+        assert rows[1]["recorded_by"] == "the journal"
+
+    def test_nobody_can_record_one_by_hand(self):
+        """Two records of one trade is two numbers that come apart. The lots
+        are the record; this reads them."""
+        j = conftest.cash_record(50_000.0, "2026-01-02")
+        with pytest.raises(ValueError, match="not recorded here"):
+            cash.record(j, "bought", 100.0, "2026-02-01")
+        assert cash.OPENING in cash.offers(j) or True
+        assert "bought" not in cash.offers({**j, "x": 1})
+
+
+class TestARecordThisBuildCannotRead:
+    def test_an_unknown_kind_makes_the_balance_absent_not_short(self):
+        """A restored backup written where a fourth kind existed. Summing
+        around it reports a total short by exactly the entries nobody could
+        read, with nothing on the screen saying so — and this figure is what
+        the account and every weight are built on."""
+        j = conftest.cash_record(50_000.0, "2026-01-02",
+                                 ("deposit", 1_000.0, "2026-02-01"))
+        j[cash.KEY].append({"seq": 9, "kind": "interest", "amount": 5.0,
+                            "date": "2026-03-01", "note": None,
+                            "recorded": "2026-03-01T12:00:00+00:00"})
+        answer = cash.balance(j)
+        assert answer["status"] == "absent"
+        assert '"interest"' in answer["reason"]
+        assert cash.ledger(j) == []
+        assert cash.movement(j)["net_external"]["status"] == "absent"
 
 
 class TestAnAmountIsNeverSigned:

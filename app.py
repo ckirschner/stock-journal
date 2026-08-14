@@ -1581,10 +1581,22 @@ class Api:
         with the present, so the record says it in as many words rather than
         leaving it to be inferred from a version number.
 
-        **The journal may not have existed.** Everything the user told it —
-        free cash, and anything else a strategy asks for — begins on the day
-        it was created. Before that the journal holds no answers, and the
-        figures built on them are absent rather than borrowed from now.
+        **The journal may not have existed.** Everything the user told it
+        begins on the day it was created. Before that the journal holds no
+        answers, and the figures built on them are absent rather than borrowed
+        from now.
+
+        **The cash record has its own day, and it is not that one.** Free cash
+        stopped being an answer: it is worked out from a record whose opening
+        balance carries a date the user chose, which is routinely *earlier*
+        than the journal — opening it on the day the account actually started
+        is the ordinary thing to do before backfilling history into it. So
+        what the account was worth on a past day is asked of that record and
+        of nothing else. Written off the answer this build actually produced,
+        rather than off a second rule about dates: two rules about one fact is
+        how the sentence came to say free cash was absent beside a weight
+        computed from it — permanently, in a record that is written once and
+        can never be asked again.
         """
         parts = [evaluation.get("note")] if evaluation.get("note") else []
         if record is not None:
@@ -1594,12 +1606,23 @@ class Api:
                 "the version in force then is not recoverable, so the rules "
                 "are the present ones and only the data is of the day")
         born = str(journal.get("created") or "")[:10]
-        if born and when_iso < born:
+        # Only where there was something to tell it. A strategy whose every
+        # declared input the host works out for itself was never told
+        # anything, so the sentence would be about nothing — and all four
+        # shipped strategies are exactly that.
+        asked = [f for f in ((record or {}).get("inputs") or [])
+                 if f.get("id") not in contract.host_answered(record or {})]
+        if born and when_iso < born and asked:
             parts.append(
                 f"this journal was created on {born}, so it held no answers "
-                f"on {when_iso} — free cash, and every figure measured "
-                "against the account, are absent rather than taken from what "
-                "you have told it since")
+                f"on {when_iso} — anything you had told it, and every figure "
+                "measured against those answers, is absent rather than taken "
+                "from what you have told it since")
+        held = cash.balance(journal, when_iso)
+        if held["status"] != "known":
+            parts.append(f"what this account held in cash on {when_iso} is "
+                         f'not on record — {held["reason"]} — so the account '
+                         "total and every share of it are absent")
         evaluation["note"] = "; ".join(p for p in parts if p)
         return evaluation
 

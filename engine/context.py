@@ -234,14 +234,16 @@ Reading rules a strategy can rely on:
   itself, and when a weight came out wrong there would be no way to see
   which input was wrong.
 - **Free cash is derived too, from the journal's cash record.** The opening
-  balance, plus every deposit, withdrawal and dividend recorded since,
-  counted on the day each one moved — see engine/cash.py. It is not a figure
-  anybody types, and it never was one that could be: an account total that
-  cannot tell money arriving from money made answers "how am I doing" with a
-  number that is false. A journal whose record has not been opened has free
-  cash absent with that reason, never zero, and the absence travels — no
-  account total, no weight, and a rule binding on weight says it cannot be
-  worked out and names why.
+  balance, plus every deposit, withdrawal and dividend recorded since, less
+  what each purchase cost and plus what each sale fetched — all counted on the
+  day each one moved, all read off records the journal already holds. See
+  engine/cash.py. It is not a figure anybody types, and it never was one that
+  could be: an account total that cannot tell money arriving from money made
+  answers "how am I doing" with a number that is false, and one that does not
+  move when shares are bought is wrong by the cost of every position in it. A
+  journal whose record has not been opened has free cash absent with that
+  reason, never zero, and the absence travels — no account total, no weight,
+  and a rule binding on weight says it cannot be worked out and names why.
 - **Free cash is only served where a strategy asked for it.** An input
   carrying the `cash` role is what unlocks cash, the account value and every
   weight; a strategy that declares no such input gets all of them absent

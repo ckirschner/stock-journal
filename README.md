@@ -255,23 +255,41 @@ dividends received, each on the day it moved, appended and never edited — on
 the same record every other thing you write already sits on. The balance is
 worked out from them.
 
-**Three kinds, and what separates them is declared rather than remembered.**
-A deposit and a dividend both add to the balance and only one of them is a
-return. So each kind declares two things: what it does to the balance, and
-whether the money crossed the account's boundary or was earned inside it.
-Nothing in the arithmetic reads a kind's name — the balance reads the first
-field, the *paid in / taken out / earned* split reads the second, and a kind
-added to the table arrives at both without either being edited.
+**And what you spent on shares, read off your own lots.** Buying takes money
+out of the cash and puts it into a position; the account is worth the same
+either side of it. Nobody types that: the purchase is already on the record
+with its shares, its price and its date, and asking for the same ten thousand
+dollars again as a "withdrawal" would be work that teaches nothing and files
+it under the wrong heading — a withdrawal is money leaving the account, and
+this money did not leave.
+
+**Four kinds of money, and what separates them is declared rather than
+remembered.** A deposit and a dividend both add to the balance and only one of
+them is a return; a purchase moves the balance and changes nothing about what
+the account is worth. So each kind declares what it does to the balance and
+which of those it is. Nothing in the arithmetic reads a kind's name — the
+balance reads the first field, the *paid in / taken out / earned* split reads
+the second, and a kind added to the table arrives at both without either being
+edited.
 
 **An amount is never signed.** Which way the money went is the kind of entry
 you are making. A withdrawal typed as −500 under a kind that already means
 "out" would add five hundred dollars to the account, silently, forever.
 
 **The record begins somewhere and says where.** A ledger of flows with no
-starting point is a change, not a balance, so the first entry is what the
-account held on the day you started counting. Until there is one, free cash
-is absent with that reason rather than zero — and nothing may be dated before
-it, because the opening balance already accounts for everything up to it.
+starting point is a change, not a balance, so the first entry is the cash the
+account held at the **start** of the day you began counting. Until there is
+one, free cash is absent with that reason rather than zero. Nothing may be
+dated before it — everything earlier is already in that figure — and
+everything on or after it counts, including a trade made on the opening day
+itself.
+
+**A record this version cannot read makes the balance absent, not short.**
+Restore a backup written where a kind existed that this build does not have,
+and summing around it would report a total missing exactly the entries nobody
+could read, with nothing on the screen saying so. The figure the account and
+every position weight rest on is the last place a partial answer may pass for
+a whole one.
 
 **The day the money moved governs, not the day you typed it in.** A deposit
 made in March and entered in August was in the account in April, so a

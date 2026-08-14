@@ -397,6 +397,34 @@ class TestWhatTheJournalKnewOnADay:
             "to reconstruct"
         assert "created on" in lot["unreconstructed"]["note"]
 
+    def test_the_frozen_note_says_what_the_cash_record_actually_says(self,
+                                                                      api):
+        """The note is written once and can never be asked again, so it must
+        not describe a figure the verdict beside it was computed from. The
+        cash record opens on 2019-01-01 — earlier than the journal, which is
+        the ordinary thing to do before backfilling history into it — so free
+        cash IS known for a 2019 purchase, and a sentence keyed off the
+        journal's creation date said it was absent."""
+        open_since("2026-01-01")
+        tracked(api, cik=893)
+        note = api.preview_purchase("SYN", "2019-06-03")["note"]
+        assert "cash" not in note, note
+        # The answers this journal genuinely had none of are still named —
+        # this fixture asks four questions besides the cash — and what is
+        # said about them no longer claims to cover the account arithmetic.
+        assert "held no answers" in note
+        assert "measured against those answers" in note
+
+    def test_and_says_it_where_the_record_genuinely_cannot_answer(self, api):
+        """The other direction, and the one silence would be worse in: a day
+        before the cash record opens has no account to size against, and the
+        record has to say so where it will be read."""
+        open_since("2026-01-01")
+        tracked(api, cik=894)
+        note = api.preview_purchase("SYN", "2018-06-03")["note"]
+        assert "held in cash on 2018-06-03 is not on record" in note
+        assert "2019-01-01" in note
+
     def test_the_note_admits_the_rules_are_the_present_ones(self, api):
         """The one part of a reconstruction that genuinely does judge the
         past with the present, and it cannot be fixed — the version in force
