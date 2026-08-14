@@ -561,3 +561,87 @@ class TestTheContractVersionMovesOnlyForAMeaning:
         assert contract.validate_declaration(decl()) == []
         assert json.loads(json.dumps(payload([tranche()]))) == \
             payload([tranche()])
+
+
+class TestABrokenMetricBankStillOpensTheWindow:
+    """The whole of item 1, end to end and through the real Api.
+
+    The unit tests above the engine prove the bank refuses well. This proves
+    the thing that actually went wrong: `get_state` called `bank.meta()` with
+    nothing around it, `@guarded` turned the ValueError into `ok: false`, the
+    browser toasted it for four seconds with the line breaks collapsed and
+    never called `render()`. On a cold start that left the boot placeholder
+    on screen forever; on a warm one it left the last good screen up with no
+    sign anything was wrong.
+    """
+
+    def _break_the_bank(self, tmp_path, monkeypatch, *, parseable=True,
+                        cold=False):
+        """Edit the shipped bank the way a user would — in a file.
+
+        `cold` is the difference between the two cases and it is only about
+        what this program has already read. A mid-session edit leaves whatever
+        loaded at launch in memory, which is the version that goes on
+        answering; a cold start has nothing, so the caches are emptied to
+        stand for a process that has just begun.
+        """
+        import os
+        from engine import bank
+        src = (bank.APP_DIR / "config" / "metric-bank.yaml").read_text(
+            encoding="utf-8")
+        broken = (src.replace("      kind: median\n      observations: 5\n",
+                              "      kind: median\n      observations: 1\n", 1)
+                  if parseable else src.replace("entries:\n", "entries: [{\n",
+                                                1))
+        assert broken != src
+        d = tmp_path / "bank"
+        d.mkdir(exist_ok=True)
+        (d / "metric-bank.yaml").write_text(broken, encoding="utf-8")
+        monkeypatch.setattr(bank, "CONFIG_DIR", d)
+        bank._bank_refused.pop("metric-bank", None)
+        if cold:
+            bank._bank_cache.pop("metric-bank", None)
+            bank._definitions_cache.pop("metric-bank", None)
+        os.utime(d / "metric-bank.yaml", None)
+
+    def test_a_cold_start_on_a_broken_bank_still_renders(
+            self, strategies, tmp_path, monkeypatch):
+        """Nothing good was ever loaded, so there are no measures — and the
+        state still comes back `ok` with the journal list and the reason,
+        because the way out of this is to go and fix a file and that needs a
+        window that opens."""
+        from app import Api
+        strategies("verdicts")
+        journal_for("verdicts", "Mine")
+        self._break_the_bank(tmp_path, monkeypatch, parseable=False,
+                             cold=True)
+
+        state = Api().get_state()
+        assert state["ok"] is True
+        assert state["bank_problem"]["holding"] is False
+        assert state["bank_problem"]["problems"]
+        assert [j["name"] for j in state["journals"]] == ["Mine"]
+
+    def test_a_bad_edit_mid_session_keeps_the_figures_and_says_so(
+            self, strategies, tmp_path, monkeypatch):
+        """The warm case, which is the common one: the user is editing the
+        file while the program is running. The last good version goes on
+        answering, the securities still render, and the screen says the edit
+        did not take — the difference between "your figures are stale" and
+        "your figures are gone" being the whole point of reporting it."""
+        from app import Api
+        strategies("verdicts")
+        journal, _ = journal_for("verdicts", "Mine")
+        api = Api()
+        api.add_security("ACME", "Acme Widgets")
+        assert api.get_state()["bank_problem"] is None
+
+        self._break_the_bank(tmp_path, monkeypatch)
+        state = api.get_state()
+        assert state["ok"] is True
+        assert state["bank_problem"]["holding"] is True
+        assert any("line" in p for p in state["bank_problem"]["problems"])
+        # still a working journal, read from the version that loaded
+        assert state["journal"]["name"] == "Mine"
+        assert [s["ticker"] for s in state["securities"]] == ["ACME"]
+        assert state["bank_meta"], "the measures went with the bad edit"

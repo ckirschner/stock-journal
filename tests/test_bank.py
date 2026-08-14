@@ -8,6 +8,8 @@ missing explanation is incomplete, not a follow-up ticket, and prose saying
 so decays where a failing test does not.
 """
 
+import os
+
 import pytest
 
 from engine import bank
@@ -229,6 +231,130 @@ class TestTheBankSaysWhatChangedWhenItChanges:
         anything."""
         assert bank._check_release(bank.load_bank()) == []
         assert bank.definitions()["version"] in bank.changelog()
+
+
+class TestABadEditIsRefusedAndNotFatal:
+    """The bank is a file the user edits, so a bad edit is an ordinary event.
+
+    It used to be a dead window. `load_bank` raised, `app.get_state` called
+    `bank.meta()` with nothing around it, and one malformed line took the
+    whole screen down to its boot placeholder — no journal list, no tabs, and
+    no way back except finding the file and fixing it blind. A strategy that
+    fails to load has never behaved like that: it is skipped with a legible
+    message and the others still load. This is the same bargain for the other
+    file a user edits, and the same one the strategy loader already keeps.
+
+    Three things are pinned, because a fix that did any two would look like it
+    worked: the refusal keeps the last good version serving; it says which
+    entry and which LINE, which is what somebody looking at a file they have
+    just broken needs; and a file fixed afterwards is picked up.
+    """
+
+    HEAD = ("version: 1\nchangelog:\n  1: first\nentries:\n"
+            "  - id: probe\n    kind: computed\n"
+            "    estimator:\n      kind: instant\n"
+            "    label: Probe\n    unit: ratio\n")
+
+    def _write(self, tmp_path, monkeypatch, text, *, fresh=True):
+        (tmp_path / "probe.yaml").write_text(
+            "schema: ledger.metric-bank/1\n" + text, encoding="utf-8")
+        monkeypatch.setattr(bank, "CONFIG_DIR", tmp_path)
+        if fresh:
+            bank._bank_cache.pop("probe", None)
+            bank._bank_refused.pop("probe", None)
+            bank._definitions_cache.pop("probe", None)
+
+    def _touch(self, tmp_path):
+        """Move the mtime the way saving the file does. The cache is keyed on
+        it, so a test writing twice within one filesystem tick would be
+        testing the cache rather than the reload."""
+        p = tmp_path / "probe.yaml"
+        stamp = p.stat().st_mtime + 10
+        os.utime(p, (stamp, stamp))
+
+    def test_a_first_load_that_fails_still_says_what_is_wrong(
+            self, tmp_path, monkeypatch):
+        """Nothing to fall back to, so this one raises — but the sentence is
+        the same one, and `refusal` reports it without raising so a screen can
+        render it."""
+        self._write(tmp_path, monkeypatch,
+                    self.HEAD.replace("      kind: instant\n",
+                                      "      kind: nonsense\n"))
+        with pytest.raises(ValueError):
+            bank.load_bank("probe")
+        r = bank.refusal("probe")
+        assert r["holding"] is False
+        assert any("nonsense" in p for p in r["problems"])
+
+    def test_a_bad_edit_keeps_the_last_good_version_serving(
+            self, tmp_path, monkeypatch):
+        self._write(tmp_path, monkeypatch, self.HEAD)
+        assert bank.load_bank("probe")["entries"][0]["label"] == "Probe"
+
+        self._write(tmp_path, monkeypatch,
+                    self.HEAD.replace("    label: Probe\n",
+                                      "    label: Renamed\n")
+                    .replace("      kind: instant\n", "      kind: bogus\n"),
+                    fresh=False)
+        self._touch(tmp_path)
+        # still answering, and answering from the version that loaded
+        assert bank.load_bank("probe")["entries"][0]["label"] == "Probe"
+        r = bank.refusal("probe")
+        assert r["holding"] is True
+        assert any("bogus" in p for p in r["problems"])
+
+    def test_the_refusal_names_the_file_and_the_line(self, tmp_path,
+                                                     monkeypatch):
+        """A message naming only the entry is useful to somebody who can
+        already find the entry. The line is what the person who just broke it
+        needs, and the round-trip parser has known it all along."""
+        self._write(tmp_path, monkeypatch,
+                    self.HEAD.replace("      kind: instant\n",
+                                      "      kind: bogus\n"))
+        with pytest.raises(ValueError):
+            bank.load_bank("probe")
+        problems = bank.refusal("probe")["problems"]
+        # `- id: probe` is the sixth line of the document `_write` produces:
+        # the schema line, then version, changelog and its one entry, then
+        # `entries:`.
+        assert problems and all(
+            p.startswith("probe.yaml line 6:") for p in problems), problems
+        assert all("probe" in p for p in problems)
+        assert any("bogus" in p for p in problems)
+
+    def test_a_file_that_is_not_yaml_at_all_reports_where(self, tmp_path,
+                                                          monkeypatch):
+        """The one path that never reached a check, because it died in the
+        parser. It has a line too."""
+        self._write(tmp_path, monkeypatch, self.HEAD + "  - [unclosed\n")
+        with pytest.raises(ValueError):
+            bank.load_bank("probe")
+        [problem] = bank.refusal("probe")["problems"]
+        assert "not valid YAML" in problem and "line" in problem
+
+    def test_fixing_the_file_is_picked_up_without_a_restart(
+            self, tmp_path, monkeypatch):
+        """The half that makes holding the old version tolerable rather than
+        a trap."""
+        self._write(tmp_path, monkeypatch, self.HEAD)
+        bank.load_bank("probe")
+        self._write(tmp_path, monkeypatch,
+                    self.HEAD.replace("      kind: instant\n",
+                                      "      kind: bogus\n"), fresh=False)
+        self._touch(tmp_path)
+        assert bank.refusal("probe") is not None
+
+        self._write(tmp_path, monkeypatch,
+                    self.HEAD.replace("    label: Probe\n",
+                                      "    label: Fixed\n"), fresh=False)
+        self._touch(tmp_path)
+        assert bank.load_bank("probe")["entries"][0]["label"] == "Fixed"
+        assert bank.refusal("probe") is None
+
+    def test_the_shipped_bank_is_not_refused(self):
+        """The control. A refusal that fired on everything would pass every
+        test above and ship a program that never reads its own definitions."""
+        assert bank.refusal() is None
 
 
 class TestEveryFieldOfAMeasureHasBeenDecidedAbout:

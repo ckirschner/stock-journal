@@ -626,6 +626,24 @@ class Api:
                     "errors": r["errors"]} for r in reports if not r["ok"]]
         listed = journals.list_journals()
 
+        # The bank is a file the user edits, so a bad edit is an ordinary
+        # event and must not be a dead window. `bank.refusal` reports what is
+        # wrong with the version on disk and whether an earlier one is still
+        # being served; where one is, everything below runs on it exactly as
+        # before and the screen carries the problem. Where there is none —
+        # a broken file at a cold start — the state still renders, with no
+        # measures and the reason in place of them, because the way out of
+        # this is to go and fix a file and that needs a window that opens.
+        bank_problem = bank.refusal()
+        try:
+            bank_meta = bank.meta()
+        except Exception as e:                      # noqa: BLE001
+            bank_meta = {}
+            if bank_problem is None:                # not a refusal: say what
+                bank_problem = {"problems": [f"{type(e).__name__}: {e}"],
+                                "holding": False,
+                                "path": str(bank.bank_path("metric-bank"))}
+
         # A journal that cannot be read must not take the whole window down
         # with it: the list still renders, with the problem named, so the
         # user can open a different one rather than face a blank screen.
@@ -634,17 +652,24 @@ class Api:
             journal, record, chain, _ = self._open()
         except store.StoreError as e:
             journal, record, chain, problem = None, None, None, str(e)
+        # Nothing about a security survives a bank that will not load at all —
+        # every measure, every verdict and every question you answer is
+        # defined there — so the securities are not walked rather than walked
+        # with each of a dozen bank reads contained separately. The list of
+        # journals and the reason render, which is what the way out needs.
+        if not bank_meta:
+            journal = None
         if journal is None:
             return ok(journal=None, journals=listed, strategies=offers,
                       refused=refused, securities=[], journal_problem=problem,
-                      bank_meta=bank.meta(), ev_methods=EV_METHODS,
+                      bank_problem=bank_problem,
+                      bank_meta=bank_meta, ev_methods=EV_METHODS,
                       exit_reasons=EXIT_REASONS,
                       data_dir=str(store.data_dir()),
                       data_security=self._data_security())
 
         if journals.open_id() != journal["id"]:
             journals.set_open(journal["id"])
-        bank_meta = bank.meta()
         securities = journal.get("securities", [])
         entry_ids = list(bank_meta)
         priced = []             # effective-price views, for the analytics
@@ -789,6 +814,7 @@ class Api:
             measures_version=journals.measures_baseline(journal)["version"],
             securities=securities,
             bank_meta=bank_meta,
+            bank_problem=bank_problem,
             # The render types, so the view sorts and counts a state
             # whose meaning it does not know. It never learns which states
             # exist; it is told, every render.

@@ -66,6 +66,22 @@ def to_plain(node):
 
 _bank_cache: dict = {}
 
+# The version on disk that this program refused, per bank name, and why. Kept
+# beside the cache above rather than raised through every caller, because the
+# two facts a reader needs — what is wrong, and what the program is doing
+# meanwhile — are one answer and used to be neither.
+#
+# A strategy that fails to load is skipped with a legible message and the
+# others still load; that is engine/strategy_loader.py and it has always been
+# the rule for the other file a user edits. This one raised. It raised through
+# `meta()`, which app.get_state calls with nothing around it, so a single
+# malformed line took the window down to its boot placeholder — no journal
+# list, no tabs, no way back except finding the file and fixing it blind, with
+# no message naming where. There is no "skip" available for the bank, so the
+# equivalent is this: refuse the new version, say which entry and which line,
+# and go on serving the last one that loaded.
+_bank_refused: dict = {}
+
 # Kinds whose estimator reads a fixed-length window of annual observations, so
 # `observations` says something and its absence is a hole. A streak has no
 # fixed window and may leave it out; a reading at one date or over a trailing
@@ -596,7 +612,54 @@ def _check_release(doc) -> list:
     return problems
 
 
+def _at(node, path) -> str:
+    """"metric-bank.yaml line 232" for a parsed node, or the file name alone.
+
+    The round-trip parser records where every entry started, and the whole
+    point of refusing an edit is that the person who made it can go back to
+    it. A message naming the entry is only useful to somebody who can already
+    find the entry; a message naming the line is useful to somebody looking at
+    a file they have just broken. Best effort by design — a node with no
+    position still gets a sentence, because a missing line number must never
+    be the reason a problem goes unreported.
+    """
+    line = getattr(getattr(node, "lc", None), "line", None)
+    if isinstance(line, int) and not isinstance(line, bool):
+        return f"{path.name} line {line + 1}"
+    return path.name
+
+
+def _problems(doc, path) -> list:
+    """Everything wrong with a parsed bank document, each sentence saying
+    where it is."""
+    schema = str(doc.get("schema") or "")
+    if not schema.startswith("ledger.metric-bank/"):
+        return [f'{path.name} does not declare a metric-bank schema '
+                f'(found "{schema or "nothing"}").']
+    entries = list(doc.get("entries") or [])
+    problems = [f"{_at(e, path)}: {p}" for e in entries
+                for p in _check_estimator(e) + _check_applicability(e)
+                + _check_rendering(e)]
+    # The three below read across entries or read the file as a whole, so no
+    # single line is the answer; each names the entries it is about instead.
+    problems += [f"{path.name}: {p}" for p in
+                 _check_propagation(entries) + _check_clock(entries)
+                 + _check_release(doc)]
+    return problems
+
+
+def _refusal_message(path, problems) -> str:
+    return (f"{path.name} cannot be loaded:\n  " + "\n  ".join(problems))
+
+
 def load_bank(name: str = "metric-bank"):
+    """The bank as it should be read right now.
+
+    Which is the version on disk when that version loads, and the last version
+    that loaded when it does not. A refusal is recorded in `_bank_refused` and
+    reported through `refusal()` — see the note above that dict for why this
+    does not raise past the first load.
+    """
     path = bank_path(name)
     if not path.exists():
         raise FileNotFoundError(
@@ -608,23 +671,67 @@ def load_bank(name: str = "metric-bank"):
     held = _bank_cache.get(name)
     if held and held[0] == mtime:
         return held[1]
-    doc = load_yaml(path) or {}
-    schema = str(doc.get("schema") or "")
-    if not schema.startswith("ledger.metric-bank/"):
-        raise ValueError(
-            f'{path.name} does not declare a metric-bank schema '
-            f'(found "{schema or "nothing"}").')
-    entries = list(doc.get("entries") or [])
-    problems = [p for e in entries
-                for p in _check_estimator(e) + _check_applicability(e)
-                + _check_rendering(e)]
-    problems += _check_propagation(entries) + _check_clock(entries)
-    problems += _check_release(doc)
+
+    # A version already refused is refused again without re-reading it. The
+    # mtime has moved away from the good document by definition, so without
+    # this the whole file would be re-parsed and re-checked on every render
+    # for as long as the edit stood — which is exactly while the user is
+    # working on it.
+    refused = _bank_refused.get(name)
+    if refused and refused["mtime"] == mtime \
+            and refused["path"] == str(path):
+        if held:
+            return held[1]
+        raise ValueError(refused["message"])
+
+    try:
+        doc = load_yaml(path) or {}
+    except Exception as e:                # noqa: BLE001 — a bad file reports
+        mark = getattr(e, "problem_mark", None)
+        where = (f"{path.name} line {mark.line + 1}"
+                 if mark is not None and isinstance(getattr(mark, "line", None),
+                                                    int) else path.name)
+        problems = [f"{where}: this is not valid YAML — "
+                    + " ".join(str(getattr(e, "problem", None) or e).split())]
+        doc = None
+    else:
+        problems = _problems(doc, path)
+
     if problems:
-        raise ValueError(f"{path.name} cannot be loaded:\n  "
-                         + "\n  ".join(problems))
+        _bank_refused[name] = {"mtime": mtime, "problems": problems,
+                               "message": _refusal_message(path, problems),
+                               "path": str(path), "holding": held is not None}
+        if held:
+            return held[1]
+        raise ValueError(_refusal_message(path, problems))
+
+    _bank_refused.pop(name, None)
     _bank_cache[name] = (mtime, doc)
     return doc
+
+
+def refusal(name: str = "metric-bank"):
+    """What is wrong with the file on disk, or None when nothing is.
+
+        {"problems": [str, ...], "holding": bool, "path": str}
+
+    `holding` is whether the program is still answering from an earlier
+    version. It is the difference between "your edit has not taken effect" and
+    "there is nothing to read", and a screen that could not tell them apart
+    would be telling somebody their figures are current when they are not.
+
+    Called for its side effect as much as its answer: it loads, so asking
+    picks up a file that has since been fixed.
+    """
+    try:
+        load_bank(name)
+    except Exception:                     # noqa: BLE001 — reporting, not doing
+        pass
+    held = _bank_refused.get(name)
+    if not held:
+        return None
+    return {"problems": list(held["problems"]), "holding": held["holding"],
+            "path": held["path"]}
 
 
 def bank_index(doc) -> dict:

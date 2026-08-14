@@ -2825,11 +2825,52 @@ function allocationView() {
 }
 
 /* ---------------------------------------------------------------- render */
+/* The metric bank refused, and what the program is doing about it.
+   Persistent and at the top of every screen rather than a toast: a toast
+   lasts four seconds, strips the line breaks that separate one problem from
+   the next, and cannot be recalled — and the thing it is reporting is a file
+   the user is in the middle of editing, which they will be looking at for
+   longer than four seconds.
+
+   The two cases read differently on purpose. Still holding an earlier
+   version means the figures on screen are real but are not what the file now
+   says; holding nothing means there are no definitions at all. Telling
+   somebody their figures are current when they are not is the failure this
+   distinction exists to prevent. */
+const bankProblemBox = (p) => !p ? "" :
+  `<div class="notice">
+     <h4>${p.holding
+       ? "Your edit to the measure definitions was not loaded"
+       : "The measure definitions could not be read"}</h4>
+     <p>${p.holding
+       ? "Everything below is still being read from the last version that "
+         + "loaded, so the figures are real — they are just not what the "
+         + "file says now. Fix the problem and it will be picked up."
+       : "There are no measure definitions, so nothing can be computed or "
+         + "shown about a security until the file loads."}</p>
+     ${p.problems.map((e) => `<p class="mono">${esc(e)}</p>`).join("")}
+     <p class="locked">${esc(p.path)}</p>
+   </div>`;
+
 function render() {
   if (!S) return;
   renderMast(); renderTabs();
   const v = $("view");
-  if (!S.journal) { v.innerHTML = welcomeView(); return; }
+  const bank = bankProblemBox(S.bank_problem);
+  if (!S.journal) { v.innerHTML = bank + welcomeView(); return; }
+  if (bank) {
+    /* Drawn above whatever the tab renders, so it is visible from wherever
+       the user happens to be standing when they edit the file. */
+    v.innerHTML = bank;
+    const rest = document.createElement("div");
+    v.appendChild(rest);
+    renderTab(rest);
+    return;
+  }
+  renderTab(v);
+}
+
+function renderTab(v) {
   if (openTicker) {
     const s = find(openTicker);
     if (!s) { closeSecurity(); return render(); }
