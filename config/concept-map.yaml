@@ -612,12 +612,24 @@ inputs:
       - us-gaap:SecuredDebtNoncurrent
       - us-gaap:UnsecuredDebtNoncurrent
       - us-gaap:SubordinatedDebtNoncurrent
-      - us-gaap:LineOfCreditFacilityAmountOutstanding
+      # us-gaap:LineOfCreditFacilityAmountOutstanding is deliberately NOT
+      # here, and used to be. The taxonomy defines it as the amount drawn
+      # under a facility at the balance-sheet date and says nothing about
+      # when it is due — a revolver can sit in either column, and which one
+      # is the filer's to state. It was the one element in this list whose
+      # placement was a guess rather than a reading, which matters more than
+      # it looks: the zero_guard below treats a line some split PLACES as no
+      # longer evidence that the split is unknowable, so a guessed placement
+      # here would have turned into a confident zero over there. It stays a
+      # component of total_debt, which is where an unclassified borrowing is
+      # meant to land.
       - us-gaap:OtherLongTermDebtNoncurrent
       - us-gaap:LongTermDebtAndCapitalLeaseObligationsNoncurrent
+      - us-gaap:LongTermDebtAndCapitalLeaseObligations
       - us-gaap:JuniorSubordinatedDebentureOwedToUnconsolidatedSubsidiaryTrustNoncurrent
     lease_combined:
       - us-gaap:LongTermDebtAndCapitalLeaseObligationsNoncurrent
+      - us-gaap:LongTermDebtAndCapitalLeaseObligations
     zero_guard: total_debt
     notes: >
       On unclassified balance sheets (REITs, banks) there is no noncurrent
@@ -644,6 +656,22 @@ inputs:
       zero_guard names that spec — so a filer with only this line comes back
       absent here rather than zero, which is what it was actually protecting
       against.
+
+      us-gaap:LongTermDebtAndCapitalLeaseObligations is here and is NOT that
+      trade. The taxonomy defines it as the NONCURRENT amount of debt and
+      capital-lease obligations — the current portion has its own element,
+      ...ObligationsCurrent, which short_term_debt above already lists. So
+      placing it is reading the definition, not judging what it probably
+      contains, and it is served with nothing to warn about. It sat only in
+      total_debt's unclassified block, which was the conservative-mapping
+      shape the fallback above was removed for: every filer tagging it — the
+      combined-caption ones (Target, Kraft Heinz) and the single-line ones
+      (Alphabet) — got a total and no split, so a measure needing the split
+      read absent while the filer had said, in the element's own definition,
+      which side it was on.
+
+      It is lease_combined here for the same reason it is in total_debt: the
+      element folds finance leases in, so they are not added on top again.
 
   total_debt:
     label: Total debt (all interest-bearing borrowings)
@@ -678,7 +706,31 @@ inputs:
       - us-gaap:UnsecuredDebtNoncurrent
       - us-gaap:SubordinatedDebtNoncurrent
       - us-gaap:OtherLongTermDebtNoncurrent
-      # unclassified (REIT-style balance sheets)
+      # Unclassified (REIT-style balance sheets). Every element below is a
+      # borrowing whose element DEFINITION says nothing about which side of a
+      # current/noncurrent split it falls on — a filer printing one on an
+      # unclassified face has not said, and neither has the taxonomy. That is
+      # what makes this block the right home for them and the wrong home for
+      # anything the taxonomy does place: an element defined as the noncurrent
+      # amount, listed only here, is a total the program can read and a split
+      # it refuses to make, which is a worse answer than either.
+      #
+      # Swept element by element against the us-gaap definitions. Only
+      # LongTermDebtAndCapitalLeaseObligations was misplaced, and it has moved
+      # up to long_term_debt; nothing else in this block carries Current or
+      # Noncurrent in its name or its definition. Two are worth a sentence so
+      # the next sweep does not have to re-derive them:
+      #
+      #   us-gaap:LongTermDebt is the taxonomy's TOTAL long-term borrowing,
+      #   including the portion due within a year. Its name reads noncurrent
+      #   and its definition is not, which is exactly the misreading that put
+      #   the removed fallback in long_term_debt above. It stays here.
+      #
+      #   us-gaap:DebtInstrumentCarryingAmount is a per-instrument note
+      #   element, not a face subtotal. It is reachable here only because
+      #   aggregates read the face and nothing else, so a filer would have to
+      #   print it AS a face line for it to count — which is the filer saying
+      #   it is their debt caption.
       - us-gaap:LongTermDebt
       - us-gaap:NotesPayable
       - us-gaap:LoansPayable

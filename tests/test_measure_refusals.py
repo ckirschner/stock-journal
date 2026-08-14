@@ -122,6 +122,134 @@ class TestCashConversionWillNotDivideByALoss:
             in r["reason"]
 
 
+class TestCashConversionWillNotDivideByARoundingError:
+    """One step above zero, where the refusal above stopped.
+
+    The bank's own `misfires` prose has said since the entry was written that
+    a profit small enough to be a rounding error against revenue makes the
+    ratio enormous without saying anything about conversion — "the number is
+    right and the reading is not". Nothing performed it. A near-zero profit
+    cleared a floor of 0.90 by twenty-five times, in the passing direction, on
+    a `higher_is_better` measure.
+
+    A ratio against the company's own revenue and not a figure in dollars,
+    because a floor that refuses a corner shop and waves through a
+    conglomerate is a test of size rather than of thinness.
+    """
+
+    def test_a_thin_but_real_margin_still_computes(self):
+        """The control, and the one that decides whether the level is usable.
+        A grocer earning 1.5% of revenue is an ordinary business and its
+        conversion is an ordinary reading."""
+        r = entry(five(revenue=10000.0, net_income=150.0, cfo=250.0,
+                       capex=50.0), "cash_conversion_median_5y")
+        assert r["status"] == "computed"
+        assert r["value"] == pytest.approx((250 - 50) / 150)
+
+    def test_a_rounding_error_profit_is_refused(self):
+        """Net income at 0.05% of revenue, cash unremarkable. The ratio would
+        be 40 — a company that converted forty times its profit into cash,
+        which is a statement about the profit vanishing and not about cash."""
+        r = entry(five(revenue=10000.0, net_income=5.0, cfo=250.0,
+                       capex=50.0), "cash_conversion_median_5y")
+        assert r["status"] == "absent"
+        assert "net income (the denominator) is under 1% of revenue" \
+            in r["reason"]
+
+    def test_the_condition_it_names_is_one_the_entry_declares(self):
+        from engine import bank
+        r = entry(five(revenue=10000.0, net_income=5.0),
+                  "cash_conversion_median_5y")
+        assert any(c in r["reason"] for c in
+                   bank.data_conditions()["cash_conversion_median_5y"])
+
+    def test_one_thin_year_refuses_the_window_and_not_just_that_year(self):
+        """Any year, like the loss test above and for the same reason. A
+        median discards an outlier, and a rounding-error year is not reliably
+        an outlier: where the cash is small too it divides one rounding error
+        by another and lands somewhere ordinary, in the middle of the sorted
+        five, describing nothing.
+
+        Here the thin year would read 1.6 — indistinguishable from the four
+        real ones, and carrying none of their meaning."""
+        r = entry(five(revenue=10000.0, net_income=800.0, cfo=1250.0,
+                       capex=50.0,
+                       per_year={"2021-12-31": {"net_income": 5.0,
+                                                "cfo": 58.0, "capex": 50.0}}),
+                  "cash_conversion_median_5y")
+        assert r["status"] == "absent"
+        assert "2021-12-31" in r["reason"]
+
+    def test_revenue_it_cannot_read_refuses_rather_than_serves(self):
+        """The gate is measured against revenue, so a filer tagging no
+        revenue total cannot be tested — and a gate that cannot be evaluated
+        has not been passed. This is roic_median_5y's defect, checked here
+        before it can be repeated."""
+        filings = five(revenue=10000.0, net_income=5.0)
+        for f in filings:
+            f["facts"] = [x for x in f["facts"]
+                          if x["concept"] != "us-gaap:Revenues"]
+        r = entry(filings, "cash_conversion_median_5y")
+        assert r["status"] == "absent"
+        assert "rounding error" in r["reason"]
+
+
+class TestEveryMeasureBuiltOnFreeCashFlowSaysSo:
+    """`inputs.entries` is what a refusal propagates along, so an empty one is
+    a sentence and not a silence: it says an industry for which free cash flow
+    means nothing leaves this measure untouched.
+
+    Four measures reproduce free cash flow through `_fcf_per_year` rather than
+    reading the entry — the entry answers a trailing twelve months and these
+    answer fiscal years — and all four declared nothing. Their gates were
+    hand-maintained, which is the arrangement bank._check_propagation exists
+    to remove.
+    """
+
+    BUILT_ON_FCF = ("cash_conversion_median_5y", "payout_to_fcf_median_5y",
+                    "fcf_margin_median_5y", "total_debt_to_avg_fcf_5y")
+
+    def test_each_one_declares_it(self):
+        from engine import bank
+        idx = bank.bank_index(bank.load_bank())
+        for eid in self.BUILT_ON_FCF:
+            declared = (idx[eid].get("inputs") or {}).get("entries") or []
+            assert "fcf_ttm" in list(declared), eid
+
+    def _probe(self, cls):
+        """Every entry the loader would refuse if free cash flow declared
+        `cls`. This is the real check from engine/bank.py, not a copy of it."""
+        from engine import bank
+        entries = [dict(e) for e in bank.load_bank()["entries"]]
+        for e in entries:
+            if e["id"] == "fcf_ttm":
+                e["not_meaningful_when"] = [
+                    {"industry": [cls], "because": "a probe"}]
+        return {p.split(" is built on")[0]
+                for p in bank._check_propagation(entries)}
+
+    def test_the_declaration_is_the_thing_that_propagates_the_gate(self):
+        """Not a note beside the code — the check that refuses the file.
+
+        Give free cash flow a real-estate gate and the two consumers that do
+        not carry one are named. Before they declared the dependency, neither
+        was: the propagation rule saw four measures built on nothing, and the
+        only thing standing between a gated ingredient and four confident
+        numbers was somebody remembering."""
+        caught = self._probe("real-estate")
+        assert "fcf_margin_median_5y" in caught
+        assert "total_debt_to_avg_fcf_5y" in caught
+
+    def test_a_consumer_already_gated_as_widely_is_not_named(self):
+        """The other direction, and what keeps the rule from being noise. Cash
+        conversion and payout already decline real estate — for two different
+        reasons, neither of them this one — so a gate arriving on their
+        ingredient asks nothing of them."""
+        caught = self._probe("real-estate")
+        assert "cash_conversion_median_5y" not in caught
+        assert "payout_to_fcf_median_5y" not in caught
+
+
 class TestPayoutOverFreeCashFlowWillNotReportABorrowedDividend:
 
     def test_five_ordinary_years_still_compute(self):

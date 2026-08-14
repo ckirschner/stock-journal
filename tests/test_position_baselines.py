@@ -537,3 +537,241 @@ def test_a_bare_number_still_cannot_reach_a_baseline():
         portfolio.add_lot(s, decision("commit"), 10, 40.0, "2025-03-01",
                           values={"fcf_ttm": 150.0})
     assert s["lots"] == []
+
+
+# -- a definition that moved after the purchase ------------------------------
+# The other way a baseline goes quietly wrong, and the one a restatement guard
+# cannot catch. The frozen figure is exactly what was seen; today's figure is
+# exactly what is seen now; and if the measure was redefined in between they
+# are readings of two different things, so the distance between them is a
+# distance in nothing. It reaches a rule as drift.
+
+def journal_with(*changes):
+    """A journal whose measure-change record holds these entries. Built as the
+    record's own shape rather than by driving the bank, because what is under
+    test is the join between a recorded change and a frozen reading, and a
+    real bank edit would have to move a real formula to exercise one row."""
+    return {"measure_changes": [
+        {"seq": i + 1, "seen": seen, "kind": "definitions",
+         "added": [], "removed": [], "moved": list(moved),
+         "restated": list(restated), "changelog": [], "notes": [],
+         "reason_owed": True, "reason": None}
+        for i, (seen, moved, restated) in enumerate(changes)]}
+
+
+def moved(field, was, now, eid="fcf_ttm"):
+    return {"id": eid, "name": "Free cash flow", "field": field,
+            "from": was, "to": now}
+
+
+def restated(field, eid="fcf_ttm"):
+    return {"id": eid, "name": "Free cash flow", "field": field,
+            "digest": "0d0d0d0d0d0d"}
+
+
+def anchored(s, journal, as_of=None):
+    ctx = context.build_context(s, [s], {}, {}, as_of=as_of, journal=journal)
+    return ctx["position"]["baselines"]
+
+
+def frozen_at(s, day):
+    """Stamp the purchase's snapshot, since what a definition change is placed
+    against is when the figures were worked out and not the day traded — a
+    backfilled purchase is dated years ago and was computed this morning."""
+    s["lots"][0]["snapshot"]["frozen"] = day
+    return s
+
+
+class TestAFigureIsNotSubtractedFromADifferentMeasure:
+    """The gate, and the reason it is a gate rather than a caution.
+
+    What a baseline feeds is one subtraction — today's reading minus the
+    frozen one — reported as how far the business has moved since you bought,
+    with a rule firing on the answer. Where the measure was redefined in
+    between, the answer is a five-year median taken from a three-year one.
+    Principle 4 is explicit that a caution is read by a person and ignored by
+    the arithmetic, so the number is withheld rather than qualified: the
+    strategy is never handed the figure it would have subtracted.
+    """
+
+    def held(self, values=None):
+        s = security()
+        buy(s, "2024-03-01", values=values or {"fcf_ttm": qual(4.0)})
+        return frozen_at(s, "2024-03-01T12:00:00-05:00")
+
+    def test_a_window_that_narrowed_after_the_purchase_withholds_the_figure(
+            self):
+        """The case this exists for. Five annual observations becoming three
+        is a different measure under the same name, and nothing about the
+        subtraction looks wrong afterwards.
+
+        Both anchors, because they are two purchases and not two views of
+        one: a strategy asking how far a business has drifted since it was
+        first bought and one asking whether it got worse since the last
+        addition read different lots, and gating one of them would leave the
+        other subtracting across the same redefinition.
+        """
+        s = security()
+        buy(s, "2024-03-01", values={"fcf_ttm": qual(4.0)})
+        buy(s, "2024-09-01", values={"fcf_ttm": qual(5.0)})
+        for lot in s["lots"]:
+            lot["snapshot"]["frozen"] = f'{lot["date"]}T12:00:00-05:00'
+        j = journal_with(("2026-08-13T09:00:00-04:00",
+                          [moved("observations read", 5, 3)], []))
+        anchors_now = anchored(s, j)
+        assert anchors_now[FIRST]["lot"] != anchors_now[LAST]["lot"]
+        for anchor in (FIRST, LAST):
+            got = reading(anchors_now[anchor], "fcf_ttm")
+            assert got["status"] == "absent", anchor
+            assert "value" not in got, anchor
+
+    def test_the_absence_says_which_day_and_what_moved(self):
+        """A drift figure that silently disappears teaches nothing. Somebody
+        watching an exit stop firing has to be able to find out that the exit
+        did not stop firing — the comparison did."""
+        s = self.held()
+        j = journal_with(("2026-08-13T09:00:00-04:00",
+                          [moved("observations read", 5, 3)], []))
+        why = reading(anchored(s, j)[FIRST], "fcf_ttm")["reason"]
+        assert "2024-03-01" in why           # when it was worked out
+        assert "2026-08-13" in why           # when the definition moved
+        assert "observations read moved from 5 to 3" in why
+        assert "would not be a distance in one measure" in why
+
+    def test_a_changed_formula_withholds_it_too_without_quoting_itself(self):
+        s = self.held()
+        j = journal_with(("2026-08-13T09:00:00-04:00", [],
+                          [restated("how it is worked out")]))
+        why = reading(anchored(s, j)[FIRST], "fcf_ttm")["reason"]
+        assert "how it is worked out changed" in why
+        assert "0d0d0d" not in why           # a digest is not a sentence
+
+    def test_a_move_that_leaves_the_readings_comparable_changes_nothing(self):
+        """The narrowness is the point. A renamed measure, a corrected
+        format, a reworded condition the formula refuses on — none of them
+        makes two readings readings of different things, and gating on any
+        bank change at all would take a working drift rule off a journal
+        because somebody fixed a typo."""
+        s = self.held()
+        for field in ("name", "format", "favourable direction",
+                      "does not describe", "judged against"):
+            j = journal_with(("2026-08-13T09:00:00-04:00",
+                              [moved(field, "a", "b")], []))
+            got = reading(anchored(s, j)[FIRST], "fcf_ttm")
+            assert got["status"] == "known", (field, got)
+            assert got["value"] == 4.0
+        for field in ("what the formula refuses on",
+                      "what nothing here can settle"):
+            j = journal_with(("2026-08-13T09:00:00-04:00", [],
+                              [restated(field)]))
+            assert reading(anchored(s, j)[FIRST],
+                           "fcf_ttm")["status"] == "known", field
+
+    def test_a_definition_that_moved_before_the_purchase_changes_nothing(self):
+        """Both readings were taken under the definition standing then. The
+        comparison is between them and not against history."""
+        s = self.held()
+        j = journal_with(("2023-01-04T09:00:00-05:00",
+                          [moved("observations read", 5, 3)], []))
+        assert reading(anchored(s, j)[FIRST], "fcf_ttm")["status"] == "known"
+
+    def test_only_the_measure_that_moved_goes_quiet(self):
+        s = security()
+        buy(s, "2024-03-01", values={"fcf_ttm": qual(4.0),
+                                     "pe_ttm": qual(11.0)})
+        frozen_at(s, "2024-03-01T12:00:00-05:00")
+        j = journal_with(("2026-08-13T09:00:00-04:00",
+                          [moved("observations read", 5, 3)], []))
+        anchor = anchored(s, j)[FIRST]
+        assert reading(anchor, "fcf_ttm")["status"] == "absent"
+        assert reading(anchor, "pe_ttm")["status"] == "known"
+
+    def test_a_measure_that_went_and_came_back_is_not_the_same_measure(self):
+        """No field ever moved across the gap, so nothing else would notice.
+        A definition can be replaced whole between a removal and an addition,
+        and the id is the only thing that survived."""
+        s = self.held()
+        j = {"measure_changes": [
+            {"seq": 1, "seen": "2026-08-13T09:00:00-04:00",
+             "removed": [{"id": "fcf_ttm", "name": "Free cash flow"}],
+             "added": [], "moved": [], "restated": []},
+            {"seq": 2, "seen": "2026-09-01T09:00:00-04:00",
+             "removed": [], "moved": [], "restated": [],
+             "added": [{"id": "fcf_ttm", "name": "Free cash flow",
+                        "definition": {"states": {}, "restates": {}}}]}]}
+        got = reading(anchored(s, j)[FIRST], "fcf_ttm")
+        assert got["status"] == "absent"
+        assert "the measure was removed" in got["reason"]
+        assert "once more since" in got["reason"]
+
+    def test_a_field_this_build_has_never_heard_of_counts(self):
+        """Fails closed. A field added to a definition later, and not thought
+        about here, takes a drift figure off the screen with a reason — which
+        is noticed. The other default subtracts two different measures and is
+        not."""
+        s = self.held()
+        j = journal_with(("2026-08-13T09:00:00-04:00",
+                          [moved("some later idea", 1, 2)], []))
+        assert reading(anchored(s, j)[FIRST], "fcf_ttm")["status"] == "absent"
+
+    def test_a_purchase_with_no_stamp_is_never_placed_against_the_record(
+            self):
+        """A snapshot that cannot say when it was worked out cannot be told
+        from one frozen this morning, and guessing is the failure being
+        guarded against. It stays comparable rather than being gated on a
+        guess — the record says what it says, and it does not say this."""
+        s = self.held()
+        s["lots"][0]["snapshot"].pop("frozen")
+        j = journal_with(("2026-08-13T09:00:00-04:00",
+                          [moved("observations read", 5, 3)], []))
+        assert reading(anchored(s, j)[FIRST], "fcf_ttm")["status"] == "known"
+
+    def test_no_journal_gates_nothing(self):
+        """Every context built without one — the engine tests above, and any
+        caller with no record to consult. There is no record saying a measure
+        moved, so nothing here may claim one did."""
+        s = self.held()
+        assert reading(anchors(s)[FIRST], "fcf_ttm")["status"] == "known"
+
+
+class TestTheGateReachesTheRuleAndNotJustTheContext:
+    """The seam that matters: a strategy asks the host how far a measure has
+    moved, and the host answers. Pinned end to end rather than on the context
+    node alone, because what the context withholds only counts if the
+    citation that reads it comes back unanswered rather than falling through
+    to something."""
+
+    def cited(self, journal):
+        from engine import contract
+        s = security()
+        buy(s, "2024-03-01", values={"fcf_ttm": qual(4.0)})
+        frozen_at(s, "2024-03-01T12:00:00-05:00")
+        ctx = context.build_context(s, [s], {}, {}, journal=journal)
+        # A reading now, so the only thing missing is the baseline.
+        ctx["measures"]["fcf_ttm"]["current"] = {
+            "status": "known", "value": 9.0, "source": "computed",
+            "cautions": [], "provenance": []}
+        item = {"measure": "fcf_ttm", "since": FIRST,
+                "comparator": "at_least", "threshold": -1.0}
+        rows, errors = contract.resolve_evidence(
+            {"name": "Fixture", "values": []}, ctx, [item])
+        assert errors == [], errors
+        return contract.test(ctx, item), rows[0]
+
+    def test_the_distance_is_answered_where_the_measure_did_not_move(self):
+        from engine import contract
+        outcome, row = self.cited(journal_with())
+        assert row["observed"]["value"] == 5.0
+        assert outcome == contract.PASS
+
+    def test_the_distance_is_unknown_where_it_did(self):
+        """Never a pass, never a zero, and never a number with a warning
+        beside it. The rule cannot fire on a comparison that was not made."""
+        from engine import contract
+        outcome, row = self.cited(journal_with(
+            ("2026-08-13T09:00:00-04:00",
+             [moved("observations read", 5, 3)], [])))
+        assert outcome == contract.UNKNOWN
+        assert row["observed"]["status"] == "absent"
+        assert "value" not in row["observed"]
+        assert "what the measure means moved" in row["observed"]["reason"]

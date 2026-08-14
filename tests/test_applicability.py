@@ -106,7 +106,9 @@ class TestTheConditionIsDeclaredAndNotProse:
         from ruamel.yaml import YAML
         y = YAML()
         buf = io.StringIO()
-        y.dump({"schema": "ledger.metric-bank/1", "entries": entries}, buf)
+        y.dump({"schema": "ledger.metric-bank/1", "version": 1,
+                "changelog": {1: "The first release of this probe."},
+                "entries": entries}, buf)
         path.write_text(buf.getvalue(), encoding="utf-8")
         return path
 
@@ -390,30 +392,49 @@ def _cited_conditions():
             out.append(" ".join(got.split()))
         return tuple(out)
 
-    # A helper that hands two of its own parameters to not_meaningful passes
-    # the question on rather than answering it, so the pair to read is at the
-    # call one level out — where the entry it is being asked for is known.
-    forwards = {"not_meaningful": (0, 1)}
-    for fn in [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]:
-        params = [a.arg for a in fn.args.args]
-        for call in ast.walk(fn):
-            if isinstance(call, ast.Call) \
-                    and getattr(call.func, "id", None) == "not_meaningful" \
-                    and len(call.args) >= 2:
-                named = [getattr(a, "id", None) for a in call.args[:2]]
-                if all(n in params for n in named):
-                    forwards[fn.name] = tuple(params.index(n) for n in named)
+    # A helper that hands two of its own parameters to a refusal passes the
+    # question on rather than answering it, so the pair to read is at the call
+    # one level out — where the entry it is being asked for is known.
+    #
+    # Followed to a fixed point, and a helper may forward more than one pair.
+    # Both of those were needed the moment `_cagr` stopped writing its own
+    # refusals: it forwards TWO pairs (a base condition and an end one) to
+    # `_not_meaningful_absence`, and `_cagr_result` forwards both of those on
+    # again before either reaches a literal. A single pass keeping one pair per
+    # function saw neither, and four conditions that are now perfectly
+    # readable would have had to be declared unreadable instead.
+    forwards = {"not_meaningful": {(0, 1)},
+                "_not_meaningful_absence": {(0, 1)}}
+    functions = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]
+    growing = True
+    while growing:
+        growing = False
+        for fn in functions:
+            params = [a.arg for a in fn.args.args]
+            for call in ast.walk(fn):
+                if not isinstance(call, ast.Call):
+                    continue
+                for where in forwards.get(getattr(call.func, "id", None),
+                                          ()) or ():
+                    if max(where) >= len(call.args):
+                        continue
+                    named = [getattr(call.args[i], "id", None) for i in where]
+                    if not all(n in params for n in named):
+                        continue
+                    pair = tuple(params.index(n) for n in named)
+                    held = forwards.setdefault(fn.name, set())
+                    if pair not in held:
+                        held.add(pair)
+                        growing = True
 
     pairs = set()
     for call in ast.walk(tree):
         if not isinstance(call, ast.Call):
             continue
-        where = forwards.get(getattr(call.func, "id", None))
-        if where is None:
-            continue
-        got = literals(call, where)
-        if got:
-            pairs.add(got)
+        for where in forwards.get(getattr(call.func, "id", None), ()) or ():
+            got = literals(call, where)
+            if got:
+                pairs.add(got)
     return pairs
 
 
@@ -429,15 +450,16 @@ def _cited_conditions():
 # to the bank and performed nowhere fails this file, and the author is asked
 # which of the two it is. It should shrink.
 ENFORCED_BY_SHARED_MACHINERY = {
-    # _cagr and _appeared_rather_than_grew, over four windows and two inputs
-    ("revenue_cagr_5y", "mean revenue over the three base years is zero or negative"),
+    # _appeared_rather_than_grew, over three entries. The four base-mean
+    # conditions that used to sit here are gone: _cagr takes the entry it is
+    # answering for now, so each pair is a literal at the entry's own
+    # function and the scan above reads it. That is the list shrinking for
+    # the reason it is supposed to — the condition became citable, not
+    # because anyone decided to stop checking it.
     ("revenue_cagr_5y", "fewer than eight fiscal years of revenue are available on one accounting basis"),
-    ("revenue_cagr_3y", "mean revenue over the three base years is zero or negative"),
     ("revenue_cagr_3y", "fewer than six fiscal years of revenue are available on one accounting basis"),
-    ("net_income_cagr_5y", "mean net income over the three base years is zero or negative"),
     ("net_income_cagr_5y", "fewer than eight fiscal years of net income are available on one accounting basis"),
     ("net_income_cagr_5y", "mean net income over the three base years is at most a tenth of the mean over the three end years, AND the base years' net margin is under half the end years'"),
-    ("eps_cagr_5y", "mean diluted EPS over the three base years is zero or negative"),
     ("eps_cagr_5y", "fewer than eight fiscal years of diluted EPS are available on one accounting basis"),
     ("eps_cagr_5y", "mean net income over the three base years is at most a tenth of the mean over the three end years, AND the base years' net margin is under half the end years'"),
     ("earnings_base_share_5y", "fewer than eight fiscal years of net income are available on one accounting basis"),
@@ -461,7 +483,6 @@ ENFORCED_BY_SHARED_MACHINERY = {
     ("pe_to_own_5y_median_pe", "fewer than 20 trailing quarters of P/E are available"),
     ("profitable_years_10y", "fewer than ten fiscal years of filings are available"),
     ("incremental_roic_5y", "fewer than eight fiscal years are available on one accounting basis"),
-    ("incremental_roic_5y", "invested capital did not grow across the window"),
     ("incremental_roic_5y", "pre-tax income in any year of the window is zero or negative"),
     ("goodwill_impairment_to_equity_5y", "any year in the window has no resolvable impairment figure"),
     ("consecutive_capital_return_years", "a year in the run paid no dividend and has no resolvable repurchase figure"),
@@ -471,20 +492,40 @@ ENFORCED_BY_SHARED_MACHINERY = {
 }
 
 
-# Every way a formula can attribute a sentence to the metric bank. Matched
-# case-insensitively against the string constants in engine/compute.py that a
-# reader could be shown. Widening this list is cheap and narrowing it is not:
-# each phrase names the bank as the authority for a claim, in a sentence
-# written where the bank cannot correct it.
+# How a formula attributing a sentence to the metric bank is caught. Both
+# tests below read these from engine/compute.py rather than restating them,
+# which is the whole of the correction: this was a tuple of eight particular
+# phrasings, and four claims walked past it — "the bank's own minimum", "the
+# bank's own caveat", "the bank's test" (the tuple had "the bank's OWN test"),
+# and one saying the bank flagged an entry as its own ingestion path. Every one
+# was true, and every one was a second copy of words the bank owns sitting in a
+# file where the bank cannot correct them. A list of the phrasings somebody
+# thought of is not a rule about attribution; it is a rule about those eight
+# phrasings, and the ninth is always available.
 #
-# What is deliberately NOT here is the bare phrase "not meaningful for". A
+# So the scan names the THING now. Any mention of the bank at all, outside the
+# one function that is allowed to speak for it, is the defect — whatever verb
+# it reaches for.
+#
+# What is deliberately NOT caught is the bare phrase "not meaningful for". A
 # `data` condition's own text is passed to compute.not_meaningful as the thing
 # being cited — "either side is not meaningful for this company" is the
 # citation key, not a restatement of it — and a scan that caught those would
 # be refusing the very mechanism it exists to require.
-_CLAIMS_THE_BANK = ("the bank's own test", "the bank marks", "the bank says",
-                    "the bank calls", "the bank states", "the bank declares",
-                    "the bank considers", "the bank treats")
+_ATTRIBUTION = compute.ATTRIBUTES_TO_THE_BANK
+
+# And the citation's own sentence, which is the second half. Three refusals
+# wore this opening — two in `_cagr`, one in `incremental_roic_5y` — without
+# going through the function that checks it, so they read to a reader exactly
+# like a citation while naming, in one case, a condition no entry declared.
+# Imported rather than typed, so the words the scan hunts for and the words
+# that reach a screen cannot come apart.
+_CITATION_OPENING = compute.NOT_MEANINGFUL
+
+# The one function allowed to say either. `not_meaningful` wraps it for the
+# callers that want a result rather than an absence, and holds no copy of the
+# sentence itself.
+_SPEAKS_FOR_THE_BANK = "_not_meaningful_absence"
 
 
 def _docstrings(tree) -> set:
@@ -515,34 +556,78 @@ class TestADataConditionAndItsEnforcementAreTheSameThing:
         return {(eid, c) for eid, cs in bank.data_conditions().items()
                 for c in cs}
 
+    def _sayable(self):
+        """Every string in engine/compute.py a reader could be shown, minus
+        the ones that are allowed to speak for the bank.
+
+        Excluded: everything inside the one function that owns the sentence;
+        every docstring, which is prose addressed to whoever edits the code
+        rather than to a reader; and the module constants holding the words
+        themselves, which would otherwise report themselves.
+        """
+        tree = ast.parse(pathlib.Path(compute.__file__).read_text(
+            encoding="utf-8"))
+        owner = next(n for n in ast.walk(tree)
+                     if isinstance(n, ast.FunctionDef)
+                     and n.name == _SPEAKS_FOR_THE_BANK)
+        mine = {id(n) for n in ast.walk(owner)} | _docstrings(tree)
+        for node in tree.body:
+            if isinstance(node, ast.Assign) and any(
+                    isinstance(t, ast.Name)
+                    and t.id in ("NOT_MEANINGFUL", "CITES_THE_BANK",
+                                 "ATTRIBUTES_TO_THE_BANK")
+                    for t in node.targets):
+                mine |= {id(n) for n in ast.walk(node)}
+        return [n for n in ast.walk(tree)
+                if isinstance(n, ast.Constant) and isinstance(n.value, str)
+                and id(n) not in mine]
+
     def test_nothing_claims_the_banks_authority_without_citing_it(self):
         """The phrase is the claim, so the phrase has one home. A formula
         writing it into a sentence of its own is a citation nothing checked —
         which is how two of them came to name a test that did not exist.
 
-        Every way of saying it, not only the one phrase that was caught the
-        first time. `altman_z_score` narrated the bank's applicability in
-        words of its own — "the bank marks this not meaningful for financial
+        Every way of saying it, and that is now structural rather than a
+        list. `altman_z_score` narrated the bank's applicability in words of
+        its own — "the bank marks this not meaningful for financial
         companies; whether this company is one is a judgement the data cannot
         make" — and sat outside a scan looking for six particular words while
-        the host had long since started making exactly that judgement. A
-        formula speaking for the bank is the defect; which synonym it reaches
-        for is not the test."""
-        tree = ast.parse(pathlib.Path(compute.__file__).read_text(
-            encoding="utf-8"))
-        helper = next(n for n in ast.walk(tree)
-                      if isinstance(n, ast.FunctionDef)
-                      and n.name == "not_meaningful")
-        mine = {id(n) for n in ast.walk(helper)} | _docstrings(tree)
-        stray = [n.value[:60] for n in ast.walk(tree)
-                 if isinstance(n, ast.Constant) and isinstance(n.value, str)
-                 and any(p in n.value.lower() for p in _CLAIMS_THE_BANK)
-                 and id(n) not in mine]
+        the host had long since started making exactly that judgement. The
+        list grew to eight and four more walked past it, one of them differing
+        from a listed phrase by the single word "own". A formula speaking for
+        the bank is the defect; which synonym it reaches for is not the test,
+        and enumerating synonyms was never going to be the check."""
+        stray = [n.value[:70] for n in self._sayable()
+                 if _ATTRIBUTION in n.value.lower()]
         assert stray == [], (
             "engine/compute.py speaks for the metric bank in a sentence of "
             "its own: " + str(stray) + ". Cite the condition through "
             "compute.not_meaningful; the sentence has one home, and an "
             "applicability rule the host now enforces needs no narration.")
+
+    def test_nothing_wears_the_citation_without_being_one(self):
+        """The other half, and the one that actually bit.
+
+        A refusal reading "Not meaningful here: …" is a promise that the
+        sentence after the colon is the bank's own and can be looked up on the
+        Metrics page. Three sentences made that promise without going through
+        the check: both of `_cagr`'s, and `incremental_roic_5y`'s. Two of them
+        named conditions the entries did declare and one named a condition no
+        entry declared anywhere — a positive base falling to a negative end,
+        which is a profit turning into a loss and is not rare. A reader who
+        followed it found nothing, which is the exact failure the citation
+        mechanism was built to end, reproduced by borrowing its opening.
+
+        Catching the attribution alone would not have caught these: none of
+        the three says "the bank" at all."""
+        stray = [n.value[:70] for n in self._sayable()
+                 if _CITATION_OPENING in n.value]
+        assert stray == [], (
+            "engine/compute.py writes the citation's own opening in a "
+            "sentence of its own: " + str(stray) + ". A refusal that reads "
+            "like a citation has to be one — route it through "
+            "compute.not_meaningful, which checks the condition against the "
+            "entry that declares it.")
 
     def test_every_refusal_names_a_condition_the_bank_states(self):
         assert _cited_conditions() - self.declared() == set()

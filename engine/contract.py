@@ -187,7 +187,30 @@ from types import MappingProxyType
 #    `form` and no `accession` — a reading that came off a price series was
 #    produced by no document, and naming one would attribute a figure to a
 #    filing that never contained it.
-CONTRACT_VERSION = 7
+# 8: evidence says which citations the verdict RESTS ON, and a strategy stops
+#    writing the names of measures into its own prose.
+#
+#    A closing verdict and one still waiting on confirmation rendered the same
+#    rows. Both cite every exit; the difference is which of them fired, and
+#    that difference is the whole point of a confirmation rule. So anything
+#    reading the evidence to explain a verdict was reading it wrongly and
+#    silently — a v7 bundle could not have got this right, because the answer
+#    was not in what it was handed. `reason.rests_on` names the citations the
+#    state is built on, the host marks those rows, and `reason.rests_on` comes
+#    back resolved with each subject's label in the bank's own words.
+#
+#    Bundled with it, because bumping once beats bumping twice: the host now
+#    composes the "what is owed" lines of a blocked verdict's `payload.needs`
+#    from the citations that came back unanswered, so `needs` carries only
+#    what the host cannot know. Both halves are the same correction. A
+#    strategy wanted to SAY something the host already knew — which of five
+#    things broke, which three questions are unanswered — and had no way to
+#    reach the host's words, so it kept a hand-written paraphrase of each and
+#    fell back to printing the raw bank id when the map missed. That is a
+#    strategy quoting the host, which is what cite-don't-quote closed
+#    everywhere else, and the fix is the same one: the strategy cites what it
+#    acted on and the host says it.
+CONTRACT_VERSION = 8
 
 # A strategy may declare at most this many states. The cap is deliberate:
 # states are user-facing vocabulary, and complexity must not creep back in
@@ -2369,7 +2392,7 @@ def input_roles(record: dict, effective: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 _DECISION_KEYS = {"state", "payload", "reason"}
-_REASON_KEYS = {"rule", "summary", "evidence", "groups", "note"}
+_REASON_KEYS = {"rule", "summary", "evidence", "groups", "note", "rests_on"}
 
 
 def _names(keys) -> str:
@@ -2894,6 +2917,24 @@ def validate_decision(record: dict, decision) -> list[str]:
         if not _is_text(reason.get("summary")):
             errors.append("`reason.summary` must say, in one plain "
                           "sentence, why this state and not another.")
+        # Which of this decision's own citations the state is built on, by
+        # subject id. Ids and not sentences, because the words are the host's:
+        # a strategy naming a measure in prose is the strategy quoting the
+        # host, and both shipped ones did it — each kept a hand-written
+        # paraphrase of every measure it might name, and each fell back to
+        # printing the raw bank id when the map missed.
+        rests = reason.get("rests_on")
+        if rests is not None:
+            if not isinstance(rests, list) or not rests \
+                    or not all(_is_text(r) for r in rests):
+                errors.append(
+                    "`reason.rests_on` names the citations this state is "
+                    "built on, by the id each one cites, as a non-empty list. "
+                    "Leave it out where the state rests on all of them or on "
+                    "none in particular — an empty list states nothing, which "
+                    "is what leaving it out already does.")
+            elif len(set(rests)) != len(rests):
+                errors.append("`reason.rests_on` names one citation twice.")
         # None is how a strategy says "nothing to add" when the note is
         # computed rather than literal; only a non-sentence is a mistake.
         if reason.get("note") is not None and not _is_text(reason["note"]):
@@ -3647,6 +3688,22 @@ def _subject(kind: str, subject_id, *, reads, label, unit, explain=None,
     """One citation's subject as a screen reads it, and — separately — which
     metric-bank entry it draws on.
 
+    Everything a reader needs to make sense of the figure travels HERE, on the
+    subject, because this is what a decision freezes. What it did not carry was
+    the bank's `format`, and the screen filled the gap from the bank standing
+    at the moment somebody opened the page: a purchase frozen two years ago
+    rendered its 10.4× through today's definition, and a measure whose unit had
+    since been corrected from `times` to `percent` printed the old number as
+    "10.4%". A frozen record that reads differently depending on a file it
+    does not own is not frozen. It carried no `explain` for a computed measure
+    either, so the one thing CLAUDE.md says a number may never appear without
+    was also being served live — and vanished entirely when an entry was
+    dropped from the bank.
+
+    So `format` is resolved once, here, alongside the label and the unit that
+    already were. The three of them decide what the figure IS to a reader, and
+    the record has to be able to say that with nothing else on hand.
+
     `reads` is the whole reason this is a constructor and not a literal.
     Everything that answers a citation per security has to know which bank
     entry it touches: the hand-entry surface offers exactly those figures,
@@ -3754,6 +3811,7 @@ def resolve_evidence(record: dict, ctx: dict, items: list):
                     label=f'{_bank_label(item["measure"])}, '
                           + form.get("label", item["without"]),
                     unit=_bank_unit(item["measure"]),
+                    format=_bank_format(item["measure"]),
                     without=item["without"], explain=form.get("explain"))
             else:
                 # `explain` is the plain-language definition on every kind of
@@ -3770,7 +3828,8 @@ def resolve_evidence(record: dict, ctx: dict, items: list):
                     reads=item["measure"],
                     label=_bank_label(item["measure"]),
                     unit=_bank_unit(item["measure"]),
-                    explain=meta.get("plain") if judged else None)
+                    format=_bank_format(item["measure"]),
+                    explain=meta.get("plain"))
                 if judged and meta.get("question"):
                     view["asks"] = meta["question"]
                 if "at" in item:
@@ -4065,6 +4124,12 @@ def _bank_entry(measure_id):
             _bank_cache[str(e.get("id"))] = {
                 "label": str(e.get("label") or e.get("id")),
                 "unit": str(e.get("unit") or "none"),
+                # None where the bank declares none, which is a real answer:
+                # a yes/no carries no format and running one through a format
+                # prints a 1. A frozen subject that says `None` says the bank
+                # had none; one that says nothing at all predates the field.
+                "format": (str(e["format"]) if e.get("format") is not None
+                           else None),
                 "kind": str(e.get("kind") or ""),
                 "estimator": _plain_estimator(e.get("estimator")),
                 "question": str(e.get("question") or "").strip() or None,
@@ -4080,6 +4145,14 @@ def _bank_entry(measure_id):
 def _bank_label(measure_id):
     entry = _bank_entry(measure_id)
     return entry["label"] if entry else measure_id
+
+
+def _bank_format(measure_id):
+    """How a bank measure's figure is printed, frozen onto the citation that
+    reads it. None where the bank declares none, and where the bank has never
+    heard of the measure — both are "print it by its unit"."""
+    entry = _bank_entry(measure_id)
+    return entry["format"] if entry else None
 
 
 def _bank_unit(measure_id):
@@ -4179,7 +4252,8 @@ def host_result(state_id: str, summary: str, record: dict | None = None,
     payload = ({"needs": list(needs) if needs else [summary]}
                if state["render"] == "blocked" else {})
     reason = {"rule": state_id, "summary": summary,
-              "evidence": list(evidence or []), "groups": [], "note": None}
+              "evidence": list(evidence or []), "groups": [],
+              "rests_on": [], "note": None}
     return _result(state_id, state, payload, reason, "host", record)
 
 
@@ -4401,10 +4475,81 @@ def evaluate(record: dict, ctx: dict) -> dict:
         if dead_end:
             return host_result("host:invalid-decision", dead_end, record)
 
+    rests_on, stray = _resolve_rests_on(
+        decision["reason"].get("rests_on"), evidence)
+    if stray:
+        return host_result(
+            "host:invalid-decision",
+            f'{record["name"]} said this verdict rests on ' + _names(stray)
+            + ", which it did not cite. A state can only be built on evidence "
+              "the decision put forward — the host resolves the words from "
+              "the citation, so a name with no citation behind it has no "
+              "words and no figure.", record)
+
     reason = {"rule": decision["reason"]["rule"],
               "summary": decision["reason"]["summary"],
               "evidence": evidence,
               "groups": groups,
+              "rests_on": rests_on,
               "note": decision["reason"].get("note")}
-    return _result(decision["state"], state, decision["payload"],
+    payload = _owed_by(state, decision["payload"], evidence)
+    return _result(decision["state"], state, payload,
                    reason, "strategy", record)
+
+
+def _resolve_rests_on(named, evidence) -> tuple:
+    """(the cited subjects a state is built on, anything named without one).
+
+    Each comes back as the citation's own subject — id, label, unit and the
+    rest — so whatever renders it says the measure's name in the bank's words
+    rather than in a strategy's. That is the whole of this key: a strategy
+    that wanted to name what broke used to keep its own table of clauses, one
+    per measure it might mention, with a fallback that printed the raw bank id
+    into the sentence telling somebody to sell.
+
+    The rows themselves are marked too, because the same fact answers a second
+    question the evidence could not: a closing verdict and one still waiting
+    on confirmation cite exactly the same exits, and which of them fired is
+    the difference between the two.
+    """
+    if not named:
+        return [], []
+    by_id = {}
+    for row in evidence:
+        by_id.setdefault(str((row.get("subject") or {}).get("id")), row)
+    stray = [n for n in named if n not in by_id]
+    if stray:
+        return [], stray
+    for n in named:
+        by_id[n]["rests_on"] = True
+    return [dict(by_id[n]["subject"]) for n in named], []
+
+
+def _owed_by(state, payload, evidence) -> dict:
+    """A blocked verdict's payload, with what is owed named by the host.
+
+    `needs` is prose and stays the strategy's, because most of it is genuinely
+    the strategy's to say — where to go, and why this method will not act
+    until it has been answered. What is NOT the strategy's is the list of
+    which questions are outstanding: those are bank entries, the decision
+    already cited every one of them, and the host resolved each label as it
+    resolved every other. A strategy writing them itself is a strategy
+    quoting the host, and the one that did kept three hand-written
+    paraphrases with a fallback that printed the raw id.
+
+    Derived from the citations that came back UNANSWERED rather than from all
+    of them, and matched against the kind the state's own way out leads to —
+    the same call the section itself is built from, so the sentence and the
+    page it sends the reader to cannot disagree about what is outstanding.
+    """
+    spec = STATE_FIXES.get(state.get("fix")) or {}
+    if state["render"] != "blocked" or not spec.get("cites"):
+        return payload
+    owed = [row for row in evidence
+            if row.get("outcome") == UNKNOWN
+            and str((row.get("subject") or {}).get("kind") or "") == "judgement"]
+    if not owed:
+        return payload
+    named = [f'{(row["subject"].get("label") or row["subject"]["id"])} — '
+             "unanswered." for row in owed]
+    return {**payload, "needs": named + list(payload.get("needs") or [])}

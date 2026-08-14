@@ -13,7 +13,7 @@ from datetime import date
 import pytest
 from conftest import journal_for
 
-from engine import hand_entered, journals
+from engine import bank, hand_entered, journals
 
 from app import Api
 
@@ -113,7 +113,7 @@ class TestRemoveSecurity:
         from engine import strategy_loader
         api.add_security("SHARED", "Shared Ticker Co")
         record = strategy_loader.discover()[0]["verdicts"]
-        other = journals.create("Second", record)
+        other = journals.create("Second", record, bank.definitions())
         other["securities"].append({"ticker": "SHARED", "lots": [],
                                     "notes": []})
         journals.save(other)

@@ -233,11 +233,12 @@ def journal_for(strategy_id, name="Test journal", inputs=None, config=None):
     tests that drive the UI seam go through Api.create_journal, which is the
     same path with the typing and validation the dialog does.
     """
-    from engine import journals, strategy_loader
+    from engine import bank, journals, strategy_loader
     strategies, reports = strategy_loader.discover()
     record = strategies.get(strategy_id)
     assert record is not None, [r["errors"] for r in reports]
-    journal = journals.create(name, record, config=config, inputs=inputs)
+    journal = journals.create(name, record, bank.definitions(),
+                              config=config, inputs=inputs)
     journals.set_open(journal["id"])
     return journal, record
 
@@ -341,3 +342,34 @@ def annual_filing(fy_end, fy_start, accession, filed, revenue,
         facts.append(dur(concept, s, e, v))
     facts.extend(extra)
     return filing(accession, "10-K", filed, fy_end, facts)
+
+
+def redefined_since(ctx, *measure_ids):
+    """The context as it reads once a measure has been redefined since the
+    purchase it would be measured against.
+
+    What `engine/context._baseline_of` does when the journal's record says
+    what a measure means moved after a purchase's figures were frozen: the
+    frozen figure is withheld rather than qualified, because what it feeds is
+    a subtraction and a five-year median taken from a three-year one is not a
+    distance in anything.
+
+    Here so the four strategies can each say what that costs them, from one
+    definition of what it is — three copies of this shape would be three
+    copies that drift, and the point of asking each strategy is that they
+    answer differently.
+    """
+    import copy
+    out = copy.deepcopy(ctx)
+    for anchor in (out.get("position") or {}).get("baselines") or {}:
+        node = out["position"]["baselines"][anchor]
+        if node.get("status") != "known":
+            continue
+        for mid in measure_ids:
+            if mid in (node.get("measures") or {}):
+                node["measures"][mid] = {
+                    "status": "absent",
+                    "reason": "what this measure means moved after this was "
+                              "worked out, so the two readings were not "
+                              "worked out to the same definition"}
+    return out

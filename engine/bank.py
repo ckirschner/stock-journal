@@ -9,10 +9,26 @@ each other.
 This module is the only reader of that file. It ships with the program rather
 than living in the user's data directory: the bank is part of what the
 program *is*, and a measure's definition is not a user setting.
+
+**A measure definition is a rule, so a change to one is recorded.** It ships
+with the program and is a file on the user's machine that this program re-reads
+whenever its mtime moves; changing a formula is exactly as easy as changing a
+threshold, and only one of those was on any record. What a measure computes,
+what it refuses on, how it is estimated and which industries it declines all
+decide what every exit demands, in every journal.
+
+So the file carries a `version` and a `changelog`, the way a strategy's
+values.yaml does, and `definitions` below hands a journal the state it stamps
+and compares against. The version is not what makes a change detectable — the
+stamp holds the definitions themselves, so an edit with no bump is caught
+anyway, which is the case this exists for. It decides who owes the sentence:
+an author who bumps it has already written one, and an edit made in place
+leaves the person who made it to say what it was for.
 """
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 from ruamel.yaml import YAML
@@ -49,6 +65,22 @@ def to_plain(node):
 
 
 _bank_cache: dict = {}
+
+# The version on disk that this program refused, per bank name, and why. Kept
+# beside the cache above rather than raised through every caller, because the
+# two facts a reader needs — what is wrong, and what the program is doing
+# meanwhile — are one answer and used to be neither.
+#
+# A strategy that fails to load is skipped with a legible message and the
+# others still load; that is engine/strategy_loader.py and it has always been
+# the rule for the other file a user edits. This one raised. It raised through
+# `meta()`, which app.get_state calls with nothing around it, so a single
+# malformed line took the window down to its boot placeholder — no journal
+# list, no tabs, no way back except finding the file and fixing it blind, with
+# no message naming where. There is no "skip" available for the bank, so the
+# equivalent is this: refuse the new version, say which entry and which line,
+# and go on serving the last one that loaded.
+_bank_refused: dict = {}
 
 # Kinds whose estimator reads a fixed-length window of annual observations, so
 # `observations` says something and its absence is a hole. A streak has no
@@ -538,7 +570,96 @@ def _check_clock(entries) -> list:
     return problems
 
 
+def _check_release(doc) -> list:
+    """Everything wrong with the file's `version` and `changelog`.
+
+    The same rule the strategy contract already makes, for the same reason and
+    in the same shape: a version that does not say what changed is refused,
+    because the record of rule changes depends on it — see
+    contract.validate_declaration.
+
+    It is checkable here, with no history on hand, precisely because it asks
+    nothing about the previous release. Whether the version SHOULD have moved
+    is a question only a journal can answer, and it answers it by comparing
+    stamped definitions rather than by trusting this number.
+    """
+    version = doc.get("version")
+    problems = []
+    if not (isinstance(version, int) and not isinstance(version, bool)
+            and version >= 1):
+        problems.append(
+            "`version` must be a whole number starting at 1 — it is what "
+            "tells a release of these definitions from an edit made in "
+            "place, and therefore who is asked to say what a change was for.")
+        version = None
+    log = doc.get("changelog")
+    if not isinstance(log, dict) or not log:
+        return problems + [
+            "`changelog` must map each version number to a sentence saying "
+            "what changed in that version. A definition decides what every "
+            "exit demands, and the host can see one move without being able "
+            "to say what the move meant — so it quotes the person who can."]
+    for k, v in log.items():
+        if not (isinstance(k, int) and not isinstance(k, bool)) \
+                or not str(v or "").strip():
+            problems.append("`changelog` entries map a version number to "
+                            f"non-empty text; {k!r} does not.")
+    if version is not None and version not in log:
+        problems.append(
+            f"version {version} has no changelog entry. A version that does "
+            "not say what changed is refused — every journal quotes this line "
+            "when it records that the measures moved under it.")
+    return problems
+
+
+def _at(node, path) -> str:
+    """"metric-bank.yaml line 232" for a parsed node, or the file name alone.
+
+    The round-trip parser records where every entry started, and the whole
+    point of refusing an edit is that the person who made it can go back to
+    it. A message naming the entry is only useful to somebody who can already
+    find the entry; a message naming the line is useful to somebody looking at
+    a file they have just broken. Best effort by design — a node with no
+    position still gets a sentence, because a missing line number must never
+    be the reason a problem goes unreported.
+    """
+    line = getattr(getattr(node, "lc", None), "line", None)
+    if isinstance(line, int) and not isinstance(line, bool):
+        return f"{path.name} line {line + 1}"
+    return path.name
+
+
+def _problems(doc, path) -> list:
+    """Everything wrong with a parsed bank document, each sentence saying
+    where it is."""
+    schema = str(doc.get("schema") or "")
+    if not schema.startswith("ledger.metric-bank/"):
+        return [f'{path.name} does not declare a metric-bank schema '
+                f'(found "{schema or "nothing"}").']
+    entries = list(doc.get("entries") or [])
+    problems = [f"{_at(e, path)}: {p}" for e in entries
+                for p in _check_estimator(e) + _check_applicability(e)
+                + _check_rendering(e)]
+    # The three below read across entries or read the file as a whole, so no
+    # single line is the answer; each names the entries it is about instead.
+    problems += [f"{path.name}: {p}" for p in
+                 _check_propagation(entries) + _check_clock(entries)
+                 + _check_release(doc)]
+    return problems
+
+
+def _refusal_message(path, problems) -> str:
+    return (f"{path.name} cannot be loaded:\n  " + "\n  ".join(problems))
+
+
 def load_bank(name: str = "metric-bank"):
+    """The bank as it should be read right now.
+
+    Which is the version on disk when that version loads, and the last version
+    that loaded when it does not. A refusal is recorded in `_bank_refused` and
+    reported through `refusal()` — see the note above that dict for why this
+    does not raise past the first load.
+    """
     path = bank_path(name)
     if not path.exists():
         raise FileNotFoundError(
@@ -550,26 +671,331 @@ def load_bank(name: str = "metric-bank"):
     held = _bank_cache.get(name)
     if held and held[0] == mtime:
         return held[1]
-    doc = load_yaml(path) or {}
-    schema = str(doc.get("schema") or "")
-    if not schema.startswith("ledger.metric-bank/"):
-        raise ValueError(
-            f'{path.name} does not declare a metric-bank schema '
-            f'(found "{schema or "nothing"}").')
-    entries = list(doc.get("entries") or [])
-    problems = [p for e in entries
-                for p in _check_estimator(e) + _check_applicability(e)
-                + _check_rendering(e)]
-    problems += _check_propagation(entries) + _check_clock(entries)
+
+    # A version already refused is refused again without re-reading it. The
+    # mtime has moved away from the good document by definition, so without
+    # this the whole file would be re-parsed and re-checked on every render
+    # for as long as the edit stood — which is exactly while the user is
+    # working on it.
+    refused = _bank_refused.get(name)
+    if refused and refused["mtime"] == mtime \
+            and refused["path"] == str(path):
+        if held:
+            return held[1]
+        raise ValueError(refused["message"])
+
+    try:
+        doc = load_yaml(path) or {}
+    except Exception as e:                # noqa: BLE001 — a bad file reports
+        mark = getattr(e, "problem_mark", None)
+        where = (f"{path.name} line {mark.line + 1}"
+                 if mark is not None and isinstance(getattr(mark, "line", None),
+                                                    int) else path.name)
+        problems = [f"{where}: this is not valid YAML — "
+                    + " ".join(str(getattr(e, "problem", None) or e).split())]
+        doc = None
+    else:
+        problems = _problems(doc, path)
+
     if problems:
-        raise ValueError(f"{path.name} cannot be loaded:\n  "
-                         + "\n  ".join(problems))
+        _bank_refused[name] = {"mtime": mtime, "problems": problems,
+                               "message": _refusal_message(path, problems),
+                               "path": str(path), "holding": held is not None}
+        if held:
+            return held[1]
+        raise ValueError(_refusal_message(path, problems))
+
+    _bank_refused.pop(name, None)
     _bank_cache[name] = (mtime, doc)
     return doc
 
 
+def refusal(name: str = "metric-bank"):
+    """What is wrong with the file on disk, or None when nothing is.
+
+        {"problems": [str, ...], "holding": bool, "path": str}
+
+    `holding` is whether the program is still answering from an earlier
+    version. It is the difference between "your edit has not taken effect" and
+    "there is nothing to read", and a screen that could not tell them apart
+    would be telling somebody their figures are current when they are not.
+
+    Called for its side effect as much as its answer: it loads, so asking
+    picks up a file that has since been fixed.
+    """
+    try:
+        load_bank(name)
+    except Exception:                     # noqa: BLE001 — reporting, not doing
+        pass
+    held = _bank_refused.get(name)
+    if not held:
+        return None
+    return {"problems": list(held["problems"]), "holding": held["holding"],
+            "path": held["path"]}
+
+
 def bank_index(doc) -> dict:
     return {str(e.get("id")): e for e in (doc.get("entries") or [])}
+
+
+# ---------------------------------------------------------------------------
+# The definitions a journal stamps, and compares against on every read.
+#
+# One table, because the split it draws is the whole of what the record can
+# honestly say and it must not be stated in one file and applied in another.
+# Each entry's definition comes back as two maps and the shape is the rule:
+#
+#   states     value → recorded as a before and after. The value means
+#              something on its own, so a reader can act on the move.
+#   restates   digest → recorded as changed, contents not stated. The host can
+#              see the arithmetic move and has no way to know what the move
+#              meant, the same way it cannot say what a strategy's edited logic
+#              now demands.
+#
+# There is deliberately no third map for the prose that explains a measure to a
+# reader. It changes nothing a verdict consumes, and a wording pass over
+# seventy-four entries would put seventy-four rows on every journal's record —
+# burying the one retuning the record exists to surface.
+# config/metric-bank.yaml says so in its own header, where somebody editing
+# it will be looking.
+#
+# The keys are the words a screen prints. A second copy of them in the view is
+# a copy that drifts, and a view holding a table of field names is a view that
+# has to be edited when a field is added — which is the wrong turn principle 9
+# names. So the record reads "observations read: 5 → 3" with nothing in the
+# interface knowing what an observation is.
+# ---------------------------------------------------------------------------
+
+# Every key an entry can carry, and where a change to it lands. All of them,
+# including the ones that land nowhere — the set of things NOT on the record is
+# a decision and has to be written down as one, because the alternative is the
+# complement of a list, which is not a decision but whatever nobody got round
+# to. tests/test_bank.py pins this against the keys the shipped entries
+# actually carry, so a key added to this file later cannot reach a journal
+# without somebody choosing a side for it, and one deleted cannot leave a
+# sentence here about a field that no longer exists.
+ACCOUNTED_FOR = {
+    "id": "not recorded: the entry's own name, which is what the record is "
+          "keyed ON. It cannot move without one entry reading as removed and "
+          "another as added — which is exactly what that is.",
+    "label": "recorded as `name`.",
+    "kind": "recorded as `answered by` — whether this is worked out from the "
+            "filings or is a question the reader answers.",
+    "unit": "recorded as `unit`.",
+    "format": "recorded as `format`.",
+    "polarity": "recorded as `favourable direction`.",
+    "estimator": "recorded field by field: `how it is read`, `observations "
+                 "read`, and the window it is `judged against`.",
+    "inputs": "`entries` is recorded as `built on`, because it decides which "
+              "measures a refusal propagates to. `filings` and `prices` are "
+              "the human-readable gloss on a formula that is itself recorded.",
+    "derivation": "recorded as the digest `how it is worked out`. The host "
+                  "can see arithmetic move and cannot say what it now means.",
+    "not_meaningful_when": "the industry classes are recorded as `does not "
+                           "describe`; the data and undetected conditions as "
+                           "digests. `because` is prose and is not recorded.",
+    "question": "recorded as the digest `the question you answer`.",
+    "response": "recorded field by field: `marks it accepts`, `prose`, and "
+                "`unmarked reads as`.",
+    "explanation": "not recorded: the plain-language account of the measure, "
+                   "its misfires, and whose thinking it comes from. A reader "
+                   "reads it; no verdict consumes a word of it.",
+    "polarity_note": "not recorded: why a measure has no favourable "
+                     "direction. The direction itself is recorded.",
+    "parameters": "recorded as `parameters` — a number the formula needs and "
+                  "this file does not fix, which a strategy then supplies.",
+}
+
+
+def _digest(*parts) -> str:
+    """A short fingerprint of prose or arithmetic — enough to see that it
+    moved, never enough to say what it now demands.
+
+    Whitespace-normalised, so re-wrapping a formula to fit the column is not
+    reported to four journals as a change to what they demand. Anything that
+    survives that normalisation is a change to the characters of the
+    arithmetic, and the host reports it without pretending to read it.
+    """
+    text = "\x1f".join(" ".join(str(p or "").split()) for p in parts)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
+
+
+def _conditions(entry, form: str) -> list:
+    """Every `not_meaningful_when` condition of one form, as declared."""
+    return [item for item in (entry.get("not_meaningful_when") or [])
+            if isinstance(item, dict) and item.get(form) is not None]
+
+
+def _estimator(e) -> dict:
+    return e.get("estimator") or {}
+
+
+def _window(e) -> dict:
+    w = _estimator(e).get("window")
+    return w if isinstance(w, dict) else {}
+
+
+def _response(e) -> dict:
+    return e.get("response") or {}
+
+
+def _marks(e):
+    r = _response(e)
+    return list(r.get("marks") or []) if r else None
+
+
+# ---------------------------------------------------------------------------
+# One row per field a definition carries, and everything about that field in
+# one place: where it is read from, how a change to it is RECORDED, and
+# whether a change to it leaves two readings COMPARABLE.
+#
+# Three lists keyed by the same names would be three lists that come apart,
+# and the second and third columns answer questions that look alike and are
+# not. Recording asks *can the host state what moved* — a number can, a
+# formula cannot. Comparability asks *would two readings taken either side of
+# this be readings of the same thing* — and the two cut the fields in
+# genuinely different places:
+#
+#   `observations read` is STATED and INCOMPARABLE. A five-year median and a
+#   three-year one are both perfectly sayable and are not the same measure.
+#   This is the case that put the gate here at all.
+#
+#   `what the formula refuses on` is RESTATED and COMPARABLE. A condition
+#   moving changes WHEN a value is absent, never what it is when present — so
+#   either one side is absent already, or both were worked out by the same
+#   arithmetic.
+#
+# So reusing the recording split for comparability would have missed the
+# motivating case and gated four that never needed it.
+#
+# COMPARABLE is the narrow list on purpose. A field this build does not know
+# is treated as breaking comparability, which is the safe direction: the cost
+# is a drift row that says why it cannot be worked out, and the cost of the
+# other default is a five-year median subtracted from a three-year one and
+# reported as drift.
+# ---------------------------------------------------------------------------
+
+STATED, RESTATED = "states", "restates"
+COMPARABLE, INCOMPARABLE = "comparable", "incomparable"
+
+_FIELDS = (
+    # field, read from, recorded as, and whether readings stay comparable
+    ("name", lambda e: e.get("label"), STATED, COMPARABLE),
+    ("answered by", lambda e: e.get("kind"), STATED, INCOMPARABLE),
+    ("unit", lambda e: e.get("unit"), STATED, INCOMPARABLE),
+    ("format", lambda e: e.get("format"), STATED, COMPARABLE),
+    ("favourable direction", lambda e: e.get("polarity"), STATED, COMPARABLE),
+    ("how it is read",
+     lambda e: _estimator(e).get("kind"), STATED, INCOMPARABLE),
+    ("observations read",
+     lambda e: _estimator(e).get("observations"), STATED, INCOMPARABLE),
+    # What a reading is JUDGED AGAINST, which robustness is derived from. It
+    # decides what a leave-one-out re-read means and not what the reading is,
+    # and a leave-one-out is computed live from today's filings either way.
+    ("judged against",
+     lambda e: _window(e).get("statistic"), STATED, COMPARABLE),
+    ("observations judged against",
+     lambda e: _window(e).get("observations"), STATED, COMPARABLE),
+    ("built on",
+     lambda e: list((e.get("inputs") or {}).get("entries") or []),
+     STATED, INCOMPARABLE),
+    # A number the formula needs and this file does not fix — the strategy
+    # supplies it. No shipped entry declares one today; it is recorded anyway,
+    # because the first one that does would otherwise arrive with nobody
+    # watching, and an entry silently gaining a knob a strategy turns is
+    # precisely what this record is for.
+    ("parameters",
+     lambda e: [str((p or {}).get("id")) for p in (e.get("parameters") or [])
+                if isinstance(p, dict)], STATED, INCOMPARABLE),
+    # The union across every industry condition, not one row per condition:
+    # what the host acts on is the SET of classes this measure refuses for,
+    # and "no longer declines insurance" is the statement a reader needs.
+    # Which sentence went with which class is prose, and prose is not on this
+    # record. Comparable for the reason the data conditions are: a class
+    # arriving makes today inapplicable and a class leaving means there was no
+    # reading to freeze, so the two sides are never both present and
+    # differently worked out.
+    ("does not describe",
+     lambda e: sorted(_classes_named(e)), STATED, COMPARABLE),
+    ("marks it accepts", _marks, STATED, INCOMPARABLE),
+    ("prose", lambda e: _response(e).get("prose"), STATED, COMPARABLE),
+    ("unmarked reads as",
+     lambda e: _response(e).get("unmarked"), STATED, COMPARABLE),
+    ("how it is worked out",
+     lambda e: _digest((e.get("derivation") or {}).get("formula"),
+                       (e.get("derivation") or {}).get("window")),
+     RESTATED, INCOMPARABLE),
+    ("what the formula refuses on",
+     lambda e: _digest(*[c["data"] for c in _conditions(e, "data")]),
+     RESTATED, COMPARABLE),
+    ("what nothing here can settle",
+     lambda e: _digest(*[p for c in _conditions(e, "undetected")
+                         for p in (c["undetected"], c.get("needs"))]),
+     RESTATED, COMPARABLE),
+    ("the question you answer",
+     lambda e: _digest(e.get("question")), RESTATED, INCOMPARABLE),
+)
+
+# The fields whose movement leaves a frozen reading and a live one comparable.
+# Anything else — including a field added to the table above and any field
+# this build has never heard of — makes them incomparable. See
+# journals.measures_incomparable and context._baseline_of.
+COMPARABLE_FIELDS = frozenset(
+    field for field, _, _, compares in _FIELDS if compares == COMPARABLE)
+
+
+def _definition(entry) -> dict:
+    """One entry's rule-bearing state: what it computes, what it refuses on,
+    how it is read, and what it does not describe."""
+    e = to_plain(entry)
+    states, restates = {}, {}
+    for field, reads, record, _ in _FIELDS:
+        (states if record == STATED else restates)[field] = reads(e)
+    # A field the entry does not declare is left out rather than written down
+    # as nothing. Absence is absence — and every journal on the machine keeps
+    # a copy of this, so two hundred nulls is two hundred nulls per journal
+    # and in every export. Safe in both directions because a comparison reads
+    # `.get`, so a field that is missing and one that is null are the same
+    # answer, and a field gaining a value moves from nothing either way.
+    return {"states": {k: v for k, v in states.items() if v is not None},
+            "restates": restates}
+
+
+_definitions_cache: dict = {}
+
+
+def definitions(name: str = "metric-bank") -> dict:
+    """What this file demands, in the form a journal can stamp and compare.
+
+        {"version": int, "entries": {id: {"states": {...},
+                                          "restates": {...}}}}
+
+    Plain data, so the record that holds it never carries a framework type and
+    never has to be rebuilt to be read back. Cached against the loaded
+    document's identity rather than recomputed per render, for the reason
+    `load_bank` caches at all — this is asked for on every read of every
+    journal, and an edit still lands because the document itself is rebuilt
+    when its mtime moves.
+    """
+    doc = load_bank(name)
+    held = _definitions_cache.get(name)
+    if held and held[0] is doc:
+        return held[1]
+    out = {"version": doc.get("version"),
+           "entries": {str(e.get("id")): _definition(e)
+                       for e in (doc.get("entries") or [])}}
+    _definitions_cache[name] = (doc, out)
+    return out
+
+
+def changelog(name: str = "metric-bank") -> dict:
+    """{version: sentence} — the author's own account of each release, quoted
+    by a journal that records the definitions moving under it. The host cannot
+    say what a changed formula meant, so it quotes the person who can."""
+    doc = load_bank(name)
+    return {int(k): " ".join(str(v).split())
+            for k, v in (doc.get("changelog") or {}).items()
+            if isinstance(k, int) and not isinstance(k, bool)}
 
 
 def bank_view(name: str = "metric-bank") -> dict:

@@ -22,7 +22,7 @@ What would fail silently here, and is therefore pinned:
 
 import pytest
 
-from engine import backup, contract, context, dated, journals, lists
+from engine import backup, bank, contract, context, dated, journals, lists
 from engine import strategy_loader, strategy_values
 
 
@@ -438,7 +438,7 @@ class TestItSurvivesAnExport:
     def test_a_bundle_carries_the_imports_whole(self, tmp_path):
         strategies, _ = strategy_loader.discover()
         record = strategies["magic-formula"]
-        j = journals.create("Listed", record, inputs={})
+        j = journals.create("Listed", record, bank.definitions(), inputs={})
         lists.record(j, "2026-08-01", ["ACME", "BRIA"], 1e9)
         journals.save(j)
 
@@ -455,7 +455,8 @@ class TestItSurvivesAnExport:
     def test_a_journal_that_never_had_one_loads_with_an_empty_record(self,
                                                                      tmp_path):
         strategies, _ = strategy_loader.discover()
-        j = journals.create("Plain", strategies["graham"], inputs={})
+        j = journals.create("Plain", strategies["graham"],
+                            bank.definitions(), inputs={})
         assert journals.load(j["id"])[lists.KEY] == []
 
 
@@ -471,7 +472,8 @@ class TestTheImportItself:
         from app import Api
         api = Api()
         strategies, _ = strategy_loader.discover()
-        journals.create("Listed", strategies["magic-formula"], inputs={})
+        journals.create("Listed", strategies["magic-formula"],
+                        bank.definitions(), inputs={})
         return api
 
     def test_an_unreadable_line_refuses_and_writes_nothing(self):
@@ -540,7 +542,129 @@ class TestTheImportItself:
         from app import Api
         api = Api()
         strategies, _ = strategy_loader.discover()
-        journals.create("Plain", strategies["graham"], inputs={})
+        journals.create("Plain", strategies["graham"],
+                        bank.definitions(), inputs={})
         assert api.import_list("2026-08-01", "ACME")["ok"] is False
         assert api.pass_over("ACME", "why not")["ok"] is False
         assert api.get_state()["list"] is None
+
+
+class TestPassingOverIsScored:
+    """The record was written, shown as prose, and never measured.
+
+    Under a mechanical method the list IS the decision, so every pass-over is
+    the user overriding the method — and it is the only one of the three
+    documented ways to break the method that leaves no lot behind. Without
+    scoring, the analytics can report the user's error rate and never the
+    list's, which is precisely the guilt machine principle 10 forbids.
+    """
+
+    def _security(self, ticker="ACME", passes=(), lots_=()):
+        from engine import portfolio
+        s = portfolio.new_security(ticker, "Acme")
+        for day, reason, stamp in passes:
+            lists.pass_over(s, day, reason)
+            s[lists.SKIP_KEY][-1]["recorded"] = stamp
+        for day, price in lots_:
+            s.setdefault("lots", []).append(
+                {"id": f"l{day}", "seq": len(s.get("lots") or []) + 1,
+                 "kind": "buy", "date": day, "recorded": day + "T12:00:00",
+                 "shares": 1, "price": price})
+        return s
+
+    def _score(self, securities, now, then):
+        from engine import portfolio
+        return portfolio.pass_over_scorecard(
+            securities, lambda s: now, lambda s, day: then)
+
+    def test_a_name_that_fell_counts_as_avoided(self):
+        """The inversion, and it is the whole point. A purchase works out when
+        the price rises; a pass-over works out when it falls. Counting these
+        as wins on the same footing would tell the reader they were right
+        whenever a name they refused went up."""
+        s = self._security(passes=[("2026-01-05", "Too much debt.",
+                                    "2026-01-06T12:00:00-05:00")])
+        out = self._score([s], {"value": 60.0}, {"value": 100.0})
+        b = out["Too much debt."]
+        assert (b["n"], b["n_scored"], b["avoided"]) == (1, 1, 1)
+        assert b["avg"] == -40.0
+
+    def test_a_name_that_rose_is_scored_and_not_avoided(self):
+        s = self._security(passes=[("2026-01-05", "Too much debt.",
+                                    "2026-01-06T12:00:00-05:00")])
+        b = self._score([s], {"value": 150.0}, {"value": 100.0})["Too much debt."]
+        assert (b["n_scored"], b["avoided"], b["avg"]) == (1, 0, 50.0)
+
+    def test_grouped_by_the_reason_the_user_wrote(self):
+        a = self._security("AAA", [("2026-01-05", "Too much debt.",
+                                    "2026-01-06T12:00:00-05:00")])
+        b = self._security("BBB", [("2026-01-05", "Too much debt.",
+                                    "2026-01-06T12:00:00-05:00")])
+        c = self._security("CCC", [("2026-01-05", "Do not understand it.",
+                                    "2026-01-06T12:00:00-05:00")])
+        out = self._score([a, b, c], {"value": 50.0}, {"value": 100.0})
+        assert sorted(out) == ["Do not understand it.", "Too much debt."]
+        assert out["Too much debt."]["n"] == 2
+
+    def test_a_name_with_no_price_is_counted_and_says_why(self):
+        """The common case, not the odd one: a passed-over name is usually one
+        this journal has never fetched. An average over the priced few beside
+        a count of all of them would let a data gap read as a settled result
+        about somebody's judgement."""
+        s = self._security(passes=[("2026-01-05", "Too much debt.",
+                                    "2026-01-06T12:00:00-05:00")])
+        b = self._score([s], {"value": 60.0},
+                        {"value": None, "reason": "never fetched"})["Too much debt."]
+        assert (b["n"], b["n_scored"], b["avg"]) == (1, 0, None)
+        assert b["unscored"] == [{"reason": "never fetched", "n": 1}]
+
+    def test_buying_it_after_all_ends_the_window_there(self):
+        """The same rule a sale's aftermath follows. Once the shares are
+        yours the price stops saying anything about having declined them."""
+        s = self._security(
+            passes=[("2026-01-05", "Too much debt.",
+                     "2026-01-06T12:00:00-05:00")],
+            lots_=[("2026-03-01", 120.0)])
+        b = self._score([s], {"value": 500.0}, {"value": 100.0})["Too much debt."]
+        assert b["bought_later"] == 1
+        # 120 against 100, not 500 against 100
+        assert b["avg"] == 20.0
+
+    def test_every_pass_over_is_reachable_and_not_only_one_list(self):
+        """`passed_over` answers about ONE list because that is what a screen
+        asks. Scoring asks the opposite question and had no way to ask it."""
+        s = self._security(passes=[
+            ("2026-01-05", "Too much debt.", "2026-01-06T12:00:00-05:00"),
+            ("2026-04-05", "Still too much.", "2026-04-06T12:00:00-05:00")])
+        assert len(lists.pass_overs(s)) == 2
+        out = self._score([s], {"value": 60.0}, {"value": 100.0})
+        assert sorted(out) == ["Still too much.", "Too much debt."]
+
+    def test_it_is_measured_from_the_day_the_user_declined(self):
+        """Two dates are stored and they answer different questions. The pull
+        date asks how the RANKING has done; the day they said no asks how the
+        DECISION has done, and this record exists because a decision was
+        made. Both travel on the answer so a reader can see the gap."""
+        from engine import portfolio
+        s = self._security(passes=[("2026-01-05", "Too much debt.",
+                                    "2026-01-20T12:00:00-05:00")])
+        got = portfolio.since_pass_over(s, lists.pass_overs(s)[0],
+                                        {"value": 60.0}, {"value": 100.0})
+        assert got["from"] == "2026-01-20"
+        assert got["list"] == "2026-01-05"
+
+    def test_nothing_is_invented_where_a_figure_is_missing(self):
+        """Never a zero. This is the panel that judges the method, and a
+        fabricated number is the last thing that may pass for a finding."""
+        from engine import portfolio
+        s = self._security(passes=[("2026-01-05", "Too much debt.",
+                                    "2026-01-06T12:00:00-05:00")])
+        for now, then in (({"value": None, "reason": "no close today"},
+                           {"value": 100.0}),
+                          ({"value": 60.0},
+                           {"value": None, "reason": "never fetched"}),
+                          ({"value": 0.0}, {"value": 100.0})):
+            got = portfolio.since_pass_over(s, lists.pass_overs(s)[0], now,
+                                            then)
+            assert got["pct"] is None
+            assert got["why_not"], got

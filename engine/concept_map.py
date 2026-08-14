@@ -501,6 +501,25 @@ def _patterns(spec):
 _LEASE_RE = re.compile(r"leas", re.I)
 
 
+def _placed_by_a_split(guard: str) -> set:
+    """Every concept the split inputs guarded by `guard` classify.
+
+    Who "the split" is derives from the declaration rather than being listed
+    again: an input naming `zero_guard: total_debt` is by that fact one of the
+    aggregates the guard exists to keep honest, so the set is exactly those
+    inputs' own concepts. A third split added later joins without this
+    function being edited, and a list here would be the second copy that comes
+    apart from the first.
+    """
+    out = set()
+    for spec in (load_map().get("inputs") or {}).values():
+        if spec.get("zero_guard") != guard:
+            continue
+        out |= set(spec.get("components") or [])
+        out |= set(spec.get("total_candidates") or [])
+    return out
+
+
 def _resolve_aggregate(fi, input_id, spec, date):
     face = fi.face_instants(date)
     if not face:
@@ -604,18 +623,45 @@ def _resolve_aggregate(fi, input_id, spec, date):
         # figure was sitting in the same filing — is the zero_guard below.
         #
         # Split aggregates (short/long classification) may not claim zero
-        # while unclassifiable debt-like lines sit on the same face — the
+        # while UNCLASSIFIABLE debt-like lines sit on the same face — the
         # guard spec (total_debt) knows how to spot them.
+        #
+        # Unclassifiable is the word doing the work, and it used to mean
+        # "anything total_debt lists", which is wider. total_debt lists the
+        # classified elements too, so a face carrying nothing but a line the
+        # taxonomy itself places as noncurrent refused to say the current side
+        # was zero — on the grounds that a line it had just classified might
+        # be current. Alphabet is the measured case: one face line, tagged
+        # LongTermDebtAndCapitalLeaseObligations, printed "Long-term debt",
+        # and no current-debt caption anywhere on the sheet. Long-term debt
+        # resolved and short-term debt came back absent, so return_on_capital
+        # — which needs the current borrowings inside current liabilities to
+        # subtract them — was absent for every filer shaped like that.
+        #
+        # An absence that is not true is not the safe direction. It is the
+        # same confident wrong answer as a false zero, wearing the costume of
+        # caution, and it silently removes a measure from every strategy that
+        # cites it rather than reporting anything a reader can act on.
+        #
+        # So a face line one of the SPLIT inputs places is not evidence that
+        # the split is unknowable — the program has already said which side
+        # that line is on, and refusing to draw the conclusion it just drew is
+        # two answers to one question. A line no split places (an unclassified
+        # element, or a label-matched extension tag nothing maps) still
+        # refuses, which is the whole of what this guard was for.
         guard = spec.get("zero_guard")
         if guard:
             gspec = input_spec(guard)
             ginc, gexc = _patterns(gspec)
             gconcepts = set(gspec.get("components") or []) \
                 | set(gspec.get("total_candidates") or [])
+            placed = _placed_by_a_split(guard)
             for f in face:
                 c = f.get("concept") or ""
                 label = f.get("label") or ""
                 if c in counted or f.get("balance") == "debit":
+                    continue
+                if c in placed:
                     continue
                 concept_hit = c in gconcepts
                 label_hit = bool(ginc and label and ginc.search(label)

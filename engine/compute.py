@@ -346,6 +346,53 @@ def _applicability() -> dict:
     return _APPLICABILITY["rules"]
 
 
+# The one sentence anything in this file may speak in the bank's name, held
+# as constants because the check that guards it derives from them rather than
+# from a list of the phrasings somebody thought of.
+#
+# tests/test_applicability.py imports these. That is the point: a refusal
+# wearing this sentence without going through the function below is exactly
+# what the check looks for, and it can only look for it reliably if the words
+# it searches for and the words that get printed are one object. They were
+# not, and three refusals wore the sentence — two in `_cagr`, one in
+# `incremental_roic_5y` — for a condition no bank entry declared.
+NOT_MEANINGFUL = "Not meaningful here: "
+CITES_THE_BANK = " (the bank's own test)"
+
+# What the check refuses OUTSIDE that sentence: any attribution to the bank at
+# all. The list it replaces held eight particular phrasings and four claims
+# walked past it — "the bank's own minimum", "the bank's own caveat", "the
+# bank's test" (the list had "the bank's OWN test"), and one flagging an entry
+# as its own ingestion path. Each was true and each was a second copy of words
+# the bank owns, in a file where the bank cannot correct them. Naming the
+# thing rather than its phrasings is the only version of this that holds.
+ATTRIBUTES_TO_THE_BANK = "the bank"
+
+
+def _not_meaningful_absence(entry_id: str, condition: str,
+                            detail: str = "") -> dict:
+    """The refusal sentence as a raw absence, for the callers that carry one.
+
+    Split from `not_meaningful` below so a helper assembling a series can
+    refuse in the bank's words and still hand its caller the absence shape
+    that caller already reads — `_quarterly_ratio_series` was writing the
+    sentence itself for exactly this reason. One check, one sentence, two
+    shapes; the alternative was the second copy that has already happened
+    three times in this file.
+    """
+    declared = _data_conditions().get(entry_id) or []
+    if condition not in declared:
+        raise ValueError(
+            f'{entry_id} refuses on "{condition}", which is not one of the '
+            "`data` conditions its metric-bank entry declares "
+            + (f"({_or_list(list(declared))})." if declared
+               else "— it declares none.")
+            + " A refusal a reader cannot look up teaches them the tool is "
+              "broken. Declare the condition under `not_meaningful_when`.")
+    return absent(NOT_MEANINGFUL + condition + CITES_THE_BANK
+                  + (f" — {detail}" if detail else ""))
+
+
 def not_meaningful(entry_id: str, condition: str, detail: str = "") -> dict:
     """This entry's own declared refusal, in the bank's words.
 
@@ -370,18 +417,7 @@ def not_meaningful(entry_id: str, condition: str, detail: str = "") -> dict:
     `detail` is what this reading was, which the bank cannot know — which
     year, which figures. It never restates the condition.
     """
-    declared = _data_conditions().get(entry_id) or []
-    if condition not in declared:
-        raise ValueError(
-            f'{entry_id} refuses on "{condition}", which is not one of the '
-            "`data` conditions its metric-bank entry declares "
-            + (f"({_or_list(list(declared))})." if declared
-               else "— it declares none.")
-            + " A refusal a reader cannot look up teaches them the tool is "
-              "broken. Declare the condition under `not_meaningful_when`.")
-    return _absent_result(absent(
-        f"Not meaningful here: {condition} (the bank's own test)"
-        + (f" — {detail}" if detail else "")))
+    return _absent_result(_not_meaningful_absence(entry_id, condition, detail))
 
 
 _DATA_CONDITIONS: dict = {}
@@ -627,10 +663,20 @@ def _aligned_windows(ctx, n, *input_ids):
 
 
 def _fcf_per_year(ctx, n):
+    """Free cash flow for each of the last n fiscal years.
+
+    Every bank entry reaching this is BUILT ON free cash flow and says so
+    under `inputs.entries`, even though none of them calls `ctx.entry` for it —
+    the entry answers a trailing twelve months and these answer fiscal years,
+    so the arithmetic is reproduced here rather than borrowed. `entries` is
+    what a refusal propagates along (see bank._check_propagation), and it is
+    a statement about what a measure depends on rather than about which
+    function call it makes. All four declared `[]`, which was not an omission
+    but a false sentence: it said an industry for which free cash flow means
+    nothing leaves these four untouched.
+    """
     wins = _aligned_windows(ctx, n, "cfo", "capex")
     if is_absent(wins):
-        if "capex" in str(wins.get("reason", "")) or "property" in str(wins.get("reason", "")):
-            return wins
         return wins
     cfo, capex = wins
     return {"values": [c - x for c, x in zip(cfo["values"], capex["values"])],
@@ -1008,9 +1054,9 @@ def roic_median_5y(ctx):
     if is_absent(rev):
         return _absent_result(absent(
             "revenue over the same five fiscal years: " + rev["reason"]
-            + " — and the bank's test for whether invested capital is too "
-              "small to divide by is measured against revenue, so it cannot "
-              "be settled either way"))
+            + " — and whether invested capital is too small to divide by is "
+              "measured against revenue, so that test cannot be settled "
+              "either way"))
     # Aligned on the period ends like every other window here, and for the
     # same reason: each input resolves its own newest five fiscal years, so
     # two that answer for different years line up by position while
@@ -1381,6 +1427,34 @@ def fcf_yield_on_ev(ctx):
                     sorted(set(f["cautions"] + ev["cautions"])))
 
 
+# How small a profit may be against the sales that produced it before dividing
+# into it stops describing conversion. A hundredth.
+#
+# A ratio and not a floor in dollars, for the reason roic_median_5y's is: a
+# figure that refuses a corner shop and waves through a conglomerate is not a
+# test of anything. Against revenue rather than assets or equity, because the
+# bank's own account of this misfire says revenue — "a profit small enough to
+# be a rounding error against revenue makes a year's ratio enormous without
+# saying anything about conversion; the number is right and the reading is
+# not". That sentence has been in the file since the entry was written and
+# nothing performed it, which is the shape this whole gate exists to end.
+#
+# One per cent is a judgement and is worth naming as one. Ordinary businesses
+# earn five to fifteen per cent of revenue; the thinnest real industries —
+# grocers, distributors, airlines in a bad year — run one to two. Below one,
+# the denominator moves further in a quarter than it stands at, and a
+# conversion of twenty-two times says the profit nearly vanished rather than
+# that the cash was outstanding. The measured case that put this here read
+# 22.4x against a floor of 0.90.
+#
+# Applied per year and refusing the whole window, which is the shape
+# roic_median_5y already uses and the shape the condition beside this one
+# already argues for: a median discards an outlier, and a rounding-error year
+# is not reliably an outlier. Where the cash is small too, the year divides one
+# rounding error by another and lands somewhere ordinary.
+PROFIT_IS_A_ROUNDING_ERROR = 0.01
+
+
 def cash_conversion_median_5y(ctx):
     fcf = _fcf_per_year(ctx, 5)
     if is_absent(fcf):
@@ -1391,8 +1465,25 @@ def cash_conversion_median_5y(ctx):
     if fcf["years"] != [p["end"] for p in ni["points"]]:
         return _absent_result(absent("free cash flow and net income resolve "
                                      "over different fiscal years"))
+    # Revenue is not in the formula; it is what the bank's smallness test
+    # judges the denominator against, so it is required for the same reason
+    # every other input is, and for the reason roic_median_5y reads it — a
+    # gate that cannot be evaluated has not been passed.
+    rev = _window(ctx, "revenue", 5)
+    if is_absent(rev):
+        return _absent_result(absent(
+            "revenue over the same five fiscal years: " + rev["reason"]
+            + " — and whether the profit this divides by is a rounding error "
+              "is measured against revenue, so that test cannot be settled "
+              "either way"))
+    if [p["end"] for p in rev["points"]] != fcf["years"]:
+        return _absent_result(absent(
+            "revenue resolves over different fiscal years from free cash "
+            "flow, so the test of whether the profit is too small to divide "
+            "by would compare one year against another"))
     vals = []
-    for f, n, y in zip(fcf["values"], ni["values"], fcf["years"]):
+    for i, (f, n, y) in enumerate(zip(fcf["values"], ni["values"],
+                                      fcf["years"])):
         # Negative and not merely zero. A loss inverts the ratio rather than
         # undefining it: a company that lost money and burned cash divides
         # one negative by another and reads as a perfect converter, which is
@@ -1403,6 +1494,24 @@ def cash_conversion_median_5y(ctx):
                 "cash_conversion_median_5y",
                 "net income in any year of the window is zero or negative",
                 f"net income for FY ending {y} is {n:,.0f}")
+        # And the same refusal one step above zero. Any year, for the reason
+        # the condition above is any year: a tiny denominator does not have to
+        # land at an extreme where a median would discard it. Where the cash
+        # is small too, the year divides one rounding error by another and
+        # arrives at something like 1.2 — an unremarkable value, sitting in
+        # the middle of the sorted five, describing nothing.
+        r = rev["values"][i]
+        if not (r > 0):
+            return _absent_result(absent(
+                f"revenue for FY ending {y} is {r:,.0f}, so whether the "
+                "profit this divides by is a rounding error against it "
+                "cannot be settled"))
+        if n < PROFIT_IS_A_ROUNDING_ERROR * r:
+            return not_meaningful(
+                "cash_conversion_median_5y",
+                "net income (the denominator) is under 1% of revenue",
+                f"net income at FY ending {y} is {n:,.0f} against revenue of "
+                f"{r:,.0f}")
         vals.append(f / n)
     value, outs = _median_of(vals, fcf["years"])
     return computed(value,
@@ -1511,8 +1620,13 @@ def enterprise_value(ctx):
     if is_absent(cash):
         return _absent_result(cash)
     cautions = sorted(set(mc["cautions"] + _cautions_of(debt, cash)))
+    # No attribution on the end of this. The sentence is true and the bank
+    # says it too, under this entry's `misfires`; claiming the bank as its
+    # author from here is a second copy of words the bank owns, sitting where
+    # the bank cannot correct it. The caution itself stays, because it travels
+    # with the value and the misfires prose does not.
     cautions.append("mixes a live price against a balance sheet up to a "
-                    "quarter old — the bank's own caveat")
+                    "quarter old")
     return computed(mc["value"] + debt["value"] - cash["value"],
                     mc["provenance"] + [_prov_point(debt), _prov_point(cash)],
                     cautions)
@@ -1792,14 +1906,23 @@ def return_on_capital(ctx):
         _cautions_of(ebit, *parts.values()))
 
 
-def _quarterly_ratio_series(ctx, kind):
+def _quarterly_ratio_series(ctx, kind, entry):
     """20 quarterly observations of EV/EBIT or P/E, each self-consistent on
-    its own quarter's original filing, price and cover shares."""
+    its own quarter's original filing, price and cover shares.
+
+    `entry` is `(entry_id, shortfall_condition)` — the bank entry this series
+    answers for and the condition it refuses on when the quarters are not
+    there. It used to say "the bank's own minimum" in a sentence of its own,
+    which was true and was still the defect: the number 20 is a constant in
+    this file and the sentence naming the bank as its author was checked by
+    nothing. Both entries declare the condition; now both cite it.
+    """
+    entry_id, shortfall = entry
     fis = ctx.sb.quarterly_observation_fis(QUARTERS_FOR_OWN_MEDIAN)
     if len(fis) < QUARTERS_FOR_OWN_MEDIAN:
-        return absent(f"only {len(fis)} reporting periods are on record; "
-                      f"{QUARTERS_FOR_OWN_MEDIAN} quarters are needed — the "
-                      "bank's own minimum")
+        return _not_meaningful_absence(
+            entry_id, shortfall,
+            f"only {len(fis)} reporting periods are on record")
     values, misses = [], []
     for fi in fis:
         q = fi.period_of_report
@@ -1864,9 +1987,11 @@ def _quarterly_ratio_series(ctx, kind):
                           / eps["value"])
     if len(values) < QUARTERS_FOR_OWN_MEDIAN:
         sample = "; ".join(misses[:4])
-        return absent(f"only {len(values)} of the last "
-                      f"{QUARTERS_FOR_OWN_MEDIAN} quarters could be "
-                      f"assembled ({sample}{'; …' if len(misses) > 4 else ''})")
+        return _not_meaningful_absence(
+            entry_id, shortfall,
+            f"only {len(values)} of the last {QUARTERS_FOR_OWN_MEDIAN} "
+            f"quarters could be assembled "
+            f"({sample}{'; …' if len(misses) > 4 else ''})")
     return {"median": median(values), "n": len(values)}
 
 
@@ -1878,7 +2003,10 @@ def ev_ebit_to_own_5y_median(ctx):
             "EV/EBIT is not meaningful in the current period",
             cur.get("reason", "") + ", and a ratio against a median needs a "
             "current value")
-    hist = _quarterly_ratio_series(ctx, "ev_ebit")
+    hist = _quarterly_ratio_series(
+        ctx, "ev_ebit",
+        ("ev_ebit_to_own_5y_median",
+         "fewer than 20 trailing quarters of EV/EBIT are available"))
     if is_absent(hist):
         return _absent_result(hist)
     if hist["median"] == 0:
@@ -1904,7 +2032,10 @@ def pe_to_own_5y_median_pe(ctx):
     # are built the same way by construction rather than by a correction
     # applied at the last moment for multi-class filers and forgotten for the
     # single-class filer whose common stock shares a CIK with a warrant.
-    hist = _quarterly_ratio_series(ctx, "pe")
+    hist = _quarterly_ratio_series(
+        ctx, "pe",
+        ("pe_to_own_5y_median_pe",
+         "fewer than 20 trailing quarters of P/E are available"))
     if is_absent(hist):
         return _absent_result(hist)
     if hist["median"] == 0:
@@ -2119,9 +2250,32 @@ def _appeared_rather_than_grew(ctx, years, base_ends=GROWTH_ENDS):
           "growth rate")
 
 
-def _cagr(ctx, input_id, span, gated=False):
+def _cagr(ctx, entry_id, base_condition, end_condition, input_id, span,
+          gated=False):
     """A compound annual rate between the averages of the three fiscal years
     at each end of a `span`-year gap.
+
+    `entry_id` is the bank entry this rate answers for, and the two
+    conditions beside it are the ones it refuses on, in the bank's own words.
+    They are here because a refusal has to name the entry it is refusing for.
+    This helper used to write both of its refusals by hand, in the shape of a
+    bank citation, and nothing joined either sentence to a declaration. One of
+    them was a condition all four entries did declare; the other was one none
+    of them did — a positive base falling to a negative end, which is a profit
+    turning into a loss and is not rare. A reader following that sentence to
+    the Metrics page found nothing there, which is the exact failure
+    `not_meaningful` was written to end.
+
+    The conditions travel as text rather than being derived from the input's
+    label because the bank's noun and the concept map's label are not the same
+    word — "Net income (loss)" and "Diluted earnings per share" against "net
+    income" and "diluted EPS" — and a sentence assembled out of the wrong one
+    would be a citation of something the bank does not say. Passing them is
+    safe in the way deriving them is not: `not_meaningful` refuses any string
+    the entry does not declare, so a typo raises rather than printing — and
+    they are passed one per argument rather than bundled, so each stays a
+    literal at the entry's own function where tests/test_applicability.py can
+    read the pair it is enforcing.
 
     Averaged rather than endpoint to endpoint, and that is the whole change:
     a single year at either end carries whatever one-off sat in it, and the
@@ -2144,19 +2298,20 @@ def _cagr(ctx, input_id, span, gated=False):
     years = [p["end"] for p in w["points"]]
     rate, outs, base, late = _averaged_cagr_from(w["values"], years, span)
     if base <= 0:
-        return absent(
-            f"Not meaningful here: mean {label(input_id)} over FY "
-            f"{years[0]}..{years[GROWTH_ENDS - 1]} is zero or negative "
-            f"({base:,.2f}) — no compound rate exists from that base")
+        return _not_meaningful_absence(
+            entry_id, base_condition,
+            f"mean {label(input_id)} over FY {years[0]}.."
+            f"{years[GROWTH_ENDS - 1]} is {base:,.2f}, and no compound rate "
+            "exists from that base")
     if rate is None:
         # A fractional power of a negative ratio is a complex number in
         # Python — and a nonsense answer in accounting. Positive-to-negative
         # has no compound annual rate; refusing beats a stack trace.
-        return absent(
-            f"Not meaningful here: mean {label(input_id)} over FY "
-            f"{years[-GROWTH_ENDS]}..{years[-1]} is negative "
-            f"({late:,.2f}) — no compound annual rate exists from a positive "
-            "base to a negative end")
+        return _not_meaningful_absence(
+            entry_id, end_condition,
+            f"mean {label(input_id)} over FY {years[-GROWTH_ENDS]}.."
+            f"{years[-1]} is {late:,.2f}, against {base:,.2f} over FY "
+            f"{years[0]}..{years[GROWTH_ENDS - 1]}")
     if gated:
         appeared = _appeared_rather_than_grew(ctx, years)
         if appeared is not None:
@@ -2170,8 +2325,10 @@ def _cagr(ctx, input_id, span, gated=False):
             "cautions": list(w["cautions"])}
 
 
-def _cagr_result(ctx, input_id, span, gated=False):
-    r = _cagr(ctx, input_id, span, gated=gated)
+def _cagr_result(ctx, entry_id, base_condition, end_condition, input_id,
+                 span, gated=False):
+    r = _cagr(ctx, entry_id, base_condition, end_condition, input_id, span,
+              gated=gated)
     if is_absent(r):
         return _absent_result(r)
     return computed(r["value"], r["prov"], r["cautions"],
@@ -2183,11 +2340,17 @@ def revenue_cagr_5y(ctx):
     # small base is the thing itself rather than an artefact of one — a
     # company selling ten times what it sold is a company selling ten times
     # what it sold, whatever happened to its earnings.
-    return _cagr_result(ctx, "revenue", 5)
+    return _cagr_result(
+        ctx, "revenue_cagr_5y",
+        "mean revenue over the three base years is zero or negative",
+        "mean revenue over the three end years is negative", "revenue", 5)
 
 
 def revenue_cagr_3y(ctx):
-    return _cagr_result(ctx, "revenue", 3)
+    return _cagr_result(
+        ctx, "revenue_cagr_3y",
+        "mean revenue over the three base years is zero or negative",
+        "mean revenue over the three end years is negative", "revenue", 3)
 
 
 def _families_of(res) -> set:
@@ -2495,7 +2658,11 @@ def net_margin_base_share_5y(ctx):
 
 
 def net_income_cagr_5y(ctx):
-    return _cagr_result(ctx, "net_income", 5, gated=True)
+    return _cagr_result(
+        ctx, "net_income_cagr_5y",
+        "mean net income over the three base years is zero or negative",
+        "mean net income over the three end years is negative",
+        "net_income", 5, gated=True)
 
 
 def eps_cagr_5y(ctx):
@@ -2504,7 +2671,11 @@ def eps_cagr_5y(ctx):
     # window; a share count that halved in between moves per-share and says
     # nothing about that. The window is this measure's own fiscal years, so
     # the two are read over exactly the same period.
-    return _cagr_result(ctx, "diluted_eps", 5, gated=True)
+    return _cagr_result(
+        ctx, "eps_cagr_5y",
+        "mean diluted EPS over the three base years is zero or negative",
+        "mean diluted EPS over the three end years is negative",
+        "diluted_eps", 5, gated=True)
 
 
 def eps_growth_10y(ctx):
@@ -2862,8 +3033,7 @@ def goodwill_intangibles_to_assets(ctx):
 def insider_net_buying_6m(ctx):
     return _absent_result(absent(
         "insider transactions live in Form 4 XML, a separate ingestion "
-        "source this pipeline does not read yet — the bank flags this entry "
-        "as its own ingestion path"))
+        "source this pipeline does not read yet"))
 
 
 def institutional_ownership_pct(ctx):
@@ -2975,13 +3145,13 @@ def incremental_roic_5y(ctx):
 
     base_c, end_c, _outs_c = _averaged_ends(invested, years)
     if end_c - base_c <= 0:
-        return _absent_result(absent(
-            "Not meaningful here: invested capital did not grow across the "
-            "window, so no capital was retained for this to be the return "
-            "on. A business that grew without keeping any of its profits is "
-            "the case this ratio has no way to express, and reporting a "
-            "figure divided by nothing or by a negative would read as an "
-            "answer"))
+        return not_meaningful(
+            "incremental_roic_5y",
+            "invested capital did not grow across the window",
+            f"mean invested capital over FY {years[-GROWTH_ENDS]}.."
+            f"{years[-1]} is {end_c:,.0f} against {base_c:,.0f} over FY "
+            f"{years[0]}..{years[GROWTH_ENDS - 1]}, so no capital was "
+            "retained for this to be the return on")
     # One-out by hand rather than through `_with_one_out`: the statistic
     # needs both series, dropped at the same year on both sides, and a year
     # in the gap between the two averages is in neither of them.

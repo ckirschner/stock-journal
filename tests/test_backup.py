@@ -11,12 +11,13 @@ test here is that the arrangement still holds, because the value of "by
 construction" is entirely in nobody having to remember.
 """
 
+import copy
 import json
 
 import pytest
 from conftest import entered, journal_for
 
-from engine import backup, hand_entered, journals, secrets, store
+from engine import backup, bank, hand_entered, journals, secrets, store
 
 
 def _bundle(tmp_path, name="b.json"):
@@ -38,9 +39,17 @@ class TestExport:
         entered(acme, "2025-03-01", fcf_ttm=5.0)
         a["securities"].append(acme)
         journals.observe_rule_change(a, record, {"cash-floor": 250000})
-        journals.explain(a, 1, "Widened on purpose.")
+        journals.explain(a, "rules", 1, "Widened on purpose.")
+        # And a measure redefined under it. The bundle is the copy that
+        # outlives the machine the bank was edited on, so what a journal can
+        # say about its own measures has to travel in it or the record only
+        # holds while the file that moved is still there to compare against.
+        moved = copy.deepcopy(bank.definitions())
+        moved["entries"]["roic_median_5y"]["states"]["observations read"] = 3
+        journals.observe_measure_change(a, moved)
+        journals.explain(a, "measures", 1, "One year was carrying it.")
         journals.save(a)
-        journals.create("Second", record)
+        journals.create("Second", record, bank.definitions())
 
         doc = json.loads(_bundle(tmp_path).read_text(encoding="utf-8"))
         assert doc["bundle_version"] == backup.BUNDLE_VERSION
@@ -49,6 +58,18 @@ class TestExport:
         kept = by_id[a["id"]]
         assert kept["strategy"]["values"] == {"cash-floor": 1000000}
         assert kept["rule_changes"][0]["reason"] == "Widened on purpose."
+        assert kept["measure_changes"][0]["moved"] == [{
+            "id": "roic_median_5y",
+            "name": "Return on invested capital, 5-year median",
+            "field": "observations read", "from": 5, "to": 3}]
+        assert kept["measure_changes"][0]["reason"] == \
+            "One year was carrying it."
+        # The stamp too, because what a change is measured FROM is half of
+        # what it says. A bundle carrying the moves and not the state they
+        # moved from restores a journal that reports every measure as newly
+        # redefined the first time it is opened.
+        assert kept["measures"]["entries"]["roic_median_5y"]["states"][
+            "observations read"] == 5
         assert kept["securities"][0]["notes"][0]["text"] == "hello"
         # Read straight out of the file, so this says what the bundle holds
         # rather than what the engine can make of it: every entry, in order,
@@ -77,7 +98,7 @@ class TestExport:
                                                              tmp_path):
         strategies("verdicts")
         good, record = journal_for("verdicts", "Good")
-        bad = journals.create("Bad", record)
+        bad = journals.create("Bad", record, bank.definitions())
         journals.path_for(bad["id"]).write_text("{ truncated",
                                                 encoding="utf-8")
         doc = json.loads(_bundle(tmp_path).read_text(encoding="utf-8"))

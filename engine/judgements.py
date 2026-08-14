@@ -249,4 +249,66 @@ def assess(security: dict, entry_id: str, mark: str, reasoning: str) -> dict:
             "record is for.")
 
     return dated.append(security, KEY, {"id": entry_id, "mark": mark,
-                                        "reasoning": reasoning})
+                                        "reasoning": reasoning,
+                                        **asked_as(entry, entry_id)})
+
+
+# What the bank said this question WAS, on the day it was answered. Frozen onto
+# the answer for the reason a citation freezes its label, unit and format: a
+# record that reads differently depending on a file it does not own is not a
+# record.
+#
+# Two things went wrong without it, and they are different sizes.
+#
+# The small one is a reword. The question is read live at render time, so
+# editing it re-labels every answer ever given — and the screen prints today's
+# wording directly above the list of earlier assessments, presenting each old
+# pass or fail as an answer to a question that may never have been asked in
+# those words. The reasoning underneath is the user's account of a question
+# they can no longer see.
+#
+# The large one is a delete, or the single word `kind: qualitative` becoming
+# `computed`. Every read path funnels through `_entries()`, which is keyed off
+# the live bank, so the id simply stops existing — and the mark, the reasoning
+# and the whole history stay on disk, unreachable, while the verdict that used
+# to read them changes state with nothing on screen to explain why.
+#
+# `marks` travels too, because the vocabulary is the third live read on the
+# same row: an entry whose `response.marks` no longer matches what this host
+# records blanks every answer already given. Freezing what was accepted at the
+# time does not make an unreadable answer readable — it makes the record able
+# to say what it was.
+def asked_as(entry: dict, entry_id: str) -> dict:
+    """The bank's words for one question, as they stand now."""
+    return {
+        "label": str(entry.get("label") or entry_id),
+        "question": str(entry.get("question") or "").strip() or None,
+        "plain": ((entry.get("explanation") or {}).get("plain")
+                  or "").strip() or None,
+        "marks": list(MARKS),
+    }
+
+
+def as_asked(answer: dict | None, live: dict | None, entry_id: str) -> dict:
+    """What to call a question on a screen: the words frozen onto the answer
+    where the answer carries them, and the live bank only where it does not.
+
+    Presence of the KEY decides, never truthiness — a stored `None` is the
+    bank having declared none, which is a different answer from silence and
+    must not fall through to whatever the file says today. A record with no
+    `label` key at all predates this, and the live bank is the best that can
+    be done for it.
+    """
+    out = dict(live or {"id": entry_id, "label": entry_id, "question": "",
+                        "plain": "", "marks": list(MARKS),
+                        "unsupported": None})
+    for field in ("label", "question", "plain", "marks"):
+        if isinstance(answer, dict) and field in answer:
+            out[field] = answer[field]
+    out["id"] = entry_id
+    # Whether the bank still asks this at all. A screen has to be able to say
+    # "you answered this and it is no longer asked" rather than showing the
+    # row as though nothing had happened, or dropping it as though nothing had
+    # been written.
+    out["withdrawn"] = live is None
+    return out

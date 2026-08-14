@@ -98,12 +98,19 @@ class Api:
         is on the books before the first verdict that uses it. journal is
         None when none exists yet; record is None when the stamped strategy
         is not installed here.
+
+        The measure definitions are compared first, and whether or not the
+        strategy is installed. A strategy missing from this machine is a
+        reason no verdict can be produced; it is not a reason for the file
+        that says what every figure means to move unobserved.
         """
         strategies, reports = self._strategies()
         jid = jid or journals.resolve_open()
         if jid is None:
             return None, None, None, reports
         journal = journals.load(jid)
+        if self._observe_measures(journal):
+            journals.save(journal)
         stamp = journal.get("strategy") or {}
         record = strategies.get(stamp.get("id"))
         if record is None:
@@ -115,6 +122,23 @@ class Api:
             if journals.observe_rule_change(journal, record, chain["values"]):
                 journals.save(journal)
         return journal, record, chain, reports
+
+    def _observe_measures(self, journal):
+        """Put any move in what the measures mean onto this journal's record.
+        Returns the appended entry, or None where nothing moved.
+
+        Contained, because a bank that will not load is already reported
+        everywhere a figure would have been and must not additionally stop a
+        journal opening. What it costs is that the move is recorded the next
+        time the file parses — which is the same as any other unreadable
+        file here, and better than a window in which nothing opens at all.
+        """
+        try:
+            return journals.observe_measure_change(
+                journal, bank.definitions(), bank.changelog())
+        except Exception:                               # noqa: BLE001
+            traceback.print_exc()
+            return None
 
     def _find(self, journal, ticker):
         for s in journal.get("securities", []):
@@ -468,23 +492,39 @@ class Api:
         screen. One sentence, one home — two copies of a caution drift until
         they disagree about what they are warning of.
         """
-        answered = {a["id"] for a in (security.get("judgements") or [])
-                    if isinstance(a, dict) and a.get("id")}
+        answered = [a["id"] for a in (security.get("judgements") or [])
+                    if isinstance(a, dict) and a.get("id")]
+        live = judgements.questions()
         seen = judgements.observations(security)
+        # Driven by the bank AND by the record, not by the bank alone. The
+        # `answered` set used to sit inside this loop as a gate, where it could
+        # only keep an id the bank still offered and never add one the bank had
+        # dropped — so deleting an entry, or flipping its `kind` to `computed`,
+        # took the mark, the reasoning and the whole history off the screen
+        # with nothing said. The words for such a row come off the answer
+        # itself; see judgements.as_asked.
+        ids = list(live) + [e for e in answered if e not in live]
         out = []
-        for eid, q in judgements.questions().items():
+        for eid in ids:
+            q = live.get(eid)
             if eid not in asked and eid not in answered:
                 continue
+            standing = judgements.in_force(security, eid) or {}
+            asked_as = judgements.as_asked(standing, q, eid)
             # Where the host cannot serve the question at all, it reports no
             # answer — even if one is on record. The strategy was told the
             # measure is absent, and a screen showing "Passed" beside a
             # verdict that says "can't say" is the two halves of the program
             # disagreeing about the same fact in front of the reader. The
             # record itself is untouched and still travels in `history`.
-            standing = ({} if q["unsupported"]
-                        else judgements.in_force(security, eid) or {})
+            #
+            # A question the bank no longer asks is the same case: the answer
+            # is shown as what it was and not as what is standing, because
+            # nothing is standing.
+            if (q or {}).get("unsupported") or asked_as["withdrawn"]:
+                standing = {}
             out.append({
-                **q,
+                **asked_as,
                 "cited": eid in asked,
                 "mark": standing.get("mark"),
                 "reasoning": standing.get("reasoning"),
@@ -602,6 +642,24 @@ class Api:
                     "errors": r["errors"]} for r in reports if not r["ok"]]
         listed = journals.list_journals()
 
+        # The bank is a file the user edits, so a bad edit is an ordinary
+        # event and must not be a dead window. `bank.refusal` reports what is
+        # wrong with the version on disk and whether an earlier one is still
+        # being served; where one is, everything below runs on it exactly as
+        # before and the screen carries the problem. Where there is none —
+        # a broken file at a cold start — the state still renders, with no
+        # measures and the reason in place of them, because the way out of
+        # this is to go and fix a file and that needs a window that opens.
+        bank_problem = bank.refusal()
+        try:
+            bank_meta = bank.meta()
+        except Exception as e:                      # noqa: BLE001
+            bank_meta = {}
+            if bank_problem is None:                # not a refusal: say what
+                bank_problem = {"problems": [f"{type(e).__name__}: {e}"],
+                                "holding": False,
+                                "path": str(bank.bank_path("metric-bank"))}
+
         # A journal that cannot be read must not take the whole window down
         # with it: the list still renders, with the problem named, so the
         # user can open a different one rather than face a blank screen.
@@ -610,17 +668,24 @@ class Api:
             journal, record, chain, _ = self._open()
         except store.StoreError as e:
             journal, record, chain, problem = None, None, None, str(e)
+        # Nothing about a security survives a bank that will not load at all —
+        # every measure, every verdict and every question you answer is
+        # defined there — so the securities are not walked rather than walked
+        # with each of a dozen bank reads contained separately. The list of
+        # journals and the reason render, which is what the way out needs.
+        if not bank_meta:
+            journal = None
         if journal is None:
             return ok(journal=None, journals=listed, strategies=offers,
                       refused=refused, securities=[], journal_problem=problem,
-                      bank_meta=bank.meta(), ev_methods=EV_METHODS,
+                      bank_problem=bank_problem,
+                      bank_meta=bank_meta, ev_methods=EV_METHODS,
                       exit_reasons=EXIT_REASONS,
                       data_dir=str(store.data_dir()),
                       data_security=self._data_security())
 
         if journals.open_id() != journal["id"]:
             journals.set_open(journal["id"])
-        bank_meta = bank.meta()
         securities = journal.get("securities", [])
         entry_ids = list(bank_meta)
         priced = []             # effective-price views, for the analytics
@@ -674,9 +739,19 @@ class Api:
                             "history": thesis_mod.history(s)}
             s["_valuation"] = {**valuation.standing(s, today=today),
                                "history": valuation.history(s)}
+            # A row per measure this security has something to show for, in
+            # the words that measure was ENTERED under rather than today's.
+            #
+            # The membership test used to be `mid in bank_meta`, which meant a
+            # bank entry deleted, or flipped from computed to qualitative,
+            # took the row away — and with it the figure, its history, and the
+            # only control that can withdraw it. The figure kept being served
+            # into every new frozen snapshot from a record the user could no
+            # longer reach. So a measure the bank has dropped keeps its row as
+            # long as something was typed for it, and says it was dropped.
             s["_inputs"] = [
-                {"id": mid, **{k: bank_meta[mid][k]
-                               for k in ("label", "unit", "format", "plain")},
+                {**hand_entered.shown_as(hand_entered.in_force(s, mid),
+                                         bank_meta.get(mid), mid),
                  "cited": mid in cited,
                  # What was entered by hand for this measure, and when — plus
                  # everything entered before it. A value that was retyped the
@@ -684,8 +759,9 @@ class Api:
                  # earlier one renders too.
                  "entered": hand_entered.reading(s, mid),
                  "entries": hand_entered.history(s, mid)}
-                for mid in shown if mid in bank_meta
-                and bank_meta[mid].get("kind") == "computed"]
+                for mid in shown
+                if (bank_meta.get(mid) or {}).get("kind") == "computed"
+                or (mid not in bank_meta and hand_entered.history(s, mid))]
             s["_computed"] = {
                 eid: {"status": r.get("status"), "value": r.get("value"),
                       "reason": r.get("reason"),
@@ -746,10 +822,26 @@ class Api:
             strategy_missing=(journal.get("strategy") or {})
             if record is None else None,
             rule_changes=list(journal.get("rule_changes") or []),
+            measure_changes=list(journal.get("measure_changes") or []),
             input_changes=list(journal.get("input_changes") or []),
             pending_changes=journals.pending(journal),
+            # What each record is, in the host's words. The banner asking for
+            # a reason has to say which of them moved, and a view holding its
+            # own table of the two is a view that has to be edited when there
+            # is a third — the wrong turn principle 9 names.
+            change_records=journals.record_words(),
+            # Every moment the definitions actually moved, so a decision
+            # frozen before one of them can say so where it is read rather
+            # than leaving the reader to join two screens. Moments and not a
+            # count, because the comparison is per frozen entry and each one
+            # was frozen on a different day. Which entries count as a move is
+            # the host's to decide and is decided in engine/journals.py — a
+            # release that changed only wording moved nothing.
+            measures_moved_at=journals.measures_moved_at(journal),
+            measures_version=journals.measures_baseline(journal)["version"],
             securities=securities,
             bank_meta=bank_meta,
+            bank_problem=bank_problem,
             # The render types, so the view sorts and counts a state
             # whose meaning it does not know. It never learns which states
             # exist; it is told, every render.
@@ -773,6 +865,21 @@ class Api:
                 securities, lambda s: by_ticker.get(s["ticker"])),
             exit_scorecard=portfolio.exit_scorecard(
                 securities, lambda s: by_ticker.get(s["ticker"])),
+            # And the third of the three ways this method gets broken. The
+            # then-price has to come from a FETCHED series and never from the
+            # effective price the other two read: a hand-entered figure is a
+            # statement about now, and reaching it into the past would invent
+            # the very number this panel is judging a decision against. A name
+            # nobody ever fetched has no CIK, so it scores as unscored with
+            # that said rather than dropping out of the count.
+            pass_over_scorecard=portfolio.pass_over_scorecard(
+                securities, lambda s: by_ticker.get(s["ticker"]),
+                lambda s, day: dataview.price_view_asof(
+                    s.get("cik"), s["ticker"], day) if s.get("cik") else
+                {"value": None, "reason": "this journal has never fetched "
+                 f"prices for {s['ticker']}, so what it was worth on the day "
+                 "you passed on it is not on record — fetch its data and "
+                 "this fills in"}),
             data_dir=str(store.data_dir()),
             data_security=self._data_security(),
         )
@@ -803,7 +910,8 @@ class Api:
         _, problems = contract.check_inputs(record, typed, chain["values"])
         if problems:
             return err(" ".join(problems))
-        journal = journals.create(name, record, inputs=typed)
+        journal = journals.create(name, record, bank.definitions(),
+                                  inputs=typed)
         journals.set_open(journal["id"])
         return ok(id=journal["id"], name=journal["name"])
 
@@ -935,11 +1043,18 @@ class Api:
 
     @guarded
     @locked
-    def explain_rule_change(self, seq, reason):
+    def explain_change(self, record, seq, reason):
+        """Write the reason a recorded change was made.
+
+        `record` names which of this journal's append-only records the change
+        sits on — the view is handed those words with the change itself and
+        hands them back, rather than holding a list of the records that
+        exist.
+        """
         journal, *_ = self._open()
         if journal is None:
             return err("No journal is open.")
-        change = journals.explain(journal, int(seq), reason)
+        change = journals.explain(journal, str(record), int(seq), reason)
         journals.save(journal)
         return ok(seq=change["seq"])
 
@@ -2151,7 +2266,7 @@ class Api:
         if problems:
             return None, f"{path.name}: {' '.join(problems)}"
         journal = journals.create(f"Sample — {record['name']}", record,
-                                  inputs=inputs)
+                                  bank.definitions(), inputs=inputs)
         journal["securities"] = sample["securities"]
         # A sample for a strategy that works from a list carries the imports
         # that were made into it, whole. They are the buy side of its story:
@@ -2207,8 +2322,10 @@ class Api:
     @guarded
     @locked
     def clear_all(self):
-        """Empty the open journal of securities. Its strategy stamp, settings
-        and rule-change record stay — they are what the journal *is*."""
+        """Empty the open journal of securities. Its strategy stamp, its
+        measure stamp, its settings and both change records stay — they are
+        what the journal *is*, and clearing positions is not a statement that
+        the rules never moved."""
         journal, *_ = self._open()
         if journal is None:
             return err("No journal is open.")

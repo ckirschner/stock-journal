@@ -691,6 +691,49 @@ Optional on any item:
   as a proportion and -7 as a distance, and only one of those says the same
   thing to a business earning 45% and one earning 15%.
 
+### Saying which citations decided it
+
+A verdict usually cites more than it acts on, and it should: a reader looking
+at a close wants to see the tests that held as well as the one that broke. But
+that leaves the rows unable to say which of them produced the state — a closing
+verdict and one still a reading short of confirmation cite exactly the same
+things, and the difference between those two is the whole point of a
+confirmation rule.
+
+So say it:
+
+```python
+"reason": {
+    "rule": "exit-confirmed",
+    "summary": "Two of the things that would stop it have gone wrong and "
+               "stayed wrong.",
+    "evidence": evidence,          # every exit, whichever fired
+    "rests_on": ["debt_to_equity", "fcf_ttm"],
+}
+```
+
+**Ids, never words.** Each name must be the id one of this decision's own
+citations carries; naming anything else is refused, because the host resolves
+the label from the citation and a name with no citation behind it has no words
+and no figure. The host marks those rows and hands `reason.rests_on` back with
+each subject resolved — so whatever renders it prints the measure's name in the
+bank's own words, which are the words on the row underneath.
+
+**Do not write measure names into `summary`.** That is the strategy quoting the
+host, and it is the failure this key exists to remove: the two shipped bundles
+that wanted to name what broke each kept a hand-written clause per measure,
+with a fallback that printed the raw bank id into the sentence telling somebody
+to sell. Write the argument; let the host supply the nouns.
+
+Leave `rests_on` out where every citation is load-bearing or none is in
+particular. An empty list is refused — it states nothing, which is what leaving
+it out already does.
+
+**A blocked verdict's `needs` works the same way.** The host composes the "what
+is owed" lines from the questions you cited that came back unanswered, in the
+bank's words. Your `needs` carries only what the host cannot know: where to go,
+and why this method will not act until it has been answered.
+
 ### Asking the host how it came out
 
 ```python
@@ -1158,6 +1201,22 @@ Cited as `{"measure": "<id>", "since": "<anchor>"}`.
 | `first-purchase` | since you first bought | the purchase that took this holding up from nothing |
 <!-- end: baseline-anchors -->
 
+**A move can come back unknown because the measure itself moved.** The reading
+at the purchase is frozen; the reading now is worked out today. If what the
+measure *means* changed in between — a different window, a different formula —
+the two are readings of different things and the distance between them is a
+distance in nothing, so the host withholds the frozen figure and the citation
+reads absent with the reason. That is not a gap a fetch can close and it does
+not close by itself: only closing the position and opening it again re-anchors
+what the holding is measured against.
+
+Nothing is asked of you for it. Handle an unknown here exactly as you handle
+every other unknown — never as a pass, never as a zero. What is worth knowing
+before you build a rule on a baseline is that this is the one absence a
+long-held position can acquire without anything about the company changing,
+and a rule that treats it as a demand will make that demand of every holding
+at once.
+
 ### How a move from a baseline is counted
 
 <!-- generated: change-forms -->
@@ -1257,7 +1316,7 @@ against the SEC's published list in
 ### The rest of the vocabulary
 
 <!-- generated: vocabulary -->
-- **Contract version** — `7`. A declaration naming any other is refused at load.
+- **Contract version** — `8`. A declaration naming any other is refused at load.
 - **Most states one strategy may declare** — `16`.
 - **Declared field types** — `number`, `integer`, `boolean`, `text`.
 - **Units a `size` may be in** — `weight`, `usd`, `shares` (`weight` is a percent number).

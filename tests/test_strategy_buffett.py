@@ -31,6 +31,7 @@ drift from the real one.
 import pytest
 
 from conftest import entered, filer, filing, dur, balance_face, \
+    redefined_since, \
     industry_node
 
 from engine import context, contract, facts_store, judgements
@@ -573,15 +574,34 @@ class TestABlockedVerdictIsNeverADeadEnd:
                       judged={"moat_durability": True})
         assert cited_judgements(out) == list(QUALITATIVE)
 
-    def test_the_needs_name_the_questions_in_words_not_ids(self, buffett):
+    def test_the_needs_name_the_questions_in_the_banks_own_words(self,
+                                                                 buffett):
+        """And this file no longer writes them. The strategy used to keep a
+        paraphrase of each of the three, because the context handed it a
+        value and not a label — a strategy quoting the host, with a fallback
+        that printed the raw bank id when the map missed. It cites them; the
+        host names them, in the same words the rows beneath this verdict and
+        the section it sends the reader to already carry."""
+        from engine import bank
         out = verdict(buffett, known=CLEARS_ENTRY,
                       judged={"moat_durability": True,
                               "management_integrity": True})
         needs = out["payload"]["needs"]
-        assert any("spare cash" in n for n in needs)
+        label = bank.meta()["capital_allocation"]["label"]
+        assert needs[0] == f"{label} — unanswered."
+        # only the one that is outstanding, not all three it cited
+        assert len([n for n in needs if n.endswith("— unanswered.")]) == 1
         assert not any("capital_allocation" in n for n in needs)
         assert any("Your judgement" in n for n in needs)
         assert any("not a fail" in n for n in needs)
+
+    def test_the_names_are_not_written_in_this_strategy_at_all(self,
+                                                               buffett):
+        """The structural half. A paraphrase that merely happens to agree
+        with the bank today is the arrangement this replaced."""
+        import pathlib
+        src = pathlib.Path(buffett["dir"], "strategy.py").read_text()
+        assert "_ASKING" not in src
 
     def test_the_host_marks_them_as_judgements_and_not_measurements(
             self, buffett):
@@ -1442,3 +1462,66 @@ class TestTheCompaniesItWillNotJudge:
     def test_an_ordinary_business_is_untouched(self, buffett):
         result = contract.evaluate(buffett, build(buffett, known=CLEARS_ENTRY))
         assert result["produced_by"] == "strategy"
+
+
+class TestWhatARedefinedMeasureCostsThisStrategy:
+    """One measure — return on invested capital — and the whole of what a
+    moved definition costs Buffett rides on it.
+
+    The return-on-capital exit is compound on purpose: returns must have
+    fallen by a third of what they were AND be under an absolute floor.
+    Only the first half measures back to a purchase, so only the first half
+    can be withheld when the definition moves — and the exit requires both,
+    so withholding one ends it. This strategy then has four exits instead of
+    five, and the one it loses is the one it is named for: a wonderful
+    business that stopped being wonderful.
+
+    Nothing happens while returns are clear of the floor. The compound test
+    answers "clear" on the absolute half alone, so a redefinition costs
+    exactly nothing until the day the floor is broken — which is the day it
+    would have mattered.
+    """
+
+    def holding(self, buffett, roic, was=None):
+        return build(buffett, known={**CLEARS_EXITS, "roic_median_5y": roic},
+                     series={"roic_median_5y": [(d, roic) for d in
+                                                ("2025-06-30", "2025-09-30",
+                                                 "2025-12-31", "2026-03-31")]},
+                     held=True, opened="2026-01-05", weight=3.0,
+                     judged=SAID_YES,
+                     bought={"first": {"roic_median_5y": was or roic},
+                             "last": {"roic_median_5y": was or roic}})
+
+    def test_nothing_moves_while_returns_are_clear_of_the_floor(self,
+                                                                buffett):
+        held = self.holding(buffett, 18.0)
+        before = contract.evaluate(buffett, held)
+        after = contract.evaluate(buffett,
+                                  redefined_since(held, "roic_median_5y"))
+        assert before["state"]["id"] == after["state"]["id"] == \
+            "room-for-more"
+        assert before["reason"]["summary"] == after["reason"]["summary"]
+
+    def test_the_exit_it_is_named_for_can_no_longer_fire(self, buffett):
+        """Returns halved and under the floor: both halves failed, and the
+        position closes. With the drift half withheld it does not — and the
+        summary says one test could not be worked out rather than counting
+        it as clear, which is the difference between a rule that has stopped
+        firing and a rule that has quietly started passing."""
+        held = self.holding(buffett, 6.0, was=12.0)
+        before = contract.evaluate(buffett, held)
+        assert (before["state"]["id"], before["render"]) == \
+            ("business-broken", "close")
+
+        after = contract.evaluate(buffett,
+                                  redefined_since(held, "roic_median_5y"))
+        assert after["render"] == "hold"
+        assert "1 could not be worked out and is listed below as unknown " \
+            "rather than as passing" in after["reason"]["summary"]
+
+    def test_the_other_four_exits_still_run(self, buffett):
+        held = self.holding(buffett, 6.0, was=12.0)
+        after = contract.evaluate(buffett,
+                                  redefined_since(held, "roic_median_5y"))
+        assert "All 4 exit tests that could be run came back clear" in \
+            after["reason"]["summary"]

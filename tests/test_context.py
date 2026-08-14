@@ -562,15 +562,19 @@ class TestPositionAndPortfolio:
         number that refuses the old bundle moves with it, and this is where
         the two are pinned together.
 
-        Now pinned at 7, for a second instance of the same shape:
-        `confirm()` answers in trading days for a measure read from a price,
-        under the same key names a v6 bundle already read as filings."""
-        assert contract.CONTRACT_VERSION == 7
+        Now pinned at 8, for a third instance of the same shape. At 7,
+        `confirm()` answered in trading days for a measure read from a price,
+        under the same key names a v6 bundle already read as filings. At 8,
+        the evidence says which citations a verdict RESTS ON: a closing
+        verdict and one still waiting on confirmation cite the same exits,
+        and a v7 bundle reading the rows to work out which of them fired was
+        reading an answer that was not there."""
+        assert contract.CONTRACT_VERSION == 8
         errors = contract.validate_declaration(
-            {**cash_strategy(), "contract": 6, "states": [
+            {**cash_strategy(), "contract": 7, "states": [
                 {"id": "hold", "name": "Hold", "render": "hold",
                  "means": "keep it"}]})
-        assert any("`contract` must be 7" in e for e in errors), errors
+        assert any("`contract` must be 8" in e for e in errors), errors
 
     def test_a_position_opened_after_the_pin_did_not_exist_yet(self):
         ctx = build(holding(), as_of="2024-06-30")

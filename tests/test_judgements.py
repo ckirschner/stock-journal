@@ -474,3 +474,163 @@ class TestTheHostHoldsNoViewAboutIt:
         [item] = out["reason"]["evidence"]
         assert item["subject"]["kind"] == "judgement"
         assert item["observed"]["status"] == "absent"
+
+
+class TestAnAnswerCarriesTheQuestionItAnswered:
+    """The three reaches into the live bank that a user record should not
+    have, and the pattern that closes them is the citation subject's: resolve
+    from the bank ONCE at write time, store it, and at read time consult the
+    live file only where the key is absent — which can only mean the record
+    predates the field.
+
+    None of these crashes. They produce a screen that is confidently wrong
+    about what somebody said, or silently missing it.
+    """
+
+    def _drop_from_the_bank(self, tmp_path, monkeypatch, *replacements):
+        """Edit the shipped bank in a file, the way a user would."""
+        import os
+        from engine import bank, judgements as j
+        src = (bank.APP_DIR / "config" / "metric-bank.yaml").read_text(
+            encoding="utf-8")
+        out = src
+        for old, new in replacements:
+            assert out.count(old) >= 1, old[:60]
+            out = out.replace(old, new, 1)
+        assert out != src
+        d = tmp_path / "bank2"
+        d.mkdir(exist_ok=True)
+        (d / "metric-bank.yaml").write_text(out, encoding="utf-8")
+        monkeypatch.setattr(bank, "CONFIG_DIR", d)
+        for cache in (bank._bank_cache, bank._bank_refused,
+                      bank._definitions_cache):
+            cache.pop("metric-bank", None)
+        j._cached_doc = None
+        j._cache.clear()
+        os.utime(d / "metric-bank.yaml", None)
+
+    def _row(self, api, entry_id, ticker="SYN"):
+        state = api.get_state()
+        rows = held(state, ticker)["_judgements"]
+        return next((r for r in rows if r["id"] == entry_id), None)
+
+    def test_the_wording_is_frozen_onto_the_answer(self, api):
+        hold(api)
+        assert api.record_judgement("SYN", "moat_durability", "pass", "Wide.")["ok"]
+        [answer] = [a for a in security()["judgements"]
+                    if a["id"] == "moat_durability"]
+        from engine import bank
+        entry = bank.bank_index(bank.load_bank())["moat_durability"]
+        assert answer["question"] == str(entry["question"]).strip()
+        assert answer["label"] == entry["label"]
+        assert answer["marks"] == list(judgements.MARKS)
+
+    def test_a_reworded_question_does_not_relabel_an_old_answer(
+            self, api, tmp_path, monkeypatch):
+        """The screen prints the question directly above the list of earlier
+        assessments. Read live, it presents every old pass or fail as an
+        answer to a question that may never have been asked in those words —
+        and the reasoning underneath is the user's account of one they can no
+        longer see."""
+        hold(api)
+        assert api.record_judgement("SYN", "moat_durability", "pass", "Wide.")["ok"]
+        was = self._row(api, "moat_durability")["question"]
+
+        # Reworded in the file, as a block scalar, the way it is written.
+        self._drop_from_the_bank(
+            tmp_path, monkeypatch,
+            ("      What stops a competitor from taking this business's "
+             "customers or its\n      margin over the next ten years, and "
+             "will that still be true in ten years?\n",
+             "      Is there anything at all stopping a competitor?\n"))
+        row = self._row(api, "moat_durability")
+        assert row["question"] == was
+        assert row["mark"] == "pass"
+
+    def test_a_deleted_question_keeps_its_answer_on_screen(
+            self, api, tmp_path, monkeypatch):
+        """The mark, the reasoning and the whole history stayed on disk and
+        came off the screen, because every read path was keyed off the live
+        bank. There was no message: the row simply was not built."""
+        hold(api)
+        assert api.record_judgement("SYN", "moat_durability", "fail", "Eroding.")["ok"]
+        from engine import bank
+        entry = bank.bank_index(bank.load_bank())["moat_durability"]
+        block = "  - id: moat_durability\n"
+        src = (bank.APP_DIR / "config" / "metric-bank.yaml").read_text()
+        start = src.index(block)
+        nxt = src.index("\n  - id: ", start + 1)
+        self._drop_from_the_bank(tmp_path, monkeypatch,
+                                 (src[start:nxt + 1], ""))
+
+        row = self._row(api, "moat_durability")
+        assert row is not None, "the recorded assessment vanished"
+        assert row["withdrawn"] is True
+        assert row["label"] == entry["label"]
+        assert row["question"] == str(entry["question"]).strip()
+        # the answer is shown as what it WAS, not as something standing
+        assert row["mark"] is None
+        assert [h["reasoning"] for h in row["history"]] == ["Eroding."]
+
+    def test_a_kind_flip_is_the_same_case(self, api, tmp_path, monkeypatch):
+        """One word. `kind: qualitative` becoming `computed` takes the id out
+        of every judgement read path exactly as a delete does."""
+        hold(api)
+        assert api.record_judgement("SYN", "moat_durability", "pass", "Wide.")["ok"]
+        from engine import bank
+        text = (bank.APP_DIR / "config" / "metric-bank.yaml").read_text()
+        start = text.index("  - id: moat_durability\n")
+        chunk = text[start:text.index("\n  - id: ", start + 1)]
+        self._drop_from_the_bank(
+            tmp_path, monkeypatch,
+            (chunk, chunk.replace("    kind: qualitative\n",
+                                  "    kind: computed\n", 1)
+                        .replace("      kind: assessed\n",
+                                 "      kind: instant\n", 1)))
+        row = self._row(api, "moat_durability")
+        assert row is not None and row["withdrawn"] is True
+        assert [h["reasoning"] for h in row["history"]] == ["Wide."]
+
+
+class TestAHandEnteredFigureCarriesItsOwnWords:
+
+    def test_the_rendering_words_are_frozen_onto_the_figure(self, api):
+        from engine import bank, hand_entered
+        hold(api)
+        s = security()
+        hand_entered.record(s, "fcf_ttm", 1234.0)
+        [e] = hand_entered.history(s, "fcf_ttm")
+        m = bank.meta()["fcf_ttm"]
+        assert (e["label"], e["unit"], e["format"]) == (
+            m["label"], m["unit"], m["format"])
+
+    def test_a_measure_dropped_from_the_bank_keeps_its_row(
+            self, api, tmp_path, monkeypatch):
+        """It used to drop out of `_inputs` entirely — so the figure could not
+        be seen, could not be cleared, and went on being served into every new
+        frozen snapshot from a record nothing on screen admitted to."""
+        from engine import bank, hand_entered
+        hold(api)
+        doc = journal()
+        s = next(x for x in doc["securities"] if x["ticker"] == "SYN")
+        hand_entered.record(s, "fcf_ttm", 4242.0)
+        journals.save(doc)
+
+        text = (bank.APP_DIR / "config" / "metric-bank.yaml").read_text()
+        start = text.index("  - id: fcf_ttm\n")
+        chunk = text[start:text.index("\n  - id: ", start + 1) + 1]
+        TestAnAnswerCarriesTheQuestionItAnswered()._drop_from_the_bank(
+            tmp_path, monkeypatch, (chunk, ""))
+
+        state = api.get_state()
+        rows = held(state)["_inputs"]
+        row = next((r for r in rows if r["id"] == "fcf_ttm"), None)
+        assert row is not None, "the figure and its history went off screen"
+        assert row["withdrawn"] is True
+        assert row["entered"]["value"] == 4242.0
+        # and it can be taken back, which is the only thing still meaningful
+        # about a measure nothing defines
+        s2 = next(x for x in journal()["securities"] if x["ticker"] == "SYN")
+        assert hand_entered.record(s2, "fcf_ttm", "") is not None
+        with pytest.raises(ValueError, match="cannot be entered"):
+            hand_entered.record(s2, "fcf_ttm", 5.0)

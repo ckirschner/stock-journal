@@ -8,7 +8,7 @@ STRATEGY = {
     "summary": "A test fixture that always stages a tiny commit. It is not "
                "investment logic.",
     "version": 2,
-    "contract": 7,
+    "contract": 8,
     "changelog": {
         1: "First version.",
         2: "Second version, to prove multi-entry changelogs load.",

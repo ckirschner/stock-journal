@@ -152,6 +152,90 @@ class TestEveryCitationSaysWhatItReads:
             contract._subject("invented", "x", label="L", unit="none")
 
 
+class TestACitationCarriesEverythingItsFigureIsReadBy:
+    """What a decision freezes has to be readable years later without asking
+    the metric bank standing that day.
+
+    It nearly was. The label and the unit travelled on the subject; the FORMAT
+    did not, and the screen filled the gap from the live bank — so a purchase
+    frozen under `0.0x` rendered through whatever the file said when somebody
+    opened the page. A measure whose unit was later corrected from times to
+    percent printed its old 10.4 as "10.4%": the stored number, restated by a
+    file the record does not own. The explanation had the same hole and worse,
+    because a computed measure froze none at all, so the one thing a number
+    may never appear without vanished entirely if the entry was ever dropped.
+
+    Pinned as a property of every bank-backed citation rather than of the one
+    measure that exposed it.
+    """
+
+    ITEMS = [{"measure": "fcf_ttm"},
+             {"measure": "fcf_ttm", "since": "first-purchase"},
+             {"measure": "roic_median_5y", "without": "one-year"},
+             {"measure": "moat_durability"},
+             {"fact": "position.weight"},
+             {"label": "A number", "unit": "count", "actual": 3}]
+
+    # The kinds whose figure IS the measure's own reading, and which therefore
+    # print through the measure's own format. A `change` is deliberately not
+    # one of them: a six-point fall in a margin run through "0.0%" prints
+    # "6.0%", which reads as the margin rather than as the move — see
+    # contract._change_unit. It prints by its own unit and carries no format,
+    # which is why silence on one of these kinds can only mean a record older
+    # than the field.
+    PRINTED_BY_THE_BANK = ("measure", "judgement", "robustness")
+
+    def test_a_cited_measure_is_printed_by_the_format_it_was_cited_under(
+            self):
+        from engine import bank
+        formats = {k: v["format"] for k, v in bank.meta().items()}
+        seen = set()
+        for row in evidence(bare_record(), bare_ctx(), self.ITEMS):
+            subj = row["subject"]
+            seen.add(subj["kind"])
+            if subj["kind"] in self.PRINTED_BY_THE_BANK:
+                assert subj["format"] == formats[subj["reads"]], subj["id"]
+            else:
+                assert "format" not in subj, subj["kind"]
+        assert set(self.PRINTED_BY_THE_BANK) <= seen, seen
+
+    def test_a_mark_carries_no_format_and_says_so_rather_than_omitting_it(
+            self):
+        """The bank refuses a format over a yes/no — running one through a
+        format prints a 1. `None` is that refusal, carried; it is a different
+        answer from a record that never carried the field at all, and only
+        the second may be answered from the file standing today."""
+        [mark] = evidence(bare_record(), bare_ctx(),
+                          [{"measure": "moat_durability"}])
+        assert mark["subject"]["format"] is None
+        assert "format" in mark["subject"]
+
+    def test_every_bank_backed_citation_explains_itself(self):
+        """No bare numbers, and none that borrow their explanation from a
+        file the record does not own. A computed measure used to freeze none
+        at all, so a measure later dropped from the bank left a figure on a
+        frozen decision with nothing anywhere saying what it was."""
+        for row in evidence(bare_record(), bare_ctx(), self.ITEMS):
+            subj = row["subject"]
+            if subj["reads"] is not None:
+                assert str(subj["explain"] or "").strip(), subj
+
+    def test_the_frozen_decision_on_a_purchase_carries_them_too(self, api):
+        """The subject is resolved once and deep-copied onto the lot, so this
+        is the same property one layer out — asserted there because that is
+        the copy that has to survive the bank being edited underneath it."""
+        assert api.open_position("DRF", 10, 20.0, "2026-08-01",
+                                 override_reason="Buying anyway.")["ok"]
+        lot = api.get_state()["securities"][0]["lots"][0]
+        cited = [r["subject"] for r in
+                 lot["snapshot"]["decision"]["reason"]["evidence"]
+                 if r["subject"].get("reads")]
+        assert cited
+        assert all("format" in s for s in cited
+                   if s["kind"] in self.PRINTED_BY_THE_BANK), cited
+        assert all(str(s["explain"] or "").strip() for s in cited), cited
+
+
 class TestTheHostAnswersWhichEntriesWereRead:
     def rows(self, *items):
         return evidence(bare_record(), bare_ctx(), list(items))

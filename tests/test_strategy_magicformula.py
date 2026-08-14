@@ -30,7 +30,7 @@ import importlib.util
 import pytest
 from conftest import industry_node
 
-from engine import (contract, context, journals, lists, portfolio,
+from engine import (bank, contract, context, journals, lists, portfolio,
                     strategy_floor, strategy_loader, strategy_values)
 
 PASS, FAIL, UNKNOWN, NOTED = (contract.PASS, contract.FAIL, contract.UNKNOWN,
@@ -481,7 +481,7 @@ class TestAgainstAContextTheHostActuallyBuilds:
 
     def test_a_real_journal_with_a_real_list_reaches_a_real_verdict(self,
                                                                     magic):
-        journal = journals.create("Live", magic, inputs={})
+        journal = journals.create("Live", magic, bank.definitions(), inputs={})
         lists.record(journal, "2026-08-01", ["ACME", "BRIA"])
         security = portfolio.new_security("ACME", "Acme Works")
         journal["securities"] = [security]
@@ -501,7 +501,8 @@ class TestAgainstAContextTheHostActuallyBuilds:
         assert result["state"]["id"] == "buy-it"
 
     def test_a_real_journal_with_no_list_blocks_with_a_way_out(self, magic):
-        journal = journals.create("Empty", magic, inputs={})
+        journal = journals.create("Empty", magic, bank.definitions(),
+                                  inputs={})
         security = portfolio.new_security("ACME", "Acme Works")
         journal["securities"] = [security]
         journals.save(journal)
@@ -513,3 +514,23 @@ class TestAgainstAContextTheHostActuallyBuilds:
         assert result["state"]["id"] == "waiting-on-a-list"
         assert result["state"]["fix"] == "list"
         assert result["reason"]["rule"] == "no-list-to-buy-from"
+
+
+def test_no_rule_here_measures_back_to_a_purchase(magic):
+    """So a redefined measure costs this strategy nothing, and the reason is
+    structural rather than lucky: its only exit is a clock. It never asks how
+    far anything has moved since you bought, so there is no frozen figure for
+    a moved definition to make incomparable.
+
+    Read off the running bundle rather than asserted as prose, because the
+    day somebody adds a drift rule here is the day this stops being true and
+    the cost has to be worked out again.
+    """
+    import ast
+    import pathlib
+    tree = ast.parse((pathlib.Path(magic["dir"]) / "strategy.py").read_text())
+    cites_a_baseline = [
+        node.lineno for node in ast.walk(tree) if isinstance(node, ast.Dict)
+        and "since" in [k.value for k in node.keys
+                        if isinstance(k, ast.Constant)]]
+    assert cites_a_baseline == [], cites_a_baseline

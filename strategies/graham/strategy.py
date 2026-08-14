@@ -517,7 +517,7 @@ STRATEGY = {
                "when that gap closes, when the balance sheet stops being "
                "safe, or when two years are up — whichever comes first.",
     "version": 9,
-    "contract": 7,
+    "contract": 8,
     "declines": DECLINES,
     "limits": LIMITS,
     "changelog": {
