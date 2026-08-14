@@ -54,8 +54,10 @@ class TestTheBalanceIsDerived:
     def test_the_derivation_is_stated_so_a_reader_can_redo_it(self):
         j = doc(50_000.0, "2026-01-02", ("deposit", 10_000.0, "2026-02-01"))
         said = " ".join(cash.balance(j)["provenance"])
-        assert "$50,000.00 opening balance on 2026-01-02" in said
-        assert "1 deposit" in said
+        assert said == ("$50,000.00 opening balance on 2026-01-02, "
+                        "then 1 deposit")
+        assert " ".join(cash.balance(doc())["provenance"]).endswith(
+            "and nothing recorded since")
 
     def test_the_derivation_pluralises_from_the_table_not_by_adding_an_s(self):
         """"2 dividend receiveds" is what a sentence built by adding a letter
@@ -63,7 +65,7 @@ class TestTheBalanceIsDerived:
         j = doc(50_000.0, "2026-01-02",
                 ("dividend", 10.0, "2026-02-01"),
                 ("dividend", 20.0, "2026-03-01"))
-        assert "2 dividends received" in \
+        assert "then 2 dividends received" in \
             " ".join(cash.balance(j)["provenance"])
 
     def test_a_running_balance_is_derived_per_entry_and_never_stored(self):

@@ -381,7 +381,13 @@ def _sum(got, flow=None) -> float:
 
 
 def _counted(got) -> str:
-    """What the balance is made of, in a sentence the reader can redo."""
+    """What the balance is made of, in a sentence the reader can redo.
+
+    "then" rather than "plus": a withdrawal is one of the things counted here
+    and it does not add. The sentence says what went on the record, and the
+    direction of each is the kind's own business — which is the same reason
+    nothing else in this module adds a sign to an amount.
+    """
     tally = {}
     for e in got:
         if e.get("kind") == OPENING:
@@ -390,7 +396,11 @@ def _counted(got) -> str:
     parts = [f"{n} " + (KINDS[k]["label"].lower() if n == 1
                         else KINDS[k]["plural"].lower())
              for k, n in tally.items()]
-    return ", plus ".join(parts) if parts else "nothing since"
+    if not parts:
+        return "and nothing recorded since"
+    if len(parts) == 1:
+        return "then " + parts[0]
+    return "then " + ", ".join(parts[:-1]) + " and " + parts[-1]
 
 
 def balance(journal: dict, as_of: str | None = None) -> dict:
