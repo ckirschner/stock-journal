@@ -429,6 +429,20 @@ class TestTheOldAnswerIsNotMigrated:
         _, problems = contract.check_inputs(record, {"free-cash": 5.0})
         assert any("does not answer it" in p for p in problems), problems
 
+    def test_sending_one_through_the_real_settings_save_is_refused(self,
+                                                                    strategies):
+        """Through the Api, because that is where a form's payload actually
+        arrives — a check that only ever ran against a hand-built record would
+        pass while the screen quietly accepted the figure and discarded it."""
+        strategies("awkward")
+        api = Api()
+        assert api.create_journal("S", "awkward", {"stance": "building"},
+                                  opening_cash=1_000.0)["ok"]
+        r = api.save_journal_settings({"free-cash": "9999"}, None)
+        assert r["ok"] is False
+        assert "does not answer it" in r["error"]
+        assert "cash record" in r["error"]
+
     def test_the_next_save_clears_it_onto_the_record(self, strategies):
         strategies("awkward")
         api = Api()

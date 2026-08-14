@@ -1087,11 +1087,24 @@ class Api:
         if chain["errors"]:
             return err(" ".join(chain["errors"]))
 
-        # The same rule `journals.set_inputs` enforces at the write: an answer
-        # the host works out for itself is not the journal's to hold. Applied
-        # here too, so the check below runs against exactly what will be
-        # stored rather than refusing a whole form over a key the save was
-        # about to drop anyway.
+        # A figure the host works out for itself is not the journal's to
+        # hold. Two different things happen to one, and the difference is who
+        # put it there: a value this form SENT is refused by name, because a
+        # form that accepted it and did nothing would leave somebody certain
+        # they had changed their balance. A value the journal was already
+        # holding — a legacy answer, from before the figure was derived — is
+        # dropped and lands on the input-change record, the same way a key a
+        # strategy no longer declares does. Nobody asked for that one today.
+        by_host = contract.host_answered(record)
+        sent = [k for k in (inputs or {}) if k in by_host]
+        if sent:
+            spec = contract.INPUT_ROLES[by_host[sent[0]]]
+            labels = {f["id"]: f.get("label") or f["id"]
+                      for f in (record.get("inputs") or [])}
+            return err(
+                f'"{labels.get(sent[0], sent[0])}" is {spec["answered_how"]}, '
+                "so this journal does not answer it. Record what moved "
+                "instead; the figure follows from that.")
         typed_inputs = contract.user_answers(
             record, merged(journal.get("inputs"), record.get("inputs"),
                            inputs))

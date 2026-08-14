@@ -1042,9 +1042,9 @@ STRATEGY = {
                     "this strategy differs from a rebalancing one: money is "
                     "added to what keeps proving itself rather than moved "
                     "back toward an average.\n\n"
-                    "It needs your free cash to be answered in settings, "
+                    "It needs this journal's cash record to be open, "
                     "because a share of the account cannot be worked out "
-                    "without knowing what the account is. Unanswered, the "
+                    "without knowing what the account is. Until it is, the "
                     "size rules report that they could not be run.\n\n"
                     "Attributed to Buffett's practice, not to the expert "
                     "report, which does not cover sizing."},

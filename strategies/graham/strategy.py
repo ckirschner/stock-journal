@@ -1055,10 +1055,10 @@ STRATEGY = {
                     "concentrated than his most concentrated list, on a "
                     "business he would be the first to say he had no "
                     "particular faith in.\n\n"
-                    "It needs your free cash to be answered in settings, "
+                    "It needs this journal's cash record to be open, "
                     "because a share of the account cannot be worked out "
-                    "without knowing what the account is. Unanswered, this "
-                    "test reports that it could not be run.\n\n"
+                    "without knowing what the account is. Until it is, "
+                    "this test reports that it could not be run.\n\n"
                     "Attributed to Graham's practice, not to the expert "
                     "report, which does not cover sizing."},
 

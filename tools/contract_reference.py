@@ -161,9 +161,11 @@ def _robustness() -> str:
 
 def _input_roles() -> str:
     return _table(
-        ["`role`", "declared as", "means", "unlocks"],
-        [(f"`{k}`", f'`{v["type"]}` in `{v["unit"]}`', v["means"],
-          _code(v["reports"]))
+        ["`role`", "declared as", "who answers it", "means", "unlocks"],
+        [(f"`{k}`", f'`{v["type"]}` in `{v["unit"]}`',
+          "you" if contract.answered_by(k) == "user"
+          else f'the journal — {v["answered_how"]}',
+          v["means"], _code(v["reports"]))
          for k, v in contract.INPUT_ROLES.items()])
 
 

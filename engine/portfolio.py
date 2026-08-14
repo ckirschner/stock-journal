@@ -1222,7 +1222,12 @@ def sell_lots(security: dict, decision: dict | None, reason: str,
     # function before this write, so what the user was prompted for and what
     # goes on the record cannot come apart.
     rule_triggered = _rule_triggered(decision)
-    how = _sold_as(rule_triggered, evaluation["basis"])
+    # Through the public reader, so a basis nobody stated is refused here
+    # exactly as `add_lot` refuses one through `recorded_as`. Reaching for
+    # `_sold_as` directly would record a sale as "without a verdict" over a
+    # typo in the word "live" — which is the shape of failure the two-argument
+    # rule exists to make impossible.
+    how = sale_recorded_as(decision, evaluation["basis"])
     reason_block = (decision or {}).get("reason") or {}
 
     lot_id, seq = _next_id(security)

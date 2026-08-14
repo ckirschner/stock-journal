@@ -1081,9 +1081,9 @@ STRATEGY = {
                     "is this file's, derived from the slot count above, and "
                     "it is the one in this strategy with the least behind "
                     "it.\n\n"
-                    "It needs your free cash to be answered in settings, "
+                    "It needs this journal's cash record to be open, "
                     "because a share of the account cannot be worked out "
-                    "without knowing what the account is. Unanswered, the "
+                    "without knowing what the account is. Until it is, the "
                     "size rules report that they could not be run."},
 
         # -- was there a business at the base of the window ----------------

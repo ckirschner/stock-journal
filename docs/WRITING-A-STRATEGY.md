@@ -1318,9 +1318,9 @@ against the SEC's published list in
 ### Input roles
 
 <!-- generated: input-roles -->
-| `role` | declared as | means | unlocks |
-|---|---|---|---|
-| `cash` | `number` in `usd` | free cash in the account this journal covers — money that is not in any position | `portfolio.cash`, `portfolio.account_value`, `position.weight` |
+| `role` | declared as | who answers it | means | unlocks |
+|---|---|---|---|---|
+| `cash` | `number` in `usd` | the journal — worked out from this journal's cash record — the opening balance, and every deposit, withdrawal and dividend since | free cash in the account this journal covers — money that is not in any position | `portfolio.cash`, `portfolio.account_value`, `position.weight` |
 <!-- end: input-roles -->
 
 ### The rest of the vocabulary

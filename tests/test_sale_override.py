@@ -142,6 +142,13 @@ class TestWhereTheBoundarySits:
         with pytest.raises(ValueError, match="not a basis"):
             portfolio.sale_recorded_as(decision("hold"), "whenever")
 
+    def test_the_write_refuses_a_basis_nobody_stated_too(self):
+        """Not only the preview. Reaching past the two-argument rule at the
+        write would record a sale as "no verdict to go against" over a typo in
+        the word "live" — silently, in an append-only record."""
+        with pytest.raises(ValueError, match="not a basis"):
+            sell(held(), decision("hold"), basis="whenever")
+
     def test_which_renders_sanction_an_exit_is_read_off_the_host_table(self):
         """Not a tuple written out at the point of use. A render type added
         to the contract arrives here without this file being edited, which is

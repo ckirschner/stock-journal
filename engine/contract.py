@@ -1297,7 +1297,15 @@ HOST_FACTS = MappingProxyType({
 #
 # Adding a role is a host change in this one table. `type` and `unit` are
 # enforced against the declaration, because a role that arrived as a percent
-# would be reported as dollars.
+# would be reported as dollars. So are the three things a host-answered role
+# may not carry — `required`, a `min`/`max`, and a bound or a gate naming it —
+# and none of those bumped the contract version, deliberately: they were never
+# coherent declarations, the host simply could not see it. `contract` says
+# which shape this host offers, and refusing a declaration that could never
+# have worked is not a change to that shape. A bump would say the contract
+# moved, which is a different and false claim, and would trade a message that
+# names the actual problem for one that says only "written for another
+# version".
 # ---------------------------------------------------------------------------
 
 INPUT_ROLES = MappingProxyType({
@@ -1847,6 +1855,21 @@ def _check_role(where: str, f: dict, errors: list) -> None:
                       f'`unit: {spec["unit"]}` — the host reports it in that '
                       "unit and would otherwise report one number as "
                       "another.")
+    if answered_by(role) == "host":
+        bounded = [k for k in ("min", "max") if k in f]
+        if bounded:
+            # Never applied, because `check_inputs` never reaches a
+            # host-answered input at all — the value does not come from the
+            # journal, so there is nothing to check it against. A bound stated
+            # here would be a declaration nothing enforces, and a strategy
+            # would be handed a figure its own declaration says cannot occur:
+            # a margin balance is negative, and `min: 0` would promise
+            # otherwise.
+            errors.append(
+                f'{where}: `{"` and `".join(bounded)}` on the "{role}" role '
+                f'is {spec["answered_how"]}, so nothing checks it — the '
+                "figure does not come from an answer this could refuse. A "
+                "rule about what the figure may be belongs in `decide`.")
     if answered_by(role) == "host" and f.get("required"):
         # Refused at load, where a declaration is checked, rather than met
         # with a blocked verdict later. `required` means the journal owes an

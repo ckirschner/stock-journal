@@ -259,6 +259,36 @@ class TestInputRoles:
         _, problems = contract.check_inputs(rec, {"free-cash": 5000.0})
         assert any("does not answer it" in p for p in problems), problems
 
+    def test_a_user_answered_role_still_reads_the_journal_s_answer(self):
+        """The other branch, which the cash role no longer takes. It is what
+        every role added after this one will take, and a branch nothing
+        exercises is a branch nobody would notice breaking."""
+        asked = dict(contract.INPUT_ROLES)
+        asked["cash"] = {k: v for k, v in asked["cash"].items()
+                         if k not in ("answered_by", "answered_how")}
+        original = contract.INPUT_ROLES
+        contract.INPUT_ROLES = asked
+        try:
+            rec = record(inputs=[field("free-cash", role="cash", unit="usd")])
+            roles = contract.input_roles(rec, {"free-cash": 5000.0})
+            assert roles["cash"] == {"id": "free-cash", "label": "Free-Cash",
+                                     "value": 5000.0}
+            unanswered = contract.input_roles(rec, {})
+            assert "Free-Cash" in unanswered["cash"]["reason"]
+            assert "value" not in unanswered["cash"]
+            # And it stays the user's to answer, so nothing refuses one.
+            assert contract.check_inputs(rec, {"free-cash": 5000.0})[1] == []
+        finally:
+            contract.INPUT_ROLES = original
+
+    def test_a_bound_on_a_host_answered_role_is_refused(self):
+        """`check_inputs` never reaches such an input, so a `min` here would
+        be a declaration nothing enforces — and a promise the record can
+        break: a margin balance is negative."""
+        errors = contract.validate_declaration(decl(inputs=[
+            field("free-cash", role="cash", unit="usd", min=0)]))
+        assert any("nothing checks it" in e for e in errors), errors
+
     def test_a_host_answered_role_may_not_be_required(self):
         """A question nobody can answer would block every verdict in the
         journal, and the screen it sent you to has no field to fill in."""
