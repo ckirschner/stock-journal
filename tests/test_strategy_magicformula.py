@@ -479,10 +479,19 @@ class TestAgainstAContextTheHostActuallyBuilds:
     """Without this the whole file can pass against a context shape that no
     longer exists. One journal, driven through the real stores."""
 
-    def test_a_real_journal_with_a_real_list_reaches_a_real_verdict(self,
-                                                                    magic):
-        journal = journals.create("Live", magic, bank.definitions(), inputs={})
-        lists.record(journal, "2026-08-01", ["ACME", "BRIA"])
+    def test_a_real_journal_with_a_real_list_reaches_a_real_verdict(
+            self, magic, written_on):
+        # Built on a stated day rather than on whatever day the suite runs.
+        # A list is served to a reconstruction by the day it was WRITTEN, not
+        # the day it was pulled, so a journal assembled at test time holds a
+        # list that is invisible to every `as_of` before today — and TODAY
+        # here is a fixed past date. That does not fail when it is wrong; it
+        # waits until midnight and then fails for a reason that looks like a
+        # defect in the strategy.
+        with written_on("2026-08-01"):
+            journal = journals.create("Live", magic, bank.definitions(),
+                                      inputs={})
+            lists.record(journal, "2026-08-01", ["ACME", "BRIA"])
         security = portfolio.new_security("ACME", "Acme Works")
         journal["securities"] = [security]
         journals.save(journal)

@@ -27,9 +27,9 @@ from pathlib import Path
 
 import webview
 
-from engine import (allocation, backup, bank, cash, contract, context,
+from engine import (allocation, backup, bank, cash, contract, context, dated,
                     dataview, fetch, hand_entered, journals, judgements, lists,
-                    portfolio, secrets, store, strategy_loader,
+                    portfolio, secrets, snapshots, store, strategy_loader,
                     strategy_values, thesis as thesis_mod, tickermap, tiingo,
                     valuation)
 from engine.expected_value import EV_METHODS, EVError
@@ -785,6 +785,20 @@ class Api:
                             "history": thesis_mod.history(s)}
             s["_valuation"] = {**valuation.standing(s, today=today),
                                "history": valuation.history(s)}
+            # The days somebody kept, as rows and never as the records
+            # themselves. One frozen evaluation is fifteen kilobytes of
+            # evidence; a year of watching thirty names would put tens of
+            # megabytes through a call that already runs on every render.
+            # What a list needs is the day, the note and what it said, and
+            # `get_snapshot` hands over the whole thing when one is opened.
+            s["_snapshots"] = snapshots.summaries(s)
+            # Whether this one may be dropped out of the journal, answered by
+            # the engine that would refuse it. The toolbar used to work it out
+            # from the bucket, which was the same rule written twice — and the
+            # copy went stale the moment a second kind of frozen record could
+            # stand in the way. A screen offering a button the write refuses
+            # is the same wrong turn as a screen that hides the way out.
+            s["_removable"] = not portfolio.has_history(s)
             # A row per measure this security has something to show for, in
             # the words that measure was ENTERED under rather than today's.
             #
@@ -869,6 +883,14 @@ class Api:
             if record is None else None,
             rule_changes=list(journal.get("rule_changes") or []),
             measure_changes=list(journal.get("measure_changes") or []),
+            # Which positions in those records were a change to something a
+            # verdict reads. A frozen record says how far each record had got
+            # when it was written; this says which of the entries after that
+            # point mattered. Keyed by the record's own word, so the line
+            # saying "the rules have moved since you kept this" never holds a
+            # list of which records exist — and never counts a release that
+            # only reworded a paragraph.
+            changes_that_moved=journals.changes_that_moved(journal),
             input_changes=list(journal.get("input_changes") or []),
             pending_changes=journals.pending(journal),
             # What each record is, in the host's words. The banner asking for
@@ -1285,18 +1307,35 @@ class Api:
         """Remove an idea that was never bought — a mistyped ticker, a
         candidate no longer worth tracking.
 
-        Anything with a lot on it is refused outright: a purchase or a sale
-        is recorded history, and this journal never deletes history — that
-        is what makes it a journal."""
+        Anything carrying a frozen verdict is refused outright: a purchase, a
+        sale, or a day somebody deliberately saved. This journal never
+        deletes what it recorded — that is what makes it a journal. See
+        portfolio.has_history for why a saved snapshot counts, and why
+        refusing is not a dead end.
+        """
         journal, *_ = self._open()
         if journal is None:
             return err("No journal is open.")
         s = self._find(journal, ticker)
+        # One gate, two sentences. Which record is in the way decides what to
+        # say and never whether to refuse — a second condition here would be
+        # a second copy of the rule, and the copy is what goes stale when a
+        # third kind of frozen record is added.
         if portfolio.has_history(s):
-            return err(f"{s['ticker']} has recorded position history — a "
-                       "purchase or a sale — and the journal never deletes "
-                       "history. Only candidates that were never bought can "
-                       "be removed.")
+            if s.get("lots"):
+                return err(f"{s['ticker']} has recorded position history — a "
+                           "purchase or a sale — and the journal never "
+                           "deletes history. Only candidates that were never "
+                           "bought can be removed.")
+            kept = len(snapshots.standing(s))
+            return err(
+                f"{s['ticker']} has {kept} saved snapshot"
+                f"{'' if kept == 1 else 's'} — days you kept a record of what "
+                "everything said, and what a note or a change since is "
+                "measured against. Discard "
+                f"{'it' if kept == 1 else 'them'} first if you no longer "
+                f"want {'it' if kept == 1 else 'them'}, and this removes "
+                "like any other candidate.")
         journal["securities"].remove(s)
         self._write(journal)
         return ok(removed=s["ticker"])
@@ -1417,6 +1456,74 @@ class Api:
         portfolio.add_note(self._find(journal, ticker), text)
         self._write(journal)
         return ok()
+
+    # -- saved snapshots ---------------------------------------------------
+    @guarded
+    @locked
+    def save_snapshot(self, ticker, note=""):
+        """Keep what everything says about this security today.
+
+        Through `_evaluated_for`, which is the one path a frozen entry is
+        assembled by — the same reading of the stores behind the figures and
+        behind the verdict, the versions of what the user had written, and
+        where this journal's change records stood. A second assembly here
+        would be the two-path failure that docstring exists to record, with
+        the difference that a purchase at least has a lot to argue with and
+        this would have nothing.
+
+        Always today: `is_past` is False and there is no parameter that could
+        make it otherwise. See engine/snapshots.py for why that is the
+        design and not a gap.
+        """
+        journal, record, chain, _ = self._open()
+        if journal is None:
+            return err("No journal is open.")
+        s = self._find(journal, ticker)
+        at = self._evaluated_for(journal, record, chain, s,
+                                 date.today().isoformat(), False)
+        entry = snapshots.take(journal, s, at["decision"],
+                               values=at["values"], price_seen=at["price"],
+                               evaluation=at["evaluation"],
+                               thesis=at["thesis"],
+                               valuation=at["valuation"], note=note)
+        self._write(journal)
+        return ok(seq=entry["seq"], day=dated.day_of(entry),
+                  state=((at["decision"] or {}).get("state") or {}).get(
+                      "name"),
+                  kept=len(snapshots.standing(s)))
+
+    @guarded
+    @locked
+    def get_snapshot(self, ticker, seq):
+        """One saved snapshot, whole, as it was frozen.
+
+        Its own call rather than something `get_state` ships, because the
+        list is rows and the record is fifteen kilobytes of evidence. Nothing
+        here recomputes any part of it — it is read off the record and handed
+        over exactly as written, which is the whole reason it was written.
+        """
+        journal, *_ = self._open()
+        if journal is None:
+            return err("No journal is open.")
+        s = self._find(journal, ticker)
+        entry = snapshots.entry(s, seq)
+        if entry is None:
+            return err(f"No snapshot numbered {seq} was saved for "
+                       f'{s["ticker"]}.')
+        return ok(entry=entry)
+
+    @guarded
+    @locked
+    def discard_snapshot(self, ticker, seq, reason=""):
+        """Stop a saved snapshot standing. It is not deleted — see
+        engine/snapshots.discard."""
+        journal, *_ = self._open()
+        if journal is None:
+            return err("No journal is open.")
+        s = self._find(journal, ticker)
+        snapshots.discard(s, seq, reason)
+        self._write(journal)
+        return ok(kept=len(snapshots.standing(s)))
 
     # -- purchases and exits ----------------------------------------------
     def _entry_date(self, when, what):
@@ -1699,6 +1806,15 @@ class Api:
             "pin": pin,
             "thesis": thesis_mod.in_force(s, pin),
             "valuation": valuation.frozen(valuation.in_force(s, pin)),
+            # Where this journal's two change records stood, so what gets
+            # frozen can say afterwards whether the rules and the measure
+            # definitions behind it are the ones in force now. Read here,
+            # with everything else the entry freezes, rather than at each
+            # writer: `_open` has just recorded any distance between this
+            # journal and what is on disk, so this is the moment the answer
+            # is true, and one reading of it is one answer for the whole
+            # entry.
+            "changes_recorded": journals.changes_recorded(journal),
         }
 
     @guarded
@@ -1761,7 +1877,8 @@ class Api:
                                 evaluation=at["evaluation"],
                                 thesis=at["thesis"],
                                 valuation=at["valuation"],
-                                recollection=recollection)
+                                recollection=recollection,
+                                changes_recorded=at["changes_recorded"])
         portfolio.note_recording(s, [lot])
         self._write(journal)
         state = (decision.get("state") or {}).get("id")
@@ -1915,7 +2032,8 @@ class Api:
                                   price_seen=at["price"],
                                   evaluation=at["evaluation"],
                                   thesis=at["thesis"],
-                                  override_reason=override_reason)
+                                  override_reason=override_reason,
+                                  changes_recorded=at["changes_recorded"])
         portfolio.note_recording(s, [lot])
         self._write(journal)
         state = ((at["decision"] or {}).get("state") or {}).get("id")
@@ -2081,7 +2199,8 @@ class Api:
                         values=at["values"], price_seen=at["price"],
                         evaluation=evaluation, thesis=at["thesis"],
                         valuation=at["valuation"],
-                        recollection=remembered if not made else "")
+                        recollection=remembered if not made else "",
+                        changes_recorded=at["changes_recorded"])
                     row["recorded_as"] = portfolio.recorded_as(
                         decision, evaluation["basis"])
                 else:
@@ -2089,7 +2208,8 @@ class Api:
                         s, decision, ev["reason"], ev["shares"], ev["price"],
                         ev["date"], values=at["values"],
                         price_seen=at["price"], evaluation=evaluation,
-                        thesis=at["thesis"])
+                        thesis=at["thesis"],
+                        changes_recorded=at["changes_recorded"])
                     row["rule_triggered"] = lot["rule_triggered"]
                     row["signal"] = lot["signal_at_exit"]
                     # No written reason is collected for a sale entered out of

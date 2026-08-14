@@ -631,8 +631,7 @@ def measures_moved_at(journal: dict) -> list[str]:
     appear over a change to a paragraph.
     """
     return [str(c.get("seen")) for c in (journal.get(_MEASURES) or [])
-            if c.get("added") or c.get("removed") or c.get("moved")
-            or c.get("restated")]
+            if RECORDS["measures"]["moved"](c)]
 
 
 def measures_incomparable(journal: dict, comparable) -> dict:
@@ -961,14 +960,34 @@ def answers_on(journal: dict, as_of: str | None = None) -> dict | None:
 # `words` is separated from `key` because one of them is the host's and the
 # other is nobody's business: the screen is handed the words and never the
 # name of a list inside a file it does not own.
+#
+# `moved` is the third thing, and it is here rather than in each reader for
+# the reason the other two are: a record entry is not the same as a change
+# that matters. Both records carry entries that moved nothing a verdict
+# reads — a bank released again with only its wording touched, a settings
+# version bumped with no value this journal uses behind it, the line a
+# journal writes the first time it can see the definitions at all. A count of
+# entries reports every one of those as a change, so a line saying "the rules
+# behind this have moved since you kept it" appears over a rewritten
+# paragraph. Each record says what a move IS on it, one function reads that,
+# and a third record arrives with its own answer rather than a branch
+# somewhere else.
 RECORDS = {
     "rules": {"key": "rule_changes",
               "words": {"noun": "rule change",
-                        "means": "what your strategy demands"}},
+                        "means": "what your strategy demands"},
+              # Logic, or a declared value that actually moved. A settings
+              # version that moved with no value behind it did not change
+              # what this journal demands of anything.
+              "moved": lambda c: "logic" in str(c.get("kind") or "")
+                                 or bool(c.get("moved"))},
     "measures": {"key": _MEASURES,
                  "words": {"noun": "measure change",
                            "means": "what the figures it demands them of "
-                                    "mean"}},
+                                    "mean"},
+                 "moved": lambda c: bool(c.get("added") or c.get("removed")
+                                         or c.get("moved")
+                                         or c.get("restated"))},
 }
 
 
@@ -978,6 +997,65 @@ def record_words() -> dict:
     would arrive with its own sentence rather than needing a branch added
     wherever changes are drawn."""
     return {name: dict(spec["words"]) for name, spec in RECORDS.items()}
+
+
+def changes_recorded(journal: dict) -> dict:
+    """How far each change record had got when this was asked::
+
+        {"rules": 3, "measures": 1}
+
+    What a frozen evaluation records so it can say afterwards whether the
+    rules and the measure definitions behind it are the ones in force now.
+    A count rather than a copy, for the reason the measure baseline is folded
+    rather than stored: the definitions are fifty kilobytes and a snapshot a
+    week would put half a gigabyte of duplicated prose inside a file that
+    belongs to the user. A position in an append-only list identifies a state
+    exactly — nothing is ever removed from one — and both records fold
+    forward from a stamp that is never rewritten, so what was in force at
+    position n is recoverable from position n.
+
+    It also replaces a comparison that was quietly wrong. The one way a
+    frozen record could say anything about the definitions behind it was its
+    own wall-clock `frozen` string, compared against the `seen` stamps on the
+    measure record. Both are offset-aware now (see dated.stamp), and
+    offset-aware stamps do not sort as text — an evening's work west of
+    Greenwich sorts before a morning's work east of it. So the comparison
+    that decided whether a snapshot predated a redefinition was a string sort
+    over two calendars, and it went wrong silently, in the direction of
+    saying nothing had changed.
+
+    Keyed by the record's own word rather than the key of a list inside the
+    journal file, for the reason `record_words` separates the two: a frozen
+    record has no business naming a field in a document it does not own. Built
+    off RECORDS, so a third change record is carried by every snapshot taken
+    after it exists with nothing here to edit.
+    """
+    return {name: len(journal.get(spec["key"]) or [])
+            for name, spec in RECORDS.items()}
+
+
+def changes_that_moved(journal: dict) -> dict:
+    """Per record, the positions at which something a verdict reads actually
+    moved::
+
+        {"rules": [2], "measures": [1, 4]}
+
+    The other half of `changes_recorded`, and they answer different questions
+    on purpose. A position has to count every entry or it stops being a
+    position — nothing folds forward from "the third one that mattered". But
+    what a reader is told has to skip the ones that mattered to nobody, or a
+    frozen record acquires a line saying the rules behind it have moved
+    because a paragraph was rewritten.
+
+    So the frozen side keeps a count and this side names which of those
+    positions were real, and the difference between them is worked out where
+    the two meet rather than baked into either. Read off each record's own
+    declared answer to what a move is — see RECORDS — so nothing that
+    consumes this holds a second copy of that rule.
+    """
+    return {name: [c["seq"] for c in (journal.get(spec["key"]) or [])
+                   if spec["moved"](c)]
+            for name, spec in RECORDS.items()}
 
 
 def pending(journal: dict) -> list[dict]:

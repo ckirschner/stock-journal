@@ -29,16 +29,25 @@ let tipOpen = null;
    allocation screen would see the wrong holding. One function writes both, so
    the period cannot outlive the ticker it was clicked with, and any caller
    that does not name one gets the ordinary default. */
+/* Which saved snapshot is open, and what came back for it: {ticker, seq,
+   entry}. Held here rather than fetched into the render, because the record
+   is kilobytes of evidence per snapshot and get_state ships rows only — one
+   is asked for when somebody opens it, and nothing else on the page waits
+   for it. */
+let openSnap = null;
+
 function openSecurity(ticker, periodBuy = null) {
   openTicker = ticker;
   openPeriodBuy = periodBuy || null;
   tipOpen = null;
+  openSnap = null;
 }
 
 function closeSecurity() {
   openTicker = null;
   openPeriodBuy = null;
   tipOpen = null;
+  openSnap = null;
 }
 
 const TABS = [
@@ -1400,9 +1409,13 @@ function detailView(s) {
     <button class="btn" data-act="ev">Expected value</button>
     <button class="btn" data-act="thesis">Thesis</button>
     <button class="btn" data-act="note">Add note</button>
+    <button class="btn" data-act="snapshot">Save a snapshot</button>
     <button class="btn" data-act="backfill">Enter history</button>
     ${!isHold ? `<button class="btn primary" data-act="buy">${isPrev ? "Record a purchase — buying it back" : "Record a purchase"}</button>` : ""}
-    ${!isHold && !isPrev ? '<button class="btn danger" data-act="remove">Remove</button>' : ""}
+    ${/* From the engine, never worked out from the bucket here: what stands in
+          the way of a removal is a question about frozen records, and a copy
+          of that rule in this file is a button the write would refuse. */
+      s._removable ? '<button class="btn danger" data-act="remove">Remove</button>' : ""}
     ${isHold ? '<button class="btn danger" data-act="sell">Record a sale</button>' : ""}
     </div></div>`;
   /* No way to buy more of it from here, and that costs a click on purpose.
@@ -1603,6 +1616,7 @@ function detailView(s) {
   h += decisionSection(d, isPrev ? "Where it stands now" : "The verdict");
   h += judgementSection(s);
   h += lotHistory(s);
+  h += snapshotHistory(s);
 
   /* where the numbers come from */
   h += coverageSection(s);
@@ -1893,6 +1907,128 @@ function lotHistory(s) {
       ? " This name has been held more than once, so the entries are grouped by holding — each one its own round trip,"
         + " newest first." : ""}</p>
     ${body}</section>`;
+}
+
+/* --------------------------------------------------------- saved snapshots */
+/* Days somebody kept on purpose. The same frozen object a purchase makes,
+   with nothing bought — so the list reads like the lot history and the record
+   underneath it is the same shape.
+
+   Rows come down with every render; the record itself does not, and is asked
+   for when one is opened. That is not an optimisation for its own sake: one
+   frozen evaluation is kilobytes of evidence, and a year of watching thirty
+   names would put tens of megabytes through a call that runs every time
+   anything changes. */
+
+/* What has moved since a snapshot was frozen, in the host's own words.
+
+   Read off positions rather than off timestamps: a snapshot says how far
+   each change record had got when it was written, and the host says which
+   positions in those records were a change to something a verdict reads.
+   Counting raw entries instead would put this line over a bank release that
+   only reworded a paragraph — which is why the host answers what a move is
+   and this only asks how many came later.
+
+   The wording comes from the host too. There is no list of which change
+   records exist in this file, so a third one arrives with its own noun and
+   needs nothing here. */
+function movedSince(snap) {
+  const then = (snap || {}).changes_recorded;
+  const real = S.changes_that_moved || {};
+  if (!then) return "";
+  const moved = Object.keys(real)
+    .map((name) => [name,
+                    (real[name] || []).filter((at) => at > (then[name] || 0)).length])
+    .filter(([, n]) => n > 0)
+    .map(([name, n]) => {
+      const w = (S.change_records || {})[name] || {};
+      return `${n} ${esc(w.noun || name)}${n === 1 ? "" : "s"}`;
+    });
+  if (!moved.length) return "";
+  return `<p class="hint">${moved.join(" and ")} since this was kept.
+    Nothing here is restated — these are the figures and the rules that were
+    read at the time. What moved is on the Strategy tab.</p>`;
+}
+
+function snapshotRow(s, row) {
+  const gone = row.discarded;
+  const open = openSnap && openSnap.ticker === s.ticker
+    && openSnap.seq === row.seq;
+  const st = row.strategy || {};
+  let body = "";
+  if (open && openSnap.entry) {
+    const snap = openSnap.entry.snapshot || {};
+    const d = snap.decision || {};
+    /* Keyed on the snapshot's own number, for the reason the lot history is
+       keyed on the lot's: two decisions rendered on one page sharing a key
+       means one "what is this?" opens tooltips on both.
+
+       Rendered here rather than through decisionSection, which draws the
+       button a blocked state offers as its way out. That button acts on
+       today, and offering it off a verdict frozen in March is the tool
+       inviting somebody to fix a problem that may not exist any more. */
+    body = `${movedSince(snap)}
+      <div class="rollup" style="margin-top:10px">
+        <div class="pe-head"><b>${esc((d.reason || {}).summary || "")}</b>
+          <span class="chip s-none">${esc((d.state || {}).name || "")}</span></div>
+        <div class="pe-sub" style="margin-top:6px">${d.produced_by === "host"
+          ? "Produced by the journal itself, not by the strategy — no verdict existed to keep."
+          : `Rule <code>${esc((d.reason || {}).rule || "")}</code> inside
+             ${esc(st.name || "the strategy")} v${esc(st.version)}${st.values_version != null
+               ? ` · settings v${esc(st.values_version)}` : ""}`}</div></div>
+      <div class="slist" style="margin-top:12px">${evidenceList(d, "snap" + row.seq)}</div>`;
+  } else if (open) {
+    body = '<p class="hint">Opening…</p>';
+  }
+  return `<div class="lot">
+    <div class="lothead">
+      <b>${esc(row.day)}</b>
+      ${row.state ? `<span class="chip s-none">${esc(row.state)}</span>` : ""}
+      ${gone ? `<span class="chip blank">discarded ${esc(gone.day)}</span>` : ""}
+    </div>
+    ${row.note ? `<div class="pe-sub">${esc(row.note)}</div>` : ""}
+    <div class="pe-sub">${esc(row.summary || "")}${row.price != null
+      ? ` · priced ${money(row.price)}${row.price_date ? " at the " + esc(row.price_date) + " close" : ""}`
+      : ""} · ${row.measures} figure${row.measures === 1 ? "" : "s"} kept</div>
+    ${gone && gone.reason ? `<p class="hint">Discarded: ${esc(gone.reason)}</p>` : ""}
+    <div class="toolbar" style="justify-content:flex-start;margin-top:10px">
+      <button class="btn" data-act="opensnap" data-seq="${esc(row.seq)}">${
+        open ? "Close" : "What it said"}</button>
+      ${gone ? "" : `<button class="btn" data-act="discardsnap" data-seq="${esc(row.seq)}">Discard</button>`}
+    </div>
+    ${body}</div>`;
+}
+
+function snapshotHistory(s) {
+  const held = s._snapshots || {};
+  const rows = held.rows || [];
+  /* A record this version cannot read is a section, not a missing one. It
+     says so in the host's own sentence and nothing else on the page is
+     affected — the security still renders, the journal still opens, and the
+     saved days are still on disk. */
+  if (held.refusal) {
+    return `<section class="group"><div class="ghead"><h3>Saved snapshots</h3>
+        <span>cannot be read</span></div>
+      <div class="greynote" style="margin-top:8px">${esc(held.refusal)}</div>
+      <p class="hint">Nothing has been removed. This security cannot be removed from the
+      journal either, because what it is holding cannot be shown to you first.</p></section>`;
+  }
+  if (!rows.length) return "";
+  const kept = rows.filter((r) => !r.discarded).length;
+  return `<section class="group"><div class="ghead"><h3>Saved snapshots</h3>
+      <span>${kept} kept${rows.length > kept ? ` · ${rows.length - kept} discarded` : ""}</span></div>
+    <p class="hint" style="margin:8px 0 0">What everything said about this security on a day you
+    chose to keep it. Each one is frozen where it was written and is never brought up to date —
+    that difference is the whole of what a snapshot is for. Discarding one does not delete it: it
+    stops counting, and the record still says it was taken.</p>
+    ${/* Where the Remove button went, said where somebody would look for it
+          rather than left as a missing control. Only for a candidate: a
+          holding cannot be removed whatever it has kept, and saying this
+          there would name the wrong reason. */
+      kept && s.bucket === "ideas" ? `<p class="hint">While any of these stands, ${esc(s.ticker)}
+      cannot be removed from the journal — a saved snapshot is a frozen verdict, the same as one on
+      a purchase. Discard them all and it removes like any other candidate.</p>` : ""}
+    <div class="lots">${rows.map((r) => snapshotRow(s, r)).join("")}</div></section>`;
 }
 
 /* ------------------------------------------------------------ data layer */
@@ -3627,6 +3763,47 @@ function dlgNote(s) {
   });
 }
 
+/* Saving a day, and letting go of one.
+
+   There is no date field on the first of these and there is not meant to be.
+   A snapshot is what everything says now — the day it belongs to is the day
+   somebody looked, and a baseline you could choose after seeing the answer is
+   not a baseline. The engine has no parameter for it either; this dialog is
+   not where that is enforced. */
+function dlgSnapshot(s) {
+  dialog({
+    title: `Save a snapshot · ${s.ticker}`,
+    blurb: "Keeps what everything says about this security today — the "
+      + "verdict, every figure behind it, and the rules that produced them. "
+      + "Frozen as it is now and never brought up to date.",
+    body: area("note", "Why this day is worth keeping (optional)", "",
+               "For you, later. It is not part of what gets frozen."),
+    confirm: "Save it",
+    onConfirm: async (d) => {
+      const r = await api("save_snapshot", s.ticker, d.note || "");
+      if (!r) return " ";
+      toast(`Saved what ${s.ticker} said on ${r.day}.`);
+    },
+  });
+}
+
+function dlgDiscardSnapshot(s, seq) {
+  const row = (((s._snapshots || {}).rows) || []).find((r) => String(r.seq) === String(seq));
+  dialog({
+    title: `Discard the snapshot from ${(row || {}).day || "that day"}`,
+    blurb: "It stops counting — it leaves the list, and it stops being what "
+      + "a change since is measured against. It is not deleted: the record "
+      + "still says it was taken, and that it was discarded.",
+    body: area("reason", "Why (optional)", "", ""),
+    confirm: "Discard it",
+    danger: true,
+    onConfirm: async (d) => {
+      if (!(await api("discard_snapshot", s.ticker, seq, d.reason || "")))
+        return " ";
+    },
+  });
+}
+
 /* The purchase dialog evaluates for the DATE being recorded, not for today.
    A past date reconstructs the state from the data available by then —
    filings filed by that day, that day's close — and says so, visibly:
@@ -4447,6 +4624,30 @@ document.addEventListener("click", async (ev) => {
       return window.scrollTo({ top: 0 });
     }
     case "note": return dlgNote(s);
+    case "snapshot": return dlgSnapshot(s);
+    case "discardsnap": return dlgDiscardSnapshot(s, act.dataset.seq);
+    /* Fetched when it is opened and held until something else is. The record
+       is not in `S` and never will be — see snapshotHistory. Rendering twice
+       is deliberate: once to say it is coming, once with it. */
+    case "opensnap": {
+      if (!s) return;
+      const seq = Number(act.dataset.seq);
+      if (openSnap && openSnap.ticker === s.ticker && openSnap.seq === seq) {
+        openSnap = null;
+        return render();
+      }
+      openSnap = { ticker: s.ticker, seq, entry: null };
+      render();
+      const r = await api("get_snapshot", s.ticker, seq);
+      if (!r) { openSnap = null; return render(); }
+      /* Only if it is still the one being asked about. A second click while
+         the first was in flight would otherwise land the older record. */
+      if (openSnap && openSnap.ticker === s.ticker && openSnap.seq === seq) {
+        openSnap.entry = r.entry;
+        render();
+      }
+      return;
+    }
     case "buy": return dlgBuy(s);
     case "sell": return dlgSell(s);
     case "backfill": return dlgBackfill(s);

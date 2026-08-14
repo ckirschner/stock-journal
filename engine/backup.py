@@ -5,7 +5,8 @@ timestamped file you can drop wherever you keep backups; import reads it
 back.
 
 What travels is exactly the journals directory: each journal entire, with its
-positions, notes, snapshots, declared inputs, its cash record, valuation
+positions, notes, the snapshots frozen onto purchases and the ones saved on
+purpose, declared inputs, its cash record, valuation
 settings, its rule change record and the strategy it is stamped with. That last part is what
 makes a restored journal still mean something — it names the rules every
 decision in it was taken under, and the versions they were at.
@@ -29,7 +30,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from . import cash, journals, lists, portfolio, store
+from . import cash, journals, lists, portfolio, snapshots, store
 
 # 4: journals hold lot history rather than one position per security, and
 #    carry the answers a strategy asked for. Nothing converts an older
@@ -106,6 +107,20 @@ def inspect_bundle(src: str | Path) -> dict:
         # that is what every account total and every position weight in the
         # restored journal is built on.
         "cash_entries": sum(len(d.get(cash.KEY) or []) for d in docs),
+        # And every day somebody deliberately kept. Counted for the same
+        # reason again, and with one of its own: a saved snapshot is the only
+        # frozen verdict in the file that is not attached to a purchase, so
+        # it is the one a reader scanning for positions would not think to
+        # check for.
+        #
+        # Standing ones, not every entry — a discarded snapshot travels and is
+        # meant to, but a count that included it would say this bundle carries
+        # more than the restored journal will show. Which is also why a record
+        # this version cannot read counts as none: this figure is what the
+        # restored journal will be able to show you, not what the file holds,
+        # and the security's own page is where the difference is said.
+        "snapshots": sum(len(snapshots.standing(s))
+                         for d in docs for s in (d.get("securities") or [])),
         "names": [str(d.get("name") or d.get("id")) for d in docs],
     }
 

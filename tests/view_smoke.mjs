@@ -63,6 +63,8 @@ run(`window.pywebview = { api: {
     || { ok: false, error: "no backfill preview captured" },
   get_coverage: async (t) => (__state.__coverage || {})[t]
     || { ok: false, error: "no coverage captured for " + t },
+  get_snapshot: async (t, seq) => (__state.__snapshots || {})[t + "@" + seq]
+    || { ok: false, error: "no snapshot captured for " + t + " " + seq },
 } };`);
 ["view", "maststats", "subtitle", "foot", "tabs"].forEach(mkEl);
 
@@ -945,6 +947,107 @@ for (const s of frozenJudged) {
                   + "recorded history is not something to act on from "
                   + "inside");
   }
+}
+
+/* Saved snapshots: the list, and one opened.
+
+   The opened branch is the one worth driving. It renders a frozen decision —
+   a whole evidence table, groups, cautions and all — out of a backend reply
+   rather than out of get_state, which is the shape that can drift from the
+   live one without anything noticing. And a snapshot frozen under an older
+   contract genuinely lacks fields today's has, so every dereference in there
+   runs against a record that may not carry what it reaches for. */
+const snapRows = (s) => ((s._snapshots || {}).rows || []);
+const kept = state.securities.filter((s) => snapRows(s).length);
+/* A record this build cannot read. It draws its own section — and the point
+   of drawing it is that everything else on the page still draws too, which
+   the detail render above has already proved by getting this far. */
+const unreadable = state.securities.filter(
+  (s) => (s._snapshots || {}).refusal);
+if (!unreadable.length) {
+  gap("no security in the payload carries a snapshot record this build "
+      + "cannot read, so the section that says so is never drawn");
+}
+for (const s of unreadable) {
+  check(`snapshots:unreadable:${s.ticker}`,
+        `snapshotHistory(find(${JSON.stringify(s.ticker)}))`);
+  must.push([`snapshots:unreadable:${s.ticker}`, s._snapshots.refusal,
+             "a snapshot record that cannot be read does not say why"]);
+  must.push([`detail:${s.ticker}`, s._snapshots.refusal,
+             "the page does not say the saved days cannot be shown"]);
+  mustNot.push([`detail:${s.ticker}`, 'data-act="remove"',
+                "a security whose frozen record cannot be read still offers "
+                + "to be removed"]);
+}
+if (!kept.length) {
+  gap("no security in the payload has a saved snapshot, so the section that "
+      + "renders them and the record behind it are never drawn");
+}
+if (!kept.some((s) => snapRows(s).some((r) => r.discarded))) {
+  gap("no saved snapshot in the payload was discarded, so the row that says "
+      + "so is never drawn");
+}
+/* A row's whole point is saying what the day said. If no row carries it the
+   chip is never drawn — and, worse, every `must` below that asserts a state
+   name quietly asserts nothing. A gap here rather than a silent skip. */
+if (kept.length
+    && !kept.some((s) => snapRows(s).every((r) => r.state))) {
+  gap("a saved snapshot in the payload carries no state, so the verdict it "
+      + "kept is never drawn and nothing below can check it");
+}
+for (const s of kept) {
+  // On the page, not only as a function that renders when called. A section
+  // dropped out of detailView is invisible to a harness that reaches past it.
+  must.push([`detail:${s.ticker}`, "Saved snapshots",
+             "a security with saved snapshots does not show them on its page"]);
+  for (const row of snapRows(s)) {
+    // Read off the frozen record, so a row that stopped saying what the day
+    // said — or started working it out from somewhere else — shows up here.
+    if (row.state) {
+      must.push([`snapshots:${s.ticker}`, row.state,
+                 "a saved snapshot does not say what the verdict was"]);
+    }
+    must.push([`snapshots:${s.ticker}`, row.day,
+               "a saved snapshot does not say which day it kept"]);
+    if (row.discarded) {
+      must.push([`snapshots:${s.ticker}`, `discarded ${row.discarded.day}`,
+                 "a discarded snapshot does not say it was discarded"]);
+      if (row.discarded.reason) {
+        must.push([`snapshots:${s.ticker}`, row.discarded.reason,
+                   "the reason it was discarded is not on the record shown"]);
+      }
+    } else {
+      must.push([`snapshots:${s.ticker}`, "Discard",
+                 "a standing snapshot offers no way to let go of it"]);
+    }
+  }
+  check(`snapshots:${s.ticker}`, `(() => { const was = openTicker;`
+    + ` openTicker = ${JSON.stringify(s.ticker)};`
+    + ` const h = snapshotHistory(find(${JSON.stringify(s.ticker)}));`
+    + ` openTicker = was; return h; })()`);
+  const row = snapRows(s)[0];
+  run(`openTicker = ${JSON.stringify(s.ticker)};`);
+  // Straight through the event path, so what is drawn is what a click
+  // actually produces — including the two renders it does, one saying the
+  // record is coming and one with it.
+  await run(`(async () => {
+    openSnap = { ticker: ${JSON.stringify(s.ticker)}, seq: ${row.seq}, entry: null };
+    const r = await window.pywebview.api.get_snapshot(
+      ${JSON.stringify(s.ticker)}, ${row.seq});
+    openSnap.entry = r.entry; })()`);
+  check(`snapshots:${s.ticker}:open`,
+        `snapshotHistory(find(${JSON.stringify(s.ticker)}))`);
+  check(`snapshots:${s.ticker}:opening`, `(() => {
+    const was = openSnap.entry; openSnap.entry = null;
+    const h = snapshotHistory(find(${JSON.stringify(s.ticker)}));
+    openSnap.entry = was; return h; })()`);
+  run("openSnap = null; openTicker = null;");
+}
+if (kept.length) {
+  dlg("dlg:snapshot", `dlgSnapshot(find(${JSON.stringify(kept[0].ticker)}))`);
+  dlg("dlg:discardsnap",
+      `dlgDiscardSnapshot(find(${JSON.stringify(kept[0].ticker)}),`
+      + ` ${snapRows(kept[0])[0].seq})`);
 }
 
 // The dialog that records one, on a question that has an answer already:
