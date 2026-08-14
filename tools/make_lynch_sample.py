@@ -100,7 +100,7 @@ def like(**over):
     return {**GROWING, **over}
 
 
-journal("Sample — Lynch", "lynch", {"free-cash": FREE_CASH})
+journal("Sample — Lynch", "lynch", {}, cash=FREE_CASH)
 
 
 # -- the one that worked, and is left alone ----------------------------------

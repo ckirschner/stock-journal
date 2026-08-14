@@ -59,7 +59,7 @@ FREE_CASH = 62_000.0
 
 # Created before the earliest entry in it — see sample_kit.journal for why
 # that matters and what breaks when a sample journal is stamped today.
-journal("Sample — Graham", "graham", {"free-cash": FREE_CASH})
+journal("Sample — Graham", "graham", {}, cash=FREE_CASH)
 
 
 # -- a holding with nothing happening ---------------------------------------
