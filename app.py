@@ -865,6 +865,21 @@ class Api:
                 securities, lambda s: by_ticker.get(s["ticker"])),
             exit_scorecard=portfolio.exit_scorecard(
                 securities, lambda s: by_ticker.get(s["ticker"])),
+            # And the third of the three ways this method gets broken. The
+            # then-price has to come from a FETCHED series and never from the
+            # effective price the other two read: a hand-entered figure is a
+            # statement about now, and reaching it into the past would invent
+            # the very number this panel is judging a decision against. A name
+            # nobody ever fetched has no CIK, so it scores as unscored with
+            # that said rather than dropping out of the count.
+            pass_over_scorecard=portfolio.pass_over_scorecard(
+                securities, lambda s: by_ticker.get(s["ticker"]),
+                lambda s, day: dataview.price_view_asof(
+                    s.get("cik"), s["ticker"], day) if s.get("cik") else
+                {"value": None, "reason": "this journal has never fetched "
+                 f"prices for {s['ticker']}, so what it was worth on the day "
+                 "you passed on it is not on record — fetch its data and "
+                 "this fills in"}),
             data_dir=str(store.data_dir()),
             data_security=self._data_security(),
         )

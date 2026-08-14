@@ -53,6 +53,8 @@ import copy
 from datetime import date, datetime
 from types import MappingProxyType
 
+from engine import dated, lists
+
 EXIT_REASONS = [
     "Thesis broke",
     "Hit valuation",
@@ -1764,6 +1766,110 @@ def exit_scorecard(securities: list[dict], price_of) -> dict:
             if b["_after"] else None
         b.pop("_held")
         b.pop("_after")
+    return out
+
+
+def since_pass_over(security: dict, entry: dict, price, then) -> dict:
+    """What a name did between the day it was declined and today.
+
+    The same shape `since_sale` returns and for the same reasons — a `pct`
+    with `reason: None`, or `pct: None` with a sentence saying which figure
+    was missing. Never a zero: this is the panel that judges the method, and
+    a fabricated number is the last thing that may pass for a finding in it.
+
+    THE WINDOW ENDS AT A LATER PURCHASE, exactly as a sale's does. Buying the
+    name afterwards makes the price start describing shares the user chose to
+    own, and from that point it says nothing about having declined it.
+
+    THE WINDOW STARTS ON THE DAY THE USER DECLINED, not on the day the list
+    was pulled. The two are stored separately and they answer different
+    questions: the pull date asks how the RANKING has done, the decline date
+    asks how the DECISION has done, and this record exists because a decision
+    was made. Both travel on the answer so a reader can see the gap.
+    """
+    when = dated.day_of(entry)
+    after = _first_buy_after(security, when)
+    end = ({"until": "purchase", "date": str(after.get("date") or "")[:10],
+            "price": after.get("price")} if after else
+           {"until": "today", "date": None, "price": _price_of(price)[0]})
+    out = {**end, "from": when, "list": entry.get("list"),
+           "reason": entry.get("reason")}
+    was, why = _price_of(then)
+    if was is None:
+        return {**out, "pct": None,
+                "why_not": why or ("no close is stored for this security on "
+                                   f"or before {when}, so what it was worth "
+                                   "when you passed on it is not known")}
+    if end["price"] is None or float(end["price"]) <= 0:
+        return {**out, "pct": None,
+                "why_not": (
+                    f'the purchase on {end["date"]} that ends this window is '
+                    "recorded at nothing, so it cannot stand for what the "
+                    "price was that day" if end["until"] == "purchase"
+                    else _price_of(price)[1]
+                    or "no current price is known for this security")}
+    return {**out, "why_not": None,
+            "pct": round((float(end["price"]) / was - 1) * 100, 2)}
+
+
+def _first_buy_after(security: dict, day: str) -> dict | None:
+    """The first purchase recorded on or after a day, or None."""
+    for lot in lots(security, "buy"):
+        if str(lot.get("date") or "")[:10] >= str(day)[:10]:
+            return lot
+    return None
+
+
+def pass_over_scorecard(securities: list[dict], price_of, price_at) -> dict:
+    """Group the names the user was told to buy and did not, by why they said
+    no, and report what those names went on to do.
+
+    Under a mechanical method the list IS the decision, so every one of these
+    is the user overriding the method — and this is the only one of the three
+    documented ways to break the method that leaves no other trace. Buying the
+    whole list at once and selling a winner early both produce a lot, and a
+    lot carries its own override. Declining a name produced a dated record
+    with a written reason that nothing ever read.
+
+    `avoided` is the count that went DOWN, and the inversion is the whole
+    point rather than a quirk. A purchase works out when the price rises; a
+    pass-over works out when it falls. Reporting these as "wins" on the same
+    footing as a purchase would say the user was right whenever the name they
+    refused went up, which is exactly backwards, in the one panel that is
+    supposed to be able to say the list is wrong for this person.
+
+    `n` and `n_scored` are kept apart, with the reasons in `unscored`, for the
+    reason the other two scorecards keep them apart: a passed-over name is
+    usually one this journal has never fetched, so the missing figure here is
+    the common case rather than the odd one. An average over the priced few
+    beside a count of all of them would let a data gap read as a settled
+    result about somebody's judgement.
+    """
+    out: dict[str, dict] = {}
+    for s in securities:
+        price = price_of(s)
+        for entry in lists.pass_overs(s):
+            b = out.setdefault(
+                entry.get("reason") or UNSTATED_REASON,
+                {"n": 0, "n_scored": 0, "avoided": 0, "avg": None,
+                 "bought_later": 0, "_returns": [], "_why": {}})
+            b["n"] += 1
+            got = since_pass_over(s, entry, price,
+                                  price_at(s, dated.day_of(entry)))
+            if got["until"] == "purchase":
+                b["bought_later"] += 1
+            if got["pct"] is None:
+                b["_why"][got["why_not"]] = b["_why"].get(got["why_not"], 0) + 1
+                continue
+            b["n_scored"] += 1
+            b["_returns"].append(got["pct"])
+            if got["pct"] < 0:
+                b["avoided"] += 1
+    for b in out.values():
+        b["avg"] = round(sum(b["_returns"]) / len(b["_returns"]), 1) \
+            if b["_returns"] else None
+        b["unscored"] = _why_unscored(b.pop("_why"))
+        b.pop("_returns")
     return out
 
 

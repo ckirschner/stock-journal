@@ -304,6 +304,19 @@ def pass_over(security: dict, pulled_on: str, reason: str) -> dict:
                         {"list": day, "reason": written})
 
 
+def pass_overs(security: dict) -> list:
+    """Every decision not to buy this name, newest first.
+
+    `passed_over` below answers about ONE list, because that is what a screen
+    asks: the name is in front of the user under today's ranking and the
+    question is whether they already declined it under this one. Scoring asks
+    the opposite question — every time this name was declined, whatever list
+    offered it — and there was no way to ask it. A record written, displayed
+    as prose, and never measured is the shape principle 10 exists against.
+    """
+    return dated.history(security, SKIP_KEY)
+
+
 def passed_over(security: dict, pulled_on: str, as_of: str | None = None):
     """The standing decision not to buy this name off that list, or None."""
     day = str(pulled_on or "").strip()[:10]

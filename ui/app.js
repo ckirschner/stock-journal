@@ -846,6 +846,38 @@ function scorecards() {
   const reconNote = (which) => shown(which).length > 1
     ? `<p class="hint">The two rows are not added up. ${esc(o.reconstructed.label)} means
        ${esc(o.reconstructed.means)} — the same question asked of a moment nobody was standing in.</p>` : "";
+  /* The third way this method gets broken, and the only one that leaves no
+     lot behind. `avoided` counts the ones that went DOWN — a purchase works
+     out when the price rises and a pass-over works out when it falls, and
+     reporting them the same way would tell the reader they were right
+     whenever a name they refused went up.
+
+     The unscored reasons are printed rather than summarised away. A
+     passed-over name is usually one this journal never fetched, so "no price"
+     is the common case here, and an average over the two that had one would
+     otherwise read as a verdict on somebody's judgement. */
+  const po = S.pass_over_scorecard || {};
+  const poRows = Object.keys(po).map((reason) => {
+    const b = po[reason];
+    const why = (b.unscored || []).map((u) =>
+      `<div class="pe-sub">${esc(u.reason)} <span class="dim">· ${u.n}</span></div>`).join("");
+    return line(reason + ` (${b.n})`,
+      (b.n_scored
+        ? `${b.avoided}/${b.n_scored} fell · ${pct(b.avg)}`
+        : '<span class="dim">nothing priced yet</span>')
+      + (b.n_scored < b.n ? ` <span class="dim">of ${b.n}</span>` : "")
+      + (b.bought_later
+        ? ` <span class="dim" title="Measured to that purchase rather than to today.">· ${b.bought_later} later bought</span>`
+        : "")) + why;
+  }).join("");
+  const poPanel = poRows
+    ? `<div class="panel"><h3>Names you passed on</h3>
+       <div class="sub">Fell / priced · average since you declined</div>${poRows}
+       <p class="hint">Your list said to buy these and you did not. If passing keeps working out,
+       the screen is picking names that are wrong for you — that is a finding about the method, not
+       about your nerve. Measured from the day you declined, to today or to the day you bought it
+       after all.</p></div>` : "";
+
   return `<div class="cards">
     <div class="panel"><h3>Overrides</h3><div class="sub">Bought against or without the signal</div>${side("override")}${kindNote}${reconNote("override")}</div>
     <div class="panel"><h3>Compliant</h3><div class="sub">Bought when the strategy said so</div>${side("compliant")}${reconNote("compliant")}</div>
@@ -855,6 +887,7 @@ function scorecards() {
     ${perRule ? `<div class="panel"><h3>Rules you overrode</h3><div class="sub">Wins / times · average</div>${perRule}
       <p class="hint">If overriding a rule keeps working, the rule is miscalibrated, not you. That is a reason to change the
       strategy's settings, written down.</p></div>` : ""}
+    ${poPanel}
   </div>`;
 }
 
