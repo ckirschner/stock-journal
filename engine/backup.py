@@ -5,8 +5,8 @@ timestamped file you can drop wherever you keep backups; import reads it
 back.
 
 What travels is exactly the journals directory: each journal entire, with its
-positions, notes, snapshots, declared inputs, valuation settings, its rule
-change record and the strategy it is stamped with. That last part is what
+positions, notes, snapshots, declared inputs, its cash record, valuation
+settings, its rule change record and the strategy it is stamped with. That last part is what
 makes a restored journal still mean something — it names the rules every
 decision in it was taken under, and the versions they were at.
 
@@ -29,7 +29,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from . import journals, lists, portfolio, store
+from . import cash, journals, lists, portfolio, store
 
 # 4: journals hold lot history rather than one position per security, and
 #    carry the answers a strategy asked for. Nothing converts an older
@@ -100,6 +100,12 @@ def inspect_bundle(src: str | Path) -> dict:
         # carry — which, for a strategy whose entire buy decision is the
         # list, is the one thing they would want to check.
         "lists": sum(len(d.get(lists.KEY) or []) for d in docs),
+        # And every cash entry. Counted for the reason the lists are: this
+        # screen is what somebody confirms an import against, and a record
+        # missing from it reads as one the bundle does not carry — for cash,
+        # that is what every account total and every position weight in the
+        # restored journal is built on.
+        "cash_entries": sum(len(d.get(cash.KEY) or []) for d in docs),
         "names": [str(d.get("name") or d.get("id")) for d in docs],
     }
 

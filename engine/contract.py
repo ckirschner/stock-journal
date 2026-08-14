@@ -256,12 +256,19 @@ _NO_REFERENCE = MappingProxyType({})
 # ---------------------------------------------------------------------------
 
 def _rt(tier, meaning, order, attention, payload_keys, optional_keys=(),
-        host_only=False):
+        host_only=False, exits=False):
     return MappingProxyType({
         "tier": tier,               # "position" | "evaluation" | "scope"
         "meaning": meaning,              # for the contract docs, not the user
         "order": order,                  # sort rank across a list of results
         "attention": attention,          # surfaces in "needs attention"
+        # Whether this verdict sanctions shares going out. Declared here,
+        # beside the meaning that justifies it, because it is read at a
+        # distance: a sale is against the signal when the strategy answered
+        # and its answer does not carry this. Written out as a tuple at the
+        # point of use it would be a second declaration nothing joins to the
+        # first, and the copy is always what goes stale when a type is added.
+        "exits": exits,
         # Whether a strategy may declare a state of this type. Carried here
         # rather than checked against an id, because the screen that lists
         # what a strategy will never say has to leave these out — and a view
@@ -283,8 +290,8 @@ def _rt(tier, meaning, order, attention, payload_keys, optional_keys=(),
 RENDER_TYPES = MappingProxyType({
     "commit":  _rt("position", "capital may go in", 0, True,
                    ("size", "condition"), ("plan",)),
-    "reduce":  _rt("position", "partial exit", 1, True, ("to",)),
-    "close":   _rt("position", "full exit", 2, True, ("when",)),
+    "reduce":  _rt("position", "partial exit", 1, True, ("to",), exits=True),
+    "close":   _rt("position", "full exit", 2, True, ("when",), exits=True),
     "hold":    _rt("position", "no action", 3, False, ()),
     "blocked": _rt("evaluation",
                    "a decision is owed from the user before any verdict",
@@ -294,6 +301,13 @@ RENDER_TYPES = MappingProxyType({
                         "these rules do not evaluate this kind of company",
                         6, False, (), host_only=True),
 })
+
+# Which verdicts sanction shares going out, read off the table above rather
+# than listed again beside it. `reduce` MEANS "partial exit" and `close`
+# MEANS "full exit" — reading them is not an opinion about investing, it is
+# reading the host's own vocabulary, exactly as `commit` is read to mean
+# capital may go in.
+EXIT_RENDERS = tuple(r for r, spec in RENDER_TYPES.items() if spec["exits"])
 
 # ---------------------------------------------------------------------------
 # The kinds of company a rule set can decline — the host's closed list.
@@ -1264,6 +1278,23 @@ HOST_FACTS = MappingProxyType({
 # and target weight are not roles either — a strategy can ship a default for
 # each, which makes them declared values, not questions for the user.
 #
+# **Who answers a role is the role's business, not the strategy's.** A role
+# names what a figure IS; whether the user is the one who knows it is a
+# separate fact, and it can change without the strategy changing. Free cash
+# was answered by the user and is now worked out by the host from the
+# journal's own cash record — money in, money out, dividends received — which
+# is principle 5 catching up with a figure that had been a typed conclusion
+# all along. The strategy's side of that is untouched: it still declares that
+# it needs to know the cash, and it still gets `portfolio.cash`. What moved is
+# where the number comes from.
+#
+# `answered_by` is what makes that structural rather than remembered. Where it
+# says "host", the value is taken from the host's record and the journal is
+# refused an answer of its own — so there is never a typed figure and a
+# derived one able to disagree, which is the shape principle 14 asks for. It
+# also means a strategy cannot mark such an input `required`: a question the
+# user has no way to answer would block every verdict with nothing to click.
+#
 # Adding a role is a host change in this one table. `type` and `unit` are
 # enforced against the declaration, because a role that arrived as a percent
 # would be reported as dollars.
@@ -1275,10 +1306,53 @@ INPUT_ROLES = MappingProxyType({
                  "is not in any position",
         "type": "number",
         "unit": "usd",
+        "answered_by": "host",
+        # Said once, here, so every screen that has to explain why a field is
+        # not editable says the same sentence.
+        "answered_how": "worked out from this journal's cash record — the "
+                        "opening balance, and every deposit, withdrawal and "
+                        "dividend since",
         "reports": ("portfolio.cash", "portfolio.account_value",
                     "position.weight"),
     }),
 })
+
+# Whether the user answers a role or the host does, defaulted for a role that
+# does not say. Read through this rather than off the key, so a role added
+# without the field behaves as the ordinary kind rather than raising.
+def answered_by(role: str) -> str:
+    return str(INPUT_ROLES.get(role, {}).get("answered_by") or "user")
+
+
+def host_answered(record: dict) -> dict:
+    """{input id: role} for every declared input the host answers itself.
+
+    One reading of the declaration, used by everything that has to keep a
+    host-answered figure out of the journal's stored answers. A caller
+    filtering by hand would be a second copy of this rule, and the copy is
+    what lets a typed figure back in.
+    """
+    out = {}
+    for f in record.get("inputs", []) or []:
+        role = f.get("role") if isinstance(f, dict) else None
+        if isinstance(role, str) and role in INPUT_ROLES \
+                and answered_by(role) == "host" and isinstance(f.get("id"),
+                                                               str):
+            out[f["id"]] = role
+    return out
+
+
+def user_answers(record: dict, answers: dict | None) -> dict:
+    """The answers that are the user's to give — everything a journal stores,
+    less anything the host answers for itself.
+
+    A journal written before a role became host-answered still holds the old
+    typed figure. It is never read: this is the one gate every read path goes
+    through, so the stored key is inert rather than a second source, and the
+    next save clears it onto the input-change record where it stays legible.
+    """
+    keep = host_answered(record)
+    return {k: v for k, v in (answers or {}).items() if k not in keep}
 
 # Exactly one of these names the subject of an evidence item.
 _SUBJECT_KEYS = ("measure", "fact", "input", "value", "label")
@@ -1746,6 +1820,18 @@ def _check_role(where: str, f: dict, errors: list) -> None:
                       f'`unit: {spec["unit"]}` — the host reports it in that '
                       "unit and would otherwise report one number as "
                       "another.")
+    if answered_by(role) == "host" and f.get("required"):
+        # Refused at load, where a declaration is checked, rather than met
+        # with a blocked verdict later. `required` means the journal owes an
+        # answer and every verdict waits until it has one — and the user has
+        # no way to give this one, so the journal would sit blocked forever
+        # with the screen pointing at a field that is not editable.
+        errors.append(
+            f'{where}: the "{role}" role is {spec["answered_how"]}, so it '
+            "cannot be `required: true` — nobody could answer it, and every "
+            "verdict in the journal would wait on a field that takes no "
+            "answer. Declare it optional; where the record is empty the "
+            "figure is absent and says so.")
 
 
 def _check_field_graph(decl: dict, errors: list) -> None:
@@ -1756,6 +1842,7 @@ def _check_field_graph(decl: dict, errors: list) -> None:
     values = [f for f in decl.get("values", []) if isinstance(f, dict)
               and _is_id(f.get("id"))]
     by_input = {f["id"]: f for f in inputs}
+    by_host = host_answered(decl)
     numeric = {f["id"]: f for f in inputs + values
                if f.get("type") in _NUMERIC_TYPES}
 
@@ -1784,6 +1871,22 @@ def _check_field_graph(decl: dict, errors: list) -> None:
                     f'{where}: `{bound}` names "{other}", which this '
                     "strategy does not declare as a number — a bound has to "
                     f"be {word} something countable.")
+            elif other in by_host:
+                # A bound is checked when an answer is saved, so it has to
+                # name something that only moves when somebody answers it.
+                # A host-answered figure moves on its own — a dividend lands
+                # and free cash is a different number — so an answer accepted
+                # in March would be refused in April by an event the user did
+                # not cause, and the screen that would let them fix it is the
+                # screen that refuses to save. The relationship may well be
+                # true; it is a thing for the strategy's own logic to say
+                # about a figure it reads, not a gate on a form.
+                errors.append(
+                    f'{where}: `{bound}` names "{other}", which the host '
+                    "works out for itself rather than asking. It changes "
+                    "without anybody answering anything, so a bound against "
+                    "it would refuse an answer that was fine when it was "
+                    "given. Read it in `decide` instead.")
 
         when = f.get("when")
         if not (isinstance(when, dict) and set(when) == _WHEN_KEYS):
@@ -2318,16 +2421,36 @@ def check_inputs(record: dict, supplied: dict,
     """
     declared = {f["id"]: f for f in record.get("inputs", [])
                 if isinstance(f, dict) and isinstance(f.get("id"), str)}
+    by_host = host_answered(record)
     problems: list[str] = []
     for key in supplied:
         if key not in declared:
             problems.append(f'The journal supplies "{key}", which '
                             f'{record.get("name", "this strategy")} does '
                             "not ask for.")
+        elif key in by_host:
+            # Loud rather than ignored. A figure the host derives and a figure
+            # the journal stores are two numbers about one thing, and the one
+            # that gets read is whichever the next caller reaches for first —
+            # so an answer arriving here at all means a write path has got
+            # round `user_answers`, and saying nothing would let the two live
+            # side by side until they disagreed.
+            spec = INPUT_ROLES[by_host[key]]
+            problems.append(
+                f'"{declared[key]["label"]}" is '
+                f'{spec["answered_how"]}, so this journal does not answer it. '
+                "Record what moved instead; the figure follows from that.")
 
     activity = input_activity(record, supplied)
     candidates: dict = {}
     for fid, spec in declared.items():
+        if fid in by_host:
+            # Never required of the user and never carried through as an
+            # answer. What the strategy is handed for it is put back by
+            # `apply_host_answers` once the host has worked it out, so the
+            # value a strategy reads and the figure the host reports are one
+            # number rather than two.
+            continue
         value = supplied.get(fid)
         inactive = activity.get(fid) is not None
         if value is None:
@@ -2365,25 +2488,85 @@ def check_inputs(record: dict, supplied: dict,
     return candidates, problems
 
 
-def input_roles(record: dict, effective: dict) -> dict:
-    """{role: {"id", "label", "value"} | {"id", "label", "reason"}} for every
-    role this strategy claims. The host reports the facts a role unlocks and
-    holds no view about the figure itself; where the question exists but is
+def input_roles(record: dict, effective: dict, host: dict | None = None) -> dict:
+    """{role: {"id", "label", "value", ...} | {"id", "label", "reason"}} for
+    every role this strategy claims. The host reports the facts a role unlocks
+    and holds no view about the figure itself; where the question exists but is
     unanswered, the reason says so by name, so the screen can point at the
-    field rather than at a shrug."""
+    field rather than at a shrug.
+
+    `host` is {role: known-or-absent} for the roles the host answers itself —
+    `{"cash": engine.cash.balance(journal, as_of)}`. It is handed in rather
+    than read here because this module is the plugin boundary and imports
+    nothing from the engine; what it does own is the rule that a host-answered
+    role NEVER falls back to a stored answer. Where the caller supplied
+    nothing, the role is absent saying so, which is the honest reading of "no
+    record was available" rather than a quiet return to the figure this change
+    exists to stop reading.
+    """
     out = {}
+    # A gate is on the figure, not merely on the question. A strategy that
+    # reads cash only when the user says they size by it is saying it has no
+    # use for the number the rest of the time — and a host-answered role
+    # would otherwise sail past the gate entirely, because there is no
+    # unanswered question for the gate to close. Same rule, both kinds.
+    activity = input_activity(record, effective)
     for f in record.get("inputs", []):
         role = f.get("role") if isinstance(f, dict) else None
         if not isinstance(role, str) or role not in INPUT_ROLES or role in out:
             continue
         entry = {"id": f["id"], "label": f["label"]}
-        if f["id"] in effective:
+        if activity.get(f["id"]) is not None:
+            entry["reason"] = (f'{record.get("name", "this strategy")} does '
+                               f'not read "{f["label"]}" here: '
+                               + activity[f["id"]])
+        elif answered_by(role) == "host":
+            answer = (host or {}).get(role)
+            if not isinstance(answer, dict):
+                entry["reason"] = (
+                    f'"{f["label"]}" is '
+                    f'{INPUT_ROLES[role]["answered_how"]}, and no such record '
+                    "was available to read here")
+            elif answer.get("status") == "known":
+                entry["value"] = answer["value"]
+                # The derivation travels with the figure. Everything below
+                # reports where a number came from, and this one is the
+                # account total's first ingredient — a reader who cannot see
+                # what it was built from cannot check the total either.
+                entry["provenance"] = list(answer.get("provenance") or [])
+                entry["cautions"] = list(answer.get("cautions") or [])
+            else:
+                entry["reason"] = answer.get("reason") or (
+                    f'"{f["label"]}" could not be worked out')
+        elif f["id"] in effective:
             entry["value"] = effective[f["id"]]
         else:
             entry["reason"] = (f'{record.get("name", "this strategy")} asks '
                                f'for "{f["label"]}" and this journal has no '
                                "answer yet")
         out[role] = entry
+    return out
+
+
+def apply_host_answers(effective: dict, roles: dict) -> dict:
+    """The answers a strategy is handed, with every host-answered role put
+    back under its own input id.
+
+    A strategy may read `inputs["free-cash"]` as readily as
+    `portfolio.cash` — the contract offers both — so the two have to be one
+    number. Without this the input is simply missing while the portfolio node
+    carries the figure, which is the same fact arriving in one place and not
+    the other, and a strategy reading the wrong one gets no error, just an
+    absence where a value was.
+    """
+    out = dict(effective or {})
+    for role, entry in (roles or {}).items():
+        if answered_by(role) != "host":
+            continue
+        if "value" in entry:
+            out[entry["id"]] = entry["value"]
+        else:
+            out.pop(entry["id"], None)
     return out
 
 
@@ -4379,7 +4562,13 @@ def evaluate(record: dict, ctx: dict) -> dict:
     if outside is not None:
         return outside
 
-    _, problems = check_inputs(record, ctx.get("inputs") or {},
+    # Only what the user answered. The context's `inputs` also carries the
+    # figures the host worked out for itself — free cash, under whichever id
+    # the strategy declared for it — and those are not answers: checking them
+    # here would report the host's own figure as something the journal must
+    # not have supplied, and block every verdict on it.
+    _, problems = check_inputs(record,
+                               user_answers(record, ctx.get("inputs")),
                                ctx.get("values") or {})
     if problems:
         return host_result(

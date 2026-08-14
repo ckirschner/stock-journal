@@ -229,14 +229,53 @@ class TestInputRoles:
         assert any("only an input can" in e for e in errors)
         assert any("account balance" in e for e in errors)
 
-    def test_a_claimed_role_resolves_to_the_answer_on_record(self):
+    def test_a_host_answered_role_takes_the_hosts_figure_and_no_other(self):
+        """The cash role is worked out by the host from the journal's own
+        record. A stored answer for it is never read — including one left
+        behind by a journal written before that was true, which is the whole
+        reason the fallback is a refusal rather than the answer."""
         rec = record(inputs=[field("free-cash", role="cash", unit="usd")])
-        roles = contract.input_roles(rec, {"free-cash": 5000.0})
+        roles = contract.input_roles(
+            rec, {"free-cash": 5000.0},
+            {"cash": {"status": "known", "value": 1234.0,
+                      "provenance": ["opened at $1,234.00"]}})
         assert roles["cash"] == {"id": "free-cash", "label": "Free-Cash",
-                                "value": 5000.0}
-        unanswered = contract.input_roles(rec, {})
-        assert "Free-Cash" in unanswered["cash"]["reason"]
-        assert "value" not in unanswered["cash"]
+                                 "value": 1234.0, "cautions": [],
+                                 "provenance": ["opened at $1,234.00"]}
+        # Handed nothing, it says so rather than falling back to the stored
+        # figure sitting right there.
+        stale = contract.input_roles(rec, {"free-cash": 5000.0})
+        assert "value" not in stale["cash"]
+        assert "no such record" in stale["cash"]["reason"]
+        # And the host's own absence travels verbatim, because it is the one
+        # sentence that names the fix.
+        empty = contract.input_roles(
+            rec, {}, {"cash": {"status": "absent",
+                               "reason": "no opening balance yet"}})
+        assert empty["cash"]["reason"] == "no opening balance yet"
+
+    def test_a_host_answered_role_cannot_be_answered_by_the_journal(self):
+        rec = record(inputs=[field("free-cash", role="cash", unit="usd")])
+        _, problems = contract.check_inputs(rec, {"free-cash": 5000.0})
+        assert any("does not answer it" in p for p in problems), problems
+
+    def test_a_host_answered_role_may_not_be_required(self):
+        """A question nobody can answer would block every verdict in the
+        journal, and the screen it sent you to has no field to fill in."""
+        errors = contract.validate_declaration(decl(inputs=[
+            field("free-cash", role="cash", unit="usd", required=True)]))
+        assert any("cannot be `required: true`" in e for e in errors), errors
+
+    def test_the_hosts_answer_is_put_back_under_the_inputs_own_name(self):
+        """A strategy may read the input or the portfolio node; they have to
+        be one number."""
+        rec = record(inputs=[field("free-cash", role="cash", unit="usd")])
+        roles = contract.input_roles(
+            rec, {}, {"cash": {"status": "known", "value": 90.0}})
+        assert contract.apply_host_answers({}, roles) == {"free-cash": 90.0}
+        gone = contract.input_roles(rec, {}, {"cash": {"status": "absent",
+                                                       "reason": "r"}})
+        assert contract.apply_host_answers({"free-cash": 5.0}, gone) == {}
 
 
 class TestChoices:
@@ -433,14 +472,24 @@ class TestConditionalFields:
 
 class TestBoundsThatNameAnotherField:
     def test_a_bound_reads_the_other_answer_and_names_it(self):
-        rec = record(inputs=[field("free-cash", role="cash", unit="usd"),
-                             field("reserve", max_from="free-cash", min=0)])
+        rec = record(inputs=[field("float"),
+                             field("reserve", max_from="float", min=0)])
         effective, problems = contract.check_inputs(
-            rec, {"free-cash": 1000.0, "reserve": 5000.0})
-        assert any("at most your Free-Cash (1000)" in p for p in problems)
+            rec, {"float": 1000.0, "reserve": 5000.0})
+        assert any("at most your Float (1000)" in p for p in problems)
         assert "reserve" not in effective
         assert contract.check_inputs(
-            rec, {"free-cash": 9000.0, "reserve": 5000.0})[1] == []
+            rec, {"float": 9000.0, "reserve": 5000.0})[1] == []
+
+    def test_a_bound_may_not_name_a_figure_the_host_works_out(self):
+        """It moves without anybody answering anything — a dividend lands and
+        free cash is a different number — so an answer accepted in March would
+        be refused in April by an event the user never caused, on the screen
+        that is the only way to fix it."""
+        errors = contract.validate_declaration(decl(inputs=[
+            field("free-cash", role="cash", unit="usd"),
+            field("reserve", max_from="free-cash")]))
+        assert any("works out for itself" in e for e in errors), errors
 
     def test_a_bound_can_name_a_declared_value(self):
         rec = record(inputs=[field("first-buy", max_from="cap")],
@@ -452,8 +501,8 @@ class TestBoundsThatNameAnotherField:
     def test_an_absent_other_answer_is_not_a_failed_bound(self):
         """Absence is never treated as failure. Refusing an answer because a
         different question is unanswered would be inventing a comparison."""
-        rec = record(inputs=[field("free-cash", role="cash", unit="usd"),
-                             field("reserve", max_from="free-cash")])
+        rec = record(inputs=[field("float"),
+                             field("reserve", max_from="float")])
         effective, problems = contract.check_inputs(rec, {"reserve": 5000.0})
         assert problems == []
         assert effective == {"reserve": 5000.0}

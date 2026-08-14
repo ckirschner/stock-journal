@@ -718,8 +718,7 @@ class TestAgainstTheHostsOwnPortfolioNode:
     def _journal():
         from conftest import entered, journal_for
         from engine import contract, context, dataview, portfolio
-        journal, record = journal_for("graham",
-                                      inputs={"free-cash": 50_000.0})
+        journal, record = journal_for("graham", cash_opening=50_000.0)
         held = portfolio.new_security("ARBR", "Arbor Mills")
         held["price"] = 20.0
         entered(held, current_ratio=2.4, altman_z_score=3.6,
@@ -735,7 +734,8 @@ class TestAgainstTheHostsOwnPortfolioNode:
         journal["securities"] = [held, idea]
         effective, _ = contract.check_inputs(record, journal["inputs"],
                                              _chain(record))
-        roles = contract.input_roles(record, effective)
+        roles = contract.input_roles(record, effective,
+                                     context.host_role_answers(journal))
         return journal, record, context.portfolio_view(journal["securities"],
                                                        roles)
 
@@ -758,7 +758,8 @@ class TestAgainstTheHostsOwnPortfolioNode:
         journal, record, folio = self._journal()
         ctx = context.build_context(journal["securities"][0],
                                     journal["securities"], _chain(record),
-                                    journal["inputs"], record=record)
+                                    journal["inputs"], record=record,
+                                    journal=journal)
         assert ctx["portfolio"]["account_value"]["value"] == \
             folio["account_value"]["value"]
         # A weight is market value over that account; a size in weight is
@@ -794,8 +795,10 @@ class TestAgainstTheHostsOwnPortfolioNode:
         journal["securities"].append(dark)
         effective, _ = contract.check_inputs(record, journal["inputs"],
                                              _chain(record))
-        folio = context.portfolio_view(journal["securities"],
-                                       contract.input_roles(record, effective))
+        folio = context.portfolio_view(
+            journal["securities"],
+            contract.input_roles(record, effective,
+                                 context.host_role_answers(journal)))
         assert folio["cash"]["status"] == "known"
         assert folio["account_value"]["status"] == "absent"
         assert "MURK" in folio["account_value"]["reason"]

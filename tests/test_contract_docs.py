@@ -75,6 +75,11 @@ class TestEveryHostTableIsDocumented:
         # Prose, not a table: the sentence is quoted where the split is
         # explained, and pinning it here would pin a paragraph.
         "SPLIT_TEST",
+        # Not vocabulary an author declares — it is read off RENDER_TYPES,
+        # whose generated table already carries the `exits` column that
+        # produces it. A block of its own would restate that column, which
+        # is the failure this whole file exists against.
+        "EXIT_RENDERS",
     }
 
     def test_no_host_owned_vocabulary_is_undocumented(self):

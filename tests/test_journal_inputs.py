@@ -24,8 +24,8 @@ from engine import facts_store, journals, price_store
 
 from app import Api
 
-ANSWERS = {"free-cash": "40000", "stance": "building",
-           "keeps-reserve": "false", "first-buy": "4"}
+ANSWERS = {"stance": "building", "keeps-reserve": "false", "first-buy": "4"}
+OPENING_CASH = 40000.0
 
 
 @pytest.fixture
@@ -38,10 +38,26 @@ def journal():
     return journals.load(journals.resolve_open())
 
 
-def make(api, name="Sized", answers=None):
+def make(api, name="Sized", answers=None, cash=OPENING_CASH):
+    """Create the journal, and open its cash record at the setup figure.
+
+    Free cash is not an answer any more — it is worked out from the record —
+    so the setup figure opens that record rather than being stored. Passed on
+    the same call, because that is what the quick-start flow does.
+    """
     r = api.create_journal(name, "awkward",
-                           dict(ANSWERS if answers is None else answers))
+                           dict(ANSWERS if answers is None else answers),
+                           opening_cash=cash)
     assert r["ok"], r
+    assert not r.get("cash_problem"), r.get("cash_problem")
+    return r
+
+
+def spend(api, amount, when=None):
+    """Take money out of the account. What free cash is now follows from it,
+    which is the only way the figure moves."""
+    r = api.record_cash("withdrawal", amount, when)
+    assert r["ok"], r.get("error")
     return r
 
 
@@ -89,8 +105,19 @@ class TestSetupCollectsWhatIsDeclared:
     def test_a_journal_holds_the_answers_it_was_created_with(self, api):
         make(api)
         assert journal()["inputs"] == {
-            "free-cash": 40000.0, "stance": "building",
-            "keeps-reserve": False, "first-buy": 4.0}
+            "stance": "building", "keeps-reserve": False, "first-buy": 4.0}
+
+    def test_the_cash_at_setup_opens_a_record_rather_than_being_stored(self,
+                                                                       api):
+        """The figure somebody types at setup is day one of a ledger, not an
+        answer sitting in a slot. A stored copy beside the derived balance
+        would be two numbers about one thing."""
+        from engine import cash
+        make(api)
+        doc = journal()
+        assert "free-cash" not in doc["inputs"]
+        assert cash.opening(doc)["amount"] == 40000.0
+        assert cash.balance(doc)["value"] == 40000.0
 
     def test_the_answers_travel_in_an_export(self, api, tmp_path):
         """They live inside the journal, so the exportable set carries them
@@ -100,7 +127,11 @@ class TestSetupCollectsWhatIsDeclared:
         path = backup.export_bundle(tmp_path)
         import json
         bundle = json.loads(path.read_text())
-        assert bundle["journals"][0]["inputs"]["free-cash"] == 40000.0
+        assert bundle["journals"][0]["inputs"]["stance"] == "building"
+        # And the cash record with them: it lives inside the journal, so the
+        # exportable set carries it without any field having to remember to.
+        [opened] = bundle["journals"][0]["cash_record"]
+        assert opened["kind"] == "opening" and opened["amount"] == 40000.0
 
     def test_a_missing_required_answer_refuses_creation_by_name(self, api):
         answers = dict(ANSWERS)
@@ -120,13 +151,6 @@ class TestSetupCollectsWhatIsDeclared:
         r = api.create_journal("Reserved", "awkward", answers)
         assert r["ok"] is False
         assert "Cash you keep back" in r["error"]
-
-    def test_a_bound_that_names_another_answer_is_enforced(self, api):
-        answers = dict(ANSWERS, **{"keeps-reserve": "true",
-                                   "reserve": "999999"})
-        r = api.create_journal("Over-reserved", "awkward", answers)
-        assert r["ok"] is False
-        assert "at most your Free cash" in r["error"]
 
     def test_a_bound_that_names_a_declared_value_is_enforced(self, api):
         """The cap is a setting the strategy ships; the first-buy size is an
@@ -150,14 +174,14 @@ class TestTheJournalStopsBeingATrap:
         make(api)
         hold(api, cik=company())
         doc = journal()
-        doc["inputs"].pop("free-cash")
+        doc["inputs"].pop("stance")
         journals.save(doc)
 
         blocked = decision_for(api.get_state())
         assert blocked["state"]["id"] == "host:inputs-missing"
         assert blocked["state"]["fix"] == "settings"
 
-        assert api.save_journal_settings({"free-cash": "25000"}, None)["ok"]
+        assert api.save_journal_settings({"stance": "building"}, None)["ok"]
         assert decision_for(api.get_state())["produced_by"] == "strategy"
 
     def test_naming_one_answer_never_deletes_the_others(self, api):
@@ -165,9 +189,9 @@ class TestTheJournalStopsBeingATrap:
         empty a journal, and the next screen would say the strategy needs
         setting up again."""
         make(api)
-        assert api.save_journal_settings({"free-cash": "25000"}, None)["ok"]
+        assert api.save_journal_settings({"first-buy": "6"}, None)["ok"]
         assert journal()["inputs"]["stance"] == "building"
-        assert journal()["inputs"]["free-cash"] == 25000.0
+        assert journal()["inputs"]["first-buy"] == 6.0
 
     def test_a_blank_answer_clears_it_rather_than_storing_a_zero(self, api):
         make(api)
@@ -177,9 +201,21 @@ class TestTheJournalStopsBeingATrap:
     def test_a_rejected_edit_leaves_the_journal_exactly_as_it_was(self, api):
         make(api)
         before = dict(journal()["inputs"])
-        r = api.save_journal_settings({"free-cash": "not a number"}, None)
+        r = api.save_journal_settings({"first-buy": "not a number"}, None)
         assert r["ok"] is False
         assert journal()["inputs"] == before
+
+    def test_a_figure_the_host_derives_cannot_be_typed_into_settings(self):
+        """Not silently dropped — the screen says where the number comes
+        from. A form that accepted it and did nothing would leave somebody
+        certain they had changed their balance."""
+        from engine import contract
+        strategies, _ = None, None
+        rec = {"name": "F", "inputs": [
+            {"id": "free-cash", "label": "Free cash", "type": "number",
+             "unit": "usd", "role": "cash", "explain": "e"}]}
+        _, problems = contract.check_inputs(rec, {"free-cash": 5.0})
+        assert any("does not answer it" in p for p in problems), problems
 
     def test_saving_clears_a_setting_the_strategy_no_longer_declares(self,
                                                                      api):
@@ -234,13 +270,26 @@ class TestTheTwoRecords:
         to justify their cash balance changing would train them to ignore
         the record that does matter."""
         make(api)
-        assert api.save_journal_settings({"free-cash": "25000"}, None)["ok"]
+        assert api.save_journal_settings({"first-buy": "6"}, None)["ok"]
         assert journal()["rule_changes"] == []
         [change] = journal()["input_changes"]
-        assert change["moved"] == [{"id": "free-cash", "label": "Free cash",
-                                    "from": 40000.0, "to": 25000.0}]
+        assert change["moved"] == [{"id": "first-buy",
+                                    "label": "Size of a first position",
+                                    "from": 4.0, "to": 6.0}]
         assert "reason_owed" not in change
         assert journals.pending(journal()) == []
+
+    def test_cash_moving_owes_nothing_and_is_its_own_record(self, api):
+        """Money arriving is not a change to what the rules demand and not an
+        edit to an answer either. It is an event, and it goes where events
+        go."""
+        make(api)
+        assert api.record_cash("deposit", 5_000, None, "pay day")["ok"]
+        doc = journal()
+        assert doc["rule_changes"] == [] and doc["input_changes"] == []
+        assert [e["kind"] for e in doc["cash_record"]] == ["opening",
+                                                           "deposit"]
+        assert journals.pending(doc) == []
 
     def test_an_edit_that_moves_nothing_records_nothing(self, api):
         make(api)
@@ -250,9 +299,9 @@ class TestTheTwoRecords:
 
     def test_both_records_are_append_only(self, api):
         make(api)
-        api.save_journal_settings({"free-cash": "25000"}, {"cap": "12"})
+        api.save_journal_settings({"first-buy": "6"}, {"cap": "12"})
         first = [dict(c) for c in journal()["input_changes"]]
-        api.save_journal_settings({"free-cash": "30000"}, {"cap": "14"})
+        api.save_journal_settings({"first-buy": "7"}, {"cap": "14"})
         after = journal()
         assert [dict(c) for c in after["input_changes"][:1]] == first
         assert [c["seq"] for c in after["input_changes"]] == [1, 2]
@@ -273,7 +322,7 @@ class TestTheTwoRecords:
         frozen = journal()["securities"][0]["lots"][0]["snapshot"]["decision"]
         assert figure(frozen, "portfolio.cash") == 40000.0
 
-        assert api.save_journal_settings({"free-cash": "1000"}, None)["ok"]
+        spend(api, 39_000)
         again = journal()["securities"][0]["lots"][0]["snapshot"]["decision"]
         assert figure(again, "portfolio.cash") == 40000.0
         # ...while today's verdict does move, which is the point
@@ -297,21 +346,24 @@ class TestSizeBindingWorksEndToEnd:
     def test_crossing_the_cap_moves_the_state_not_just_the_number(self, api):
         """The verdict has to actually turn on the figure, or none of this
         was worth building."""
-        make(api, answers=dict(ANSWERS, **{"free-cash": "100"}))
+        make(api, cash=100.0)
         hold(api, shares=100, cost=15.0, cik=company(close=20.0))
         d = decision_for(api.get_state())
         assert d["render"] == "reduce"
         assert d["payload"]["to"] == {"unit": "weight", "value": 8.0}
 
-    def test_without_the_answer_the_same_strategy_cannot_say(self, api):
-        make(api)
+    def test_without_a_cash_record_the_same_strategy_cannot_say(self, api):
+        """No opening balance means no account total, so a rule about a share
+        of the account has nothing to read — and says so, rather than sizing
+        against a zero nobody stated."""
+        make(api, cash=None)
         hold(api, shares=10, cost=15.0, cik=company(close=20.0))
-        doc = journal()
-        doc["inputs"].pop("free-cash")
-        journals.save(doc)
         d = decision_for(api.get_state())
-        assert d["render"] == "blocked"
-        assert "Free cash" in " ".join(d["payload"]["needs"])
+        assert d["render"] == "unknown"
+        cited = {e["subject"]["id"]: e for e in d["reason"]["evidence"]}
+        assert cited["portfolio.cash"]["observed"]["status"] == "absent"
+        assert "opening balance" in \
+            cited["portfolio.cash"]["observed"]["reason"]
 
     def test_the_host_never_says_whether_a_weight_is_too_high(self, api):
         """The host reports the figure. Which side of a line it should sit

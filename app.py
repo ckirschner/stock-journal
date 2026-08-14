@@ -27,8 +27,8 @@ from pathlib import Path
 
 import webview
 
-from engine import (allocation, backup, bank, contract, context, dataview,
-                    fetch, hand_entered, journals, judgements, lists,
+from engine import (allocation, backup, bank, cash, contract, context,
+                    dataview, fetch, hand_entered, journals, judgements, lists,
                     portfolio, secrets, store, strategy_loader,
                     strategy_values, thesis as thesis_mod, tickermap, tiingo,
                     valuation)
@@ -231,7 +231,18 @@ class Api:
             "values_version": record.get("values_version"),
             "contract": record["contract"],
             "states": list(record["states"]),
-            "inputs": list(record.get("inputs") or []),
+            # Every declared question, each saying who answers it. A field
+            # the host works out for itself is not a question for the user,
+            # and the setup screen has to be able to tell the two apart
+            # without knowing which role it is looking at — free cash is the
+            # opening balance of a record, not an answer, and a form that
+            # rendered it as a plain number field would collect a figure the
+            # save then refuses.
+            "inputs": [{**f, "answered_by": contract.answered_by(f.get("role")),
+                        "answered_how": (contract.INPUT_ROLES.get(f.get("role"))
+                                         or {}).get("answered_how")}
+                       for f in (record.get("inputs") or [])],
+            "roles": {k: dict(v) for k, v in contract.INPUT_ROLES.items()},
             # What it will not evaluate, and why, resolved into the host's
             # own words for each kind. This is on the OFFER and not only on
             # the stamped strategy on purpose: what a rule set covers is
@@ -288,13 +299,39 @@ class Api:
         # dropped, and reporting that leftover as something the user owes an
         # answer for would name a problem they cannot act on.
         declared = {f["id"] for f in (record.get("inputs") or [])}
-        supplied = {k: v for k, v in (journal.get("inputs") or {}).items()
+        supplied = {k: v for k, v in
+                    contract.user_answers(record,
+                                          journal.get("inputs")).items()
                     if k in declared}
         activity = contract.input_activity(record, supplied)
         _, problems = contract.check_inputs(record, supplied, chain["values"])
-        inputs = [{**f, "value": supplied.get(f["id"]),
-                   "inactive": activity.get(f["id"])}
-                  for f in (record.get("inputs") or [])]
+        # What the host answers for itself, on today's clock. Read here rather
+        # than left as the stored figure: a journal written before free cash
+        # was derived still holds the number somebody typed, and showing it on
+        # the screen that explains where figures come from is the one place it
+        # would be believed.
+        roles = context.host_role_answers(journal)
+        by_host = contract.host_answered(record)
+        offered = contract.input_roles(record, supplied, roles)
+        inputs = []
+        for f in (record.get("inputs") or []):
+            role = by_host.get(f["id"])
+            answer = offered.get(role) if role else None
+            inputs.append({
+                **f,
+                "answered_by": contract.answered_by(f.get("role")),
+                "answered_how": (contract.INPUT_ROLES.get(f.get("role"))
+                                 or {}).get("answered_how"),
+                "value": (answer or {}).get("value") if role
+                         else supplied.get(f["id"]),
+                # Why the host could not work it out, where it could not. An
+                # empty field with nothing beside it reads as a question
+                # nobody has answered, which is exactly what this is not.
+                "unavailable": (answer or {}).get("reason") if role else None,
+                "provenance": list((answer or {}).get("provenance") or [])
+                              if role else [],
+                "inactive": activity.get(f["id"]),
+            })
         return {
             **self._strategy_offer(record),
             "changelog": {str(k): v
@@ -617,12 +654,18 @@ class Api:
             roles = {}
             if record is not None and not chain["errors"]:
                 declared = {f["id"] for f in (record.get("inputs") or [])}
-                supplied = {k: v
-                            for k, v in (journal.get("inputs") or {}).items()
+                supplied = {k: v for k, v in
+                            contract.user_answers(
+                                record, journal.get("inputs")).items()
                             if k in declared}
                 effective, _ = contract.check_inputs(record, supplied,
                                                      chain["values"])
-                roles = contract.input_roles(record, effective)
+                # The same record on the same clock the security pages read.
+                # Two screens reaching their own cash figure is how an account
+                # total here comes to differ from the one a weight there was
+                # measured against, with neither visibly the wrong one.
+                roles = contract.input_roles(
+                    record, effective, context.host_role_answers(journal))
             folio = context.portfolio_view(securities, roles)
             return allocation.view(
                 securities,
@@ -861,6 +904,23 @@ class Api:
             # what hides the screen. The view asks whether this journal works
             # from a list, never which strategy is running.
             list=self._list_view(journal, record, securities),
+            # What has happened to the account's cash, and what follows from
+            # it. The balance is here rather than only inside the allocation
+            # view because it is the account's own figure and outlives any one
+            # screen; `movement` is here because it carries the one
+            # distinction a cash balance on its own cannot make — money that
+            # arrived against money that was earned — and a figure nothing
+            # renders is a figure nobody can check.
+            cash={"kinds": cash.kinds_view(),
+                  # Which of them may be recorded right now. From the engine,
+                  # so the screen never compares a kind against a word it
+                  # holds itself — a button the write would refuse is the
+                  # same wrong turn as a hardcoded measure id.
+                  "offers": cash.offers(journal),
+                  "opened": cash.opening(journal),
+                  "ledger": cash.ledger(journal),
+                  "balance": cash.balance(journal),
+                  "movement": cash.movement(journal)},
             override_scorecard=portfolio.override_scorecard(
                 securities, lambda s: by_ticker.get(s["ticker"])),
             exit_scorecard=portfolio.exit_scorecard(
@@ -891,11 +951,19 @@ class Api:
     # -- journals ---------------------------------------------------------
     @guarded
     @locked
-    def create_journal(self, name, strategy_id, inputs=None):
+    def create_journal(self, name, strategy_id, inputs=None,
+                       opening_cash=None, opening_cash_on=None):
         """Create a journal against one strategy and stamp it.
 
         The strategy is chosen here and never again. Two strategies means two
         journals, the way it would mean two accounts.
+
+        `opening_cash` opens the journal's cash record rather than answering a
+        question: what the account holds in cash is worked out from that
+        record from here on, and the figure typed at setup is the day one it
+        counts from. Optional, like every other setup answer — a journal with
+        no opening balance reports its cash absent with the way out, and
+        nothing about recording a decision is blocked by it.
         """
         strategies, _ = self._strategies()
         record = strategies.get(strategy_id)
@@ -904,7 +972,9 @@ class Api:
                        "and stays there — it is what every decision in it "
                        "will be judged by.")
         typed = {k: v for k, v in
-                 self._typed(record.get("inputs"), inputs).items()
+                 contract.user_answers(
+                     record, self._typed(record.get("inputs"),
+                                         inputs)).items()
                  if v is not None}
         chain = strategy_values.resolve(record, layers=[])
         _, problems = contract.check_inputs(record, typed, chain["values"])
@@ -912,8 +982,49 @@ class Api:
             return err(" ".join(problems))
         journal = journals.create(name, record, bank.definitions(),
                                   inputs=typed)
+        if opening_cash not in (None, ""):
+            # Written after the journal exists and through the same call the
+            # cash screen uses, so setup cannot open a record by a route the
+            # rest of the program does not check — a second opening balance, a
+            # negative figure and a future date are all refused in one place.
+            try:
+                cash.record(journal, cash.OPENING, opening_cash,
+                            opening_cash_on)
+            except ValueError as e:
+                # The journal exists and is usable; only the balance is not
+                # set. Saying so beats deleting a journal somebody just named
+                # over a number they can type again in one click.
+                journals.save(journal)
+                journals.set_open(journal["id"])
+                return ok(id=journal["id"], name=journal["name"],
+                          cash_problem=str(e))
+            journals.save(journal)
         journals.set_open(journal["id"])
         return ok(id=journal["id"], name=journal["name"])
+
+    # -- cash -------------------------------------------------------------
+    # What the account holds is derived from what happened to it. See
+    # engine/cash.py for why an editable figure could not answer "how am I
+    # doing" and this can.
+
+    @guarded
+    @locked
+    def record_cash(self, kind, amount, when=None, note=""):
+        """Append one cash entry — an opening balance, a deposit, a
+        withdrawal, or a dividend received.
+
+        Every refusal comes from the engine and names its fix. Nothing here
+        decides whether the entry was wise; there is no such judgement to make
+        about money arriving.
+        """
+        journal, _record, _chain, _ = self._open()
+        if journal is None:
+            return err("No journal is open.")
+        entry = cash.record(journal, kind, amount, when, note)
+        self._write(journal)
+        return ok(entry=entry,
+                  balance=cash.balance(journal),
+                  opened=entry["kind"] == cash.OPENING)
 
     @guarded
     @locked
@@ -973,8 +1084,14 @@ class Api:
         if chain["errors"]:
             return err(" ".join(chain["errors"]))
 
-        typed_inputs = merged(journal.get("inputs"), record.get("inputs"),
-                              inputs)
+        # The same rule `journals.set_inputs` enforces at the write: an answer
+        # the host works out for itself is not the journal's to hold. Applied
+        # here too, so the check below runs against exactly what will be
+        # stored rather than refusing a whole form over a key the save was
+        # about to drop anyway.
+        typed_inputs = contract.user_answers(
+            record, merged(journal.get("inputs"), record.get("inputs"),
+                           inputs))
         _, problems = contract.check_inputs(record, typed_inputs,
                                             chain["values"])
         if problems:
@@ -1656,6 +1773,18 @@ class Api:
                   # signal — never "no rule triggered this exit", which
                   # claims a signal was read and came back clear.
                   verdict=portfolio.is_verdict(at["decision"]),
+                  # Which of the four ways this sale would go on the record,
+                  # and whether it owes a written reason — both from the
+                  # engine rather than worked out again in the browser. A
+                  # second copy of that judgement in the view is how the
+                  # purchase dialog and the purchase record came to disagree
+                  # about the same entry, and the sentence collected here is
+                  # worth having only if it is asked for on exactly the sales
+                  # that go against a verdict.
+                  recorded_as=portfolio.sale_recorded_as(
+                      at["decision"], evaluation["basis"]),
+                  reason_owed=portfolio.sale_reason_owed(
+                      at["decision"], evaluation["basis"]),
                   # What "everything" means for a sale dated this day. The
                   # write resolves it again from the same reader, so the
                   # number on the screen and the number recorded are one
@@ -1679,7 +1808,8 @@ class Api:
 
     @guarded
     @locked
-    def sell_shares(self, ticker, reason, price, exited, shares=None):
+    def sell_shares(self, ticker, reason, price, exited, shares=None,
+                    override_reason=""):
         """Record a sale, whole or partial.
 
         `shares` left out sells everything held **on the day the sale is
@@ -1694,6 +1824,12 @@ class Api:
         today's, which put a verdict the strategy was never asked for into
         `signal_at_exit` and `rule_triggered`, and those are what the exit
         analytics teach from.
+
+        `override_reason` is what the user wrote about selling against the
+        strategy. It is never a condition of recording: the sale is written
+        with or without it, and an empty one goes on the record as "No reason
+        given." — see engine/portfolio.sell_lots. The dialog asks; nothing
+        refuses.
         """
         journal, record, chain, _ = self._open()
         if journal is None:
@@ -1731,7 +1867,8 @@ class Api:
                                   exited_iso, values=at["values"],
                                   price_seen=at["price"],
                                   evaluation=at["evaluation"],
-                                  thesis=at["thesis"])
+                                  thesis=at["thesis"],
+                                  override_reason=override_reason)
         portfolio.note_recording(s, [lot])
         self._write(journal)
         return ok(rule_triggered=lot["rule_triggered"],
@@ -1739,6 +1876,12 @@ class Api:
                   basis=at["evaluation"]["basis"],
                   as_of=at["evaluation"]["as_of"],
                   remaining=portfolio.shares_held(s),
+                  # How it went on the record, read back off the entry rather
+                  # than from what the preview predicted: the state can move
+                  # between the dialog opening and the write, and the toast
+                  # has to describe what was written.
+                  recorded_as=portfolio.sold_as(lot),
+                  override=bool(lot.get("override")),
                   strategy_name=(lot["strategy"] or {}).get("name"))
 
     # -- backfill ----------------------------------------------------------
@@ -1893,6 +2036,14 @@ class Api:
                         thesis=at["thesis"])
                     row["rule_triggered"] = lot["rule_triggered"]
                     row["signal"] = lot["signal_at_exit"]
+                    # No written reason is collected for a sale entered out of
+                    # history, on the rule the purchase side already follows:
+                    # the sentence this asks for is the one somebody wrote on
+                    # the day, and one composed now about a sale in 2016 would
+                    # be hindsight filed where a contemporaneous reason
+                    # belongs. It still records as an override, so the exit
+                    # analytics can see it.
+                    row["recorded_as"] = portfolio.sold_as(lot)
                 made.append(lot)
             except (ValueError, store.StoreError) as e:
                 row["problem"] = str(e)
@@ -2258,16 +2409,17 @@ class Api:
                           f'"{sample.get("strategy")}" strategy, which is '
                           "not installed here, so its verdicts could not be "
                           "produced.")
-        inputs, problems = contract.check_inputs(
-            record, {f["id"]: sample.get("free_cash")
-                     for f in record.get("inputs", [])
-                     if f.get("role") == "cash"},
-            strategy_values.resolve(record)["values"])
-        if problems:
-            return None, f"{path.name}: {' '.join(problems)}"
         journal = journals.create(f"Sample — {record['name']}", record,
-                                  bank.definitions(), inputs=inputs)
+                                  bank.definitions())
         journal["securities"] = sample["securities"]
+        # The cash a sample starts with opens its record rather than answering
+        # a question, exactly as it does in the setup flow. A sample carrying
+        # deposits and dividends of its own would tell a story about cash that
+        # nothing in these files was built to support; what it needs is the
+        # balance its sizing rules are measured against.
+        if sample.get("free_cash") not in (None, ""):
+            cash.record(journal, cash.OPENING, sample["free_cash"],
+                        str(journal["created"])[:10])
         # A sample for a strategy that works from a list carries the imports
         # that were made into it, whole. They are the buy side of its story:
         # without them every verdict in the journal comes back blocked on a

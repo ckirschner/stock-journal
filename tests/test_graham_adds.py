@@ -31,6 +31,7 @@ you paid cannot be written at all.
 """
 
 import pytest
+import conftest
 
 from test_strategy_graham import (CLEARS_ENTRY, CLEARS_EXITS, QUARTERS,
                                   build, graham, outcomes, verdict)  # noqa: F401
@@ -451,9 +452,10 @@ class TestThroughTheRealMachinery:
 
     @staticmethod
     def _held(tmp_path):
+        import conftest
         from conftest import entered, journal_for
         from engine import context, portfolio, dataview, price_store
-        _journal, record = journal_for("graham", inputs={"free-cash": 50_000.0})
+        _journal, record = journal_for("graham", cash_opening=50_000.0)
         security = portfolio.new_security("ARBR", "Arbor Mills")
         security["price"] = 20.0
         entered(security, **SCREENS)
@@ -468,7 +470,8 @@ class TestThroughTheRealMachinery:
     def test_the_context_the_host_builds_carries_the_baselines(self, tmp_path):
         security, record, context = self._held(tmp_path)
         ctx = context.build_context(security, [security],
-                                    _values(record), {"free-cash": 50_000.0},
+                                    _values(record), {},
+                                    journal=conftest.cash_record(50_000.0),
                                     record=record)
         pos = ctx["position"]
         assert pos["purchases"] == 1
@@ -490,7 +493,8 @@ class TestThroughTheRealMachinery:
         record that holds the price."""
         security, record, context = self._held(tmp_path)
         ctx = context.build_context(security, [security],
-                                    _values(record), {"free-cash": 50_000.0},
+                                    _values(record), {},
+                                    journal=conftest.cash_record(50_000.0),
                                     record=record)
         assert any(l["price"] == 17.0 for l in security["lots"])
         blob = repr(ctx)
@@ -506,7 +510,8 @@ class TestThroughTheRealMachinery:
         from engine import contract
         security, record, context = self._held(tmp_path)
         ctx = context.build_context(security, [security],
-                                    _values(record), {"free-cash": 50_000.0},
+                                    _values(record), {},
+                                    journal=conftest.cash_record(50_000.0),
                                     record=record)
         result = contract.evaluate(record, ctx)
         assert result["produced_by"] == "strategy", result["reason"]["summary"]

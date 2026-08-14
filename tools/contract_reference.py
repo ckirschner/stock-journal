@@ -68,11 +68,12 @@ def _yes(flag) -> str:
 def _render_types() -> str:
     return _table(
         ["`render`", "tier", "means", "payload keys", "may also carry",
-         "needs attention", "a strategy may declare it"],
+         "needs attention", "sanctions an exit",
+         "a strategy may declare it"],
         [(f"`{k}`", v["tier"], v["meaning"],
           _code(v["payload_keys"]) or "— (none)",
           _code(v["optional_keys"]) or "—", _yes(v["attention"]),
-          _yes(not v["host_only"]))
+          _yes(v["exits"]), _yes(not v["host_only"]))
          for k, v in sorted(contract.RENDER_TYPES.items(),
                             key=lambda kv: kv[1]["order"])])
 
