@@ -472,6 +472,25 @@ class TestAStrategyThatMovedOn:
         assert d["state"]["id"] == "say-yes"
 
 
+# What release the shipped bank is on, and the one after it. Read rather than
+# written down: these tests are about a version MOVING, and they used to say
+# `version=2` because the file happened to be on 1. The first real bump made
+# "the next version" and "version 2" different numbers, and three tests that
+# were checking a release is recorded quietly started checking that an
+# unchanged version is not — which is a different assertion that also passes.
+SHIPPED_VERSION = bank.definitions()["version"]
+NEXT = object()          # `_defs(x__version=NEXT)` — whatever comes next
+
+
+def _log(*sentences) -> dict:
+    """A changelog covering the shipped release and the next one, so a test
+    naming a release never has to know which number it landed on."""
+    first, *rest = sentences
+    log = {v: first for v in range(1, SHIPPED_VERSION + 1)}
+    log[SHIPPED_VERSION + 1] = rest[0] if rest else "reworded"
+    return log
+
+
 def _defs(**moves):
     """The shipped definitions with named fields moved, as `bank.definitions`
     hands them over. Built from the real bank rather than a fixture, because
@@ -480,6 +499,8 @@ def _defs(**moves):
     """
     d = copy.deepcopy(bank.definitions())
     for path, value in moves.items():
+        if value is NEXT:
+            value = SHIPPED_VERSION + 1
         eid, _, field = path.partition("__")
         if field == "gone":
             d["entries"].pop(eid)
@@ -574,10 +595,12 @@ class TestTheMeasureRecord:
         into a record that is written once."""
         journal = self._journal(strategies)
         entry = journals.observe_measure_change(
-            journal, _defs(roic_median_5y__obs=3, roic_median_5y__version=2),
-            {1: "as shipped", 2: "cut the window to three years"})
+            journal,
+            _defs(roic_median_5y__obs=3, roic_median_5y__version=NEXT),
+            _log("as shipped", "cut the window to three years"))
         assert entry["kind"] == "definitions and release"
-        assert entry["changelog"] == ["v2: cut the window to three years"]
+        assert entry["changelog"] == [
+            f"v{SHIPPED_VERSION + 1}: cut the window to three years"]
         assert entry["reason_owed"] is False
         assert journals.pending(journal) == []
 
@@ -589,7 +612,7 @@ class TestTheMeasureRecord:
         it says in as many words that what a verdict reads is where it was."""
         journal = self._journal(strategies)
         entry = journals.observe_measure_change(
-            journal, _defs(x__version=2), {1: "as shipped", 2: "reworded"})
+            journal, _defs(x__version=NEXT), _log("as shipped", "reworded"))
         assert entry["kind"] == "release"
         assert (entry["moved"], entry["restated"]) == ([], [])
         assert entry["reason_owed"] is False
@@ -757,9 +780,9 @@ class TestTheMeasureRecord:
         a line beside the decision whose figures are the ones that moved, which
         needs the days the definitions actually moved and nothing else."""
         journal = self._journal(strategies)
-        journals.observe_measure_change(journal, _defs(x__version=2),
-                                        {1: "a", 2: "reworded"})
+        journals.observe_measure_change(journal, _defs(x__version=NEXT),
+                                        _log("a", "reworded"))
         journals.observe_measure_change(
-            journal, _defs(roic_median_5y__obs=3, x__version=2))
+            journal, _defs(roic_median_5y__obs=3, x__version=NEXT))
         assert journals.measures_moved_at(journal) == \
             [journal["measure_changes"][1]["seen"]]

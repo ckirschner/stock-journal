@@ -12,11 +12,18 @@ schema: ledger.metric-bank/1
 # this number moves. What the number decides is WHO OWES THE SENTENCE: bump it
 # and the changelog below is the account, leave it alone and the journal asks
 # the person who edited the file to write one.
-version: 1
+version: 2
 
 changelog:
   1: |
     The definitions as they stood when they started being recorded.
+  2: |
+    The four compound growth rates now declare the second way they refuse: a
+    positive base falling to a negative end, which is a profit turning into a
+    loss and has no compound annual rate. The arithmetic already refused it
+    and this file did not say so, so the refusal cited a test nobody could
+    look up. No formula, window, estimator or industry gate moved — what a
+    rate computes, when it computes, is unchanged.
 # =============================================================================
 # THE METRIC BANK
 # =============================================================================
@@ -2979,6 +2986,14 @@ entries:
         because: |
           The compound growth rate has no interpretation from a zero or
           negative base.
+      - data: mean revenue over the three end years is negative
+        because: |
+          A profit that turned into a loss has no compound annual rate — the
+          fractional power of a negative ratio is not a number. It is a
+          different fact from the base being zero or negative above and it
+          reads differently: that one says the rate had nowhere to start
+          from, this one says the thing being compounded ended below nothing,
+          which is what a reader needs told rather than a rate.
       - data: fewer than eight fiscal years of revenue are available on one
           accounting basis
         because: |
@@ -3030,6 +3045,14 @@ entries:
         because: |
           The compound growth rate has no interpretation from a zero or
           negative base.
+      - data: mean revenue over the three end years is negative
+        because: |
+          A profit that turned into a loss has no compound annual rate — the
+          fractional power of a negative ratio is not a number. It is a
+          different fact from the base being zero or negative above and it
+          reads differently: that one says the rate had nowhere to start
+          from, this one says the thing being compounded ended below nothing,
+          which is what a reader needs told rather than a rate.
       - data: fewer than six fiscal years of revenue are available on one
           accounting basis
         because: |
@@ -3354,6 +3377,14 @@ entries:
         because: |
           The compound growth rate has no interpretation from a zero or
           negative base.
+      - data: mean net income over the three end years is negative
+        because: |
+          A profit that turned into a loss has no compound annual rate — the
+          fractional power of a negative ratio is not a number. It is a
+          different fact from the base being zero or negative above and it
+          reads differently: that one says the rate had nowhere to start
+          from, this one says the thing being compounded ended below nothing,
+          which is what a reader needs told rather than a rate.
       - data: mean net income over the three base years is at most a tenth of
           the mean over the three end years, AND the base years' net margin is
           under half the end years'
@@ -3426,6 +3457,14 @@ entries:
       - data: mean diluted EPS over the three base years is zero or negative
         because: |
           A zero or negative base mean breaks the compound rate entirely.
+      - data: mean diluted EPS over the three end years is negative
+        because: |
+          A profit that turned into a loss has no compound annual rate — the
+          fractional power of a negative ratio is not a number. It is a
+          different fact from the base being zero or negative above and it
+          reads differently: that one says the rate had nowhere to start
+          from, this one says the thing being compounded ended below nothing,
+          which is what a reader needs told rather than a rate.
       - data: mean net income over the three base years is at most a tenth of
           the mean over the three end years, AND the base years' net margin is
           under half the end years'

@@ -285,6 +285,68 @@ class TestEarningsThatAppeared:
         assert "Revenue could not be read" in r["reason"]
 
 
+class TestARateRefusesInTheBanksWords:
+    """Both of `_cagr`'s refusals are citations now, and one of them had
+    nothing to cite.
+
+    The helper wrote its own sentences, each opening "Not meaningful here:" —
+    the shape `compute.not_meaningful` prints, which promises the words after
+    the colon are the bank's and can be looked up. For the base-mean refusal
+    that promise happened to be keepable. For the other it was not: a positive
+    base falling to a negative end is a profit turning into a loss, which is
+    ordinary, and no entry declared it anywhere. A reader who followed the
+    sentence to the Metrics page found nothing, which is the exact failure the
+    citation mechanism exists to end, reproduced by borrowing its opening.
+    """
+
+    EIGHT = tuple(range(2019, 2027))
+
+    def _profit_turning_into_a_loss(self):
+        """Positive at the base, negative at the end. Revenue stays healthy,
+        so this is a real business losing money, not an arithmetic corner."""
+        ni = dict(zip(self.EIGHT, (80.0, 90.0, 85.0, 40.0, 10.0,
+                                   -30.0, -60.0, -90.0)))
+        return with_income({y: 1000.0 for y in self.EIGHT}, ni)
+
+    def test_a_negative_end_is_refused_and_says_so_in_the_banks_words(self):
+        r = one(self._profit_turning_into_a_loss(), "net_income_cagr_5y")
+        assert r["status"] == "absent"
+        assert r["reason"].startswith(
+            compute.NOT_MEANINGFUL
+            + "mean net income over the three end years is negative")
+        assert compute.CITES_THE_BANK in r["reason"]
+
+    def test_the_condition_it_cites_is_one_the_entry_declares(self):
+        """The half that makes the sentence worth printing. Every `data`
+        condition reachable from here is checked against the entry's own
+        declaration by `not_meaningful`, so this cannot drift into naming a
+        test the Metrics page does not carry."""
+        declared = bank.data_conditions()["net_income_cagr_5y"]
+        assert "mean net income over the three end years is negative" \
+            in declared
+        r = one(self._profit_turning_into_a_loss(), "net_income_cagr_5y")
+        assert any(c in r["reason"] for c in declared)
+
+    def test_the_reading_travels_beside_the_condition_not_inside_it(self):
+        """`detail` is what this filer's figures were, which the bank cannot
+        know. It never restates the condition — that is what keeps one copy
+        of the sentence."""
+        r = one(self._profit_turning_into_a_loss(), "net_income_cagr_5y")
+        assert "-60.00" in r["reason"] or "60.00" in r["reason"]
+
+    def test_a_zero_or_negative_base_cites_its_own_condition(self):
+        """The other refusal, which is a different fact and reads
+        differently: this one says the rate had nowhere to start from."""
+        ni = dict(zip(self.EIGHT, (-10.0, -5.0, 0.0, 20.0, 40.0,
+                                   60.0, 80.0, 100.0)))
+        r = one(with_income({y: 1000.0 for y in self.EIGHT}, ni),
+                "net_income_cagr_5y")
+        assert r["status"] == "absent"
+        assert r["reason"].startswith(
+            compute.NOT_MEANINGFUL
+            + "mean net income over the three base years is zero or negative")
+
+
 # ---------------------------------------------------------------------------
 # Outcome 2 — the estimator, declared and enforced
 # ---------------------------------------------------------------------------

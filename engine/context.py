@@ -346,7 +346,30 @@ def _series_for(filings, prices, symbols, today, ind=None):
     2019 filing is judged against what the SEC called this filer then. A
     company that reclassified part way through a holding is the case this
     exists for: without it, one measure would read inapplicable across a
-    history in which it meant something."""
+    history in which it meant something.
+
+    **On the cost of this, and what not to do about it.** Building one
+    security's series is measured at around 60ms. The entry-level duplication
+    is already gone — the `contexts` list below is built once per boundary and
+    every entry on that cadence reads it — and what is left is that each
+    boundary's `Ctx` assembles its own SeriesBuilder over its own prefix of
+    the filings. Sharing one builder across boundaries would take the marginal
+    cost of a day to roughly 2ms.
+
+    It is not worth doing and is written down so that it stays not done
+    deliberately. 60ms is under a render, and the refactor touches the one
+    piece of machinery whose whole job is that a point read at a boundary sees
+    exactly the filings that existed then. A shared builder is a builder that
+    has to be told what to forget, and forgetting is the failure this pinning
+    exists to prevent — a restatement leaking backwards into a reading taken
+    before it was filed would be invisible and would look like history.
+
+    The reason to write it here rather than leave it unsaid: the next person
+    who notices 60ms will reach for a cache, and a cache over these readings
+    is the same bug with a shorter name. If this ever does need to be faster,
+    the honest move is the sharing refactor with the prefix still enforced —
+    never a memo of results keyed on something that does not include which
+    filings were visible."""
     dated = [f for f in filings
              if str(f.get("filed") or "")[:10]
              and str(f.get("filed") or "")[:10] <= today]
