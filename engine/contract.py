@@ -1929,6 +1929,23 @@ def _check_field_graph(decl: dict, errors: list) -> None:
                 "not declare as an input. A field can only depend on another "
                 "answer from the same setup screen.")
             continue
+        if other in by_host:
+            # The same refusal as a bound naming one, and it has to be here
+            # too or the gate is worse than the bound: a gate is read against
+            # the *stored answers*, which never carry a host-answered figure,
+            # so it could never be met at all — the field below it would be
+            # hidden forever and its `required` silently waived, with nothing
+            # on any screen saying a question exists. And even reading the
+            # derived figure would be wrong for the reason the bound is: it
+            # moves when a dividend lands, so the question would appear and
+            # disappear without anybody answering anything.
+            errors.append(
+                f'{where}: `when` names "{other}", which the host works out '
+                "for itself rather than asking. A gate is read against what "
+                "the journal was told, and that is never one of these — so "
+                "this field could never appear at all. Read the figure in "
+                "`decide` instead.")
+            continue
         # One answer, or several any one of which applies. Every one of them
         # is checked against the gate's own declaration, so a list cannot
         # smuggle in an answer the gate could never give — a gate that can

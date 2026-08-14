@@ -1812,7 +1812,7 @@ class Api:
     @guarded
     @locked
     def sell_shares(self, ticker, reason, price, exited, shares=None,
-                    override_reason=""):
+                    override_reason="", previewed_state=None):
         """Record a sale, whole or partial.
 
         `shares` left out sells everything held **on the day the sale is
@@ -1833,6 +1833,14 @@ class Api:
         with or without it, and an empty one goes on the record as "No reason
         given." — see engine/portfolio.sell_lots. The dialog asks; nothing
         refuses.
+
+        `previewed_state` is the state the dialog was showing. The verdict is
+        worked out again here, and it can have moved while the dialog was open
+        — a fetch landing is enough. Where it has, what goes on the record is
+        not what the person was looking at, and the reply says so: the dialog
+        may have asked for a sentence that turned out not to be owed, or —
+        worse — not asked for one that now is. Same signal the purchase path
+        carries, for the same reason.
         """
         journal, record, chain, _ = self._open()
         if journal is None:
@@ -1874,6 +1882,7 @@ class Api:
                                   override_reason=override_reason)
         portfolio.note_recording(s, [lot])
         self._write(journal)
+        state = ((at["decision"] or {}).get("state") or {}).get("id")
         return ok(rule_triggered=lot["rule_triggered"],
                   signal=lot["signal_at_exit"],
                   basis=at["evaluation"]["basis"],
@@ -1881,10 +1890,18 @@ class Api:
                   remaining=portfolio.shares_held(s),
                   # How it went on the record, read back off the entry rather
                   # than from what the preview predicted: the state can move
-                  # between the dialog opening and the write, and the toast
+                  # between the dialog opening and the write, and the screen
                   # has to describe what was written.
                   recorded_as=portfolio.sold_as(lot),
                   override=bool(lot.get("override")),
+                  # And whether a sentence was actually captured. "No reason
+                  # given." is the host's own words, and a screen that could
+                  # not tell it from the user's would say their reason is on
+                  # the record when nothing is.
+                  reason_given=bool((lot.get("override") or {})
+                                    .get("reason_given")),
+                  state_changed=bool(previewed_state and state
+                                     and previewed_state != state),
                   strategy_name=(lot["strategy"] or {}).get("name"))
 
     # -- backfill ----------------------------------------------------------

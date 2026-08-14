@@ -1268,6 +1268,11 @@ def sell_lots(security: dict, decision: dict | None, reason: str,
             # above; what is worth reading back is the state and the rule,
             # which are here.
             "reason": (override_reason or "").strip() or "No reason given.",
+            # Whether one was actually written. "No reason given." is a
+            # sentence the host supplied, and a reader — or a screen about to
+            # tell somebody their reason is on the record — has no way to
+            # tell it from one they typed.
+            "reason_given": bool((override_reason or "").strip()),
         }
     security.setdefault("lots", []).append(lot)
 
@@ -1278,6 +1283,18 @@ def sell_lots(security: dict, decision: dict | None, reason: str,
     # the position stayed open when it did not.
     partial = shares_held(security, when) > 0
     did = "Trimmed" if partial else "Closed"
+    if how == "with" and (override_reason or "").strip():
+        # The state can move between the preview and the write — a fetch
+        # lands, the strategy is upgraded — and the user may already have
+        # written why they were selling against the old one. That sentence is
+        # theirs and is kept rather than dropped because the answer improved
+        # while they were typing. `add_lot` keeps the same sentence for the
+        # same reason, and on a reconstruction too: it is the only record
+        # that at the moment they decided, they were going against something.
+        add_note(security,
+                 f"{did} with the signal. The reason written while the "
+                 "verdict still read otherwise: " + override_reason.strip())
+        return lot
     if rebuilt:
         # No note. See `note_recording`: an entry made out of history is
         # narrated once for the whole act of recording, not once per entry,

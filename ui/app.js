@@ -356,6 +356,23 @@ const lotById = (s) => {
   buyLots(s).concat(sales(s)).forEach((l) => { m[l.id] = l; });
   return m;
 };
+/* What this row is flagged for, in the words the dot's title uses.
+   Buys and sales now both carry an override, and they mean different things:
+   one says shares went in against a verdict, the other says shares went out
+   against one. A single dot titled "bought against the signal" over a
+   position whose only override is a trim is the interface asserting something
+   that did not happen. Both are worth flagging; neither may wear the other's
+   sentence. */
+const flagDot = (s) => {
+  const lots = openPeriod(s) ? periodLots(s, openPeriod(s)) : [];
+  const bought = lots.some((l) => l.kind === "buy" && l.override);
+  const sold = lots.some((l) => l.kind === "sell" && l.override);
+  if (!bought && !sold) return "";
+  const said = [bought ? "holds shares bought against or without the signal" : "",
+    sold ? "has been sold against or without the signal" : ""].filter(Boolean);
+  return `<span class="flagdot" title="This position ${said.join(", and ")}"></span>`;
+};
+
 const periodLots = (s, c) => {
   const by = lotById(s);
   return c.buys.concat(c.sells).map((id) => by[id]).filter(Boolean)
@@ -672,7 +689,7 @@ function listView() {
     const sorted = rows.slice().sort((a, b) => order(a) - order(b));
     head = '<th class="l">Position</th><th>Price</th><th>Avg cost</th><th>Since buy</th><th>State</th>';
     body = sorted.map((s) => `<tr data-t="${s.ticker}"><td class="l"><span class="tick">${esc(s.ticker)}</span>
-      ${(openPeriod(s) ? periodLots(s, openPeriod(s)) : []).some((l) => l.override) ? '<span class="flagdot" title="This position holds shares bought against or without the signal"></span>' : ""}
+      ${flagDot(s)}
       ${s._backfilled ? RECON_CHIP : ""}
       <div class="coname">${esc(s.name)}${lotCount(s)}</div></td>
       <td>${priceCell(s)}</td><td class="dim">${money(s._cost_basis)}</td>
@@ -3903,15 +3920,33 @@ async function dlgSell(s, dateChosen, keep, fallbackDate) {
       if (owed && !(d.override_reason || "").trim())
         return "A reason is required when you are selling against your strategy.";
       const r = await api("sell_shares", s.ticker, d.reason, d.price, d.exited,
-        d.shares, d.override_reason || "");
+        d.shares, d.override_reason || "",
+        ((p.decision || {}).state || {}).id || null);
       if (!r) return " ";
+      /* The verdict is worked out again at the write and can have moved while
+         the dialog was open. Where it has, what went on the record is not
+         what was on the screen — and on this path that can mean a sale filed
+         as an override with no sentence against it, because the dialog never
+         asked for one. Said loudly, with the way to add it. */
+      if (r.state_changed) {
+        toast(`The verdict changed between the preview and the record (data or the strategy moved). The sale is recorded ${
+          r.recorded_as === "against" ? "as going against the signal" : "under the new verdict"}${
+          r.override && !r.reason_given ? " — with no reason on it, because you were not asked for one. Add a note if you want one there." : ""}.`,
+        r.override && !r.reason_given);
+      }
       tab = r.remaining > 0 ? "holdings" : "previous";
       if (r.remaining > 0)
         toast(`Recorded. ${r.remaining} shares still held; the lots they came from are unchanged.`);
       if (r.basis === "reconstructed")
         toast(`Recorded from history, dated ${r.as_of}. What is frozen beside it was rebuilt from that day's data, and says so wherever it appears.`);
       else if (r.recorded_as === "against")
-        toast(`Recorded against the signal. ${r.signal} under ${r.strategy_name} — no rule called for this sale, and your reason is on the record beside it.`);
+        /* Only claim the sentence is there when it is. "No reason given." is
+           the host's own words, and telling somebody their reason is on the
+           record when nothing is would be the interface asserting something
+           the record does not say. */
+        toast(`Recorded against the signal. ${r.signal} under ${r.strategy_name} — no rule called for this sale`
+          + (r.reason_given ? ", and your reason is on the record beside it." : ", and no reason is recorded against it."),
+        !r.reason_given);
       else if (r.recorded_as === "without")
         toast("Recorded. No verdict could be evaluated, and that absence is on the record rather than papered over.");
     },

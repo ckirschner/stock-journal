@@ -176,6 +176,32 @@ class TestNothingIsBlocked:
                        for n in s.get("notes") or [])
 
 
+class TestTheSentenceIsNeverDiscarded:
+    def test_a_reason_written_before_the_verdict_moved_is_kept(self):
+        """The dialog asks for a sentence while the verdict says hold; the
+        verdict is worked out again at the write and can have moved to a
+        `close` by then. Dropping the sentence loses the only record that at
+        the moment they decided, they were going against something — the same
+        rule the purchase path already follows."""
+        s = held()
+        lot = sell(s, decision("close"), override_reason="Could not sleep.")
+        assert portfolio.sold_as(lot) == "with"
+        assert lot["override"] is None
+        note = s["notes"][-1]["text"]
+        assert "with the signal" in note
+        assert "Could not sleep." in note
+
+    def test_the_record_says_whether_a_sentence_was_actually_written(self):
+        """"No reason given." is the host's own words. A screen that could not
+        tell it from the user's would say their reason is on the record when
+        nothing is."""
+        written = sell(held(), decision("hold"), override_reason="Because.")
+        assert written["override"]["reason_given"] is True
+        silent = sell(held(), decision("hold"))
+        assert silent["override"]["reason_given"] is False
+        assert silent["override"]["reason"] == "No reason given."
+
+
 class TestTheExitAnalyticsCanGroupByIt:
     @staticmethod
     def _priced(_s):

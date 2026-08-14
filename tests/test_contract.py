@@ -481,6 +481,26 @@ class TestBoundsThatNameAnotherField:
         assert contract.check_inputs(
             rec, {"float": 9000.0, "reserve": 5000.0})[1] == []
 
+    def test_a_gate_may_not_name_a_figure_the_host_works_out(self):
+        """Worse than the bound, and refused for one more reason: a gate is
+        read against what the journal was TOLD, and a host-answered figure is
+        never among those — so the field below it could never appear at all,
+        and a `required` on it would be silently waived."""
+        errors = contract.validate_declaration(decl(inputs=[
+            field("free-cash", role="cash", unit="usd"),
+            field("reserve", when={"input": "free-cash", "is": [1000]})]))
+        assert any("could never appear at all" in e for e in errors), errors
+
+    def test_a_gate_ON_a_host_answered_figure_is_still_allowed(self):
+        """The other direction, and a real declaration: "only read the cash
+        when the user says they size by it". The gate is an answer; what it
+        gates is the derived figure."""
+        errors = contract.validate_declaration(decl(inputs=[
+            field("sizes-by-cash", type="boolean"),
+            field("free-cash", role="cash", unit="usd",
+                  when={"input": "sizes-by-cash", "is": [True]})]))
+        assert errors == []
+
     def test_a_bound_may_not_name_a_figure_the_host_works_out(self):
         """It moves without anybody answering anything — a dividend lands and
         free cash is a different number — so an answer accepted in March would
