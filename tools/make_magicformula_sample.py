@@ -130,8 +130,7 @@ STORIES = {
 
 
 def build():
-    journal("Sample — Magic Formula", "magic-formula",
-            {"free-cash": FREE_CASH})
+    journal("Sample — Magic Formula", "magic-formula", {}, cash=FREE_CASH)
 
     # ---------------------------------------------------------------- year one
     import_list(FIRST_PULL, FIRST_LIST, FLOOR)

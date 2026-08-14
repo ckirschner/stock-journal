@@ -130,8 +130,13 @@ class TestBothLand:
             journal, record, *_ = open_by_strategy(api, strategy_id)
             assert record["id"] == strategy_id
             assert journal["name"] == f"Sample — {record['name']}"
-            # The one answer each asks for, so the size rules can run at all.
-            assert journal["inputs"]["free-cash"] > 0
+            # The cash record each opens with, so the size rules can run at
+            # all. It is a record and not an answer: what a sample starts
+            # with is day one of its ledger, exactly as it is in a real
+            # journal.
+            from engine import cash
+            assert cash.opening(journal)["amount"] > 0
+            assert cash.balance(journal)["value"] > 0
 
     def test_none_pours_into_another(self, loaded):
         """A journal has one strategy, so the securities of one sample must

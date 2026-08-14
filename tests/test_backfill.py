@@ -32,15 +32,19 @@ from engine import facts_store, journals, portfolio, price_store
 
 from app import Api
 
-ANSWERS = {"free-cash": "40000", "stance": "building",
-           "keeps-reserve": "false", "first-buy": "4"}
+ANSWERS = {"stance": "building", "keeps-reserve": "false", "first-buy": "4"}
 
 
 @pytest.fixture
 def api(strategies):
     strategies("awkward")
     a = Api()
-    assert a.create_journal("Backfilled", "awkward", dict(ANSWERS))["ok"]
+    # The record opens well before anything below is dated, because a cash
+    # entry cannot come before the opening balance — the opening already says
+    # what the account held that day.
+    assert a.create_journal("Backfilled", "awkward", dict(ANSWERS),
+                            opening_cash=40_000.0,
+                            opening_cash_on="2019-01-01")["ok"]
     return a
 
 
@@ -337,26 +341,44 @@ class TestClosingOutMeansTheDayTheSaleIsDated:
 
 class TestWhatTheJournalKnewOnADay:
     def test_an_answer_is_read_back_to_the_day_it_was_true(self, api):
-        """Free cash was served from today's answer under any pin, with a
-        caution admitting it carried no date. It does carry one — every
-        change to it is on the journal's own append-only record — and the
-        caution was the wrong fix: the account is built from this and every
-        weight is measured against the account."""
+        """An answer used to be served from today's value under any pin, with
+        a caution admitting it carried no date. It does carry one — every
+        change to it is on the journal's own append-only record."""
         open_since("2019-01-01")
-        assert api.save_journal_settings({"free-cash": "9000"})["ok"]
+        assert api.save_journal_settings({"first-buy": "6"})["ok"]
         doc = journal()
         assert doc["input_changes"], "a change to an answer is recorded"
         doc["input_changes"][-1]["seen"] = "2026-05-01T12:00:00+00:00"
         journals.save(doc)
 
-        assert journals.answers_on(doc, None)["free-cash"] == 9000.0
-        assert journals.answers_on(doc, "2026-08-09")["free-cash"] == 9000.0
+        assert journals.answers_on(doc, None)["first-buy"] == 6.0
+        assert journals.answers_on(doc, "2026-08-09")["first-buy"] == 6.0
         # Before the change, the answer was the one the journal was created
         # with, and that is what a decision made then was measured against.
-        assert journals.answers_on(doc, "2026-04-30")["free-cash"] == 40000.0
+        assert journals.answers_on(doc, "2026-04-30")["first-buy"] == 4.0
         # A change made ON the day counts as in force, the rule every dated
         # record in this program obeys.
-        assert journals.answers_on(doc, "2026-05-01")["free-cash"] == 9000.0
+        assert journals.answers_on(doc, "2026-05-01")["first-buy"] == 6.0
+
+    def test_cash_is_read_back_to_the_day_the_money_actually_moved(self, api):
+        """The one figure that improved on this rather than joining it. An
+        answer carries only the day it was given, so that is the only day it
+        can be read against; a deposit carries the day the money moved, and a
+        purchase being reconstructed for April is sized against an account
+        that had what was in it in April — even if the deposit was typed in
+        in August."""
+        from engine import cash
+        open_since("2019-01-01")
+        doc = journal()
+        cash.record(doc, "deposit", 10_000.0, "2026-05-01")
+        journals.save(doc)
+
+        assert cash.balance(doc)["value"] == 50_000.0
+        assert cash.balance(doc, "2026-05-01")["value"] == 50_000.0
+        assert cash.balance(doc, "2026-04-30")["value"] == 40_000.0
+        # And the day of the deposit counts as in force, the rule every dated
+        # record in this program obeys.
+        assert cash.balance(doc, "2026-05-02")["value"] == 50_000.0
 
     def test_a_day_before_the_journal_existed_has_no_answers_at_all(self,
                                                                     api):
@@ -374,6 +396,34 @@ class TestWhatTheJournalKnewOnADay:
             "with no answers there is nothing to size against, so nothing " \
             "to reconstruct"
         assert "created on" in lot["unreconstructed"]["note"]
+
+    def test_the_frozen_note_says_what_the_cash_record_actually_says(self,
+                                                                      api):
+        """The note is written once and can never be asked again, so it must
+        not describe a figure the verdict beside it was computed from. The
+        cash record opens on 2019-01-01 — earlier than the journal, which is
+        the ordinary thing to do before backfilling history into it — so free
+        cash IS known for a 2019 purchase, and a sentence keyed off the
+        journal's creation date said it was absent."""
+        open_since("2026-01-01")
+        tracked(api, cik=893)
+        note = api.preview_purchase("SYN", "2019-06-03")["note"]
+        assert "cash" not in note, note
+        # The answers this journal genuinely had none of are still named —
+        # this fixture asks four questions besides the cash — and what is
+        # said about them no longer claims to cover the account arithmetic.
+        assert "held no answers" in note
+        assert "measured against those answers" in note
+
+    def test_and_says_it_where_the_record_genuinely_cannot_answer(self, api):
+        """The other direction, and the one silence would be worse in: a day
+        before the cash record opens has no account to size against, and the
+        record has to say so where it will be read."""
+        open_since("2026-01-01")
+        tracked(api, cik=894)
+        note = api.preview_purchase("SYN", "2018-06-03")["note"]
+        assert "held in cash on 2018-06-03 is not on record" in note
+        assert "2019-01-01" in note
 
     def test_the_note_admits_the_rules_are_the_present_ones(self, api):
         """The one part of a reconstruction that genuinely does judge the

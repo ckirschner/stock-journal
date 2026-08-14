@@ -53,7 +53,7 @@ import copy
 from datetime import date, datetime
 from types import MappingProxyType
 
-from engine import dated, lists
+from engine import contract, dated, lists
 
 EXIT_REASONS = [
     "Thesis broke",
@@ -514,6 +514,115 @@ def recorded_as(decision: dict | None, basis: str) -> str:
     return "without" if basis == "live" else "unreconstructed"
 
 
+# How a sale goes on the record. Exactly one of these, always — the same rule
+# as the four above, for the other half of a trade.
+#
+#   with             the strategy called for an exit, in whole or in part, and
+#                    shares went out.
+#   against          a verdict was reached, it did not call for an exit, and
+#                    shares went out anyway.
+#   without          no verdict could be reached, and the user — looking at
+#                    that on the screen — sold anyway.
+#   unreconstructed  no verdict could be REBUILT for a day in the past.
+#
+# **A written reason is owed on `against` and on nothing else**, and the
+# boundary is worth stating because it is not the purchase's.
+#
+# Selling something the strategy said to hold is the behaviour this program
+# exists to catch: it is the panic sale, it happens in a bad week, and the
+# record had a place for the reason you bought against advice and nowhere for
+# the reason you sold against it. Selling something it told you to sell is not
+# against anything. Selling more of it than a `reduce` asked for is not
+# separated out either — the host would have to price the remainder against an
+# account total to know, and a prompt that fires on arithmetic the reader
+# cannot see teaches nothing.
+#
+# `without` is where this parts company with a purchase, deliberately. Buying
+# into a name nothing could evaluate is putting capital behind a blank; the
+# purchase path asks for a sentence and should. Selling one is the direction
+# that reduces exposure, it is the ordinary outcome for a name with no data
+# fetched, and a prompt there would fire constantly on decisions with nothing
+# to defy. Over-prompting trains people to type nothing, and the sentence this
+# exists to collect is the one written on the day somebody sold against a
+# clear hold — which is worth nothing if it arrives in a field they have
+# learned to skip.
+#
+# Recorded either way, prompted only on `against`. What kind it was is on the
+# entry, so the analytics can still tell a defied verdict from an absent one.
+SOLD_AS = ("with", "against", "without", "unreconstructed")
+
+
+def _rule_triggered(decision: dict | None):
+    """Whether the strategy called for this exit: True, False, or None where
+    it reached no verdict at all.
+
+    None is not "no rule triggered it" — that would claim a signal was read
+    and came back clear. It is the absence it looks like: the strategy could
+    not be asked, could not answer, or could not be rebuilt for the day.
+
+    Read through `is_verdict` rather than off the tier, so a strategy's own
+    blocked state — "read this again before you act" — counts as the answer it
+    is, on the sale exactly as on the purchase.
+    """
+    if decision is None or not is_verdict(decision):
+        return None
+    return decision.get("render") in contract.EXIT_RENDERS
+
+
+def _sold_as(rule_triggered, basis: str) -> str:
+    """The four-way split, from the two facts that settle it.
+
+    One definition, reached from both sides: `sale_recorded_as` asks it of a
+    decision before the write so a dialog knows whether to ask for a sentence,
+    and `sold_as` asks it of an entry afterwards so the analytics can group.
+    Two implementations of one rule is how a prompt comes to disagree with the
+    record it produced.
+    """
+    if rule_triggered is True:
+        return "with"
+    if rule_triggered is False:
+        return "against"
+    return "unreconstructed" if basis == "reconstructed" else "without"
+
+
+def sale_recorded_as(decision: dict | None, basis: str) -> str:
+    """Which of the four a sale would be, given what the strategy said and
+    whether that answer was seen or rebuilt.
+
+    `basis` is required for the reason it is required on a purchase: a
+    reconstruction that reaches no verdict is not a decision taken in the face
+    of a blank screen, because nobody was standing in front of one, and a
+    caller that does not say which moment it is recording cannot get an answer
+    at all.
+    """
+    if basis not in ("live", "reconstructed"):
+        raise ValueError(
+            f'"{basis}" is not a basis. A decision was either seen live or '
+            "reconstructed for a past day, and which one it was decides "
+            "whether selling anyway was going against something or simply a "
+            "gap in what could be rebuilt.")
+    return _sold_as(_rule_triggered(decision), basis)
+
+
+def sale_reason_owed(decision: dict | None, basis: str) -> bool:
+    """Whether this sale owes a written reason. See SOLD_AS for where the
+    boundary sits and why it is not the purchase's."""
+    return sale_recorded_as(decision, basis) == "against"
+
+
+def sold_as(sale: dict | None) -> str:
+    """How a recorded sale went on the record, read off the entry.
+
+    Derived rather than stored, like the bucket and the holding periods, and
+    for the same reason: a stored word would be a second opinion about a fact
+    `rule_triggered` and the frozen evaluation already settle. It also means
+    every sale ever recorded answers this — the split is visible across a
+    journal's whole history rather than only from the day the sentence started
+    being collected.
+    """
+    return _sold_as((sale or {}).get("rule_triggered"), basis_of(sale))
+
+
 def basis_of(lot: dict | None) -> str:
     """Whether this entry's verdict was seen on the day it is dated, or
     rebuilt for that day afterwards.
@@ -956,7 +1065,8 @@ def sell_lots(security: dict, decision: dict | None, reason: str,
               values: dict | None = None,
               price_seen: dict | None = None,
               evaluation: dict | None = None,
-              thesis: dict | None = None) -> dict:
+              thesis: dict | None = None,
+              override_reason: str = "") -> dict:
     """Record a sale against specific lots, keeping the ticker in the journal.
 
     A partial sale leaves the position open and the remaining lots intact; a
@@ -1002,6 +1112,15 @@ def sell_lots(security: dict, decision: dict | None, reason: str,
     against a revision made after the answer was known. No valuation is
     frozen here — a claim is the case for a purchase, and attaching one to an
     exit would invent a number the sale was never justified by.
+
+    **`override_reason` is what the user wrote about selling against the
+    strategy**, and it is recorded exactly as the same sentence is on a
+    purchase — including when it is empty. Nothing here blocks a sale for the
+    want of it: the tool records decisions and never blocks them, and a sale
+    the journal refused to write would be a sale that happened and is not on
+    the record, which is worse than one recorded with "No reason given."
+    against it. Which sales owe the sentence, and why the boundary is not the
+    purchase's, is set out at SOLD_AS.
     """
     exit_price = float(exit_price)
     when = recorded_date(exited, "sale")
@@ -1091,29 +1210,25 @@ def sell_lots(security: dict, decision: dict | None, reason: str,
     rebuilt = evaluation.get("basis") == "reconstructed"
 
     if decision is None:
-        signal, rule_triggered, strategy = "Strategy not installed", None, None
+        signal, strategy = "Strategy not installed", None
     else:
         state = decision.get("state") or {}
         signal = state.get("name") or state.get("id") or "no verdict"
         strategy = copy.deepcopy(decision.get("strategy"))
-        if not is_verdict(decision):
-            # No verdict was reached at all — the strategy could not be
-            # asked, could not answer, or could not be rebuilt for the day
-            # this sale is dated. That is an absence, and it is recorded as
-            # one. Calling it "no rule triggered this exit" would claim a
-            # signal was read and came back clear, which is the difference
-            # between a fact and a fabrication.
-            #
-            # Read through `is_verdict` rather than off the tier, so a
-            # strategy's own blocked state — "read this again before you
-            # act" — counts as the answer it is, on the sale exactly as on
-            # the purchase.
-            rule_triggered = None
-        else:
-            # An exit the strategy called for: it said to leave, in whole or
-            # in part. Everything else is an exit the user reached on their
-            # own, which is what the exit scorecard exists to measure.
-            rule_triggered = decision.get("render") in ("close", "reduce")
+    # Whether the strategy called for this exit, in whole or in part.
+    # Everything else is an exit the user reached on their own, which is what
+    # the exit scorecard exists to measure. `_rule_triggered` is the one
+    # definition — the sale dialog asks the same question of the same
+    # function before this write, so what the user was prompted for and what
+    # goes on the record cannot come apart.
+    rule_triggered = _rule_triggered(decision)
+    # Through the public reader, so a basis nobody stated is refused here
+    # exactly as `add_lot` refuses one through `recorded_as`. Reaching for
+    # `_sold_as` directly would record a sale as "without a verdict" over a
+    # typo in the word "live" — which is the shape of failure the two-argument
+    # rule exists to make impossible.
+    how = sale_recorded_as(decision, evaluation["basis"])
+    reason_block = (decision or {}).get("reason") or {}
 
     lot_id, seq = _next_id(security)
     lot = {
@@ -1129,9 +1244,41 @@ def sell_lots(security: dict, decision: dict | None, reason: str,
         "signal_at_exit": signal,
         "rule_triggered": rule_triggered,
         "strategy": strategy,
+        # Set below where this sale went against the strategy or was made with
+        # no verdict to go on. Named and shaped as the purchase's is, because
+        # they are the same fact about the two halves of a trade and a reader
+        # of one should not have to learn a second vocabulary for the other.
+        "override": None,
         "snapshot": _snapshot(decision, values, price_seen, evaluation,
                               thesis=thesis),
     }
+    if how in ("against", "without"):
+        lot["override"] = {
+            "date": when,
+            "kind": how,
+            "state": signal,
+            "rule": reason_block.get("rule"),
+            "summary": reason_block.get("summary"),
+            "basis": evaluation["basis"],
+            "as_of": evaluation["as_of"],
+            "strategy": copy.deepcopy(strategy),
+            # No `failed` and `missing` lists here, unlike a purchase. On a
+            # buy those name the tests that blocked it, and the per-rule
+            # scorecard reads them to ask whether a limit that keeps being
+            # overridden is miscalibrated. On a sale against a hold there are
+            # no failed tests to name — the exit rules all came back clear,
+            # which is precisely why it said hold — so the two lists would be
+            # empty or misleading and nothing would read them. The whole
+            # decision with every piece of its evidence is on the snapshot
+            # above; what is worth reading back is the state and the rule,
+            # which are here.
+            "reason": (override_reason or "").strip() or "No reason given.",
+            # Whether one was actually written. "No reason given." is a
+            # sentence the host supplied, and a reader — or a screen about to
+            # tell somebody their reason is on the record — has no way to
+            # tell it from one they typed.
+            "reason_given": bool((override_reason or "").strip()),
+        }
     security.setdefault("lots", []).append(lot)
 
     # Whether this sale trimmed or closed is a fact about the holding it
@@ -1141,16 +1288,29 @@ def sell_lots(security: dict, decision: dict | None, reason: str,
     # the position stayed open when it did not.
     partial = shares_held(security, when) > 0
     did = "Trimmed" if partial else "Closed"
+    if how == "with" and (override_reason or "").strip():
+        # The state can move between the preview and the write — a fetch
+        # lands, the strategy is upgraded — and the user may already have
+        # written why they were selling against the old one. That sentence is
+        # theirs and is kept rather than dropped because the answer improved
+        # while they were typing. `add_lot` keeps the same sentence for the
+        # same reason, and on a reconstruction too: it is the only record
+        # that at the moment they decided, they were going against something.
+        add_note(security,
+                 f"{did} with the signal. The reason written while the "
+                 "verdict still read otherwise: " + override_reason.strip())
+        return lot
     if rebuilt:
         # No note. See `note_recording`: an entry made out of history is
         # narrated once for the whole act of recording, not once per entry,
         # and everything specific to this sale is on the sale.
         return lot
-    if rule_triggered is False:
+    if how == "against":
         who = (strategy or {}).get("name") or "the strategy"
-        add_note(security, f"{did} with no rule triggering it. {who} read "
-                           f"{signal} at the time.")
-    elif rule_triggered is None:
+        add_note(security,
+                 f"{did} against the signal ({signal} under {who}). Stated "
+                 f'reason: {lot["override"]["reason"]}')
+    elif how == "without":
         add_note(security, f"{did} with no verdict to go on — {signal}. No "
                            "signal could be evaluated at the time, and that "
                            "absence is on the record rather than papered "
@@ -1732,6 +1892,21 @@ def exit_scorecard(securities: list[dict], price_of) -> dict:
     each group carried a rebuilt verdict rather than one seen at the time.
     That is the figure a reader needs before treating "Panic, three times,
     and the price rose 20% after each" as evidence about their own nerve.
+
+    **Every group also splits by what the strategy was saying at the time**,
+    into the four of SOLD_AS, and the split covers the group whole — the four
+    counts add up to `n`, so a reader can never be shown a subset that reads
+    like the total. `against` carries its own aftermath figure beside the
+    group's, because those two numbers answer different questions and the
+    difference between them is the finding: "Panic, five times, the price rose
+    9% after" is about a habit, and "of those five, four were sold against a
+    hold your own rules were still giving, and the price rose 21% after those"
+    is about a specific rule being defied at a specific moment.
+
+    It runs over sales recorded before the written reason existed, because it
+    is derived from `rule_triggered` and the frozen evaluation rather than
+    from the new field — `sold_as` says why. What those older sales do not
+    have is the sentence, and nothing invents one for them.
     """
     out: dict[str, dict] = {}
     for s in securities:
@@ -1740,8 +1915,13 @@ def exit_scorecard(securities: list[dict], price_of) -> dict:
             b = out.setdefault(sale.get("reason") or UNSTATED_REASON,
                                {"n": 0, "n_reconstructed": 0,
                                 "avg_held": 0.0, "avg_after": 0.0,
-                                "bought_again": 0, "_held": [], "_after": []})
+                                "bought_again": 0, "_held": [], "_after": [],
+                                "signal": {k: 0 for k in SOLD_AS},
+                                "against": {"n": 0, "n_after": 0,
+                                            "avg_after": None, "_after": []}})
             b["n"] += 1
+            how = sold_as(sale)
+            b["signal"][how] += 1
             if is_reconstructed(sale):
                 b["n_reconstructed"] += 1
             held = sale_return(s, sale)
@@ -1752,6 +1932,10 @@ def exit_scorecard(securities: list[dict], price_of) -> dict:
                 b["bought_again"] += 1
             if after["pct"] is not None:
                 b["_after"].append(after["pct"])
+            if how == "against":
+                b["against"]["n"] += 1
+                if after["pct"] is not None:
+                    b["against"]["_after"].append(after["pct"])
     for b in out.values():
         # Each average says what it rests on. The group count is a true
         # figure on its own ("you panicked three times"), but presenting an
@@ -1766,6 +1950,10 @@ def exit_scorecard(securities: list[dict], price_of) -> dict:
             if b["_after"] else None
         b.pop("_held")
         b.pop("_after")
+        got = b["against"].pop("_after")
+        b["against"]["n_after"] = len(got)
+        b["against"]["avg_after"] = round(sum(got) / len(got), 1) if got \
+            else None
     return out
 
 

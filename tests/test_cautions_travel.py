@@ -173,14 +173,14 @@ class TestThePriceSaysWhenItWasAPrice:
 
     # A strategy that asks for free cash, because weight and the account
     # total are the two figures this class is about and neither exists
-    # without it.
-    ANSWERS = {"free-cash": 40000.0, "stance": "building",
-               "keeps-reserve": False, "first-buy": 4}
+    # without it — and a cash record for it to be worked out from.
+    ANSWERS = {"stance": "building", "keeps-reserve": False, "first-buy": 4}
 
     @pytest.fixture(autouse=True)
     def _journal(self, strategies):
         strategies("awkward")
-        journal_for("awkward", "Prices", inputs=dict(self.ANSWERS))
+        journal_for("awkward", "Prices", inputs=dict(self.ANSWERS),
+                    cash_opening=40000.0)
 
     def _held(self, closes, price=None):
         """One holding, priced from `closes`, with the position figures a
@@ -321,7 +321,8 @@ def _context_for(api, ticker):
     supplied = {k: v for k, v in (journal.get("inputs") or {}).items()
                 if k in declared}
     return context.build_context(security, journal["securities"],
-                                 chain["values"], supplied, record=record)
+                                 chain["values"], supplied, record=record,
+                                 journal=journal)
 
 
 class TestADeadSeriesReachesEveryFigureBuiltOnIt:

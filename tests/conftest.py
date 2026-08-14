@@ -115,6 +115,45 @@ def entered(security, day=None, **values):
     return security
 
 
+def cash_record(opening, opened_on=None, *events) -> dict:
+    """A bare journal document holding a cash record and nothing else.
+
+    What free cash is, is worked out from this — the opening balance and every
+    deposit, withdrawal and dividend since (engine/cash.py) — so a test that
+    wants the account arithmetic to run has to give the journal a record
+    rather than an answer. `opening` of None leaves it unopened, which is the
+    state a journal starts in and the one where cash is absent.
+
+    `events` are (kind, amount, date) triples, applied in the order given.
+    Written through `cash.record` rather than by building dicts, so a test can
+    never assemble a record the real write would have refused.
+
+    A negative `opening` is a convenience for tests about a margin balance,
+    and it is reached the way the real thing is — open at nothing, record what
+    went out — rather than by writing a signed amount the engine refuses. An
+    account that starts overdrawn started somewhere.
+    """
+    from engine import cash
+    doc: dict = {}
+    if opening is not None and float(opening) < 0:
+        cash.record(doc, cash.OPENING, 0, opened_on)
+        cash.record(doc, "withdrawal", -float(opening), opened_on)
+    elif opening is not None:
+        cash.record(doc, cash.OPENING, opening, opened_on)
+    for kind, amount, day in events:
+        cash.record(doc, kind, amount, day)
+    return doc
+
+
+def open_cash(api, opening, opened_on=None, *events):
+    """The same, through the Api, onto the open journal."""
+    for kind, amount, day in ((None, opening, opened_on),) + events:
+        from engine import cash
+        r = api.record_cash(kind or cash.OPENING, amount, day)
+        assert r["ok"], r.get("error")
+    return api
+
+
 def open_since(day: str):
     """Move the open journal's creation date back to `day`.
 
@@ -226,19 +265,28 @@ def tie(ticker, cik):
     return doc
 
 
-def journal_for(strategy_id, name="Test journal", inputs=None, config=None):
+def journal_for(strategy_id, name="Test journal", inputs=None, config=None,
+                cash_opening=None, cash_opened_on=None, cash_events=()):
     """A journal stamped with a discovered strategy, saved and opened.
 
     Returns (journal, record). Tests that only need the engine use this;
     tests that drive the UI seam go through Api.create_journal, which is the
     same path with the typing and validation the dialog does.
+
+    `cash_opening` opens the journal's cash record, which is where free cash
+    comes from — it is not an answer and cannot be passed as one.
     """
-    from engine import bank, journals, strategy_loader
+    from engine import bank, cash, journals, strategy_loader
     strategies, reports = strategy_loader.discover()
     record = strategies.get(strategy_id)
     assert record is not None, [r["errors"] for r in reports]
     journal = journals.create(name, record, bank.definitions(),
                               config=config, inputs=inputs)
+    if cash_opening is not None:
+        cash.record(journal, cash.OPENING, cash_opening, cash_opened_on)
+        for kind, amount, day in cash_events:
+            cash.record(journal, kind, amount, day)
+        journals.save(journal)
     journals.set_open(journal["id"])
     return journal, record
 

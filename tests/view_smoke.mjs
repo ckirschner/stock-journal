@@ -170,6 +170,20 @@ for (const [id, headline] of [
 check("allocate:unbuildable", `(() => {
   const a = S.allocation; S.allocation = null;
   const h = allocationView(); S.allocation = a; return h; })()`);
+// The cash record, both of its branches. An unopened one is the state every
+// journal starts in and the one where free cash, the account total and every
+// weight are absent — so it has to name the way out rather than render as a
+// screen that failed to load. The opened one has to keep the two kinds of
+// money apart on the screen, because a single total is the figure this whole
+// record replaced.
+check("cash:unopened", `(() => {
+  const c = S.cash;
+  S.cash = { ...(c || {}), opened: null, ledger: [],
+             balance: { status: "absent", reason: "no opening balance yet" },
+             movement: {}, kinds: (c || {}).kinds || {},
+             offers: Object.keys((c || {}).kinds || {}).slice(0, 1) };
+  const h = cashRecord(); S.cash = c; return h; })()`);
+check("cash:opened", "cashRecord()");
 run('tab = "holdings";');
 for (const s of state.securities) {
   check(`detail:${s.ticker}`, `detailView(find(${JSON.stringify(s.ticker)}))`);
@@ -256,6 +270,12 @@ const dlg = (label, code) => check(label,
              document.getElementById("dlgblurb").textContent,
              document.getElementById("dlgbody").innerHTML].join("\\n")`);
 dlg("dlg:settings", "dlgSettings()");
+dlg("dlg:cash-open", `(() => {
+  const c = S.cash;
+  S.cash = { ...(c || {}), opened: null,
+             offers: Object.keys((c || {}).kinds || {}).slice(0, 1) };
+  dlgCash(""); S.cash = c; })()`);
+dlg("dlg:cash-move", 'dlgCash("")');
 /* The one dialog that writes into an append-only record. It renders from a
    change on one of two records, and each of those has its own shape — a
    strategy's settings move as whole values, a measure's definition moves per
@@ -644,6 +664,34 @@ if (state.__sale_previews) {
             ["dlg:sell-no-preview", "Shares sold",
              "a preview that did not answer does not stop a sale being "
              + "recorded"]);
+  // The one piece of mandatory friction on the sell side. Where the engine
+  // says the sale owes a written reason, the dialog has to ask for it — a
+  // preview that says "owed" against a form with no field is the asymmetry
+  // this closed, reintroduced in the view. Driven off the captured reply
+  // rather than a ticker named here, so it fires on whichever sale the
+  // fixture happens to make against a verdict.
+  for (const [key, reply] of Object.entries(state.__sale_previews)) {
+    if (!reply.reason_owed) continue;
+    const label = key.endsWith("@2026-03-02")
+      ? "dlg:sell-from-history" : "dlg:sell";
+    must.push([label, 'name="override_reason"',
+               "a sale against the signal asks for a written reason"],
+              [label, "goes against your own rules",
+               "and says plainly what it is going against"]);
+  }
+}
+// A sale that went against the signal renders the sentence written at the
+// time. A verdict without the reason somebody gave against it teaches
+// nothing, and this is the one place the two sit together.
+for (const s of state.securities) {
+  const said = (s._sales || []).find((l) => (l.override || {}).reason
+                                            && l.rule_triggered === false);
+  if (!said) continue;
+  must.push([`detail:${s.ticker}`, "against the signal",
+             "a sale nobody's rule called for is named as one"],
+            [`detail:${s.ticker}`, said.override.reason,
+             "and carries the reason written at the time"]);
+  break;
 }
 if (state.__backfill) {
   must.push(
@@ -679,6 +727,21 @@ if (stamped) {
 // or a lot kind the view quietly drops renders as a shorter screen, which
 // is exactly the failure "correct by inspection" never catches.
 for (const f of (state.strategy || {}).inputs || []) {
+  // Except the ones the host works out for itself. Those are not questions:
+  // the save refuses an answer for them, so a form field would collect a
+  // figure and discard it, and the reader would leave certain they had
+  // changed their balance. They still have to appear — as the figure, with
+  // where it came from — because a screen that simply dropped them would
+  // hide the number the whole account total is built on.
+  if (f.answered_by === "host") {
+    mustNot.push(["dlg:settings", `name="in_${f.id}"`,
+                  `"${f.id}" is worked out by the journal and must not be `
+                  + "offered as a field"]);
+    must.push(["dlg:settings", f.label,
+               `the derived figure "${f.id}" is still shown on the settings `
+               + "screen"]);
+    continue;
+  }
   must.push(["dlg:settings", `name="in_${f.id}"`,
              `the declared input "${f.id}" reaches the settings form`]);
 }

@@ -189,10 +189,17 @@ def expected(node):
 
 
 def built(history, secs, cash=None):
-    """The context for the first security, with the journal behind it."""
-    inputs = {} if cash is None else {"free-cash": cash}
-    return context.build_context(secs[0], secs, {}, inputs,
-                                 record=cash_record())
+    """The context for the first security, with the journal behind it.
+
+    Free cash is not an answer this can supply — it is worked out from the
+    journal's cash record — so a fixture that states an account balance opens
+    a record at it. Which is the honest shape anyway: a hand-read account
+    total rests on the cash actually being there on the day.
+    """
+    import conftest
+    doc = conftest.cash_record(cash)
+    return context.build_context(secs[0], secs, {}, {},
+                                 record=cash_record(), journal=doc)
 
 
 def cash_of(history):

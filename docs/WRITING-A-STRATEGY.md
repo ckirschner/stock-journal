@@ -1109,16 +1109,26 @@ journal you chose. `inapplicable` is the only one a strategy cannot declare —
 the host produces it, from `declines`.
 
 <!-- generated: render-types -->
-| `render` | tier | means | payload keys | may also carry | needs attention | a strategy may declare it |
-|---|---|---|---|---|---|---|
-| `commit` | position | capital may go in | `size`, `condition` | `plan` | yes | yes |
-| `reduce` | position | partial exit | `to` | — | yes | yes |
-| `close` | position | full exit | `when` | — | yes | yes |
-| `hold` | position | no action | — (none) | — | — | yes |
-| `blocked` | evaluation | a decision is owed from the user before any verdict | `needs` | — | yes | yes |
-| `unknown` | evaluation | not enough data to say | — (none) | — | yes | yes |
-| `inapplicable` | scope | these rules do not evaluate this kind of company | — (none) | — | — | — |
+| `render` | tier | means | payload keys | may also carry | needs attention | sanctions an exit | a strategy may declare it |
+|---|---|---|---|---|---|---|---|
+| `commit` | position | capital may go in | `size`, `condition` | `plan` | yes | — | yes |
+| `reduce` | position | partial exit | `to` | — | yes | yes | yes |
+| `close` | position | full exit | `when` | — | yes | yes | yes |
+| `hold` | position | no action | — (none) | — | — | — | yes |
+| `blocked` | evaluation | a decision is owed from the user before any verdict | `needs` | — | yes | — | yes |
+| `unknown` | evaluation | not enough data to say | — (none) | — | yes | — | yes |
+| `inapplicable` | scope | these rules do not evaluate this kind of company | — (none) | — | — | — | — |
 <!-- end: render-types -->
+
+**"Sanctions an exit" decides whether a sale is an override.** Where your
+state's render carries it, a sale recorded under that state is a sale your
+rules called for. Where it does not, and your strategy did reach a verdict,
+the user is selling against you — and the journal asks them for a written
+reason and files the sale as an override, the same way it does a purchase
+made against a verdict. You do not declare this and cannot opt out of it: it
+follows from the render you chose, because `reduce` and `close` *mean* partial
+and full exit. Nothing is ever blocked either way; the sale is recorded
+whatever the verdict said.
 
 ### Where a blocked verdict sends someone
 
@@ -1308,9 +1318,9 @@ against the SEC's published list in
 ### Input roles
 
 <!-- generated: input-roles -->
-| `role` | declared as | means | unlocks |
-|---|---|---|---|
-| `cash` | `number` in `usd` | free cash in the account this journal covers — money that is not in any position | `portfolio.cash`, `portfolio.account_value`, `position.weight` |
+| `role` | declared as | who answers it | means | unlocks |
+|---|---|---|---|---|
+| `cash` | `number` in `usd` | the journal — worked out from this journal's cash record — the opening balance, and every deposit, withdrawal and dividend since | free cash in the account this journal covers — money that is not in any position | `portfolio.cash`, `portfolio.account_value`, `position.weight` |
 <!-- end: input-roles -->
 
 ### The rest of the vocabulary

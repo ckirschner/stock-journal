@@ -357,7 +357,7 @@ class TestLotsAreTheposition:
         portfolio.add_lot(s, decision("commit"), 100, 50.0, "2026-01-01")
         portfolio.sell_lots(s, decision("hold"), "Panic", 10, 90.0,
                             "2025-06-01")
-        assert "Closed with no rule" in s["notes"][-1]["text"]
+        assert s["notes"][-1]["text"].startswith("Closed against the signal")
         assert portfolio.shares_held(s) == 100.0      # still held, after it
 
     def test_a_sale_backdated_into_a_closed_holding_says_so_in_dates(self):
@@ -588,13 +588,23 @@ class TestExits:
             assert lot["rule_triggered"] is True, render
             assert val(portfolio.sale_return(s, lot)) == 50.0
 
-    def test_an_exit_nobody_called_for_says_so_on_the_record(self):
+    def test_an_exit_nobody_called_for_is_an_override_with_its_reason(self):
+        """A sale the strategy did not call for is against the signal, and it
+        carries the sentence the user wrote — the same way a purchase against
+        the signal does. That symmetry was missing: the record had a place for
+        why you bought against advice and nowhere for why you sold against
+        it, which is the one it exists to catch."""
         s = bought()
         lot = portfolio.sell_lots(s, decision("hold"), "Panic", 10, 30.0,
-                                  "2026-08-08")
+                                  "2026-08-08",
+                                  override_reason="Could not sleep.")
         assert lot["rule_triggered"] is False
         assert lot["signal_at_exit"] == "A State"
-        assert "no rule triggering" in s["notes"][-1]["text"]
+        assert portfolio.sold_as(lot) == "against"
+        assert lot["override"]["kind"] == "against"
+        assert lot["override"]["reason"] == "Could not sleep."
+        assert "against the signal" in s["notes"][-1]["text"]
+        assert "Could not sleep." in s["notes"][-1]["text"]
 
     def test_a_missing_strategy_is_recorded_as_absence_not_as_clear(self):
         """"Nothing fired" and "nobody could be asked" are different facts.
@@ -1187,7 +1197,8 @@ class TestNoVerdictIsNotAClearSignal:
         lot = portfolio.sell_lots(s, decision("hold"), "Panic", 10, 30.0,
                                   "2026-08-08")
         assert lot["rule_triggered"] is False
-        assert "no rule triggering" in s["notes"][-1]["text"]
+        assert portfolio.sold_as(lot) == "against"
+        assert "against the signal" in s["notes"][-1]["text"]
 
 
 class TestTheReasonIsNeverDiscarded:

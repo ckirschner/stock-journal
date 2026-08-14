@@ -142,18 +142,27 @@ Two kinds of thing, and the difference is where the default comes from.
 
 **Settings** are numbers the strategy has an opinion about and ships a default
 for — a position cap, a required return. **Answers** are facts about your
-account that no strategy could guess: how much free cash you have, how you
-are trading right now. The test is whether the strategy can ship a sensible
-default. It has a view about a 5% position cap; it can have none about your
-balance.
+account that no strategy could guess: how you are trading right now, how much
+you keep back. The test is whether the strategy can ship a sensible default.
+It has a view about a 5% position cap; it can have none about how you trade.
+
+A third kind is neither: a figure the host **works out for itself** from a
+record you keep. Free cash is the only one, and it is derived from your cash
+record rather than typed — see *Cash is a record, not a figure* below. A
+strategy still declares that it needs to know the cash, and still gets it; it
+is simply not a question, so it is shown and never offered as a field, and
+the save refuses one.
 
 A strategy declares the answers it needs, and the setup screen is generated
 from that declaration. A journal only ever asks for the fields its own
 strategy uses; there is no list of known settings anywhere in the interface.
 A declared field can be a number, a fixed set of choices, or a question that
 only appears once another one is answered a particular way, and it can be
-bounded by another field — "the cash you keep back" can never exceed the cash
-you have.
+bounded by another field — a first position can never be larger than the
+position cap. What it cannot be bounded by is a figure the host derives:
+that moves on its own, so an answer accepted in March would be refused in
+April by an event you did not cause, on the screen that is the only way to
+fix it.
 
 A question can apply under any of several answers — "the cash you keep back"
 means something whether you are building or trimming and nothing at all while
@@ -232,12 +241,75 @@ before the holding you have now says so rather than passing itself off as
 current. Leaving a question unanswered is not a fail; the strategy is told it
 has no answer, and absence never reads as a pass.
 
+### Cash is a record, not a figure
+
+There was one editable box for free cash and a dated log of its edits, and
+the log could not answer the question the box existed for. An edit from
+50,000 to 60,000 is a deposit or a correction, and no reading of that record
+can say which — so *how am I doing* was answered by a number that treats
+money arriving as money earned. Pay $10,000 into a $50,000 account and every
+figure built on the account reads a fifth of it as a gain.
+
+So cash is **events**: an opening balance, and then money in, money out, and
+dividends received, each on the day it moved, appended and never edited — on
+the same record every other thing you write already sits on. The balance is
+worked out from them.
+
+**And what you spent on shares, read off your own lots.** Buying takes money
+out of the cash and puts it into a position; the account is worth the same
+either side of it. Nobody types that: the purchase is already on the record
+with its shares, its price and its date, and asking for the same ten thousand
+dollars again as a "withdrawal" would be work that teaches nothing and files
+it under the wrong heading — a withdrawal is money leaving the account, and
+this money did not leave.
+
+**Four kinds of money, and what separates them is declared rather than
+remembered.** A deposit and a dividend both add to the balance and only one of
+them is a return; a purchase moves the balance and changes nothing about what
+the account is worth. So each kind declares what it does to the balance and
+which of those it is. Nothing in the arithmetic reads a kind's name — the
+balance reads the first field, the *paid in / taken out / earned* split reads
+the second, and a kind added to the table arrives at both without either being
+edited.
+
+**An amount is never signed.** Which way the money went is the kind of entry
+you are making. A withdrawal typed as −500 under a kind that already means
+"out" would add five hundred dollars to the account, silently, forever.
+
+**The record begins somewhere and says where.** A ledger of flows with no
+starting point is a change, not a balance, so the first entry is the cash the
+account held at the **start** of the day you began counting. Until there is
+one, free cash is absent with that reason rather than zero. Nothing may be
+dated before it — everything earlier is already in that figure — and
+everything on or after it counts, including a trade made on the opening day
+itself.
+
+**A record this version cannot read makes the balance absent, not short.**
+Restore a backup written where a kind existed that this build does not have,
+and summing around it would report a total missing exactly the entries nobody
+could read, with nothing on the screen saying so. The figure the account and
+every position weight rest on is the last place a partial answer may pass for
+a whole one.
+
+**The day the money moved governs, not the day you typed it in.** A deposit
+made in March and entered in August was in the account in April, so a
+purchase reconstructed for April is sized against an account that had it.
+
+**Nothing converts the old answer.** There is no migration, and that is the
+honest answer as well as the standing rule: the edit log cannot say whether a
+rise was a deposit or a correction, and manufacturing deposits out of it
+would poison the exact figure this exists to fix. The old answer stays on the
+input-change record, where it is what it always was — a dated statement of
+what somebody typed — and is never read again.
+
 ### The account, and why it is derived
 
 An answer can carry a **role**: a name from the host's own short list saying
-what the figure is. Free cash is the only one. Once a journal has it, the
-host reports free cash, the account value and every position's weight; until
-then those read absent, with the reason naming the question nobody asked.
+what the figure is. Free cash is the only one. Where a strategy declares it,
+the host reports free cash, the account value and every position's weight;
+where it does not, those read absent with the reason naming the question
+nobody asked. The record exists either way — it is your bookkeeping — but the
+host holds no view about whether a strategy ought to read it.
 
 The account value is *not* something you type. It is free cash plus the
 market value of every holding, because that is a figure the tool can reach —
@@ -252,12 +324,10 @@ a strategy's opinion, and appears nowhere in the host.
 **Your answers are dated too.** Every change to one is on the journal's own
 append-only record, so an entry judged for a past day reads the answer that
 was standing then. Before the journal existed there is no answer, and the
-absence is served as itself: free cash absent, so the account absent, so
-every weight absent, so a rule that binds on one says it cannot be worked
-out and names why. This used to serve today's balance with a caution beside
-it, which is the same failure one step removed — a qualified wrong number
-still decides, and a purchase made two years ago was being sized against
-today's account.
+absence is served as itself: the answer absent, so anything built on it
+absent, so a rule that binds on one says it cannot be worked out and names
+why. This used to serve today's value with a caution beside it, which is the
+same failure one step removed — a qualified wrong number still decides.
 
 ### A share class is a security; the company is not
 
@@ -696,11 +766,48 @@ second would hide real evidence about the rules.
 The per-rule breakdown is the part that earns its keep. If overriding one
 particular limit keeps working out, that limit is miscalibrated, not you.
 
+### Selling against the signal is recorded the same way
+
+Buying against a verdict has demanded a written reason since the first
+override work. Selling did not, and the asymmetry was backwards: closing a
+position your own rules still say to hold, in a bad week, is the failure this
+program exists to catch, and the record had a place for why you bought
+against advice and nowhere for why you sold against it.
+
+The boundary is exact, because over-prompting trains people to type nothing:
+
+- Selling what the strategy **told you to sell** — a full or partial exit —
+  is not against anything, and nothing is asked.
+- Selling what it said to **hold**, or to buy more of, or to go and answer a
+  question about first, is against it. That asks for a sentence and files the
+  sale as an override, exactly as a purchase against a verdict is filed.
+- Selling something it **could not evaluate** is neither. It is recorded as
+  its own kind so the analytics can still tell a defied verdict from an
+  absent one, and no reason is demanded — selling reduces exposure, it is the
+  ordinary outcome for a name with no data fetched, and a prompt firing on
+  every one of those is how the field that matters becomes one you skip.
+- A sale entered **out of history** collects no sentence at all. The one
+  worth having is the one written on the day; one composed now about a sale
+  in 2016 would be hindsight filed where a contemporaneous reason belongs.
+
+Nothing is blocked either way. A sale with no reason records with "No reason
+given." against it, because a sale the journal refused to write is a sale
+that happened and is not on the record.
+
 ### Exits are grouped by reason
 
 Closed positions keep getting priced. If *Panic* keeps showing a strong
 return *after* you sold, that is a finding you would never get from a tool
 that drops the ticker the day you exit.
+
+Every group also splits by what the strategy was saying at the time, and the
+split covers the group whole. *Panic, five times, and it rose 9% after* is
+about a habit; *four of those were sold against a hold your own rules were
+still giving, and it rose 21% after those* is about a specific rule being
+defied at a specific moment, which is the finding worth having. It runs over
+sales recorded before the sentence existed, because how a sale went is
+derived from the verdict frozen with it rather than from the new field —
+what those older sales do not have is the sentence, and nothing invents one.
 
 ### Your thesis, and what would prove you wrong
 
@@ -973,6 +1080,8 @@ engine/                   no UI imports live here
   bank.py                 the metric bank
   lists.py                the dated set of securities a journal imported,
                           for a strategy whose choosing happened elsewhere
+  cash.py                 money in, money out, dividends received — the
+                          record free cash is worked out from
   dated.py                append, date, never edit — the one mechanic under
                           every record below
   judgements.py           the per-security questions no filing answers
@@ -1126,13 +1235,12 @@ with Windows 10 and 11, so the build stays around 20 MB rather than the
   shipped content.
 - **Choosing which lots a sale draws on.** The record holds whichever
   allocation it is given; the screens always propose oldest-first.
-- **Telling a journal what your account looked like in the past.** Answers —
-  free cash above all — begin the day the journal is created, so an entry
-  dated before that has no account to be sized against and any rule about
-  position size reports that it cannot be worked out. That is the honest
-  answer and it is why most backfilled purchases record no verdict. Fixing it
-  means a dated answer record you can enter history into as well, which is
-  its own piece of work rather than a corner of this one.
+- **Telling a journal what the rest of your answers were in the past.**
+  Answers begin the day the journal is created, so an entry dated before that
+  reads none of them. Cash is no longer among them — its record carries the
+  day each movement happened, so it answers about any day on or after the
+  balance was opened — but the rest still do, and that is why a backfill
+  reaching further back than the journal records no verdict.
 - **The strategy of the day.** A reconstruction runs *that day's data*
   through *today's* strategy, because the version in force in 2019 is not on
   the machine and, for a purchase predating the journal, never was. The

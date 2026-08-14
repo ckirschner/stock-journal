@@ -93,19 +93,29 @@ def call(fn, *a, **kw):
     return r
 
 
-def journal(name, strategy_id, inputs):
-    """Create the sample's journal and leave it open.
+OPENED_ON = "2024-01-02"
+
+
+def journal(name, strategy_id, inputs, cash=None):
+    """Create the sample's journal, open its cash record, and leave it open.
 
     Created before the earliest entry in it, deliberately. What a journal has
-    been told begins on the day it was created — free cash, and every figure
-    measured against the account — so a journal stamped today could not size a
+    been told begins on the day it was created, and its cash record begins on
+    the day it was opened — so a journal stamped today could not size a
     purchase it is being told about from two years ago, and every frozen
     verdict would read "waiting on setup" instead of the state its own note
     describes. A sample is a journal that has been kept for a while, and it is
     built as one.
+
+    `cash` opens the record rather than answering a question: free cash is
+    worked out from what the journal records moving, and the figure a sample
+    starts with is day one of that. Dated the same day the journal is, because
+    nothing may be recorded before the opening balance and every entry below
+    comes after it.
     """
-    with writing_on("2024-01-02"):
-        return call(api.create_journal, name, strategy_id, inputs)
+    with writing_on(OPENED_ON):
+        return call(api.create_journal, name, strategy_id, inputs,
+                    opening_cash=cash, opening_cash_on=OPENED_ON)
 
 
 def security(ticker, name, price, values, on, thesis=None, notes=(),

@@ -78,10 +78,10 @@ def holding(cik=None, shares=10, price=15.0, opened="2025-02-25", **over):
 
 
 def build(sec, journal=None, values=None, inputs=None, as_of=None,
-          record=None):
+          record=None, doc=None):
     return context.build_context(sec, journal if journal is not None
                                  else [sec], values or {}, inputs or {},
-                                 as_of=as_of, record=record)
+                                 as_of=as_of, record=record, journal=doc)
 
 
 def cash_strategy(required=True, **over):
@@ -629,11 +629,14 @@ class TestTheAccountAndWeight:
         self._priced(cik, close)
         return holding(cik, shares=shares)
 
-    def test_an_answered_cash_input_makes_weight_a_reported_fact(self):
+    def test_a_cash_record_makes_weight_a_reported_fact(self):
         sec = self._held()
         ctx = build(sec, record=cash_strategy(),
-                    inputs={"free-cash": 800.0})
+                    doc=conftest.cash_record(800.0))
         assert ctx["portfolio"]["cash"]["value"] == 800.0
+        # And the strategy reads one number, not two: the input it declared
+        # carries the figure the portfolio node reports.
+        assert ctx["inputs"]["free-cash"] == 800.0
         # 800 cash plus 10 shares at 20
         assert ctx["portfolio"]["account_value"]["value"] == 1000.0
         assert ctx["position"]["weight"]["value"] == 20.0
@@ -641,17 +644,23 @@ class TestTheAccountAndWeight:
 
     def test_the_account_is_derived_and_says_what_it_rests_on(self):
         ctx = build(self._held(921), record=cash_strategy(),
-                    inputs={"free-cash": 800.0})
+                    doc=conftest.cash_record(800.0))
         prov = " ".join(ctx["portfolio"]["account_value"]["provenance"])
         assert "free cash" in prov and "1 holding" in prov
         assert "of an account of" in \
             " ".join(ctx["position"]["weight"]["provenance"])
 
-    def test_an_unanswered_cash_input_names_the_field_it_wants(self):
+    def test_an_unopened_cash_record_says_so_and_never_reads_as_zero(self):
+        """Zero would be a confident answer, and it would understate the
+        account and inflate every weight measured against it. The absence
+        names the way out instead."""
         ctx = build(self._held(922), record=cash_strategy())
         assert ctx["portfolio"]["cash"]["status"] == "absent"
-        assert "Free cash" in ctx["portfolio"]["cash"]["reason"]
+        assert "opening balance" in ctx["portfolio"]["cash"]["reason"]
         assert ctx["position"]["weight"]["status"] == "absent"
+        # And nothing is handed to the strategy under the input's own name
+        # either, so a rule reading it cannot get a number the host refused.
+        assert "free-cash" not in ctx["inputs"]
 
     def test_one_unpriced_holding_makes_the_whole_account_absent(self):
         """Treating a missing price as zero would understate the account and
@@ -660,7 +669,7 @@ class TestTheAccountAndWeight:
         sec = self._held(923)
         dark = holding(ticker="DARK", shares=5)     # no cik, no price
         ctx = build(sec, [sec, dark], record=cash_strategy(),
-                    inputs={"free-cash": 800.0})
+                    doc=conftest.cash_record(800.0))
         av = ctx["portfolio"]["account_value"]
         assert av["status"] == "absent"
         assert "DARK" in av["reason"]
@@ -670,7 +679,14 @@ class TestTheAccountAndWeight:
         """A margin balance is real, and dividing by it produces a confident
         nonsense figure rather than an honest absence."""
         sec = self._held(924)
-        ctx = build(sec, record=cash_strategy(), inputs={"free-cash": -500.0})
+        # A margin balance is reached the way a real one is: money went out
+        # that was not there. The amount on an entry is never signed — which
+        # way it went is the kind of entry it is.
+        ctx = build(sec, record=cash_strategy(),
+                    doc=conftest.cash_record(
+                        100.0, "2025-03-01",
+                        ("withdrawal", 600.0, "2025-03-02")))
+        assert ctx["portfolio"]["cash"]["value"] == -500.0
         assert ctx["portfolio"]["account_value"]["value"] == -300.0
         assert ctx["position"]["weight"]["status"] == "absent"
         assert "nothing or less" in ctx["position"]["weight"]["reason"]
@@ -680,42 +696,44 @@ class TestTheAccountAndWeight:
         measure its weight against an account it was not part of."""
         sec = self._held(925)
         ctx = build(sec, [], record=cash_strategy(),
-                    inputs={"free-cash": 800.0})
+                    doc=conftest.cash_record(800.0))
         assert ctx["portfolio"]["account_value"]["value"] == 1000.0
         assert ctx["position"]["weight"]["value"] == 20.0
 
-    def test_under_a_pin_cash_is_the_answer_of_that_day_or_none_at_all(self):
+    def test_under_a_pin_cash_is_the_balance_of_that_day_or_nothing(self):
         """Free cash used to be served from today's answer under any pin,
-        with a caution saying it carried no date. It does carry a date — every
-        change to it is on the journal's own append-only record — and the
-        caution was the wrong fix anyway: a qualified wrong number still
-        decides. The account total is built from this, every weight is
-        measured against the account, and strategies bind on weight, so a
+        with a caution saying it carried no date. A qualified wrong number
+        still decides — the account total is built from this, every weight is
+        measured against the account, and strategies bind on weight — so a
         purchase backdated two years was being sized against today's balance
         with a sentence beside it.
 
-        The answers that reach the context are now already the ones that were
-        on record on the day being evaluated — resolved in journals.answers_on
-        before the context is built — so a pin serves a figure or nothing.
-        Nothing is where every real backfill lands, because the journal held
-        no answers before it existed.
+        It is now worked out from the cash record on the day being rebuilt:
+        every entry dated by then and none dated after. A day before the
+        record opens gets nothing at all, which is where a backfill of a
+        position bought before this journal existed lands, and the absence
+        cascades to the weight rather than a present-day balance standing in
+        for a past one.
         """
         sec = self._held(926)
-        ctx = build(sec, record=cash_strategy(), inputs={"free-cash": 800.0},
-                    as_of="2025-03-05")
-        # Given an answer for that day, it is served as one — dated, not
-        # apologised for.
+        doc = conftest.cash_record(800.0, "2025-03-01",
+                                   ("deposit", 5_000.0, "2025-06-01"))
+        ctx = build(sec, record=cash_strategy(), doc=doc, as_of="2025-03-05")
+        # The deposit in June had not happened, so it is not in the balance.
         assert ctx["portfolio"]["cash"]["value"] == 800.0
         assert not ctx["portfolio"]["cash"]["cautions"]
         assert "2025-03-05" in \
             " ".join(ctx["portfolio"]["cash"]["provenance"])
+        # And today it is, without anybody having answered anything.
+        assert build(sec, record=cash_strategy(),
+                     doc=doc)["portfolio"]["cash"]["value"] == 5_800.0
 
-        # Given none, the absence cascades all the way to weight rather than
-        # a present-day balance standing in for a past one.
-        dark = build(sec, record=cash_strategy(), inputs={},
-                     as_of="2025-03-05")
+        # Before the record opens there is no answer, and the absence reaches
+        # every figure built on it.
+        dark = build(sec, record=cash_strategy(), doc=doc,
+                     as_of="2025-02-05")
         assert dark["portfolio"]["cash"]["status"] == "absent"
-        assert "2025-03-05" in dark["portfolio"]["cash"]["reason"]
+        assert "2025-03-01" in dark["portfolio"]["cash"]["reason"]
         assert dark["portfolio"]["account_value"]["status"] == "absent"
         assert dark["position"]["weight"]["status"] == "absent"
 
@@ -728,12 +746,17 @@ class TestTheAccountAndWeight:
             {"id": "free-cash", "label": "Free cash", "type": "number",
              "unit": "usd", "role": "cash", "explain": "e",
              "when": {"input": "sizes-by-cash", "is": True}}])
-        supplied = {"sizes-by-cash": False, "free-cash": 800.0}
-        ctx = build(self._held(927), record=rec, inputs=supplied)
+        doc = conftest.cash_record(800.0)
+        ctx = build(self._held(927), record=rec, doc=doc,
+                    inputs={"sizes-by-cash": False})
         assert "free-cash" not in ctx["inputs"]
         assert ctx["portfolio"]["cash"]["status"] == "absent"
-        assert build(self._held(928), record=rec,
-                     inputs={"sizes-by-cash": True, "free-cash": 800.0}
+        # The gate closes on the figure and not merely on the question. A
+        # host-answered role has no unanswered question for a gate to shut,
+        # so without this it would sail straight past one.
+        assert "only applies when" in ctx["portfolio"]["cash"]["reason"]
+        assert build(self._held(928), record=rec, doc=doc,
+                     inputs={"sizes-by-cash": True}
                      )["portfolio"]["cash"]["value"] == 800.0
 
 

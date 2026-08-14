@@ -77,13 +77,24 @@ answer to one `pending` and one `explain`, because owing a sentence is the same
 obligation whichever record it sits on.
 
 **Answers are not rules, and are kept apart.** What the user told the journal
-— free cash, and anything else a strategy asks for — moves for ordinary
-reasons and moves often; putting each edit on the rule-change record would
-bury the retunings that record exists to surface. But those answers now feed
+— anything a strategy asks for that the host cannot work out — moves for
+ordinary reasons and moves often; putting each edit on the rule-change record
+would bury the retunings that record exists to surface. But those answers feed
 figures a strategy binds on, so an answer that can be quietly adjusted the
 day before a purchase is worth being able to see. They get their own
 append-only list: before and after, dated, and no reason ever demanded,
 because updating a fact is not a change to what the rules demand.
+
+**Free cash used to be one of those answers and is not any more.** It is
+worked out from this journal's own cash record — an opening balance and every
+deposit, withdrawal and dividend since, each on the day it moved (engine/
+cash.py). What the change buys is the difference between money that arrived
+and money that was made, which a single editable figure and a log of its edits
+cannot express: the edit from 50,000 to 60,000 could be a deposit or a
+correction, and no reading of the record can say which. That is why nothing
+converts the old answers into events. The old figure stays on the input-change
+record, where it is what it always was — a dated statement of what somebody
+typed — and the cash record starts from an opening balance the user states.
 """
 
 from __future__ import annotations
@@ -93,7 +104,8 @@ import re
 import shutil
 from pathlib import Path
 
-from . import dated, lists, portfolio, secrets, store, strategy_values
+from . import cash, contract, dated, lists, portfolio, secrets, store
+from . import strategy_values
 
 # 2: a security's position became append-only lot history and every stored
 #    bucket, running total and single entry snapshot went with it. There is
@@ -233,6 +245,10 @@ def load(journal_id: str) -> dict:
     # works from a list and has not been given one yet — which is a state the
     # host answers with a blocked verdict rather than a guess.
     doc.setdefault(lists.KEY, [])
+    # What has happened to the account's cash, oldest first. Empty until the
+    # record is opened, which is a state the host answers with an absent
+    # balance naming the fix — never with a zero.
+    doc.setdefault(cash.KEY, [])
     return doc
 
 
@@ -413,13 +429,17 @@ def create(name: str, record: dict, measures: dict, config: dict | None = None,
         "strategy": stamp_for(record, chain["values"]),
         "measures": measures_stamp_for(measures),
         "config": dict(config or {}),
-        "inputs": dict(inputs or {}),
+        # Only what the user is the one to answer. A figure the host works out
+        # for itself never enters the stored answers, here or at any later
+        # save — see `set_inputs` and contract.user_answers.
+        "inputs": contract.user_answers(record, inputs),
         "rule_changes": [],
         "measure_changes": [],
         "input_changes": [],
         "settings": dict(settings or DEFAULT_SETTINGS),
         "securities": [],
         lists.KEY: [],
+        cash.KEY: [],
     }
     if path_for(journal["id"]).exists():
         raise ValueError(f'A journal already exists at {journal["id"]}.')
@@ -848,9 +868,19 @@ def set_inputs(journal: dict, record: dict, inputs: dict) -> dict | None:
     a record, because these answers now feed figures a strategy binds on.
 
     Returns the appended entry, or None when nothing moved.
+
+    A figure the host works out for itself is not an answer and cannot be
+    stored as one — free cash is now derived from this journal's cash record,
+    and a typed copy of it sitting beside the derived figure is two numbers
+    about one thing. Filtered here, at the write, rather than trusted to each
+    caller: this is the only path a stored answer can arrive by, so what a
+    journal holds cannot include one. A journal written before that was true
+    still holds the old figure until its owner next saves anything, and the
+    save clears it onto the record below, where it stays readable.
     """
     before = dict(journal.get("inputs") or {})
-    after = {k: v for k, v in (inputs or {}).items() if v is not None}
+    after = {k: v for k, v in contract.user_answers(record, inputs).items()
+             if v is not None}
     journal["inputs"] = after
     labels = {f["id"]: f.get("label") or f["id"]
               for f in (record.get("inputs") or []) if isinstance(f, dict)}

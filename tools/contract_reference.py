@@ -68,11 +68,12 @@ def _yes(flag) -> str:
 def _render_types() -> str:
     return _table(
         ["`render`", "tier", "means", "payload keys", "may also carry",
-         "needs attention", "a strategy may declare it"],
+         "needs attention", "sanctions an exit",
+         "a strategy may declare it"],
         [(f"`{k}`", v["tier"], v["meaning"],
           _code(v["payload_keys"]) or "— (none)",
           _code(v["optional_keys"]) or "—", _yes(v["attention"]),
-          _yes(not v["host_only"]))
+          _yes(v["exits"]), _yes(not v["host_only"]))
          for k, v in sorted(contract.RENDER_TYPES.items(),
                             key=lambda kv: kv[1]["order"])])
 
@@ -160,9 +161,11 @@ def _robustness() -> str:
 
 def _input_roles() -> str:
     return _table(
-        ["`role`", "declared as", "means", "unlocks"],
-        [(f"`{k}`", f'`{v["type"]}` in `{v["unit"]}`', v["means"],
-          _code(v["reports"]))
+        ["`role`", "declared as", "who answers it", "means", "unlocks"],
+        [(f"`{k}`", f'`{v["type"]}` in `{v["unit"]}`',
+          "you" if contract.answered_by(k) == "user"
+          else f'the journal — {v["answered_how"]}',
+          v["means"], _code(v["reports"]))
          for k, v in contract.INPUT_ROLES.items()])
 
 

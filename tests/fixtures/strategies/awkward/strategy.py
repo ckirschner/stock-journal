@@ -55,8 +55,13 @@ STRATEGY = {
         # The one input the host reports back as a figure. No strategy could
         # ship a default for someone's cash, and the host has no field of
         # its own to put it in — the role is how the two meet.
+        # Optional, and it has to be: the host works this out from the
+        # journal's cash record rather than asking, so a required version of
+        # it would be a question nobody could answer and the contract refuses
+        # one. Where the record is empty the figure is absent and every
+        # share-of-the-account rule below says so.
         {"id": "free-cash", "label": "Free cash", "type": "number",
-         "unit": "usd", "role": "cash", "required": True,
+         "unit": "usd", "role": "cash", "required": False,
          "explain": "Money sitting in the account that is not in any "
                     "position. It is what the account is worth on top of "
                     "the holdings, and every share-of-the-account figure "
@@ -82,12 +87,17 @@ STRATEGY = {
          "explain": "Whether you deliberately hold some cash rather than "
                     "putting all of it into positions. Answer no and "
                     "nothing below is asked."},
+        # No bound against free cash, deliberately. It reads as the obvious
+        # one — a reserve above the balance is nonsense — and the contract
+        # refuses it, because free cash is worked out from a record that
+        # moves on its own: a dividend lands, and an answer that was fine in
+        # March is refused in April by something the user never did.
         {"id": "reserve", "label": "Cash you keep back", "type": "number",
-         "unit": "usd", "min": 0, "max_from": "free-cash", "required": True,
+         "unit": "usd", "min": 0, "required": True,
          "when": {"input": "keeps-reserve", "is": True},
-         "explain": "The amount you will not spend. It cannot be more than "
-                    "the cash you have, because a floor above the balance "
-                    "would stop every purchase forever."},
+         "explain": "The amount you will not spend. Whether it is more than "
+                    "you actually have is for the fixture's own logic to "
+                    "notice, not for this form to refuse."},
         # Optional, and bounded by a declared value rather than a literal.
         {"id": "first-buy", "label": "Size of a first position",
          "type": "number", "unit": "percent", "min": 0.1,

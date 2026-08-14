@@ -356,6 +356,23 @@ const lotById = (s) => {
   buyLots(s).concat(sales(s)).forEach((l) => { m[l.id] = l; });
   return m;
 };
+/* What this row is flagged for, in the words the dot's title uses.
+   Buys and sales now both carry an override, and they mean different things:
+   one says shares went in against a verdict, the other says shares went out
+   against one. A single dot titled "bought against the signal" over a
+   position whose only override is a trim is the interface asserting something
+   that did not happen. Both are worth flagging; neither may wear the other's
+   sentence. */
+const flagDot = (s) => {
+  const lots = openPeriod(s) ? periodLots(s, openPeriod(s)) : [];
+  const bought = lots.some((l) => l.kind === "buy" && l.override);
+  const sold = lots.some((l) => l.kind === "sell" && l.override);
+  if (!bought && !sold) return "";
+  const said = [bought ? "holds shares bought against or without the signal" : "",
+    sold ? "has been sold against or without the signal" : ""].filter(Boolean);
+  return `<span class="flagdot" title="This position ${said.join(", and ")}"></span>`;
+};
+
 const periodLots = (s, c) => {
   const by = lotById(s);
   return c.buys.concat(c.sells).map((id) => by[id]).filter(Boolean)
@@ -672,7 +689,7 @@ function listView() {
     const sorted = rows.slice().sort((a, b) => order(a) - order(b));
     head = '<th class="l">Position</th><th>Price</th><th>Avg cost</th><th>Since buy</th><th>State</th>';
     body = sorted.map((s) => `<tr data-t="${s.ticker}"><td class="l"><span class="tick">${esc(s.ticker)}</span>
-      ${(openPeriod(s) ? periodLots(s, openPeriod(s)) : []).some((l) => l.override) ? '<span class="flagdot" title="This position holds shares bought against or without the signal"></span>' : ""}
+      ${flagDot(s)}
       ${s._backfilled ? RECON_CHIP : ""}
       <div class="coname">${esc(s.name)}${lotCount(s)}</div></td>
       <td>${priceCell(s)}</td><td class="dim">${money(s._cost_basis)}</td>
@@ -811,9 +828,27 @@ function scorecards() {
        when the row was typed — but the signal the sale was recorded against
        was rebuilt, and "Panic, three times, and it rose after each" reads
        differently when none of the three was a moment anybody lived through. */
+    /* How many of this group went against a verdict that was still saying
+       hold, and what the price did after those. Not the same figure as the
+       group's own: "Panic, five times, and it rose 9% after" is about a
+       habit, and "four of those were sold against your own rules and it rose
+       21% after those" is about a rule being defied at a moment. The second
+       is the finding this program exists to be able to make.
+
+       A group with no overrides in it says nothing rather than printing a
+       zero — there is no finding to report about a sale your rules asked
+       for. */
+    const ag = b.against || {};
+    const against = ag.n
+      ? ` <span class="chip s-bad" title="A verdict was reached, it did not call for an exit, and shares went out anyway. The reason written at the time is on the sale.">${ag.n} against the signal</span>`
+        + (ag.n_after
+          ? ` <span class="dim">after ${pct(ag.avg_after)}${ag.n_after < ag.n ? ` (${ag.n_after} of ${ag.n})` : ""}</span>`
+          : "")
+      : "";
     return line(reason + ` (${b.n})`,
       `held ${pct(b.avg_held)}${over(b.n_held)}`
       + ` · after ${pct(b.avg_after)}${over(b.n_after)}`
+      + against
       + (b.n_reconstructed
         ? ` <span class="dim" title="Entered from history: the verdict beside these sales was rebuilt, not seen at the time.">· ${b.n_reconstructed} from history</span>`
         : ""));
@@ -1515,25 +1550,48 @@ function detailView(s) {
      because a name bought back would otherwise bury the exit that taught the
      most. */
   const by = lotById(s);
-  closed.forEach((c) => {
-    const ex = by[c.sells[c.sells.length - 1]];
-    if (!ex) return;
+  /* Every sale nobody's rule called for, not only the one that ended a
+     holding. A trim taken against a hold verdict is the same decision at a
+     smaller size, and it is the one that renders inside a position you are
+     still holding — where the notice is worth most, and where nothing used
+     to appear at all. */
+  ((open ? [open] : []).concat(closed)).forEach((c) => {
     const which = many ? ` (${periodName(s, c).toLowerCase()})` : "";
-    const x = c.since_exit || {};
-    const after = x.pct === null || x.pct === undefined ? ""
-      : `It went ${x.pct >= 0 ? "up" : "down"} ${Math.abs(x.pct).toFixed(1)}% `
-        + (x.until === "purchase"
-          ? `between that sale and buying it again on ${esc(x.date)}.`
-          : "since it was closed.");
-    if (ex.rule_triggered === false) {
-      h += `<div class="notice"><h4>No rule triggered this exit${which}</h4>
-        <p>The signal read <strong>${esc(ex.signal_at_exit)}</strong> under
-        ${esc((ex.strategy || {}).name || "the strategy")} on ${esc(ex.date)}. ${after}</p></div>`;
-    } else if (ex.rule_triggered === null) {
-      h += `<div class="notice quiet"><h4>Closed without its rules${which}</h4>
-        <p>The strategy this journal is stamped with was not installed when this position was closed on
-        ${esc(ex.date)}, so no signal could be evaluated. That absence is on the record, not papered over.</p></div>`;
-    }
+    const ended = c.sells[c.sells.length - 1];
+    (c.sells || []).forEach((id) => {
+      const ex = by[id];
+      if (!ex) return;
+      const trim = id !== ended || c.open;
+      /* What happened afterwards is a fact about the sale that ENDED a
+         holding — the window runs from it to today or to buying the name
+         back. A trim leaves the position open, so there is no such window
+         and nothing is claimed about one. */
+      const x = (!trim && c.since_exit) || {};
+      const after = x.pct === null || x.pct === undefined ? ""
+        : `It went ${x.pct >= 0 ? "up" : "down"} ${Math.abs(x.pct).toFixed(1)}% `
+          + (x.until === "purchase"
+            ? `between that sale and buying it again on ${esc(x.date)}.`
+            : "since it was closed.");
+      const did = trim ? "Trimmed" : "Sold";
+      if (ex.rule_triggered === false) {
+        /* The panic-sell loop. What was said at the time is the whole point
+           of the notice — a verdict without the sentence somebody wrote
+           against it teaches nothing, and this is the one place the two sit
+           together. A sale recorded before the sentence existed carries none
+           and none is invented for it. */
+        const ov = ex.override || {};
+        h += `<div class="notice"><h4>${did} against the signal${which}</h4>
+          <p>The signal read <strong>${esc(ex.signal_at_exit)}</strong> under
+          ${esc((ex.strategy || {}).name || "the strategy")} on ${esc(ex.date)} —
+          no rule called for ${trim ? "this trim" : "this exit"}. ${after}</p>
+          ${ov.reason ? `<p><b>Your reason at the time:</b> ${esc(ov.reason)}</p>` : ""}
+          ${ov.summary ? `<p class="hint">${esc(ov.summary)}</p>` : ""}</div>`;
+      } else if (ex.rule_triggered === null && !trim) {
+        h += `<div class="notice quiet"><h4>Closed without its rules${which}</h4>
+          <p>The strategy this journal is stamped with was not installed when this position was closed on
+          ${esc(ex.date)}, so no signal could be evaluated. That absence is on the record, not papered over.</p></div>`;
+      }
+    });
   });
   if (isHold && !((s._thesis || {}).version || {}).falsifier) {
     h += `<div class="notice quiet"><h4>No falsifier on record</h4>
@@ -2210,11 +2268,24 @@ function strategyView() {
       <div class="plist" style="margin-top:12px">${st.inputs.map((f) => `<div class="pentry">
         <div class="pe-head"><b>${esc(f.label)}</b><code>${esc(f.id)}</code>
           ${f.required ? '<span class="req">required</span>' : ""}
-          ${f.role ? `<span class="req" title="${esc(((st.roles || {})[f.role] || {}).means || "")}">the journal reports this</span>` : ""}</div>
+          ${f.role ? `<span class="req" title="${esc(((st.roles || {})[f.role] || {}).means || "")}">the journal reports this</span>` : ""}
+          ${f.answered_by === "host" ? '<span class="req">worked out, not answered</span>' : ""}</div>
         <div class="pe-desc">${prose(f.explain)}</div>
         ${f.inactive
           ? `<div class="pe-param"><span class="chip blank">not asked</span>
              <span class="dim">${esc(f.inactive)}</span></div>`
+          : f.answered_by === "host"
+          /* Shown with where it came from, and never as a field. A figure the
+             journal derives has an entry behind it; a reader who cannot see
+             which entries cannot check the number, and this is the one on
+             which the account total and every weight are built. */
+          ? `<div class="pe-param">${f.value === null || f.value === undefined
+              ? `<span class="chip blank">not worked out</span> <span class="dim">${esc(f.unavailable || "")}</span>`
+              : `<b>${esc(declaredText(f, f.value))}</b>
+                 <span class="dim">${esc((f.provenance || []).join(" "))}</span>`}</div>
+             <div class="pe-why"><p>${esc(f.answered_how || "")}. It is not editable —
+             record what moved and the figure follows, which is what lets this journal tell money
+             that arrived from money you made.</p></div>`
           : `<div class="pe-param">${f.value === null || f.value === undefined
               ? '<span class="chip blank">not answered</span>'
               : `<b>${esc(declaredText(f, f.value))}</b>`}</div>`}
@@ -2863,7 +2934,7 @@ function allocationView() {
       ${st.action ? `<div class="toolbar"><button class="btn primary" data-act="add">${esc(st.action)}</button></div>` : ""}
     </div>
     <div class="facts">${figure("Free cash", a.cash)}${figure("Account value", a.account_value)}</div>
-  </section>`;
+  </section>${cashRecord()}`;
 
   if (a.ready.length) {
     h += `<section class="group"><div class="ghead"><h3>May take capital now</h3>
@@ -2891,6 +2962,74 @@ function allocationView() {
       <div class="plist">${a.excluded.map(allocExcluded).join("")}</div></section>`;
   }
   return h;
+}
+
+
+/* What has happened to the account's cash, and what follows from it.
+   The balance is derived here as it is everywhere: a deposit and a dividend
+   both add to it and only one of them is a return, so the two are reported
+   apart rather than added up. A screen that showed one total would be back to
+   the figure this record replaced. */
+function cashRecord() {
+  const c = S.cash;
+  if (!c) return "";
+  const kinds = c.kinds || {};
+  const m = c.movement || {};
+  const amount = (v) => v && v.status === "known" ? money(v.value) : "—";
+  if (!c.opened) {
+    return `<section class="group"><div class="ghead"><h3>Cash</h3></div>
+      <div class="rollup"><div class="pe-head"><b>This journal has no cash record yet.</b></div>
+      <div class="pe-why"><p>Free cash, your account total and every position weight are worked out from it,
+      so until it is opened they read as unknown rather than as zero — a zero would understate the account and
+      inflate every weight measured against it.</p>
+      <p>Open it with what the account holds now, then record what moves. That is what lets the journal tell
+      money that arrived from money you made.</p></div>
+      <div class="toolbar"><button class="btn primary" data-act="cash">Open the cash record</button></div></div>
+    </section>`;
+  }
+  /* Oldest first with the balance after each, the way a statement reads.
+     The running figure is derived per row by the engine rather than stored
+     on the entry — a stored total is a second opinion about a fact the
+     entries already settle. */
+  const rows = (c.ledger || []).slice().reverse().map((e) => {
+    const k = kinds[e.kind] || {};
+    return `<tr><td>${esc(e.date)}</td>
+      <td>${esc(k.label || e.kind)}${e.recorded_by && e.recorded_by !== "you"
+        ? ` <span class="dim" title="${esc(k.means || "")}">read off your lots</span>` : ""}
+        ${e.note ? `<div class="greynote">${esc(e.note)}</div>` : ""}</td>
+      <td class="num">${e.direction < 0 ? "−" : "+"}${esc(money(e.amount))}</td>
+      <td class="num dim">${esc(money(e.balance))}</td>
+      <td class="dim hide-sm">${esc(String(e.recorded || "").slice(0, 10))}</td></tr>`;
+  }).join("");
+  return `<section class="group"><div class="ghead"><h3>Cash</h3>
+      <span>${(c.ledger || []).length} entr${(c.ledger || []).length === 1 ? "y" : "ies"}</span></div>
+    <p class="hint">The balance is worked out from these, never typed. Money you paid in is not a gain and
+    money a holding paid out is — which is why they are counted apart, and why the account can say how you
+    are doing rather than how much you have added. What you spent on shares and what you got back for them
+    are read off your own purchases and sales: the trade is already on the record, and typing the same money
+    twice is how two versions of it come to disagree.</p>
+    <div class="facts">
+      <div class="fact"><i>Free cash now</i><b>${amount(c.balance)}</b>${
+        c.balance && c.balance.status !== "known"
+          ? `<div class="greynote">${esc(c.balance.reason)}</div>` : ""}</div>
+      <div class="fact"><i>Paid in</i><b>${amount(m.contributed)}</b>
+        <div class="greynote">money you moved in — not a gain</div></div>
+      <div class="fact"><i>Taken out</i><b>${amount(m.withdrawn)}</b>
+        <div class="greynote">money you moved out — not a loss</div></div>
+      <div class="fact"><i>Dividends received</i><b>${amount(m.earned)}</b>
+        <div class="greynote">cash your holdings paid you — this one <em>is</em> a return</div></div>
+    </div>
+    <div class="toolbar" style="justify-content:flex-start">
+      ${(c.offers || []).filter((k) => kinds[k]).map((k) =>
+        `<button class="btn" data-act="cash" data-kind="${esc(k)}">${esc(kinds[k].label)}</button>`).join("")}
+    </div>
+    <div class="sheet" style="margin-top:12px"><table>
+      <thead><tr><th>Date</th><th>What</th><th class="num">Amount</th>
+        <th class="num">Balance after</th><th class="hide-sm">Recorded</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
+    <p class="hint">Nothing here is ever edited or removed. An entry made wrong is corrected by another
+    entry saying so, exactly as a correction is a new entry everywhere else in this journal.</p>
+  </section>`;
 }
 
 /* ---------------------------------------------------------------- render */
@@ -3071,9 +3210,22 @@ function dlgSettings() {
   const st = S.strategy;
   if (!st) { toast("This journal's strategy is not installed here.", true); return; }
   const cfg = S.journal.config || {};
-  const inputs = (st.inputs || []).map((f) =>
-    declaredField(f, f.value, "in_",
+  /* A figure the host works out for itself is shown and never offered as a
+     field. The save refuses one, so a form that took it would collect an
+     answer and discard it — and the reader would leave certain they had
+     changed their balance. Read off `answered_by` from the declaration, so
+     this never learns which role it is looking at. */
+  const inputs = (st.inputs || []).filter((f) => f.answered_by !== "host")
+    .map((f) => declaredField(f, f.value, "in_",
       f.role ? `This journal reports it back to you as a figure: ${esc(((st.roles || {})[f.role] || {}).means || "")}.` : "")).join("");
+  const derived = (st.inputs || []).filter((f) => f.answered_by === "host")
+    .map((f) => `<div class="field"><label>${esc(f.label)}</label>
+      <div class="pe-param">${f.value === null || f.value === undefined
+        ? `<span class="chip blank">not worked out</span> <span class="dim">${esc(f.unavailable || "")}</span>`
+        : `<b>${esc(declaredText(f, f.value))}</b>`}</div>
+      <div class="help">Not editable here: it is ${esc(f.answered_how || "worked out by the journal")}.
+      Record what moved and the figure follows — which is what lets the journal tell money that arrived
+      from money you made. ${(f.provenance || []).map(esc).join(" ")}</div></div>`).join("");
   /* The attribution belongs here above all: this is the screen where someone
      is about to overwrite a number, and whose number it is — and whether the
      reasoning they just read is that source's or the strategy author's — is
@@ -3089,6 +3241,9 @@ function dlgSettings() {
     blurb: `${st.name} · everything ${S.journal.name} tells it.`,
     body: (inputs ? `<p class="hint" style="margin:0 0 10px">What it asked you. Facts about your account, which
         change for ordinary reasons — each edit is dated on the record, and nothing is owed for it.</p>${inputs}` : "")
+      + (derived ? `<p class="hint" style="margin:18px 0 10px">And what this journal works out for itself.</p>${derived}
+        <div class="toolbar" style="justify-content:flex-start;margin:0 0 8px">
+          <button class="btn" type="button" data-act="cash">Record money in or out</button></div>` : "")
       + (values ? `<p class="hint" style="margin:18px 0 10px">Its settings. Changing one changes what every future
         verdict in this journal means, so it goes on the rule-change record and asks you to write down why.</p>${values}` : ""),
     confirm: "Save",
@@ -3111,6 +3266,72 @@ function dlgSettings() {
   });
 }
 
+/* ------------------------------------------------------------------ cash */
+/* Money in, money out, and money the holdings paid you. The balance is
+   worked out from these and is never typed, so a figure that looks wrong has
+   an entry behind it rather than a typo nobody can find.
+
+   The kinds come from the host, never from a list here — the same rule the
+   render types follow. A kind added to the engine gets a row in this dialog
+   and a line in the ledger with no view code changed. */
+function dlgCash(kind) {
+  const c = S.cash || {};
+  const kinds = c.kinds || {};
+  const opened = c.opened;
+  /* Before the record is opened there is exactly one thing to record, and
+     offering the others would collect entries the balance cannot count
+     from. After it, the opening balance is not on offer at all: there is
+     only ever one, and a second would silently restate every figure counted
+     from the first. */
+  /* What may be recorded right now, from the engine. Before the record is
+     opened there is exactly one thing to record; after it, the opening
+     balance is not on offer at all — there is only ever one, and a second
+     would silently restate every figure counted from the first. The view
+     never works that out for itself: a button whose entry the write refuses
+     is the same wrong turn as a hardcoded measure id. */
+  const choices = (c.offers || []).filter((k) => kinds[k]);
+  const chosen = choices.includes(kind) ? kind : choices[0];
+  if (!chosen) { toast("This journal records no cash movements.", true); return; }
+  const opts = choices.map((k) =>
+    `<option value="${esc(k)}" ${k === chosen ? "selected" : ""}>${esc(kinds[k].label)}</option>`).join("");
+  const today = localToday();
+  const floor = opened ? ` min="${esc(opened.date)}"` : "";
+  dialog({
+    title: opened ? "Record money moving" : "Open the cash record",
+    blurb: opened
+      ? "Appended, never edited. A figure entered wrong is corrected by another entry saying so."
+      : "The cash the account held at the start of the day you choose. Everything from then on is counted against it, so nothing can be dated before it.",
+    body: (opened ? "" : `<div class="notice quiet" style="margin:0 0 12px">
+        <h4>Why this is a record and not a number</h4>
+        <p>A single editable balance cannot tell money that arrived from money you made — add $10,000 to a
+        $50,000 account and every return figure reads it as a gain. So cash is what happened to it, dated,
+        and the balance follows.</p></div>`)
+      + `<div class="field"><label for="f_kind">What happened</label>
+         <select id="f_kind" name="kind">${opts}</select>
+         <div class="help" id="kindhelp">${esc((kinds[chosen] || {}).means || "")}</div></div>`
+      + field("amount", "Amount", "", "In dollars and cents, always positive. Which way the money went is what you chose above.", "number", 'step="0.01" min="0"')
+      + `<div class="field"><label for="f_when">Date</label>
+         <input id="f_when" name="when" type="date" value="${esc(today)}" max="${esc(today)}"${floor}>
+         <div class="help">The day the money moved, not the day you are typing it in.
+         ${opened ? `This record opens on ${esc(opened.date)}; nothing can be dated before that.`
+                  : "A past date is fine — this is the day that balance was true, read at the start of it."}</div></div>`
+      + area("note", "Note (optional)", "", "What it was. You will read it back beside the entry."),
+    confirm: opened ? "Record it" : "Open the record",
+    onConfirm: async (d) => {
+      if (!d.amount) return "How much?";
+      const r = await api("record_cash", d.kind, d.amount, d.when, d.note || "");
+      if (!r) return " ";
+      toast(r.opened
+        ? `Cash record opened at ${money(r.balance.value)}. Every figure that reads your account is counted from here.`
+        : `Recorded. Free cash is now ${money(r.balance.value)}.`);
+    },
+  });
+  const sel = $("f_kind");
+  if (sel) sel.onchange = () => {
+    $("kindhelp").textContent = (kinds[sel.value] || {}).means || "";
+  };
+}
+
 /* Creating a journal is where the strategy is chosen, and the only time. The
    setup fields below are generated from the chosen strategy's declaration,
    so a journal only ever asks for what its own strategy uses. */
@@ -3119,8 +3340,29 @@ function dlgNewJournal(chosenId) {
   if (!list.length) { toast("No strategy would load, so there is nothing to create a journal against.", true); return; }
   const cur = list.find((x) => x.id === chosenId) || list[0];
   const opts = list.map((x) => `<option value="${esc(x.id)}" ${x.id === cur.id ? "selected" : ""}>${esc(x.name)}</option>`).join("");
-  const setup = (cur.inputs || []).map(
-    (f) => declaredField(f, undefined, "in_")).join("");
+  /* A field the host works out for itself is not a question, and the form
+     must not collect it as one — the save refuses it, and a form that asked
+     anyway would take an answer and throw it away. What it collects instead
+     is the opening balance of the record the figure is derived from. Read
+     off the declaration (`answered_by`), never off the field's id: the view
+     never learns which role it is looking at. */
+  const asked = (cur.inputs || []).filter((f) => f.answered_by !== "host");
+  const derived = (cur.inputs || []).filter((f) => f.answered_by === "host");
+  const setup = asked.map((f) => declaredField(f, undefined, "in_")).join("");
+  const opening = derived.map((f) => `<div class="field">
+      <label for="f_opening_cash">${esc(f.label)} in the account now (optional)</label>
+      <input id="f_opening_cash" name="opening_cash" type="number" step="0.01" min="0" value="">
+      <div class="help">This is not an answer that gets stored — it opens a record.
+      From here the balance is worked out from what you record: deposits, withdrawals
+      and dividends received, each dated — and from what your own purchases and sales
+      say went in and out. That is what lets the journal tell money that arrived from
+      money you made.</div>
+      <div class="help">${esc(f.explain)}</div></div>
+      <div class="field"><label for="f_opening_cash_on">As at</label>
+      <input id="f_opening_cash_on" name="opening_cash_on" type="date" value="${esc(localToday())}" max="${esc(localToday())}">
+      <div class="help">The cash your account held at the <b>start</b> of this day.
+      Nothing can be dated before it — everything earlier is already in the figure —
+      and anything you bought or sold on it or after counts against it.</div></div>`).join("");
   dialog({
     title: "New journal",
     blurb: "One journal, one strategy, chosen now and not changed later. Trading two strategies means two journals, the way it would mean two accounts.",
@@ -3140,16 +3382,23 @@ function dlgNewJournal(chosenId) {
            single difference in how a journal is used, and the strategy cannot be changed afterwards.</div>` : ""}
          </div>`
       + (setup ? `<p class="hint" style="margin:4px 0 10px">${esc(cur.name)} asks for the following. These are things no
-          strategy could ship a default for, because they are facts about you rather than opinions about investing.</p>${setup}` : ""),
+          strategy could ship a default for, because they are facts about you rather than opinions about investing.</p>${setup}` : "")
+      + (opening ? `<p class="hint" style="margin:14px 0 10px">And what is in the account to start with.</p>${opening}` : ""),
     confirm: "Create journal",
     onConfirm: async (d) => {
       if (!(d.name || "").trim()) return "Give the journal a name.";
       const inputs = {};
       Object.keys(d).forEach((k) => { if (k.startsWith("in_")) inputs[k.slice(3)] = d[k]; });
-      const r = await api("create_journal", d.name, d.strategy, inputs);
+      const r = await api("create_journal", d.name, d.strategy, inputs,
+        d.opening_cash || null, d.opening_cash_on || null);
       if (!r) return " ";
       tab = "holdings"; closeSecurity();
       toast(`${r.name} created. Every decision in it will be judged by ${cur.name}.`);
+      /* The journal exists and only the balance did not take. Said out loud
+         rather than swallowed: every size rule in it reads that figure, and
+         somebody who typed one should not find out later that it never
+         landed. */
+      if (r.cash_problem) toast(`The opening balance was not recorded: ${r.cash_problem}`, true);
     },
   });
   const body = $("dlgbody");
@@ -3567,6 +3816,7 @@ async function dlgSell(s, dateChosen, keep, fallbackDate) {
      happened. The tool records decisions and never blocks them, and a screen
      that will not appear is a block however it is described. */
   const p = reply || {
+    recorded_as: null, reason_owed: false,
     held: s._shares,
     lots: buyLots(s).filter((l) => l.open)
       .map((l) => ({ date: l.date, remaining: l.remaining })),
@@ -3627,10 +3877,31 @@ async function dlgSell(s, dateChosen, keep, fallbackDate) {
   const lotHelp = lots.length > 1
     ? `Oldest shares go first, across ${lots.length} open lots${asOfThen} (${lots.map((l) => `${l.remaining} from ${l.date}`).join(", ")}).`
     : "";
+  /* Whether this sale goes against a verdict the strategy actually reached,
+     from the engine rather than worked out again here. The line the purchase
+     dialog draws is the same line the record draws, because both ask the same
+     function — a second copy of the judgement in the view is how a dialog and
+     the entry it wrote came to disagree about the same purchase.
+
+     Asked on `against` and on nothing else, and the asymmetry with a purchase
+     is deliberate. Buying into a name nothing could evaluate is putting
+     capital behind a blank and the buy screen asks for a sentence. Selling one
+     reduces exposure, it is the ordinary outcome for a name with no data, and
+     a prompt there would fire constantly on decisions with nothing to defy —
+     which is how the field somebody should write in becomes one they skip. */
+  const owed = !!p.reason_owed;
+  const verdict = (p.decision || {});
+  const who = (verdict.strategy || {}).name || "Your strategy";
+  const againstBox = owed
+    ? `<div class="dlg-err"><strong>${esc(who)}</strong> says
+       <strong>${esc((verdict.state || {}).name || "")}</strong>. ${esc((verdict.reason || {}).summary || "")}
+       Selling now goes against your own rules. Nothing here stops you — the sale and this reason both go into
+       the journal, and in a year the two together are what tell you whether the rule was wrong or the week
+       was.</div>` : "";
   dialog({
     title: `Record a sale · ${s.ticker}`,
     blurb: "It stays in the journal and keeps being priced, so you can see what happened after you sold.",
-    body: reconBox + `<div class="field"><label for="f_reason">Why are you selling?</label>
+    body: reconBox + againstBox + `<div class="field"><label for="f_reason">Why are you selling?</label>
         <select id="f_reason" name="reason">${opts}</select>
         <div class="help">Answer honestly. The Previous holdings tab groups outcomes by this, and it is the only way to find out whether your sell rules work.</div></div>`
       + field("shares", "Shares sold", (keep && keep.shares) || p.held,
@@ -3644,21 +3915,45 @@ async function dlgSell(s, dateChosen, keep, fallbackDate) {
       + `<div class="field"><label for="f_exited">Date</label>
          <input id="f_exited" name="exited" type="date" value="${esc(when)}" max="${esc(today)}">
          <div class="help">The day you actually sold. A past date is judged with the data of that day,
-         and this dialog updates when you change it. A date that has not happened yet is refused.</div></div>`,
-    confirm: "Record the sale", danger: true,
+         and this dialog updates when you change it. A date that has not happened yet is refused.</div></div>`
+      + (owed ? area("override_reason", "Why are you selling anyway?", (keep && keep.override_reason) || "",
+        "Required. One sentence. This is the record of a decision taken against your own rules, and it is the "
+        + "one you will most want to read back.") : ""),
+    confirm: owed ? "Record it anyway" : "Record the sale", danger: true,
     onConfirm: async (d) => {
       if (!d.price) return "A sale price is required.";
       if (!d.shares) return "How many shares were sold?";
-      const r = await api("sell_shares", s.ticker, d.reason, d.price, d.exited, d.shares);
+      if (owed && !(d.override_reason || "").trim())
+        return "A reason is required when you are selling against your strategy.";
+      const r = await api("sell_shares", s.ticker, d.reason, d.price, d.exited,
+        d.shares, d.override_reason || "",
+        ((p.decision || {}).state || {}).id || null);
       if (!r) return " ";
+      /* The verdict is worked out again at the write and can have moved while
+         the dialog was open. Where it has, what went on the record is not
+         what was on the screen — and on this path that can mean a sale filed
+         as an override with no sentence against it, because the dialog never
+         asked for one. Said loudly, with the way to add it. */
+      if (r.state_changed) {
+        toast(`The verdict changed between the preview and the record (data or the strategy moved). The sale is recorded ${
+          r.recorded_as === "against" ? "as going against the signal" : "under the new verdict"}${
+          r.override && !r.reason_given ? " — with no reason on it, because you were not asked for one. Add a note if you want one there." : ""}.`,
+        r.override && !r.reason_given);
+      }
       tab = r.remaining > 0 ? "holdings" : "previous";
       if (r.remaining > 0)
         toast(`Recorded. ${r.remaining} shares still held; the lots they came from are unchanged.`);
       if (r.basis === "reconstructed")
         toast(`Recorded from history, dated ${r.as_of}. What is frozen beside it was rebuilt from that day's data, and says so wherever it appears.`);
-      else if (r.rule_triggered === false)
-        toast(`Recorded. ${r.signal} under ${r.strategy_name} — no rule triggered this sale. That is now on the record.`);
-      else if (r.rule_triggered === null)
+      else if (r.recorded_as === "against")
+        /* Only claim the sentence is there when it is. "No reason given." is
+           the host's own words, and telling somebody their reason is on the
+           record when nothing is would be the interface asserting something
+           the record does not say. */
+        toast(`Recorded against the signal. ${r.signal} under ${r.strategy_name} — no rule called for this sale`
+          + (r.reason_given ? ", and your reason is on the record beside it." : ", and no reason is recorded against it."),
+        !r.reason_given);
+      else if (r.recorded_as === "without")
         toast("Recorded. No verdict could be evaluated, and that absence is on the record rather than papered over.");
     },
   });
@@ -3673,6 +3968,7 @@ async function dlgSell(s, dateChosen, keep, fallbackDate) {
        just stopped making, reintroduced at the one seam where the clock
        moves. */
     const keepNow = { price: $("f_price").value,
+      override_reason: ($("f_override_reason") || {}).value || "",
       shares: String(typed) === String(p.held) ? "" : typed };
     $("dlg").close();
     dlgSell(s, dateEl.value, keepNow, when);
@@ -4156,6 +4452,7 @@ document.addEventListener("click", async (ev) => {
     case "backfill": return dlgBackfill(s);
     case "ev": return dlgEV(s);
     case "settings": return dlgSettings();
+    case "cash": return dlgCash(act.dataset.kind || "");
     case "explain": return dlgExplain(act.dataset.record, act.dataset.seq);
     case "export": {
       const r = await api("export_data");

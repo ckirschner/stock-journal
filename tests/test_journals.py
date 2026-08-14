@@ -421,19 +421,40 @@ class TestEditingWhatTheJournalTellsItsStrategy:
 
     def _answered(self, strategies):
         strategies("awkward")
-        return journal_for("awkward", inputs={"free-cash": 1000.0,
-                                              "stance": "building"})
+        return journal_for("awkward", inputs={"stance": "building",
+                                              "keeps-reserve": True,
+                                              "reserve": 1000.0})
 
     def test_answers_go_on_their_own_record_and_owe_nothing(self,
                                                             strategies):
         journal, record = self._answered(strategies)
         entry = journals.set_inputs(journal, record,
-                                    {"free-cash": 2000.0,
-                                     "stance": "building"})
-        assert entry["moved"] == [{"id": "free-cash", "label": "Free cash",
+                                    {"stance": "building",
+                                     "keeps-reserve": True,
+                                     "reserve": 2000.0})
+        assert entry["moved"] == [{"id": "reserve",
+                                   "label": "Cash you keep back",
                                    "from": 1000.0, "to": 2000.0}]
         assert journal["rule_changes"] == []
         assert journals.pending(journal) == []
+
+    def test_a_figure_the_host_works_out_is_never_stored_as_an_answer(
+            self, strategies):
+        """Free cash comes from this journal's cash record. A typed copy
+        beside it would be two numbers about one thing, and which one gets
+        read is whichever the next caller reaches for first — so the write
+        refuses to hold one at all, and a journal that already does has it
+        cleared onto the record the next time anything is saved."""
+        journal, record = self._answered(strategies)
+        journal["inputs"]["free-cash"] = 1000.0        # as an older journal
+        entry = journals.set_inputs(journal, record,
+                                    {"stance": "building",
+                                     "keeps-reserve": True,
+                                     "reserve": 1000.0,
+                                     "free-cash": 9999.0})
+        assert "free-cash" not in journal["inputs"]
+        assert entry["moved"] == [{"id": "free-cash", "label": "Free cash",
+                                   "from": 1000.0, "to": None}]
 
     def test_an_answer_that_did_not_move_records_nothing(self, strategies):
         journal, record = self._answered(strategies)
@@ -443,10 +464,14 @@ class TestEditingWhatTheJournalTellsItsStrategy:
 
     def test_a_cleared_answer_is_recorded_as_going_away(self, strategies):
         journal, record = self._answered(strategies)
-        entry = journals.set_inputs(journal, record, {"stance": "building"})
-        assert entry["moved"] == [{"id": "free-cash", "label": "Free cash",
+        entry = journals.set_inputs(journal, record,
+                                    {"stance": "building",
+                                     "keeps-reserve": True})
+        assert entry["moved"] == [{"id": "reserve",
+                                   "label": "Cash you keep back",
                                    "from": 1000.0, "to": None}]
-        assert journal["inputs"] == {"stance": "building"}
+        assert journal["inputs"] == {"stance": "building",
+                                     "keeps-reserve": True}
 
 
 class TestAStrategyThatMovedOn:

@@ -927,11 +927,16 @@ STRATEGY = {
         {"id": "free-cash", "label": "Free cash", "type": "number",
          "unit": "usd", "role": "cash", "required": False,
          "explain": "Money in the account this journal covers that is not "
-                    "in any position. The journal adds it to what your "
-                    "holdings are worth to get the account total, and that "
-                    "total is what a position's size is measured against. "
-                    "Leave it blank and the size rules say they cannot be "
-                    "worked out rather than guessing at them."},
+                    "in any position. You do not type it: the journal "
+                    "works it out from what you record moving — an "
+                    "opening balance, then deposits, withdrawals and "
+                    "dividends received, with what every purchase cost "
+                    "and every sale fetched read off your own lots. It "
+                    "adds that to what your holdings are worth to get "
+                    "the account total, and that total is what a "
+                    "position's size is measured against. Until the "
+                    "record is opened the size rules say they cannot "
+                    "be worked out rather than guessing at them."},
     ],
 
     # -----------------------------------------------------------------
@@ -1050,10 +1055,10 @@ STRATEGY = {
                     "concentrated than his most concentrated list, on a "
                     "business he would be the first to say he had no "
                     "particular faith in.\n\n"
-                    "It needs your free cash to be answered in settings, "
+                    "It needs this journal's cash record to be open, "
                     "because a share of the account cannot be worked out "
-                    "without knowing what the account is. Unanswered, this "
-                    "test reports that it could not be run.\n\n"
+                    "without knowing what the account is. Until it is, "
+                    "this test reports that it could not be run.\n\n"
                     "Attributed to Graham's practice, not to the expert "
                     "report, which does not cover sizing."},
 

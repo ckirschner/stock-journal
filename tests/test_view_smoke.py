@@ -43,8 +43,9 @@ HARNESS = Path(__file__).resolve().parent / "view_smoke.mjs"
 pytestmark = pytest.mark.skipif(shutil.which("node") is None,
                                 reason="Node is not installed on this machine")
 
-ANSWERS = {"free-cash": "40000", "stance": "building",
-           "keeps-reserve": "true", "reserve": "5000", "first-buy": "4"}
+ANSWERS = {"stance": "building", "keeps-reserve": "true",
+           "reserve": "5000", "first-buy": "4"}
+OPENING_CASH = 40000.0
 
 
 def _company(cik, ticker="ACME"):
@@ -112,15 +113,19 @@ def _state(strategies, answers=ANSWERS, redefine=None) -> dict:
     """
     strategies("awkward")
     api = app_mod.Api()
-    created = api.create_journal("Long-term ideas", "awkward", dict(answers))
+    created = api.create_journal("Long-term ideas", "awkward", dict(answers),
+                                 opening_cash=OPENING_CASH,
+                                 opening_cash_on="2025-12-01")
     assert created["ok"], created
     # The journal has to predate the entries below or none of them can be
     # sized: what the user told a journal begins on the day it was created,
-    # and before that there is no free cash, no account total and no weight.
-    # That is correct — see journals.answers_on — and it is what a backfill
-    # of a position bought before this program existed genuinely meets. The
-    # screens that render weight need a journal that was there, and the ones
-    # that render a gap get HIST below, which was deliberately not.
+    # and its cash record begins on the day it was opened. Before either
+    # there is no free cash, no account total and no weight. That is correct
+    # — see journals.answers_on and engine/cash.balance — and it is what a
+    # backfill of a position bought before this program existed genuinely
+    # meets. The screens that render weight need a journal that was there,
+    # and the ones that render a gap get HIST below, which was deliberately
+    # not.
     open_since("2025-12-01")
 
     cik = 611
@@ -540,7 +545,7 @@ def test_a_blocked_journal_offers_the_way_out(strategies, tmp_path):
     """
     _state(strategies)
     doc = journals.load(journals.resolve_open())
-    doc["inputs"].pop("free-cash")
+    doc["inputs"].pop("stance")
     journals.save(doc)
 
     state = app_mod.Api().get_state()
@@ -549,8 +554,9 @@ def test_a_blocked_journal_offers_the_way_out(strategies, tmp_path):
     d = held["_decision"]
     assert d["state"]["id"] == "host:inputs-missing", d["state"]
     assert d["state"]["fix"] == "settings"
-    assert any("Free cash" in n for n in d["payload"]["needs"])
-    assert any("Free cash" in p for p in state["strategy"]["input_problems"])
+    assert any("How you are trading" in n for n in d["payload"]["needs"])
+    assert any("How you are trading" in p
+               for p in state["strategy"]["input_problems"])
 
     # The harness asserts the way out is on the page: every state the host
     # says has a screen behind it must render the button that opens it.
@@ -560,11 +566,11 @@ def test_a_blocked_journal_offers_the_way_out(strategies, tmp_path):
     # ...and supplying it in the app resolves the block, which is the half
     # that makes the button worth rendering.
     api = app_mod.Api()
-    assert api.save_journal_settings({"free-cash": "40000"}, None)["ok"]
+    assert api.save_journal_settings({"stance": "building"}, None)["ok"]
     again = api.get_state()
     held = [s for s in again["securities"] if s["bucket"] == "holdings"][0]
     assert held["_decision"]["produced_by"] == "strategy"
-    assert again["input_changes"][-1]["moved"][0]["id"] == "free-cash"
+    assert again["input_changes"][-1]["moved"][0]["id"] == "stance"
 
 
 def test_weight_reaches_the_screen_once_the_account_is_known(strategies):
@@ -582,10 +588,15 @@ def test_weight_reaches_the_screen_once_the_account_is_known(strategies):
     # from history, at the 31.00 hand-entered price, is 3,100 — a position
     # entered afterwards is still a position, and leaving it out of the
     # account would understate every weight measured against it. CLSD is
-    # closed and holds nothing. Against 40,000 of free cash that is an
-    # account of 43,600.
-    assert cited["portfolio.account_value"]["observed"]["value"] == 43600.0
-    assert round(weight["value"], 4) == round(320 / 43600 * 100, 4)
+    # closed and holds nothing.
+    #
+    # Free cash is 41,438: 40,000 opened on 2025-12-01, less what every
+    # purchase dated after it cost and plus what every sale fetched. That is
+    # the half a typed figure could never keep straight — a balance that did
+    # not move when shares were bought would report an account of 43,600 for
+    # one holding 45,038.
+    assert cited["portfolio.account_value"]["observed"]["value"] == 45038.0
+    assert round(weight["value"], 4) == round(320 / 45038 * 100, 4)
 
 
 def test_returns_and_scorecards_use_the_fetched_price(strategies):

@@ -85,7 +85,7 @@ def like(**over):
     return {**WONDERFUL, **over}
 
 
-journal("Sample — Buffett", "buffett", {"free-cash": FREE_CASH})
+journal("Sample — Buffett", "buffett", {}, cash=FREE_CASH)
 
 
 # -- the position that got large, and is left alone --------------------------

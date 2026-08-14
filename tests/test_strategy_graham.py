@@ -31,6 +31,7 @@ from datetime import date
 
 import pytest
 
+import conftest
 from conftest import entered, filer, filing, dur, balance_face, \
     redefined_since, \
     industry_node
@@ -1167,7 +1168,8 @@ class TestThroughTheRealContext:
                     "price": 30.0}
         entered(security, **CLEARS_EXITS)
         ctx = context.build_context(security, [security], values_for(graham),
-                                    {"free-cash": 6_000.0}, record=graham)
+                                    {}, record=graham,
+                                    journal=conftest.cash_record(6_000.0))
         assert ctx["position"]["weight"]["status"] == "known"
         # 100 shares at 30 is 3,000 of a 9,000 account.
         assert round(ctx["position"]["weight"]["value"], 1) == 33.3
