@@ -69,6 +69,22 @@ def locked(fn):
     return wrapper
 
 
+def _typed_name(s) -> str:
+    """A name as fingers can reproduce it, for the typed-delete confirmation.
+
+    The check exists so the person retypes what they can SEE — but a name
+    like "Sample — Graham" holds an em-dash no keyboard key produces, and an
+    exact comparison made those journals undeletable from the screen that
+    showed them. Dashes of every width collapse to a hyphen and runs of
+    whitespace to one space; everything else still has to match, so the
+    confirmation stays a confirmation.
+    """
+    out = str(s or "")
+    for dash in "‐‑‒–—―−":
+        out = out.replace(dash, "-")
+    return " ".join(out.split())
+
+
 class Api:
     def __init__(self):
         self.window = None
@@ -1200,11 +1216,12 @@ class Api:
         if journal_id not in listed:
             return err("That journal is not on disk any more.")
         name = listed[journal_id].get("name") or journal_id
-        if str(confirm_name or "").strip() != str(name).strip():
+        if _typed_name(confirm_name) != _typed_name(name):
             return err(
-                f'Type the journal\'s name exactly — "{name}" — to delete it. '
-                "This removes every position, note and recorded decision in "
-                "it, and nothing else holds a copy.")
+                f'Type the journal\'s name — "{name}" — to delete it. A '
+                "plain hyphen stands in for any dash. This removes every "
+                "position, note and recorded decision in it, and nothing "
+                "else holds a copy.")
         removed = journals.delete(journal_id)
         return ok(**removed)
 

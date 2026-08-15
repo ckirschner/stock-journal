@@ -649,3 +649,30 @@ class TestABrokenMetricBankStillOpensTheWindow:
         assert state["journal"]["name"] == "Mine"
         assert [s["ticker"] for s in state["securities"]] == ["ACME"]
         assert state["bank_meta"], "the measures went with the bad edit"
+
+
+class TestTheTypedDeleteConfirmationCanActuallyBeTyped:
+    """The confirmation asks the user to retype the name they can see — and
+    a name holding an em-dash ("Sample — Graham") has no key that types it,
+    which made every journal named that way undeletable from the screen that
+    showed it. A plain hyphen stands in for any dash; everything else still
+    has to match, so the confirmation stays a confirmation."""
+
+    def test_a_hyphen_stands_in_for_the_em_dash(self, strategies):
+        strategies("verdicts")
+        from app import Api
+        from conftest import journal_for
+        journal, record = journal_for("verdicts", "Sample — Graham")
+        r = Api().delete_journal(journal["id"], "Sample - Graham")
+        assert r["ok"], r
+        assert journals.list_journals() == []
+
+    def test_a_wrong_name_is_still_refused(self, strategies):
+        strategies("verdicts")
+        from app import Api
+        from conftest import journal_for
+        journal, record = journal_for("verdicts", "Sample — Graham")
+        r = Api().delete_journal(journal["id"], "Sample Graham")
+        assert not r["ok"]
+        assert "hyphen" in r["error"]
+        assert len(journals.list_journals()) == 1
