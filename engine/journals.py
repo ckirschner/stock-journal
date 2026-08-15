@@ -660,24 +660,32 @@ def measures_incomparable(journal: dict, comparable) -> dict:
     """
     out: dict[str, list] = {}
     for change in journal.get(_MEASURES) or []:
+        # `seq` rides along with `seen` because the two answer different
+        # comparisons. A frozen record placed against this list by wall-clock
+        # stamp is the string sort over two calendars `changes_recorded`
+        # documents as quietly wrong; a record that kept its position in the
+        # append-only list compares by `seq` exactly. Both are served so the
+        # reader that can do it right has what it needs.
+        seq = change.get("seq")
         seen = str(change.get("seen"))
         for gone in change.get("removed") or []:
             out.setdefault(gone["id"], []).append(
-                {"seen": seen, "field": "the measure was removed"})
+                {"seq": seq, "seen": seen,
+                 "field": "the measure was removed"})
         for new in change.get("added") or []:
             out.setdefault(new["id"], []).append(
-                {"seen": seen, "field": "the measure was added"})
+                {"seq": seq, "seen": seen, "field": "the measure was added"})
         for m in change.get("moved") or []:
             if m["field"] in comparable:
                 continue
             out.setdefault(m["id"], []).append(
-                {"seen": seen, "field": m["field"],
+                {"seq": seq, "seen": seen, "field": m["field"],
                  "from": m.get("from"), "to": m.get("to")})
         for r in change.get("restated") or []:
             if r["field"] in comparable:
                 continue
             out.setdefault(r["id"], []).append(
-                {"seen": seen, "field": r["field"]})
+                {"seq": seq, "seen": seen, "field": r["field"]})
     return out
 
 

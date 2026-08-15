@@ -255,7 +255,7 @@ Reading rules a strategy can rely on:
 from __future__ import annotations
 
 import copy
-from datetime import date
+from datetime import date, timedelta
 
 from . import bank as bank_mod
 from . import cash as cash_mod
@@ -1162,6 +1162,131 @@ def portfolio_view(journal_securities: list, roles: dict,
     """
     return _portfolio(journal_securities, None,
                       today or date.today().isoformat(), None, roles)
+
+
+def account_value_on(journal: dict, securities: list,
+                     as_of: str | None = None) -> dict:
+    """The whole account on one day: cash as at that day, plus every holding
+    on it priced from its own instrument's close on or before it. Without
+    `as_of` the day is today and each holding is priced the way the journal
+    prices it live — hand-entered first, else the newest stored close.
+
+    A reporting read, not a strategy input. The cash record is read directly
+    rather than through the role gate: the gate says which strategies may
+    consume the figure, and this is the journal's own reader-facing total —
+    the record exists whether or not any strategy asked. The masthead reads
+    this so the account total has exactly one derivation; a view summing
+    per-security numbers for itself was the second one, and it filled a
+    missing price with zero.
+
+    Absence propagates the way `_account_value` always has: one unpriced
+    holding and the total is absent naming it, never a subtotal presented as
+    the whole. Each holding's own node stays on the row, so a screen can say
+    which ones went dark without the total pretending to be reachable.
+    """
+    day = str(as_of)[:10] if as_of else date.today().isoformat()
+    holdings, seen = [], set()
+    for sec in securities or []:
+        ticker = str(sec.get("ticker") or "")
+        if ticker in seen:
+            continue
+        seen.add(ticker)
+        shares = portfolio.shares_held(sec, day)
+        if shares <= 0:
+            continue
+        holdings.append({
+            "ticker": sec.get("ticker"), "name": sec.get("name"),
+            "shares": shares,
+            "market_value": _market_value(sec, shares, day,
+                                          day if as_of else None),
+        })
+    cash = cash_mod.balance(journal or {}, as_of)
+    account_value = _account_value(cash, holdings)
+    for h in holdings:
+        h["weight"] = _weight(h["market_value"], account_value)
+    return {"date": day, "cash": cash, "holdings": holdings,
+            "account_value": account_value}
+
+
+def account_change(journal: dict, securities: list, since: str) -> dict:
+    """What the account did over a window ending today, net of the money
+    that crossed its boundary::
+
+        {"since", "date",
+         "then", "now",          # account_value nodes, known-or-absent
+         "net_external",         # deposits less withdrawals in the window
+         "change",               # dollars: now − then − net_external
+         "percent"}              # change as a share of then
+
+    Netting out deposits is what keeps the figure honest — "up 12%" the week
+    after adding money is a lie the first time someone adds money. Dividends
+    are deliberately NOT netted: a holding paying cash out is the account
+    earning, and engine/cash.py keeps the two apart for exactly this
+    subtraction.
+
+    The window's flows are counted strictly after `since`: the valuation on
+    `since` is an end-of-day reading, so a deposit dated that day is already
+    inside it. Either endpoint being unreachable makes the change absent
+    with that side's reason — a change computed against an invented endpoint
+    would be the confident wrong number this program refuses everywhere.
+
+    The percent is the plain quotient against the starting value. It is a
+    simple measure, not a time-weighted one, and its provenance says exactly
+    what was divided by what so the reader can redo it.
+    """
+    since = str(since)[:10]
+    then = account_value_on(journal, securities, since)
+    now = account_value_on(journal, securities)
+    day_after = (date.fromisoformat(since) + timedelta(days=1)).isoformat()
+    flows = cash_mod.movement(journal or {}, since=day_after)
+    net = flows["net_external"]
+    out = {"since": since, "date": now["date"],
+           "then": then["account_value"], "now": now["account_value"],
+           "net_external": net}
+    for side, label in ((then["account_value"],
+                         f"the account's value on {since}"),
+                        (now["account_value"],
+                         "the account's value today")):
+        if side["status"] != "known":
+            why = f'{label} cannot be reached — {side["reason"]}'
+            out["change"] = _absent(why)
+            out["percent"] = _absent(why)
+            return out
+    if net["status"] != "known":
+        why = ("what crossed the account's boundary since "
+               f'{since} cannot be worked out — {net["reason"]}')
+        out["change"] = _absent(why)
+        out["percent"] = _absent(why)
+        return out
+    moved = round(now["account_value"]["value"]
+                  - then["account_value"]["value"] - net["value"], 2)
+    # Both endpoints' qualifiers, each saying which day it is about. A change
+    # is one figure resting on two valuations, and a caution that names its
+    # side is the only version a reader can act on.
+    cautions = []
+    for prefix, side in ((f"on {since}", then["account_value"]),
+                         ("now", now["account_value"])):
+        for note in side.get("cautions") or []:
+            line = f"{prefix} — {note}"
+            if line not in cautions:
+                cautions.append(line)
+    out["change"] = _known(
+        moved, "computed", cautions,
+        [f'{_usd(now["account_value"]["value"])} now, against '
+         f'{_usd(then["account_value"]["value"])} on {since}, less '
+         f'{_usd(net["value"])} that crossed the account\'s boundary in '
+         "between"])
+    if then["account_value"]["value"] <= 0:
+        out["percent"] = _absent(
+            f"the account was worth nothing or less on {since}, so the "
+            "change cannot be expressed as a share of it")
+    else:
+        out["percent"] = _known(
+            round(moved / then["account_value"]["value"] * 100, 2),
+            "computed", list(cautions),
+            [f'{_usd(moved)} of change over '
+             f'{_usd(then["account_value"]["value"])} on {since}'])
+    return out
 
 
 # -- the public build --------------------------------------------------------

@@ -792,6 +792,12 @@ class Api:
             # What a list needs is the day, the note and what it said, and
             # `get_snapshot` hands over the whole thing when one is opened.
             s["_snapshots"] = snapshots.summaries(s)
+            # Whether today's verdict is the one the last kept day kept —
+            # which is the exact meaning of "new" here: changed since
+            # something you deliberately saved, never since a visit nobody
+            # recorded. Absent with the difference stated where nothing
+            # stands to measure against.
+            s["_since_reading"] = snapshots.since_last(s, s["_decision"])
             # Whether this one may be dropped out of the journal, answered by
             # the engine that would refuse it. The toolbar used to work it out
             # from the bucket, which was the same rule written twice — and the
@@ -965,6 +971,12 @@ class Api:
                  f"prices for {s['ticker']}, so what it was worth on the day "
                  "you passed on it is not on record — fetch its data and "
                  "this fills in"}),
+            # The whole account, derived in one place. The masthead used to
+            # sum per-security numbers in the browser, and a missing price
+            # became zero there — the exact invention the engine refuses
+            # everywhere else. Served, so the view renders the node and never
+            # holds arithmetic of its own (principles 4 and 13).
+            portfolio=context.account_value_on(journal, securities),
             data_dir=str(store.data_dir()),
             data_security=self._data_security(),
         )
@@ -1511,6 +1523,53 @@ class Api:
             return err(f"No snapshot numbered {seq} was saved for "
                        f'{s["ticker"]}.')
         return ok(entry=entry)
+
+    @guarded
+    @locked
+    def compare_snapshots(self, ticker, seqs):
+        """Two or more of one security's saved days, side by side.
+
+        Read off what each snapshot froze, never recomputed — see
+        engine/snapshots.compare, which owns every rule in it including the
+        gate that refuses a delta across a redefined measure.
+        """
+        journal, *_ = self._open()
+        if journal is None:
+            return err("No journal is open.")
+        s = self._find(journal, ticker)
+        return ok(comparison=snapshots.compare(s, journal, seqs,
+                                               bank.COMPARABLE_FIELDS))
+
+    @guarded
+    @locked
+    def timeframe_view(self, since):
+        """The chosen timeframe, in one reply: the account's change since
+        that day net of what crossed its boundary, and each security's own
+        price move over the same window.
+
+        Served whole from the engine so the header and the rows read one
+        derivation — the view never subtracts two prices for itself, for the
+        reason the masthead no longer sums one (principles 5 and 13). Every
+        figure is known-or-absent; a security with no dated history says so
+        per row without taking the account figure down with it.
+        """
+        journal, *_ = self._open()
+        if journal is None:
+            return err("No journal is open.")
+        try:
+            day = date.fromisoformat(str(since)[:10]).isoformat()
+        except (TypeError, ValueError):
+            return err(f"{since!r} is not a day the account can be read "
+                       "as of.")
+        if day >= date.today().isoformat():
+            return err("The timeframe has to start before today for there "
+                       "to be a window to measure across.")
+        securities = journal.get("securities", [])
+        return ok(since=day,
+                  account=context.account_change(journal, securities, day),
+                  rows={s["ticker"]: dataview.price_return(
+                      s, s.get("cik"), s["ticker"], day)
+                      for s in securities})
 
     @guarded
     @locked
