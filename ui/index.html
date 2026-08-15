@@ -6,30 +6,32 @@
 <title>Ledger</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bitter:wght@600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Red+Hat+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
-<div class="wrap">
-  <header class="masthead">
-    <div class="mast-row">
-      <div class="brand">Ledger<span id="subtitle">Portfolio journal</span></div>
-      <div class="mast-stats" id="maststats"></div>
+<div class="frame">
+  <header class="mast">
+    <div class="mast-top">
+      <div class="brand">Ledger</div>
+      <div id="journalchip"></div>
     </div>
+    <div class="acct" id="maststats"></div>
   </header>
-  <nav class="tabs" role="tablist" id="tabs"></nav>
-  <main id="view"><p class="empty">Starting up…</p></main>
+  <nav class="tabs" id="tabs"></nav>
+  <div class="body">
+    <main class="plane" id="view"><p class="quiet">Starting up…</p></main>
+    <aside class="margin" id="margin"></aside>
+  </div>
   <p class="foot" id="foot"></p>
 </div>
-
-<dialog id="dlg">
-  <form method="dialog" id="dlgform">
-    <div class="dlg-head"><h3 id="dlgtitle"></h3><p id="dlgblurb"></p></div>
-    <div class="dlg-body" id="dlgbody"></div>
-    <div class="dlg-foot" id="dlgfoot"></div>
-  </form>
-</dialog>
-
-<script src="app.js" charset="utf-8"></script>
+<!-- One app, in reading order. Each file assumes the ones above it. -->
+<script src="js/00-core.js" charset="utf-8"></script>
+<script src="js/10-margin.js" charset="utf-8"></script>
+<script src="js/20-list.js" charset="utf-8"></script>
+<script src="js/30-detail.js" charset="utf-8"></script>
+<script src="js/40-screens.js" charset="utf-8"></script>
+<script src="js/50-act.js" charset="utf-8"></script>
+<script src="js/90-wire.js" charset="utf-8"></script>
 </body>
 </html>

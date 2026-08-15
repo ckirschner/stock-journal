@@ -1,27 +1,24 @@
-/* Render every screen against a real get_state payload, under Node with a
-   stub DOM. Driven by tests/test_view_smoke.py, which builds the payload
-   through the same Api the window calls.
+/* Render every screen and every margin pane against a real get_state
+   payload, under Node with a stub DOM. Driven by tests/test_view_smoke.py,
+   which builds the payload through the same Api the window calls.
 
-   This is one smoke path, not a testing framework. It exists because the
-   view layer carries real logic and the standard for it has been "correct by
-   inspection" — which is the standard that produced the defects the Python
-   reviews caught. What it can catch: a key renamed on the Python side, an
-   undefined dereference in a branch nobody clicked, a number rendering as
-   NaN, a whole section silently disappearing. What it cannot: anything about
-   how it looks.
+   One smoke path, not a testing framework. What it catches: a key renamed
+   on the Python side, an undefined dereference in a branch nobody clicked,
+   a number rendering as NaN, a section silently disappearing — and, through
+   the must/mustNot lists, the semantic guarantees the interface carries:
+   absence renders with its reason, a caution is a mark and never a warning,
+   an override asks for its sentence, recorded history stays readable and
+   offers no actions from inside itself.
 
-   Usage: node view_smoke.mjs <state.json> <app.js> */
+   Usage: node view_smoke.mjs <state.json> <ui/js dir> [mode]
+   "coverage" (default) also insists the payload reached every surface the
+   view draws; "render-only" keeps the real complaints and drops the gaps. */
 
 import fs from "node:fs";
+import path from "node:path";
 import vm from "node:vm";
 
-const [statePath, appPath, mode] = process.argv.slice(2);
-/* Two jobs, one harness. "coverage" (the default) also insists the payload
-   reaches every surface the view draws — that is what stops a screen being
-   silently unexercised. "render-only" drops those complaints and keeps the
-   real ones, for a payload that exists to draw the branches the coverage
-   fixture cannot reach and is not expected to reach the ones it can. A gap
-   is not a defect; an unrendered screen is. */
+const [statePath, uiDir, mode] = process.argv.slice(2);
 const DEMAND_COVERAGE = mode !== "render-only";
 const state = JSON.parse(fs.readFileSync(statePath, "utf8"));
 
@@ -29,9 +26,10 @@ const els = {};
 const mkEl = (id) => (els[id] ||= {
   id, innerHTML: "", textContent: "", className: "", dataset: {},
   querySelectorAll: () => [], querySelector: () => null,
-  appendChild() {}, remove() {}, prepend() {}, close() {}, showModal() {},
-  focus() {}, onclick: null, onchange: null, value: "", readOnly: false,
-  style: {}, open: false,
+  appendChild() {}, remove() {}, prepend() {}, insertBefore() {},
+  focus() {}, setSelectionRange() {}, scrollIntoView() {},
+  classList: { toggle() {}, add() {}, remove() {} },
+  style: {}, value: "", checked: false, hidden: false, scrollTop: 0,
 });
 const ctx = vm.createContext({
   document: {
@@ -39,21 +37,27 @@ const ctx = vm.createContext({
     createElement: () => mkEl("scratch"), addEventListener: () => {},
     body: { appendChild() {} },
   },
-  window: { addEventListener: () => {} },
+  window: { addEventListener: () => {}, scrollTo: () => {} },
+  CSS: { escape: (s) => String(s) },
   setTimeout: () => {}, console,
   Number, String, Object, Array, Math, Date, JSON, Set, Map, RegExp,
   Intl, isNaN, parseInt, parseFloat,
 });
-vm.runInContext(fs.readFileSync(appPath, "utf8"), ctx, { filename: "app.js" });
+const uiFiles = fs.readdirSync(uiDir).filter((x) => x.endsWith(".js")).sort();
+let viewSource = "";
+for (const f of uiFiles) {
+  const src = fs.readFileSync(path.join(uiDir, f), "utf8");
+  viewSource += src;
+  vm.runInContext(src, ctx, { filename: f });
+}
 Object.assign(ctx, { __state: state });
 const run = (code) => vm.runInContext(code, ctx);
 run("S = __state;");
+if (state.__timeframe && state.__timeframe.ok) {
+  run('T = { ...__state.__timeframe, label: "Past month" };');
+}
 // A stub backend, serving replies the Python side captured from the real
-// Api. Some of the view loads asynchronously — the coverage panel does —
-// and without this those loads fail and the page renders "could not reach
-// the app backend" as its content. That was invisible for as long as the
-// harness never yielded to the microtask queue, which is a bad reason for a
-// panel to look tested.
+// Api — the async surfaces render against real shapes or not at all.
 run(`window.pywebview = { api: {
   preview_purchase: async (t) => (__state.__previews || {})[t]
     || { ok: false, error: "no preview captured for " + t },
@@ -65,30 +69,38 @@ run(`window.pywebview = { api: {
     || { ok: false, error: "no coverage captured for " + t },
   get_snapshot: async (t, seq) => (__state.__snapshots || {})[t + "@" + seq]
     || { ok: false, error: "no snapshot captured for " + t + " " + seq },
+  get_bank: async () => __state.__bank || { ok: false, error: "no bank captured" },
+  ev_prefill: async (t) => (__state.__ev || {})[t]
+    || { ok: true, prefill: {}, references: {} },
+  compare_snapshots: async (t, seqs) => (__state.__compare || {})[t]
+    || { ok: false, error: "no comparison captured for " + t },
+  timeframe_view: async () => __state.__timeframe
+    || { ok: false, error: "no timeframe captured" },
 } };`);
-["view", "maststats", "subtitle", "foot", "tabs"].forEach(mkEl);
+["view", "maststats", "tabs", "foot", "margin", "journalchip"].forEach(mkEl);
+if (state.__bank && state.__bank.ok) run("C.bank = (__state.__bank.bank || {}).entries || [];");
 
 const problems = [];
-/* A surface the payload never reached. Only a defect when this run is the one that is supposed to reach everything. */
-const gap = (...parts) => {
-  if (DEMAND_COVERAGE) problems.push(parts.join(""));
-};
+const gap = (...parts) => { if (DEMAND_COVERAGE) problems.push(parts.join("")); };
 const out = {};
 
-function check(label, code) {
+async function check(label, code) {
   try {
-    const html = run(code);
+    let html = run(code);
+    if (html && typeof html.then === "function") html = await html;
     if (typeof html === "string") {
-      // A number that reached the screen as NaN, an object stringified into
-      // the markup, or an undefined interpolation are all the same defect:
-      // the view read a key the backend does not send.
-      //
-      // `/*` is a fourth of the same kind. Every screen here is built from
-      // template literals, and a comment written one line too far inside one
-      // stops being a comment and becomes body text — silently, because it
-      // is still valid JavaScript and still renders.
-      const m = html.match(
-        /.{0,80}(undefined|\[object Object\]|\bNaN\b|\/\*).{0,80}/);
+      /* undefined, [object Object], NaN and a comment leaked into a template
+         literal are all the same defect: the view read a key the backend
+         does not send, and it prints instead of throwing.
+
+         The measures screens are exempt from the `undefined` token alone:
+         they print the bank's own misfires prose, which is entitled to say
+         "makes the ratio undefined" in English. NaN, stringified objects
+         and leaked comments stay fatal there too. */
+      const lax = label.startsWith("measures");
+      const m = html.match(lax
+        ? /.{0,80}(\[object Object\]|\bNaN\b|\/\*).{0,80}/
+        : /.{0,80}(undefined|\[object Object\]|\bNaN\b|\/\*).{0,80}/);
       if (m) problems.push(`${label}: rendered "${m[0].replace(/\s+/g, " ")}"`);
     }
     out[label] = html;
@@ -98,128 +110,79 @@ function check(label, code) {
     return "";
   }
 }
+const pane = (label, id, arg) =>
+  check(label, `PANES[${JSON.stringify(id)}](${JSON.stringify(arg)})`);
 
-check("mast", "renderMast(); renderTabs(); 0");
-for (const t of ["holdings", "previous", "ideas", "allocate", "strategy",
-                 "data"]) {
-  run(`tab = ${JSON.stringify(t)};`);
-  check(t, t === "strategy" ? "strategyView()"
-    : t === "data" ? "dataView()"
-    : t === "allocate" ? "allocationView()" : "listView()");
+// ---------------------------------------------------------------- screens
+await check("mast", "renderMast(); renderTabs(); "
+  + '$("maststats").innerHTML + $("journalchip").innerHTML');
+for (const f of ["everything", "holdings", "watchlist", "track"]) {
+  run(`filter = ${JSON.stringify(f)};`);
+  await check(`list:${f}`, "listView()");
 }
-// The list a journal works from, for the journals that have one. Guarded
-// rather than unconditional because the tab genuinely does not exist for a
-// strategy that screens for itself — which is the behaviour, not a gap — and
-// the empty case is drawn separately below so the branch a brand-new journal
-// sees is not the one branch nothing renders.
 if (state.list) {
-  run('tab = "list";');
-  check("list", "importedListView()");
-  check("list:empty", `(() => {
+  run('filter = "yourlist";');
+  await check("list:yourlist", "listView()");
+  await check("list:yourlist:empty", `(() => {
     const was = S.list;
     S.list = { ...was, current: null, rows: [], history: [] };
-    const html = importedListView(); S.list = was; return html;
-  })()`);
-  check("list:no-history", `(() => {
-    const was = S.list;
-    S.list = { ...was, history: [] };
-    const html = importedListView(); S.list = was; return html;
-  })()`);
-  check("list:untracked-row", `(() => {
+    const h = listView(); S.list = was; return h; })()`);
+  await check("list:yourlist:untracked", `(() => {
     const was = S.list;
     S.list = { ...was, rows: [{ ticker: "ZZZZ", name: null, tracked: false,
-                                held: false, new: true, decision: null,
-                                passed_over: null }] };
-    const html = importedListView(); S.list = was; return html;
-  })()`);
-  check("list:no-floor", `(() => {
-    const was = S.list;
-    S.list = { ...was, current: { ...was.current, floor: null } };
-    const html = importedListView(); S.list = was; return html;
-  })()`);
-  run('tab = "holdings";');
+      held: false, new: true, decision: null, passed_over: null }] };
+    const h = listView(); S.list = was; return h; })()`);
 }
-// The allocation view's four standings, each rendered. Only one of them can
-// be true of any real journal, and the other three are exactly where an
-// empty screen would ship unnoticed — "nothing qualifies" is the ORDINARY
-// outcome of a disciplined strategy, so it is the branch a user sees most
-// and the one nothing would otherwise render.
-run('tab = "allocate";');
-for (const [id, headline] of [
-  ["empty", "Nothing is being tracked yet."],
-  ["unfunded", "1 position could take capital, and the free cash on record "
-    + "does not cover any of them."],
-  ["cash", "Nothing qualifies today."],
-  ["unavailable", "This journal's strategy could not be asked."],
-  ["open", "1 position may take capital now."],
-]) {
-  check(`allocate:${id}`, `(() => {
-    const a = S.allocation; S.allocation = ${JSON.stringify({})};
-    S.allocation = JSON.parse(JSON.stringify(a || {cash:{status:"absent",reason:"x"},
-      account_value:{status:"absent",reason:"x"}, ready:[], waiting:[], excluded:[]}));
-    S.allocation.standing = {id: ${JSON.stringify(id)},
-      headline: ${JSON.stringify(headline)},
-      detail: "A sentence the screen is supposed to carry.",
-      action: ${id === "empty" ? '"Add a security"' : "null"}};
-    const h = allocationView(); S.allocation = a; return h;
-  })()`);
-}
-// The screen itself failing to build is the only case that renders nothing.
-// A journal whose STRATEGY cannot be asked keeps a full allocation view —
-// that is the "unavailable" standing above — because this is the only screen
-// a purchase into a name you already hold can start from, and a screen that
-// disappears is a block on recording however it is described.
-check("allocate:unbuildable", `(() => {
-  const a = S.allocation; S.allocation = null;
-  const h = allocationView(); S.allocation = a; return h; })()`);
-// The cash record, both of its branches. An unopened one is the state every
-// journal starts in and the one where free cash, the account total and every
-// weight are absent — so it has to name the way out rather than render as a
-// screen that failed to load. The opened one has to keep the two kinds of
-// money apart on the screen, because a single total is the figure this whole
-// record replaced.
-check("cash:unopened", `(() => {
-  const c = S.cash;
-  S.cash = { ...(c || {}), opened: null, ledger: [],
-             balance: { status: "absent", reason: "no opening balance yet" },
-             movement: {}, kinds: (c || {}).kinds || {},
-             offers: Object.keys((c || {}).kinds || {}).slice(0, 1) };
-  const h = cashRecord(); S.cash = c; return h; })()`);
-check("cash:opened", "cashRecord()");
-run('tab = "holdings";');
-for (const s of state.securities) {
-  check(`detail:${s.ticker}`, `detailView(find(${JSON.stringify(s.ticker)}))`);
-}
-/* The detail page describes ONE holding period, and which one is now carried
-   by the click rather than assumed to be the newest. Rendered per period on
-   any security that has more than one, and the two renderings are compared:
-   a page that draws the same thing whichever row you came from is the defect
-   this exists to catch, and it is invisible to a smoke test that only asks
-   whether something rendered.
+run('filter = "everything";');
+await check("strategy", "strategyView()");
+await check("measures", "measuresView()");
+await check("measures:whole-bank", `(() => {
+  showWholeBank = true; const h = measuresView(); showWholeBank = false; return h; })()`);
+await check("data", "dataView()");
+await check("analytics", "analyticsView()");
+await check("welcome", "(() => { const j = S.journal; S.journal = null;"
+  + " const h = welcomeView(); S.journal = j; return h; })()");
+await check("missing-strategy",
+  "(() => { const a = S.strategy, b = S.strategy_missing;"
+  + " S.strategy = null; S.strategy_missing = S.journal.strategy;"
+  + " const h = strategyView(); S.strategy = a; S.strategy_missing = b;"
+  + " return h; })()");
 
-   The bucket used to decide it, so a name closed and bought back showed its
-   open position however you arrived — including from the closed round trip
-   under Previous holdings, which is the row that was clicked. */
+// Detail per security, the coverage panel primed with its captured reply so
+// the whole page renders rather than the loading placeholder.
+const prime = (ticker) => {
+  const cov = (state.__coverage || {})[ticker];
+  run(`C.coverage = ${JSON.stringify(cov && cov.ok
+    ? cov.coverage || { entries: [] } : { entries: [] })};`
+    + ` C.coverageFor = ${JSON.stringify(ticker)}; C.loadingCoverage = false;`);
+};
+for (const s of state.securities) {
+  const t = JSON.stringify(s.ticker);
+  prime(s.ticker);
+  run(`openTicker = ${t};`);
+  await check(`detail:${s.ticker}`, `detailView(find(${t}))`);
+  run("openTicker = null;");
+}
+/* The page describes ONE holding period, carried by the click. A page that
+   draws the same thing whichever row you came from is the defect. */
 for (const s of state.securities) {
   const cycles = s._cycles || [];
   if (cycles.length < 2) continue;
   const drawn = new Map();
+  prime(s.ticker);
   for (const c of cycles) {
-    const html = String(check(
+    const html = String(await check(
       `detail:${s.ticker}:period:${c.seq}`,
       `(() => { const was = openPeriodBuy;`
+      + ` openTicker = ${JSON.stringify(s.ticker)};`
       + ` openPeriodBuy = ${JSON.stringify(c.buys[0])};`
       + ` const h = detailView(find(${JSON.stringify(s.ticker)}));`
-      + ` openPeriodBuy = was; return h; })()`));
+      + ` openPeriodBuy = was; openTicker = null; return h; })()`));
     drawn.set(c.seq, html);
-    // Each period's page has to be about that period. An open one is priced
-    // and marked to market; a closed one has an exit price and a return over
-    // its life, and neither sentence is true of the other.
-    const wants = c.open ? "Since buy" : "Exit price";
+    const wants = c.open ? "Since buy" : "While held";
     if (html && !html.includes(wants)) {
       problems.push(`detail:${s.ticker}:period:${c.seq}: `
-        + `${c.open ? "an open" : "a closed"} holding rendered without `
-        + `"${wants}"`);
+        + `${c.open ? "an open" : "a closed"} holding rendered without "${wants}"`);
     }
     if (html && !html.includes(c.open ? c.opened : c.closed)) {
       problems.push(`detail:${s.ticker}:period:${c.seq}: the page does not `
@@ -232,160 +195,109 @@ for (const s of state.securities) {
       + "page, so the period the reader clicked is not reaching it");
   }
 }
-/* The data-coverage panel with its payload already in hand.
-   The detail page above loads it asynchronously, so a synchronous render
-   only ever draws the "reading the stored filings" placeholder — which
-   means the panel's real body, thirty-odd rows and everything the host says
-   about the stored data, had never been rendered here at all. Primed the
-   same way the allocation standings above are, for the same reason.
 
-   Both branches of the industry line are drawn, because different journals
-   reach them and the absent one is the commoner. That the payload carries
-   the field at all is pinned on the Python side, in test_view_smoke.py — a
-   condition here that vanished along with the thing it asserts would pass
-   precisely when the field stopped being served. */
-const industryOf = (s) => ((((((state.__coverage || {})[s.ticker] || {})
-  .coverage || {}).status) || {}).industry || {}).industry || {};
-const classified = state.securities.find(
-  (s) => industryOf(s).status === "known");
-const unclassified = state.securities.find(
-  (s) => industryOf(s).status === "absent");
-for (const s of [classified, unclassified]) {
-  if (!s) continue;
-  const t = JSON.stringify(s.ticker);
-  check(`coverage:${s.ticker}`, `(() => {
-    const held = [C.coverage, C.coverageFor];
-    C.coverage = ${JSON.stringify(state.__coverage[s.ticker])};
-    C.coverageFor = ${t};
-    const h = coverageSection(find(${t}));
-    [C.coverage, C.coverageFor] = held;
-    return h; })()`);
-}
-// The dialogs render from a strategy's declaration and from the lot list,
-// which is where a renamed key or an unhandled field type shows up first.
-// They write into the stub's dialog body rather than returning markup.
-/* Title, blurb and body — all three. The blurb is where a dialog says what
-   an action costs, and reading only the body meant a confirmation could lose
-   the sentence naming the cost with nothing here noticing. */
-const dlg = (label, code) => check(label,
-  `${code}; [document.getElementById("dlgtitle").textContent,
-             document.getElementById("dlgblurb").textContent,
-             document.getElementById("dlgbody").innerHTML].join("\\n")`);
-dlg("dlg:settings", "dlgSettings()");
-dlg("dlg:cash-open", `(() => {
-  const c = S.cash;
-  S.cash = { ...(c || {}), opened: null,
-             offers: Object.keys((c || {}).kinds || {}).slice(0, 1) };
-  dlgCash(""); S.cash = c; })()`);
-dlg("dlg:cash-move", 'dlgCash("")');
-/* The one dialog that writes into an append-only record. It renders from a
-   change on one of two records, and each of those has its own shape — a
-   strategy's settings move as whole values, a measure's definition moves per
-   field and sometimes moves in a way nothing can quote. It was never
-   rendered here at all, which is how it came to read the wrong list when a
-   second record appeared beside the first. */
-for (const c of state.pending_changes || []) {
-  dlg(`dlg:explain-${c.record}`,
-      `dlgExplain(${JSON.stringify(c.record)}, ${JSON.stringify(c.seq)})`);
+// ---------------------------------------------------------- margin panes
+await pane("m:rest", "rest", null);
+await pane("m:journal", "journal", {});
+await pane("m:newjournal", "newjournal", {});
+await pane("m:renamejournal", "renamejournal", {});
+await pane("m:deletejournal", "deletejournal", {});
+await pane("m:add", "add", {});
+await pane("m:cash", "cash", {});
+await pane("m:settings", "settings", {});
+await pane("m:sources", "sources", {});
+await pane("m:valdefaults", "valdefaults", {});
+await pane("m:importdata", "importdata", {});
+await pane("m:emptyjournal", "emptyjournal", {});
+await pane("m:timeframe", "timeframe", {});
+for (const which of ["value", "cash", "saying", "blind", "positions"]) {
+  await pane(`m:acct:${which}`, "acct", { which });
 }
 if (state.list) {
-  dlg("dlg:importlist", "dlgImportList()");
-  dlg("dlg:passover", 'dlgPassOver("ZZZZ")');
+  await pane("m:importlist", "importlist", {});
+  await pane("m:passover", "passover", { t: "ZZZZ", name: "Zed Corp" });
 }
-dlg("dlg:newjournal", "dlgNewJournal()");
-dlg("dlg:renamejournal", "dlgRenameJournal()");
-// The one destructive dialog in the program. It has to say what goes, and it
-// has to offer the export first — a confirmation that does not name the cost
-// is a confirmation nobody read.
-dlg("dlg:deletejournal", "dlgDeleteJournal()");
+for (const c of state.pending_changes || []) {
+  await pane(`m:explain:${c.record}`, "explain", { record: c.record, seq: c.seq });
+}
+for (const v of (state.strategy || {}).values || []) {
+  await pane(`m:declared:${v.id}`, "declared", { kind: "value", id: v.id });
+}
+for (const s of state.securities) {
+  const t = s.ticker;
+  await pane(`m:row:${t}`, "row", { t });
+  await pane(`m:state:${t}`, "state", { t });
+  await pane(`m:price:${t}`, "price", { t });
+  await pane(`m:datastatus:${t}`, "datastatus", { t });
+  await pane(`m:thesis:${t}`, "thesis", { t });
+  await pane(`m:thesisedit:${t}`, "thesisedit", { t });
+  await pane(`m:values:${t}`, "values", { t });
+  await pane(`m:more:${t}`, "more", { t });
+  await pane(`m:snapshot:${t}`, "snapshot", { t });
+  await pane(`m:readings:${t}`, "readings", { t });
+  await pane(`m:buy:${t}`, "buy", { t });
+  await pane(`m:backfill:${t}`, "backfill", { t });
+  for (const c of s._cycles || []) {
+    if (!c.open) await pane(`m:row:${t}:${c.seq}`, "row", { t, period: c.seq });
+  }
+  for (const lot of (s._lots || []).concat(s._sales || [])) {
+    await pane(`m:lot:${t}:${lot.id}`, "lot", { t, id: lot.id });
+  }
+  for (const j of s._judgements || []) {
+    await pane(`m:judgement:${t}:${j.id}`, "judgement", { t, id: j.id });
+  }
+  for (const id of s._cited || []) {
+    await pane(`m:measure:${t}:${id}`, "measure", { sid: id, t });
+  }
+  (s.notes || []).forEach((n, i) => pane(`m:note:${t}:${i}`, "note", { t, i }));
+  for (const row of ((s._snapshots || {}).rows || [])) {
+    if (!row.discarded) {
+      await pane(`m:readings:${t}:${row.seq}`, "readings", { t, seq: row.seq });
+      await pane(`m:discardsnap:${t}:${row.seq}`, "discardsnap", { t, seq: row.seq });
+      break;
+    }
+  }
+}
 const holding = state.securities.find((s) => s.bucket === "holdings");
-if (holding) {
-  // dlgSell is async and takes a date. Today's is the ordinary screen; a past
-  // one fetches a preview and renders the reconstruction notice, which is the
-  // branch that freezes a verdict for a day nobody was standing in.
-  await run(`dlgSell(find(${JSON.stringify(holding.ticker)}))`);
-  check("dlg:sell", `document.getElementById("dlgbody").innerHTML`);
-  await run(`dlgSell(find(${JSON.stringify(holding.ticker)}), "2026-03-02")`);
-  check("dlg:sell-from-history",
-        `document.getElementById("dlgbody").innerHTML`);
-  // The preview not answering must not stop a sale being recorded. Today's
-  // dialog falls back to the live payload, which for today IS the same
-  // figures — a screen that refuses to appear is a gate however it is
-  // described, and the sale has already happened.
-  //
-  // The body is emptied first, so what is checked is what THIS render put
-  // there. The stub's elements persist between runs, and a dialog that never
-  // opened would otherwise be asserted against the markup of the one before
-  // it — a check that passes precisely when the screen is missing.
-  run("__saved = __state.__sale_previews; __state.__sale_previews = {};"
-      + ' document.getElementById("dlgbody").innerHTML = "";');
-  await run(`dlgSell(find(${JSON.stringify(holding.ticker)}))`);
-  check("dlg:sell-no-preview",
-        `document.getElementById("dlgbody").innerHTML`);
+if (holding && state.__sale_previews) {
+  const t = holding.ticker;
+  const days = Object.keys(state.__sale_previews)
+    .filter((k) => k.startsWith(t + "@")).map((k) => k.split("@")[1]).sort();
+  const past = days[0], today = days[days.length - 1];
+  await check("m:sell", `paneSell(${JSON.stringify(t)}, ${JSON.stringify(today)})`);
+  await check("m:sell-from-history",
+    `paneSell(${JSON.stringify(t)}, ${JSON.stringify(past)})`);
+  // The preview not answering must not stop today's sale being recorded.
+  run("__saved = __state.__sale_previews; __state.__sale_previews = {};");
+  await check("m:sell-no-preview",
+    `paneSell(${JSON.stringify(t)}, ${JSON.stringify(today)})`);
   run("__state.__sale_previews = __saved;");
 }
-
-// Entering a position out of your own records: the empty form, and the form
-// after a check has come back with a verdict per row — including a row
-// nothing could be rebuilt for, which is the whole reason this exists.
-// The footer matters here and nowhere else: the promise this dialog makes is
-// that nothing is written until it has been checked, and the only place that
-// promise is visible is the button's own label changing from one to the
-// other. A body-only capture would let both presses read "Record".
-await run(`dlgBackfill(find(${JSON.stringify(state.securities[0].ticker)}))`);
-check("dlg:backfill", `[document.getElementById("dlgbody").innerHTML,
-                       document.getElementById("dlgfoot").innerHTML].join("")`);
 if (state.__backfill) {
-  await run(`dlgBackfill(find(${JSON.stringify(state.securities[0].ticker)}),`
-    + ` {rows: __state.__backfill_rows, recollection: "",`
-    + `  preview: __state.__backfill})`);
-  check("dlg:backfill-checked",
-        `[document.getElementById("dlgbody").innerHTML,
-          document.getElementById("dlgfoot").innerHTML].join("")`);
+  await check("m:backfill-checked",
+    `paneBackfill(${JSON.stringify(state.securities[0].ticker)},`
+    + ` { rows: __state.__backfill_rows, recollection: "",`
+    + ` preview: __state.__backfill })`);
 }
-
-// The three dialogs that write to a dated record. Each renders one branch
-// when the record is empty and a different one when it is not — the second
-// shows the standing version above the fields, which is the branch that
-// dereferences the payload and so the branch that breaks when a key moves.
-const written = state.securities.find(
-  (s) => ((s._thesis || {}).history || []).length);
-const unwritten = state.securities.find(
-  (s) => !((s._thesis || {}).history || []).length);
-if (written) dlg("dlg:thesis-amend",
-                 `dlgThesis(find(${JSON.stringify(written.ticker)}))`);
-if (unwritten) dlg("dlg:thesis-first",
-                   `dlgThesis(find(${JSON.stringify(unwritten.ticker)}))`);
 const valued = state.securities.find(
   (s) => (s._valuation || {}).status === "known");
-if (valued) {
-  // `pf` passed explicitly: undefined would send it round the backend for
-  // its prefills, and there is no backend here.
-  dlg("dlg:ev", `dlgEV(find(${JSON.stringify(valued.ticker)}), null,`
-    + ` {prefill: {}, references: {}})`);
+if (valued) await pane("m:ev", "ev", { t: valued.ticker });
+const compared = Object.keys(state.__compare || {})
+  .find((t) => state.__compare[t].ok);
+if (compared) {
+  await check("m:comparison",
+    `comparisonHtml(${JSON.stringify(compared)},`
+    + ` __state.__compare[${JSON.stringify(compared)}].comparison)`);
+} else {
+  gap("no snapshot comparison was captured, so the side-by-side rendering "
+    + "is unexercised");
 }
 
-// The purchase dialog, against a REAL preview payload captured from the same
-// Api the window calls. It is the one dialog that renders from a backend
-// reply rather than from get_state, so it is the one place the two sides can
-// hold different shapes for the same document and nothing notices — which is
-// exactly what happened: it read the standing view and was handed a raw
-// record entry, so it told people who had written a thesis that they had not.
-for (const ticker of Object.keys(state.__previews || {})) {
-  // dlgBuy is async; the stub resolves immediately, so awaiting it is enough
-  // before reading the body. What it must and must not say is asserted with
-  // everything else, further down — `must` is not declared yet up here.
-  await run(`dlgBuy(find(${JSON.stringify(ticker)}))`);
-  check(`dlg:buy:${ticker}`, `document.getElementById("dlgbody").innerHTML`);
-}
-// A change row — how far a measure has moved since one of your own
-// purchases. No fixture journal here has two purchases into one holding, so
-// nothing in either payload carries one, and the branch that renders it
-// would ship unexercised: a change is its own subject kind, with its own
-// unit and its own sign rule, and the whole risk is a reader taking "6.0%"
-// for the margin rather than for the six points it fell.
-check("evidence:change", `(() => {
-  const row = (id, unit, value) => evidenceRow({
+// A change row — its own subject kind, its own unit and sign rule: a
+// distance between two readings always shows its sign, in every unit.
+await check("evidence:change", `(() => {
+  const s = S.securities[0];
+  const row = (id, unit, value) => evidenceRow(s, {
     group: null,
     subject: {kind: "change", id, since: "first-purchase", unit,
               label: "Gross margin, change since you first bought",
@@ -402,30 +314,8 @@ check("evidence:change", `(() => {
           row("current_ratio", "ratio", -1.1)].join("");
 })()`);
 
-// the explain-this-figure branch, which only renders when a tip is open
-if (state.securities.length) {
-  run('tipOpen = "ev:0";');
-  check("detail-with-tip",
-        `detailView(find(${JSON.stringify(state.securities[0].ticker)}))`);
-  run("tipOpen = null;");
-}
-// the two screens a running app reaches only in trouble
-check("welcome", "(() => { const j = S.journal; S.journal = null;"
-  + " const h = welcomeView(); S.journal = j; return h; })()");
-check("missing-strategy",
-  "(() => { const a = S.strategy, b = S.strategy_missing;"
-  + " S.strategy = null; S.strategy_missing = S.journal.strategy;"
-  + " const h = strategyView() + listView();"
-  + " S.strategy = a; S.strategy_missing = b; return h; })()");
-
-// The gate arithmetic, exercised directly. Everything else here goes through
-// the stub DOM, whose querySelectorAll returns nothing — so applyGates is
-// reached on every dialog and does nothing on any of them. It is the one
-// piece of view logic that decides whether a question is ASKED, and a gate
-// that never opens reads as a question the strategy does not have rather
-// than as a bug. The host's own answer to the same gate is pinned in
-// tests/test_contract.py; these two have to agree or the user is shown a
-// form the save disagrees with.
+// The gate arithmetic, exercised directly — the stub DOM's querySelectorAll
+// returns nothing, so applyGates does nothing on any rendered form above.
 run(`__gate = (gateIs, answer) => {
   const f = { dataset: { gate: "g", gateIs: JSON.stringify(gateIs) },
               hidden: null };
@@ -446,17 +336,13 @@ for (const [gateIs, answer, hidden, why] of [
   const got = run(`__gate(${JSON.stringify(gateIs)}, ${JSON.stringify(answer)})`);
   if (got !== hidden) {
     problems.push(`applyGates(${JSON.stringify(gateIs)}, `
-                  + `${JSON.stringify(answer)}): hidden=${got}, expected `
-                  + `${hidden} — ${why}`);
+      + `${JSON.stringify(answer)}): hidden=${got}, expected ${hidden} — ${why}`);
   }
 }
 
-// A qualified figure — one that borrowed a share class's close, say — has to
-// render its qualification wherever the number renders. The payload is
-// stamped here, last, rather than built upstream: this harness is about what
-// the view does with what it is handed, and that the host hands the caution
-// over at all is pinned against a real multi-class filer in
-// tests/test_cautions_travel.py.
+// A qualified figure carries its qualification wherever the number renders:
+// the ° mark holds the sentences on hover, the margin says them whole, and
+// a pane where the figure is acted on says them inline.
 const QUAL = "Class B has no stored close and is valued at the Class A close";
 run(`__q = ${JSON.stringify(QUAL)};`);
 const stamped = run(`(() => {
@@ -475,422 +361,288 @@ const stamped = run(`(() => {
 })();`);
 if (!stamped) {
   gap("no security in the payload has a computed value, so the "
-      + "qualified-figure rendering is unexercised");
+    + "qualified-figure rendering is unexercised");
 } else {
-  check("qualified:detail", "detailView(__qs)");
-  dlg("qualified:values", "dlgMetrics(__qs)");
+  prime(stamped.ticker);
+  run(`openTicker = ${JSON.stringify(stamped.ticker)};`);
+  await check("qualified:detail", "detailView(__qs)");
+  run("openTicker = null;");
+  await check("qualified:values", "PANES.values({ t: __qs.ticker })");
+  await check("qualified:measure",
+    "PANES.measure({ sid: Object.keys(__qs._computed)[0], t: __qs.ticker })");
 }
 
-// Substance: a screen that renders empty is not a screen that works. Each
-// of these is load-bearing text the pivot is supposed to have put there.
-// Text a screen must NOT carry. A button offered where the backend would
-// refuse the action is a dead end the user finds by clicking it.
+// ------------------------------------------------------- must / must not
 const mustNot = [];
 const must = [
-  ["holdings", state.journal.name, "the open journal is named"],
-  ["holdings", "Journal", "the journal switcher is present"],
-  // wording unique to the history list, not to the banner above it — the
-  // banner also says "rule changes" and would mask the list disappearing
-  ["strategy", "append-only: entries are never edited",
-   "the rule-change history is reachable"],
+  ["mast", state.journal.name, "the open journal is named in the chip"],
+  ["mast", 'data-m="journal"', "the journal menu is reachable"],
+  ["mast", "Something to say", "the header reports; it never demands"],
   ["strategy", state.journal.strategy.name, "the stamped strategy is named"],
-  ["strategy", 'data-act="settings"', "the settings screen is reachable"],
+  ["strategy", "Append-only: entries are never edited",
+   "the change histories say what they are"],
+  ["strategy", 'data-m="settings"', "the answers screen is reachable"],
+  ["strategy", "read-only", "the thresholds say they cannot be edited here"],
   ["missing-strategy", "not installed", "a missing strategy says so"],
   ["welcome", "one strategy", "the empty state explains the commitment"],
+  ["welcome", "exit", "existing holdings are framed as evaluated for exit"],
+  ["welcome", "tiingo.com", "the setup wall links the way in"],
   ["data", "Back up", "export is reachable"],
-  ["allocate:cash", "Nothing qualifies today.",
-   "the ordinary outcome renders as a position rather than an empty screen"],
-  // The host writes what a standing MEANS; this only proves the view puts it
-  // on the page. What those sentences actually say is pinned in
-  // tests/test_allocation.py, where the copy lives — asserting the backend's
-  // wording against a stub the harness itself wrote would prove nothing.
-  ["allocate:cash", "A sentence the screen is supposed to carry.",
-   "the standing's explanation reaches the screen, not just its headline"],
-  ["allocate:empty", "Add a security",
-   "the one standing with an action offers it"],
-  ["allocate:unbuildable", "nothing to allocate against",
-   "a screen that could not be built says so instead of rendering blank"],
-  ["dlg:deletejournal", "Export it first",
-   "the destructive dialog offers the backup before the deletion"],
-  ["dlg:deletejournal", "none of it can be recovered",
-   "the destructive dialog says the record is not recoverable"],
-  ["dlg:deletejournal", 'name="confirm_name"',
-   "the deletion is confirmed by typing the name, not by a bare yes"],
-  ["dlg:renamejournal", 'name="name"', "the rename dialog asks for a name"],
-  // A distance between two readings always shows its sign, in every unit.
-  // Unsigned, "0.20" beside a current ratio of 2.4 reads as a level rather
-  // than as a move, and the reader has no way to tell which.
+  ["m:deletejournal", "Export it first",
+   "the destructive pane offers the backup before the deletion"],
+  ["m:deletejournal", "none of it can be recovered",
+   "the destructive pane names the cost"],
+  ["m:deletejournal", 'name="confirm_name"',
+   "deletion is confirmed by typing the name, not a bare yes"],
+  ["m:renamejournal", 'name="name"', "the rename pane asks for a name"],
+  ["m:add", "Fetch its data now", "one added name auto-fetches by default"],
   ["evidence:change", "−6.0 pp", "a percent measure moves in points"],
   ["evidence:change", "+2.0 pp", "a rise shows its sign"],
   ["evidence:change", "+0.20", "a unit that does not sign itself is signed"],
   ["evidence:change", "change since you first bought",
    "the row says which purchase it measures from"],
 ];
-/* An entry typed in out of somebody's records must be visibly distinct from
-   one captured at the time, everywhere it appears — and a screen that renders
-   it as an ordinary record is the one failure this whole change exists to
-   prevent. Pushed conditionally, like every other payload-dependent
-   assertion here: a journal with nothing entered from history has nothing to
-   mark, and demanding the mark of it would be testing the fixture. */
-const lotsOf = (s) => (s._lots || []).concat(s._sales || []);
+mustNot.push(
+  ["data", "Load sample", "the sample-journals button left the interface (§6.30)"],
+  [`m:snapshot:${state.securities[0].ticker}`, 'type="date"',
+   "a saved reading offers no date picker — today only, by design"]);
+must.push([`m:snapshot:${state.securities[0].ticker}`, "no date field",
+  "and says why not"]);
+
 const fromHistory = state.securities.find((s) => s._backfilled);
 if (fromHistory) {
   must.push(
-    ["holdings", "from history",
-     "the list marks a position part of which was entered afterwards"],
-    [`detail:${fromHistory.ticker}`, "entered from history",
-     "the detail page says so before a single figure is read"],
-    );
+    ["list:everything", "from history",
+     "the list marks a position entered afterwards"],
+    [`detail:${fromHistory.ticker}`, "from history",
+     "the page says so before a single figure is read"]);
 }
-/* What a strategy will not evaluate, and what that looks like when it lands.
-
-   Both halves are asserted because they are read by different people at
-   different times: somebody reading the strategy needs to know the boundary
-   exists before they meet it, and somebody looking at a security that fell
-   outside it needs the verdict to say so in words rather than in a blank. A
-   boundary that only ever appears as a verdict is one a reader meets by
-   surprise, on the one security where it is least useful to be surprised.
-
-   Gated on the payload, like every other conditional here: a strategy that
-   declines nothing has nothing to draw, and demanding it would be testing
-   the fixture. */
 const declines = (state.strategy || {}).declines || [];
 if (declines.length) {
   must.push(
     ["strategy", "What it will not evaluate",
-     "the strategy screen says the boundary exists before a verdict does"],
-    ["strategy", declines[0].label,
-     "and names the kind of company rather than only that there is one"],
-    ["strategy", declines[0].because,
-     "in this strategy's own words, not the host's"]);
+     "the boundary exists on the strategy page before a verdict shows it"],
+    ["strategy", declines[0].label, "and names the kind of company"],
+    ["strategy", declines[0].because, "in the strategy's own words"]);
 }
-/* A render type only the host produces must never appear in the list of what
-   a strategy will never say. Nothing a strategy declares could reach one, so
-   listing it reports the contract's own shape as a position this strategy
-   took — and it is the sentence most likely to be believed, because it sits
-   under a heading that is true of everything beside it.
-
-   Unconditional and derived: every host-only type, on every journal. The
-   meaning of one can only reach the strategy screen through that list, since
-   the states above it are the strategy's own and it cannot declare one. */
 Object.values(state.render_types || {}).filter((t) => t.host_only)
-  .forEach((t) => mustNot.push(
-    ["strategy", t.meaning,
-     "a verdict only the host produces is not something this strategy "
-     + "declined to have"]));
+  .forEach((t) => mustNot.push(["strategy", t.meaning,
+    "a verdict only the host produces is not something this strategy "
+    + "declined to have"]));
 const outOfScope = state.securities.find(
   (s) => (s._decision || {}).render === "inapplicable");
 if (outOfScope) {
   must.push(
     [`detail:${outOfScope.ticker}`, "Outside these rules",
      "a company these rules do not cover says so as a verdict"],
-    [`detail:${outOfScope.ticker}`, "Produced by the journal itself",
-     "and says the strategy did not produce it"]);
+    [`m:state:${outOfScope.ticker}`, "Produced by the journal itself",
+     "and the state gloss says the strategy did not produce it"]);
 }
-// What the SEC says a filer is, on the page that reports every other fact
-// about the stored data. A figure that decides whether a whole rule set
-// applies, with nowhere on screen to read it, is exactly the invisible input
-// this program does not have.
+const industryOf = (s) => ((((((state.__coverage || {})[s.ticker] || {})
+  .coverage || {}).status) || {}).industry || {}).industry || {};
+const classified = state.securities.find(
+  (s) => industryOf(s).status === "known");
+const unclassified = state.securities.find(
+  (s) => s._data && industryOf(s).status === "absent");
 if (classified) {
-  must.push(
-    [`coverage:${classified.ticker}`, "What the SEC classifies this",
-     "the data panel reports the filer's kind"],
-    [`coverage:${classified.ticker}`, "SIC ",
-     "and the code it says it with, so the claim can be checked"]);
+  must.push([`m:datastatus:${classified.ticker}`, "The SEC classifies",
+    "the data gloss reports the filer's kind"]);
 }
 if (unclassified) {
-  must.push(
-    [`coverage:${unclassified.ticker}`, "not established",
-     "a filer whose kind is not known says so rather than reading as an "
-     + "ordinary business"],
-    [`coverage:${unclassified.ticker}`, industryOf(unclassified).reason,
-     "and gives the host's own reason for it"]);
+  must.push([`m:datastatus:${unclassified.ticker}`, "not established",
+    "an unclassified filer says so rather than reading as ordinary"]);
 }
-// The two scorecard shapes, each gated on the journal actually having that
-// population. A panel demanded of a journal with nothing in it would be
-// testing the fixture rather than the screen.
 const card = state.override_scorecard || {};
 if ((card.unreconstructed || {}).n_purchases) {
-  must.push(["previous", "Could not be reconstructed",
-             "the scorecards report the third population rather than folding "
-             + "it into the override comparison"]);
+  must.push(["analytics", "Could not be reconstructed",
+    "the third population is reported apart, never folded in"]);
 }
-if ((card.live || {}).n_purchases && (card.reconstructed || {}).n_purchases) {
-  must.push(["previous", "seen at the time",
-             "the two cohorts are labelled where they are stacked"]);
+if (((card.live || {}).override || {}).n_purchases
+  && ((card.reconstructed || {}).override || {}).n_purchases) {
+  must.push(["analytics", "Seen at the time", "the cohorts are labelled"],
+    ["analytics", "Entered from history", "both of them"]);
 }
-// The security holding an entry nothing could be rebuilt for, and the one
-// holding a memory. Two different securities in general, and each assertion
-// asks its own — a page with a reconstruction on it need not have either.
 const noVerdict = state.securities.find(
-  (s) => lotsOf(s).some((l) => l.unreconstructed));
+  (s) => (s._lots || []).concat(s._sales || []).some((l) => l.unreconstructed));
 if (noVerdict) {
-  const page = `detail:${noVerdict.ticker}`;
+  const lot = (noVerdict._lots || []).concat(noVerdict._sales || [])
+    .find((l) => l.unreconstructed);
   must.push(
-    [page, "No verdict could be reconstructed",
-     "an entry nothing could be rebuilt for says that, not that it was an "
-     + "override"],
-    [page, "not</strong> counted as buying against a signal",
-     "and says explicitly that it is not counted as one"]);
-  mustNot.push(
-    // The sentence this whole change exists to stop. An entry nobody could
-    // rebuild a verdict for is not a decision taken without one — there was
-    // no screen, and no grey box anybody read and went past.
-    [page, "Bought without a signal",
-     "a gap in what can be reconstructed is not a decision"]);
+    [`detail:${noVerdict.ticker}`, "no verdict to rebuild",
+     "an entry nothing could be rebuilt for says what kind of gap it is"],
+    [`m:lot:${noVerdict.ticker}:${lot.id}`,
+     "not</b> counted as acting against a signal",
+     "and the record pane says it is not an override"]);
+  mustNot.push([`m:lot:${noVerdict.ticker}:${lot.id}`, "Bought without a signal",
+    "a gap in what can be reconstructed is not a decision"]);
 }
 const remembered = state.securities.find(
-  (s) => lotsOf(s).some((l) => ((l.snapshot || {}).recollection)));
+  (s) => (s._lots || []).concat(s._sales || []).some(
+    (l) => ((l.snapshot || {}).recollection || {}).text));
 if (remembered) {
-  must.push([`detail:${remembered.ticker}`, "Written in hindsight",
-             "a recollection is never presented as the case made at the "
-             + "time"]);
+  const lot = (remembered._lots || []).concat(remembered._sales || [])
+    .find((l) => ((l.snapshot || {}).recollection || {}).text);
+  must.push([`m:lot:${remembered.ticker}:${lot.id}`, "Written in hindsight",
+    "a recollection is never presented as the case made at the time"]);
 }
-if (state.__sale_previews) {
-  must.push(["dlg:sell-from-history", "not seen at the time",
-             "a backdated sale says what it is about to freeze was rebuilt"],
-            // Everything this dialog states about the position is a fact
-            // about the day in its own date field. It used to read the share
-            // count, the lot note and the reference close off the live
-            // payload — three sentences about today, against a picker set to
-            // 2026-03-02, the last of them a price it was inviting into a
-            // record that can never be corrected.
-            ["dlg:sell-from-history", "You held",
-             "a backdated sale says what was held on the day it is dated"],
-            ["dlg:sell-from-history", "2026-03-02",
-             "the count and the close it shows name the day they belong to"]);
-  mustNot.push(["dlg:sell-from-history", "You hold ",
-                "the live share count has no business on a backdated sale"]);
-  must.push(["dlg:sell", "You hold ",
-             "a sale recorded today says what is held today"],
-            ["dlg:sell-no-preview", "Shares sold",
-             "a preview that did not answer does not stop a sale being "
-             + "recorded"]);
-  // The one piece of mandatory friction on the sell side. Where the engine
-  // says the sale owes a written reason, the dialog has to ask for it — a
-  // preview that says "owed" against a form with no field is the asymmetry
-  // this closed, reintroduced in the view. Driven off the captured reply
-  // rather than a ticker named here, so it fires on whichever sale the
-  // fixture happens to make against a verdict.
-  for (const [key, reply] of Object.entries(state.__sale_previews)) {
-    if (!reply.reason_owed) continue;
-    const label = key.endsWith("@2026-03-02")
-      ? "dlg:sell-from-history" : "dlg:sell";
-    must.push([label, 'name="override_reason"',
-               "a sale against the signal asks for a written reason"],
-              [label, "goes against your own rules",
-               "and says plainly what it is going against"]);
-  }
-}
-// A sale that went against the signal renders the sentence written at the
-// time. A verdict without the reason somebody gave against it teaches
-// nothing, and this is the one place the two sit together.
 for (const s of state.securities) {
   const said = (s._sales || []).find((l) => (l.override || {}).reason
-                                            && l.rule_triggered === false);
+    && l.rule_triggered === false);
   if (!said) continue;
   must.push([`detail:${s.ticker}`, "against the signal",
-             "a sale nobody's rule called for is named as one"],
-            [`detail:${s.ticker}`, said.override.reason,
-             "and carries the reason written at the time"]);
+    "a sale nobody's rule called for is named as one"],
+    [`m:lot:${s.ticker}:${said.id}`, said.override.reason,
+     "and carries the reason written at the time"]);
   break;
 }
-if (state.__backfill) {
+if (holding && state.__sale_previews) {
   must.push(
-    ["dlg:backfill", "Add a purchase",
-     "the history form can be grown a row at a time"],
-    ["dlg:backfill", "Check these entries",
-     "nothing is recorded before it has been checked"],
-    ["dlg:backfill-checked", "nothing recorded yet",
-     "the checked form still says the record is untouched"],
-    ["dlg:backfill-checked", "no verdict to rebuild — not an override",
-     "the check names the rows that would record a gap rather than a "
-     + "decision"]);
-}
-
-if (stamped) {
-  // The whole point of carrying a caution: it is on screen beside the number
-  // it qualifies. The values dialog never rendered one at all.
-  must.push(["qualified:values", `Qualified — ${QUAL}`,
-             "the values dialog says what a computed figure rests on"]);
-  // The verdict's own figures, where a verdict cited any. A host state —
-  // "the strategy could not be asked" — cites nothing about the security by
-  // design, so there is nothing to qualify and nothing to assert.
-  if (stamped.cited) {
-    must.push(["qualified:detail", `Qualified — ${QUAL}`,
-               "a cited figure's qualification renders with the verdict"]);
-    // never a bare glyph, and never colour doing the work on its own
-    mustNot.push(["qualified:detail", "⚠",
-                  "a caution is not rendered as a warning glyph"]);
+    ["m:sell-from-history", "not seen at the time",
+     "a backdated sale says what it freezes was rebuilt"],
+    ["m:sell-from-history", "you held", "the count belongs to the chosen day"],
+    ["m:sell", "you hold", "a sale today says what is held today"],
+    ["m:sell", "never prefilled", "the price field says why it is empty"],
+    ["m:sell-no-preview", "Shares sold",
+     "a preview that did not answer does not stop a sale being recorded"]);
+  mustNot.push(["m:sell-from-history", "you hold ",
+    "the live share count has no business on a backdated sale"]);
+  for (const [key, reply] of Object.entries(state.__sale_previews)) {
+    if (!reply.reason_owed) continue;
+    const label = key.split("@")[1] < new Date().toISOString().slice(0, 10)
+      ? "m:sell-from-history" : "m:sell";
+    must.push([label, 'name="override_reason"',
+      "a sale against the signal asks for a written reason"],
+      [label, "goes against your own rules", "and says so plainly"]);
   }
 }
-// Everything the declaration asked for has to reach the settings form, and
-// everything the lots recorded has to reach the detail page. A field type
-// or a lot kind the view quietly drops renders as a shorter screen, which
-// is exactly the failure "correct by inspection" never catches.
+if (state.__backfill) {
+  const label = `m:backfill:${state.securities[0].ticker}`;
+  must.push(
+    [label, "Add a purchase", "the history form grows a row at a time"],
+    [label, "Check these entries", "nothing is recorded before it is checked"],
+    [label, "exit", "entered holdings are framed as evaluated for exit"],
+    ["m:backfill-checked", "nothing recorded yet",
+     "the checked form still says the record is untouched"],
+    ["m:backfill-checked", "no verdict to rebuild — not an override",
+     "the check names the rows that would record a gap"]);
+}
+if (valued) {
+  const v = valued._valuation;
+  must.push(["m:ev", "target price", "the no-target-price rule is stated"],
+    ["m:ev", 'name="ev_method"', "the method is chosen, not implied"],
+    ["m:ev", (v.claim || {}).made || "", "the standing claim says its day"]);
+}
+if (stamped) {
+  must.push(["qualified:measure", `Qualified — ${QUAL}`,
+    "the measure gloss says what the figure rests on"]);
+  must.push(["qualified:values", `Qualified — ${QUAL}`,
+    "the values pane says it inline, where the figure is acted on"]);
+  if (stamped.cited) {
+    must.push(["qualified:detail", QUAL,
+      "a cited figure's qualification travels to the page on the mark"]);
+    mustNot.push(["qualified:detail", "⚠",
+      "a caution is never a warning glyph"]);
+  }
+}
 for (const f of (state.strategy || {}).inputs || []) {
-  // Except the ones the host works out for itself. Those are not questions:
-  // the save refuses an answer for them, so a form field would collect a
-  // figure and discard it, and the reader would leave certain they had
-  // changed their balance. They still have to appear — as the figure, with
-  // where it came from — because a screen that simply dropped them would
-  // hide the number the whole account total is built on.
   if (f.answered_by === "host") {
-    mustNot.push(["dlg:settings", `name="in_${f.id}"`,
-                  `"${f.id}" is worked out by the journal and must not be `
-                  + "offered as a field"]);
-    must.push(["dlg:settings", f.label,
-               `the derived figure "${f.id}" is still shown on the settings `
-               + "screen"]);
+    mustNot.push(["m:settings", `name="in_${f.id}"`,
+      `"${f.id}" is worked out by the journal and must not be a field`]);
+    must.push(["m:settings", f.label,
+      `the derived figure "${f.id}" still shows`]);
     continue;
   }
-  must.push(["dlg:settings", `name="in_${f.id}"`,
-             `the declared input "${f.id}" reaches the settings form`]);
+  must.push(["m:settings", `name="in_${f.id}"`,
+    `the declared input "${f.id}" reaches the answers form`]);
 }
 for (const v of (state.strategy || {}).values || []) {
-  must.push(["dlg:settings", `name="cfg_${v.id}"`,
-             `the declared value "${v.id}" reaches the settings form`]);
+  mustNot.push(["m:settings", `name="cfg_${v.id}"`,
+    `the threshold "${v.id}" must not be editable in the app (§6.20)`]);
+  must.push(["strategy", v.label, `the threshold "${v.id}" is readable`]);
+  if (v.source && v.source.name) {
+    must.push([`m:declared:${v.id}`, v.source.name,
+      `"${v.id}" says where its number came from`]);
+  }
 }
-// A state the host says has a screen behind it must render the way in. A
-// blocked verdict with nothing to click is a trap, and it is the state a
-// strategy that gained a required input puts every journal into.
-//
-// The button is not enough on its own where the destination is built out of
-// the decision's own citations: a button leading to a section that is not on
-// the page is the same trap one click further along, and it looks like it
-// worked. The host refuses the verdict without the citation; this checks the
-// section the citation was supposed to produce actually rendered.
 const FIX_ANCHOR = { judgement: 'id="judgements"' };
 for (const s of state.securities) {
   const fix = ((s._decision || {}).state || {}).fix;
   if (fix) {
     must.push([`detail:${s.ticker}`, `data-act="${fix}"`,
-               `a blocked verdict offers the "${fix}" screen that resolves it`]);
+      `a blocked verdict offers the "${fix}" way out`]);
     if (FIX_ANCHOR[fix]) {
       must.push([`detail:${s.ticker}`, FIX_ANCHOR[fix],
-                 `the "${fix}" button has somewhere on this page to land`]);
+        `the "${fix}" button has somewhere on this page to land`]);
     }
   }
 }
-// Several of the emptiness guards below are only owed where a strategy
-// actually spoke. A journal blocked on setup is the host saying it could not
-// ask: it cites nothing about any security, so demanding cited content there
-// would fail the very screen that state exists for.
 const spoke = state.securities.some(
   (s) => (s._decision || {}).produced_by === "strategy");
-
-// A limit the host read out of a named setting has to say WHOSE it is, on
-// screen, beside the number. That attribution is the whole reason the
-// strategy is not allowed to state the figure itself, and it is also what
-// the override scorecard groups by — an attribution that never renders is
-// one nobody can check against the setting it claims.
 let attributed = 0;
 for (const s of state.securities) {
   for (const e of ((s._decision || {}).reason || {}).evidence || []) {
-    const src = (e.test || {}).threshold_from;
-    if (!src) continue;
+    if (!(e.test || {}).threshold_from) continue;
     attributed += 1;
-    must.push([`detail:${s.ticker}`, `— your ${src.label}`,
-               `${s.ticker}: the limit names the setting it was read from`]);
+    must.push([`detail:${s.ticker}`, `— your ${e.test.threshold_from.label}`,
+      `${s.ticker}: the limit names the setting it was read from`]);
   }
 }
 if (spoke && !attributed) {
-  gap("no verdict in the harness cites a limit by the setting it "
-      + "came from — the attribution renders against nothing");
+  gap("no verdict cites a limit by the setting it came from — "
+    + "the attribution renders against nothing");
 }
-
-// The heading a group renders as, and the rollup the host counted under it.
-// A group is not decoration: it is what tells a reader which rows were
-// disqualifying, and it is what the host refuses a contradicted buy on. If
-// it never draws, the reader is back to a flat list of fifteen.
 let headed = 0;
 for (const s of state.securities) {
   for (const g of ((s._decision || {}).reason || {}).groups || []) {
     headed += 1;
     must.push([`detail:${s.ticker}`, g.name,
-               `${s.ticker}: the "${g.name}" heading reaches the screen`]);
+      `${s.ticker}: the "${g.name}" heading reaches the screen`]);
     if (g.tested) {
-      must.push([`detail:${s.ticker}`, `${g.passed} of ${g.tested} passed`,
-                 `${s.ticker}: the rollup under "${g.name}" is on screen`]);
+      must.push([`detail:${s.ticker}`, `${g.passed} of ${g.tested}`,
+        `${s.ticker}: the rollup under "${g.name}" is on screen`]);
     }
   }
 }
 if (spoke && !headed) {
-  gap("no verdict in the harness gathers its evidence under a heading — "
-      + "the group rendering is unexercised");
+  gap("no verdict gathers its evidence under a heading — "
+    + "the group rendering is unexercised");
 }
-
-// Where a threshold came from, on the screen where someone is about to
-// change it. The claim used to live inside the explanation, which meant it
-// could be made once for a file and quietly fail to cover a value added
-// afterwards; rendered from the declaration, it cannot go missing.
-let attributedValues = 0;
-for (const v of (state.strategy || {}).values || []) {
-  if (!v.source || !v.source.name) continue;
-  attributedValues += 1;
-  must.push(["dlg:settings", v.source.name,
-             `the setting "${v.id}" says where its number came from`]);
-  must.push(["strategy", v.source.name,
-             `the strategy page says where "${v.id}" came from`]);
-}
-if ((state.strategy || {}).values && !attributedValues) {
-  gap("no declared value in the harness says where its number came from — "
-      + "the attribution renders against nothing");
-}
-
-// The questions no filing answers. Three renderings have to work: an
-// answered one showing the mark and the reasoning behind it, an unanswered
-// one showing the question and a way to answer it, and the earlier
-// assessments an append-only record keeps — which are the whole reason for
-// keeping them and are invisible if only the newest one draws.
 const judged = state.securities.filter((s) => (s._judgements || []).length);
 if (spoke && !judged.length) {
-  gap("no security in the payload has a judgement to answer, so "
-      + "the whole judgement surface renders against nothing");
+  gap("no security has a judgement to answer — the surface is unexercised");
 }
 let answered = 0, unanswered = 0, revised = 0;
 for (const s of judged) {
-  must.push([`detail:${s.ticker}`, "Your judgement",
-             `${s.ticker} shows the questions it was asked`]);
+  must.push([`detail:${s.ticker}`, "Questions only you can answer",
+    `${s.ticker} shows the questions it was asked`]);
   for (const j of s._judgements) {
-    must.push([`detail:${s.ticker}`, j.label,
-               `${s.ticker}: "${j.id}" is named on the page`]);
+    must.push([`detail:${s.ticker}`, j.label, `${s.ticker}: "${j.id}" is named`]);
+    must.push([`detail:${s.ticker}`, `data-jid="${j.id}"`,
+      `${s.ticker}: "${j.id}" can be answered from the page`]);
     if (j.mark) {
       answered += 1;
-      must.push([`detail:${s.ticker}`, j.reasoning,
-                 `${s.ticker}: the reasoning behind "${j.id}" is on screen`]);
+      must.push([`m:judgement:${s.ticker}:${j.id}`, j.reasoning,
+        `${s.ticker}: the reasoning behind "${j.id}" is readable`]);
     } else {
       unanswered += 1;
-      // Unanswered is not a fail, and it must never be dressed as one.
       mustNot.push([`detail:${s.ticker}`, "Failed",
-                    `${s.ticker}: an unassessed question reads as a failure`]);
+        `${s.ticker}: an unassessed question reads as a failure`]);
     }
     if ((j.history || []).length > 1) {
       revised += 1;
-      must.push([`detail:${s.ticker}`, j.history[1].reasoning,
-                 `${s.ticker}: the earlier assessment of "${j.id}" survives`]);
+      must.push([`m:judgement:${s.ticker}:${j.id}`, j.history[1].reasoning,
+        `${s.ticker}: the earlier assessment of "${j.id}" survives`]);
     }
-    // Answered or not, there is always a way to record one. A verdict that
-    // waits on a judgement with nothing to click is the trap.
-    must.push([`detail:${s.ticker}`, `data-jid="${j.id}"`,
-               `${s.ticker}: "${j.id}" can be answered from the page`]);
   }
 }
 for (const [n, what] of [[answered, "answered"], [unanswered, "unanswered"],
                          [revised, "revised"]]) {
-  if (spoke && !n) {
-    gap(`no ${what} judgement in the payload — that rendering is `
-        + "unexercised and would pass however broken it is");
-  }
+  if (spoke && !n) gap(`no ${what} judgement in the payload — that rendering `
+    + "is unexercised");
 }
-/* Every scalar a decision's payload carries has to reach the screen.
-
-   `esc(undefined)` is the empty string, so a payload key the view reads by
-   the wrong name does not throw and does not print the word "undefined" —
-   it prints nothing at all, and "Exit due" with no date beside it is a
-   scheduled exit whose day has silently gone missing. Checked generically,
-   over whatever keys the payload happens to carry, so a render type added
-   later is covered without this being edited. */
+// Every scalar a decision's payload carries reaches the verdict card:
+// esc(undefined) is the empty string, so a key read by the wrong name prints
+// nothing at all, and "exit due" with no day is a scheduled exit gone silent.
 for (const s of state.securities) {
   const decision = s._decision || {};
   const wanted = [];
@@ -898,10 +650,6 @@ for (const s of state.securities) {
     if (node === null || node === undefined) return;
     if (typeof node === "object") { Object.values(node).forEach(walk); return; }
     if (typeof node === "boolean") return;
-    /* Figures, dates and prose — the parts that mean something on their own
-       and vanish silently when read by the wrong key. A payload's unit
-       discriminator ("weight", "shares") is not among them: the view turns
-       it into a phrase rather than printing the word. */
     if (typeof node === "number" || /^\d{4}-\d{2}-\d{2}$/.test(node)
         || String(node).includes(" ")) wanted.push(String(node));
   };
@@ -909,457 +657,225 @@ for (const s of state.securities) {
   if (!wanted.length) continue;
   const html = String(run(`(() => { const was = openTicker;`
     + ` openTicker = ${JSON.stringify(s.ticker)};`
-    + ` const h = decisionSection((find(${JSON.stringify(s.ticker)}) || {})._decision);`
+    + ` const h = verdictCard(find(${JSON.stringify(s.ticker)}),`
+    + ` find(${JSON.stringify(s.ticker)})._decision);`
     + ` openTicker = was; return h; })()`));
-  /* The view escapes what it prints, so an apostrophe in a sentence is
-     `&#39;` on the page. Compared both ways rather than only raw. */
-  const escaped = (v) => v.replace(/[&<>"']/g, (c) => ({
+  const escd = (v) => v.replace(/[&<>"']/g, (c) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
   }[c]));
   for (const value of wanted) {
-    if (!html.includes(value) && !html.includes(escaped(value))) {
+    if (!html.includes(value) && !html.includes(escd(value))) {
       problems.push(`detail:${s.ticker}: the ${decision.render} payload `
-                    + `carries ${JSON.stringify(value)} and the screen does `
-                    + "not say it");
+        + `carries ${JSON.stringify(value)} and the verdict card does not `
+        + "say it");
     }
   }
 }
-
-// Recorded history offers no actions. A lot's frozen decision renders
-// through the same row as the live one, and a purchase recorded in 2024
-// says what was unanswered THEN — a button inside it reads as though
-// answering would change what an append-only record says.
-const frozenJudged = state.securities.filter(
-  (s) => (s._lots || []).concat(s._sales || []).some(
-    (l) => ((((l.snapshot || {}).decision || {}).reason || {}).evidence || [])
-      .some((e) => (e.subject || {}).kind === "judgement")));
-if (spoke && !frozenJudged.length) {
-  gap("no lot in the payload froze a judgement citation, so "
-      + "nothing checks what a frozen judgement row offers");
-}
-for (const s of frozenJudged) {
-  const html = run(`(() => { const was = openTicker;`
-    + ` openTicker = ${JSON.stringify(s.ticker)};`
-    + ` const h = lotHistory(find(${JSON.stringify(s.ticker)}));`
-    + ` openTicker = was; return h; })()`);
-  if (String(html).includes("data-act=")) {
-    problems.push(`detail:${s.ticker}: the lot history offers an action, and `
-                  + "recorded history is not something to act on from "
-                  + "inside");
+// Recorded history offers no actions from inside itself.
+for (const s of state.securities) {
+  for (const lot of (s._lots || []).concat(s._sales || [])) {
+    if (String(out[`m:lot:${s.ticker}:${lot.id}`] || "").includes("data-do=")) {
+      problems.push(`m:lot:${s.ticker}:${lot.id}: recorded history offers an `
+        + "action, and it is not something to act on from inside");
+    }
   }
 }
-
-/* Saved snapshots: the list, and one opened.
-
-   The opened branch is the one worth driving. It renders a frozen decision —
-   a whole evidence table, groups, cautions and all — out of a backend reply
-   rather than out of get_state, which is the shape that can drift from the
-   live one without anything noticing. And a snapshot frozen under an older
-   contract genuinely lacks fields today's has, so every dereference in there
-   runs against a record that may not carry what it reaches for. */
+// Saved readings: rows, discards, and the unreadable refusal — all on the
+// page, read off what was frozen.
 const snapRows = (s) => ((s._snapshots || {}).rows || []);
 const kept = state.securities.filter((s) => snapRows(s).length);
-/* A record this build cannot read. It draws its own section — and the point
-   of drawing it is that everything else on the page still draws too, which
-   the detail render above has already proved by getting this far. */
-const unreadable = state.securities.filter(
-  (s) => (s._snapshots || {}).refusal);
+const unreadable = state.securities.filter((s) => (s._snapshots || {}).refusal);
 if (!unreadable.length) {
-  gap("no security in the payload carries a snapshot record this build "
-      + "cannot read, so the section that says so is never drawn");
+  gap("no security carries a snapshot record this build cannot read — the "
+    + "refusal rendering is never drawn");
 }
 for (const s of unreadable) {
-  check(`snapshots:unreadable:${s.ticker}`,
-        `snapshotHistory(find(${JSON.stringify(s.ticker)}))`);
-  must.push([`snapshots:unreadable:${s.ticker}`, s._snapshots.refusal,
-             "a snapshot record that cannot be read does not say why"]);
   must.push([`detail:${s.ticker}`, s._snapshots.refusal,
-             "the page does not say the saved days cannot be shown"]);
-  mustNot.push([`detail:${s.ticker}`, 'data-act="remove"',
-                "a security whose frozen record cannot be read still offers "
-                + "to be removed"]);
+    "an unreadable saved-days record says why, on the page"]);
 }
-if (!kept.length) {
-  gap("no security in the payload has a saved snapshot, so the section that "
-      + "renders them and the record behind it are never drawn");
-}
+if (!kept.length) gap("no security has a saved reading — the rows never draw");
 if (!kept.some((s) => snapRows(s).some((r) => r.discarded))) {
-  gap("no saved snapshot in the payload was discarded, so the row that says "
-      + "so is never drawn");
-}
-/* A row's whole point is saying what the day said. If no row carries it the
-   chip is never drawn — and, worse, every `must` below that asserts a state
-   name quietly asserts nothing. A gap here rather than a silent skip. */
-if (kept.length
-    && !kept.some((s) => snapRows(s).every((r) => r.state))) {
-  gap("a saved snapshot in the payload carries no state, so the verdict it "
-      + "kept is never drawn and nothing below can check it");
+  gap("no saved reading was discarded — the discarded row is never drawn");
 }
 for (const s of kept) {
-  // On the page, not only as a function that renders when called. A section
-  // dropped out of detailView is invisible to a harness that reaches past it.
-  must.push([`detail:${s.ticker}`, "Saved snapshots",
-             "a security with saved snapshots does not show them on its page"]);
   for (const row of snapRows(s)) {
-    // Read off the frozen record, so a row that stopped saying what the day
-    // said — or started working it out from somewhere else — shows up here.
     if (row.state) {
-      must.push([`snapshots:${s.ticker}`, row.state,
-                 "a saved snapshot does not say what the verdict was"]);
+      must.push([`detail:${s.ticker}`, row.state,
+        "a saved reading says what the verdict was"]);
     }
-    must.push([`snapshots:${s.ticker}`, row.day,
-               "a saved snapshot does not say which day it kept"]);
+    must.push([`detail:${s.ticker}`, row.day,
+      "a saved reading says which day it kept"]);
     if (row.discarded) {
-      must.push([`snapshots:${s.ticker}`, `discarded ${row.discarded.day}`,
-                 "a discarded snapshot does not say it was discarded"]);
+      must.push([`detail:${s.ticker}`, `discarded ${row.discarded.day}`,
+        "a discarded reading says so"]);
       if (row.discarded.reason) {
-        must.push([`snapshots:${s.ticker}`, row.discarded.reason,
-                   "the reason it was discarded is not on the record shown"]);
+        must.push([`detail:${s.ticker}`, row.discarded.reason,
+          "with the reason it was let go"]);
       }
-    } else {
-      must.push([`snapshots:${s.ticker}`, "Discard",
-                 "a standing snapshot offers no way to let go of it"]);
     }
   }
-  check(`snapshots:${s.ticker}`, `(() => { const was = openTicker;`
-    + ` openTicker = ${JSON.stringify(s.ticker)};`
-    + ` const h = snapshotHistory(find(${JSON.stringify(s.ticker)}));`
-    + ` openTicker = was; return h; })()`);
-  const row = snapRows(s)[0];
-  run(`openTicker = ${JSON.stringify(s.ticker)};`);
-  // Straight through the event path, so what is drawn is what a click
-  // actually produces — including the two renders it does, one saying the
-  // record is coming and one with it.
-  await run(`(async () => {
-    openSnap = { ticker: ${JSON.stringify(s.ticker)}, seq: ${row.seq}, entry: null };
-    const r = await window.pywebview.api.get_snapshot(
-      ${JSON.stringify(s.ticker)}, ${row.seq});
-    openSnap.entry = r.entry; })()`);
-  check(`snapshots:${s.ticker}:open`,
-        `snapshotHistory(find(${JSON.stringify(s.ticker)}))`);
-  check(`snapshots:${s.ticker}:opening`, `(() => {
-    const was = openSnap.entry; openSnap.entry = null;
-    const h = snapshotHistory(find(${JSON.stringify(s.ticker)}));
-    openSnap.entry = was; return h; })()`);
-  run("openSnap = null; openTicker = null;");
 }
-if (kept.length) {
-  dlg("dlg:snapshot", `dlgSnapshot(find(${JSON.stringify(kept[0].ticker)}))`);
-  dlg("dlg:discardsnap",
-      `dlgDiscardSnapshot(find(${JSON.stringify(kept[0].ticker)}),`
-      + ` ${snapRows(kept[0])[0].seq})`);
-}
-
-// The dialog that records one, on a question that has an answer already:
-// the prior assessment and the "this appends, it does not replace" wording
-// only render on that path.
-const withAnswer = judged.find((s) => (s._judgements || []).some((j) => j.mark));
-if (withAnswer) {
-  const jid = withAnswer._judgements.find((j) => j.mark).id;
-  dlg("dlg:judgement",
-      `openTicker = ${JSON.stringify(withAnswer.ticker)};`
-      + ` dlgJudgement(find(${JSON.stringify(withAnswer.ticker)}),`
-      + ` ${JSON.stringify(jid)}); openTicker = null`);
-  must.push(["dlg:judgement", 'name="mark"',
-             "the dialog offers a mark"]);
-  must.push(["dlg:judgement", 'name="reasoning"',
-             "the dialog asks for the reasoning"]);
-  must.push(["dlg:judgement", "adds a new entry above this one",
-             "the dialog says the record appends rather than replaces"]);
-}
-
-// The three records the user writes, on the screen and in their dialogs.
-// Each of these is the append-only guarantee made visible: if the earlier
-// version stops rendering, the record is still correct and the reader has
-// no way to know it changed, which is the whole thing being worthless.
+// The thesis: standing text renders whole, amendment asks why, a first
+// write does not, superseded versions survive.
+const written = state.securities.find(
+  (s) => ((s._thesis || {}).history || []).length);
+const unwritten = state.securities.find(
+  (s) => !((s._thesis || {}).history || []).length);
 if (written) {
-  const t = written._thesis, prev = t.history[t.history.length - 1];
-  must.push([`detail:${written.ticker}`, t.version.falsifier || t.version.thesis,
-             "the standing thesis renders"]);
-  must.push(["dlg:thesis-amend", 'name="reason"',
-             "amending an existing thesis asks why it changed"]);
-  must.push(["dlg:thesis-amend", "it adds a new version above it",
-             "the dialog says the record appends rather than replaces"]);
-  // The fields carry the standing text, so amending one half cannot blank
-  // the other. An entry holds the whole document; a blank box would save a
-  // blank half, silently and permanently.
+  const t = written._thesis;
+  must.push([`m:thesis:${written.ticker}`, t.version.thesis,
+    "the standing thesis renders whole"]);
+  must.push([`m:thesisedit:${written.ticker}`, 'name="reason"',
+    "amending asks what changed"]);
+  must.push([`m:thesisedit:${written.ticker}`, "adds a new version",
+    "and says the record appends"]);
   if (t.version.falsifier) {
-    must.push(["dlg:thesis-amend", t.version.falsifier,
-               "the amendment form carries the standing falsifier forward"]);
-  }
-  if (t.version.thesis) {
-    must.push(["dlg:thesis-amend", t.version.thesis,
-               "the amendment form carries the standing thesis forward"]);
-  }
-  if (t.version.reason) {
-    must.push([`detail:${written.ticker}`, t.version.reason,
-               "the reason for the standing amendment renders on the page"]);
+    must.push([`m:thesisedit:${written.ticker}`, t.version.falsifier,
+      "the amendment form carries the standing falsifier forward"]);
   }
   if (t.history.length > 1) {
-    must.push([`detail:${written.ticker}`, prev.falsifier || prev.thesis,
-               "a superseded thesis is still readable on the page"]);
-    must.push([`detail:${written.ticker}`, "earlier version",
-               "the page says how many versions came before"]);
+    const prev = t.history[t.history.length - 1];
+    must.push([`m:thesis:${written.ticker}`, prev.falsifier || prev.thesis,
+      "a superseded version is still readable"]);
+  }
+  if (t.version.reason) {
+    must.push([`m:thesis:${written.ticker}`, t.version.reason,
+      "the reason for the standing amendment renders"]);
   }
 }
 if (unwritten) {
-  mustNot.push(["dlg:thesis-first", 'name="reason"',
-                "a first thesis is asked why it changed, when nothing changed"]);
+  mustNot.push([`m:thesisedit:${unwritten.ticker}`, 'name="reason"',
+    "a first thesis is not asked why it changed"]);
 }
-// The purchase dialog, which renders from a backend reply rather than from
-// get_state — the one place the two sides can hold different shapes for the
-// same document. They did: it read the standing view, was handed a raw
-// record entry, and so rendered "No thesis on record" over a thesis it was
-// holding, splicing the amendment's own reason in as the explanation for the
-// absence. A screen asserting absence about something present is the one
-// inversion this program must never make, and nothing was watching for it.
-// What the dialog must say is read off `_thesis` — the detail page's own
-// payload, which is the standing shape — never off the preview reply. Keying
-// it off the reply is how the first version of this check passed against the
-// defect: a preview in the wrong shape has no `status`, the check read that
-// as "nothing written", and cheerfully asserted the very sentence that was
-// wrong. An expectation derived from the thing under test tests nothing.
-for (const ticker of Object.keys(state.__previews || {})) {
-  const t = (state.securities.find((s) => s.ticker === ticker) || {})._thesis;
-  if (!t) continue;
-  if (t.status === "known") {
-    must.push([`dlg:buy:${ticker}`, t.version.thesis || t.version.falsifier,
-               "the purchase dialog shows the thesis it is about to freeze"]);
-    mustNot.push([`dlg:buy:${ticker}`, "No thesis on record",
-                  "the purchase dialog denies a thesis it was handed"]);
-    if (t.version.reason) {
-      mustNot.push([`dlg:buy:${ticker}`, t.version.reason,
-                    "the amendment reason reads as the reason there is none"]);
-    }
-  } else {
-    must.push([`dlg:buy:${ticker}`, "No thesis on record",
-               "buying with nothing written says so"]);
-  }
-}
-if (valued) {
-  const v = valued._valuation;
-  must.push([`detail:${valued.ticker}`, `Claimed ${v.made}`,
-             "the standing valuation says the day it was claimed"]);
-  if (v.history.length > 1) {
-    must.push([`detail:${valued.ticker}`, "earlier claim",
-               "a superseded valuation is still reachable"]);
-  }
-}
+// Hand-entered figures: the day they were entered, and the earlier entries.
 for (const s of state.securities) {
   for (const m of s._inputs || []) {
     if ((m.entered || {}).status === "known") {
-      must.push([`dlg:values:${s.ticker}`, `Entered by you on ${m.entered.recorded}`,
-                 "a hand-entered figure says the day it was entered"]);
+      must.push([`m:measure:${s.ticker}:${m.id}`, "typed",
+        `${s.ticker}: a typed figure says it was typed`]);
+      // The gloss is only captured for cited ids; enter one if needed.
+      if (!(s._cited || []).includes(m.id)) {
+        await pane(`m:measure:${s.ticker}:${m.id}`, "measure",
+          { sid: m.id, t: s.ticker });
+      }
     }
-    if ((m.entries || []).length > 1) {
-      must.push([`dlg:values:${s.ticker}`, "earlier entr",
-                 "an earlier hand-entered figure is still readable"]);
-    }
-  }
-  if ((s._inputs || []).length) {
-    dlg(`dlg:values:${s.ticker}`, `dlgMetrics(find(${JSON.stringify(s.ticker)}))`);
   }
 }
-
-const held = state.securities.find((s) => s.bucket === "holdings");
-if (held) {
-  must.push([`detail:${held.ticker}`, "Lot history",
-             "a holding shows the lots it was built from"]);
-  for (const lot of (held._lots || []).concat(held._sales || [])) {
-    must.push([`detail:${held.ticker}`, String(lot.date).slice(0, 10),
-               `lot ${lot.id} appears in the history`]);
+// The buy pane, against real previews: the verdict is pinned on top, an
+// override asks its sentence, and the thesis shape matches the page's.
+for (const [ticker, reply] of Object.entries(state.__previews || {})) {
+  if (!reply.ok) continue;
+  const label = `m:buy:${ticker}`;
+  const d = reply.decision || {};
+  must.push([label, (d.state || {}).name,
+    `${ticker}: today's verdict is in front of you`]);
+  const commit = d.render === "commit";
+  const cannotRebuild = reply.recorded_as === "unreconstructed";
+  if (!commit && !cannotRebuild) {
+    must.push([label, 'name="override_reason"',
+      `${ticker}: a buy against the verdict asks for its sentence`]);
+  } else {
+    mustNot.push([label, 'name="override_reason"',
+      `${ticker}: no sentence is owed where nothing said no`]);
+  }
+  const page = state.securities.find((x) => x.ticker === ticker) || {};
+  const th = page._thesis || {};
+  if ((reply.thesis || {}).status !== th.status) {
+    problems.push(`${ticker}: the purchase preview and the page hold `
+      + "different shapes for the same thesis");
+  }
+  if (th.status === "known") {
+    must.push([label, th.version.thesis || th.version.falsifier,
+      `${ticker}: the pane shows the thesis it is about to freeze`]);
+    mustNot.push([label, "No thesis is on record",
+      `${ticker}: the pane denies a thesis it was handed`]);
+  } else {
+    must.push([label, "No thesis is on record",
+      `${ticker}: buying with nothing written says so`]);
   }
 }
-// A closed position must offer the way back in. Refusing to record a
-// re-purchase is the app declining to record something that happened, which
-// is the one thing it must never do — and the refusal lived entirely here,
-// in a gate on lot history rather than on shares held.
+// A closed position can always be bought back, and its round trip has its
+// own row under the track record.
 const closed = state.securities.filter((s) => s.bucket === "previous");
 if (!closed.length) {
-  gap("the harness built no closed position — the previous screen "
-      + "renders against nothing and proves nothing");
+  gap("the harness built no closed position — the track record renders "
+    + "against nothing");
 } else {
   for (const s of closed) {
-    must.push([`detail:${s.ticker}`, 'data-act="buy"',
-               `a closed position (${s.ticker}) can be bought again`]);
-    mustNot.push([`detail:${s.ticker}`, 'data-act="remove"',
-                  `a closed position (${s.ticker}) is never deletable`]);
+    must.push([`detail:${s.ticker}`, "Buy it back",
+      `a closed position (${s.ticker}) can be bought again`]);
+    must.push([`m:more:${s.ticker}`, "unavailable",
+      `a closed position (${s.ticker}) says why it cannot be removed`]);
   }
-  must.push(["previous", closed[0].ticker,
-             "a closed holding reaches the previous table"]);
-  must.push(["previous", "Overrides", "the scorecards render beside the list"]);
-  // The host counts a group's purchases and, apart from that, how many of
-  // them could be scored at all. Printing the average beside the group count
-  // and dropping the scored count is how a partial population passes for the
-  // whole — on the one panel meant to be able to indict a rule.
-  must.push(["previous", "Scored",
-             "an average says how many purchases it rests on"]);
-  for (const bad of ["null%", "NaN%", "undefined%"]) {
-    mustNot.push(["previous", bad,
-                  `an absent average renders as "${bad}" instead of a dash`]);
-  }
-  mustNot.push(["previous", "[object Object]",
-                "a return arrives as {status, value} and must be unpacked, "
-                + "not stringified into the page"]);
-  // A holding closed in stages ended for more than one stated reason, and
-  // the row used to print the last sale's and drop the rest. Every reason
-  // has to be on the row, or the period card and the exit scorecard tell
-  // the reader two different stories about the same exit.
-  //
-  // Checked against the ROW rather than the whole table: "Hit valuation"
-  // appears on some other security's row on every realistic screen, so a
-  // page-wide substring proves nothing about the exit being described here.
+  must.push(["list:track", closed[0].ticker,
+    "a closed holding reaches the track record"]);
+  // Every reason a staged exit gave is on its row and its facts.
   let staged = 0;
   for (const s of closed) {
     for (const c of (s._cycles || []).filter((x) => !x.open && x.exit)) {
-      if (c.exit.sales < 2) continue;
+      if ((c.exit.sales || 0) < 2) continue;
       staged += 1;
-      const table = String(out.previous ?? "");
-      const row = (table.split(`data-t="${s.ticker}"`)[1] || "").split("</tr>")[0];
-      // The detail page's own header says which holding you are reading and
-      // how it ended, and it read the last sale alone too.
-      const head = (String(out[`detail:${s.ticker}`] ?? "")
-        .split('<div class="meta">')[1] || "").split("</div>")[0];
-      for (const r of c.exit.reasons) {
-        if (!row.includes(r.reason)) {
-          problems.push(`previous: ${s.ticker}'s exit on ${c.closed} gave `
-                        + `"${r.reason}" for ${r.share}% of it and the row `
-                        + `does not say so — "${row.slice(0, 200)}"`);
-        }
-        if (!head.includes(r.reason)) {
-          problems.push(`detail:${s.ticker}: the header names how the holding `
-                        + `ended and leaves out "${r.reason}" — "${head}"`);
-        }
-      }
-      // The exit price on the detail strip is the share-weighted figure.
-      // The last sale's price is what it used to be, and it must not be
-      // what renders — so both halves are asserted, or a page that happens
-      // to contain the right digits elsewhere would pass.
-      if (c.exit.price.status === "known") {
-        const last = c.sells[c.sells.length - 1];
-        must.push([`detail:${s.ticker}`,
-                   `<i>Exit price</i><b>$${c.exit.price.value}`,
-                   `${s.ticker} exited across ${c.exit.sales} sales, so its `
-                   + "exit price is the share-weighted figure"]);
-        mustNot.push([`detail:${s.ticker}`,
-                      `<i>Exit price</i><b>$${lotPrice(s, last)}`,
-                      `${s.ticker}'s exit price is not its last sale's`]);
+      for (const r of c.exit.reasons || []) {
+        const word = typeof r === "string" ? r : r.reason;
+        must.push(["list:track", word,
+          `${s.ticker}'s staged exit gave "${word}" and the row says so`]);
+        must.push([`detail:${s.ticker}`, word,
+          `and so does the page`]);
       }
     }
   }
   if (!staged) {
-    gap("the harness built no holding closed in stages — the weighted exit "
-        + "price and the multi-reason row are unexercised");
+    gap("no holding closed in stages — the multi-reason row is unexercised");
   }
 }
-
-/* One sale lot's price, by id, off the payload the page renders from. */
-function lotPrice(s, lotId) {
-  const lot = (s._sales || []).find((l) => l.id === lotId);
-  return lot ? lot.price : null;
-}
-// A name held more than once: every period is its own row, the detail page
-// groups the entries by holding, and no figure spanning them is unlabelled.
+// A name held more than once: every closed period its own track row, the
+// record grouped by holding, the windowed since-exit closed at re-purchase.
 const twice = state.securities.filter((s) => (s._cycles || []).length > 1);
 if (!twice.length) {
-  gap("the harness built no security held more than once — the "
-      + "grouping, the ordinals and the windowed since-exit are "
-      + "unexercised");
+  gap("no security held more than once — the grouping, the ordinals and the "
+    + "windowed since-exit are unexercised");
 }
 for (const s of twice) {
-  must.push([`detail:${s.ticker}`, "First holding",
-             `${s.ticker}'s lot history is grouped by holding period`]);
-  must.push([`detail:${s.ticker}`, "Second holding",
-             `${s.ticker}'s second holding is named apart from the first`]);
-  must.push([`detail:${s.ticker}`, "All holdings",
-             `${s.ticker} names its lifetime figure as spanning both`]);
+  must.push([`detail:${s.ticker}`, "holding ·",
+    `${s.ticker}'s record is grouped by holding period`]);
   for (const c of s._cycles.filter((x) => !x.open)) {
-    must.push(["previous", `${c.opened}`,
-               `${s.ticker}'s closed holding of ${c.opened} has its own row`]);
+    must.push(["list:track", c.opened,
+      `${s.ticker}'s closed holding of ${c.opened} has its own row`]);
   }
-  // The window that must not run to today once the name was bought back.
   const back = s._cycles.find((c) => c.since_exit
     && c.since_exit.until === "purchase");
   if (!back) {
     problems.push(`${s.ticker} was bought back but no period's since_exit `
-                  + "closed at that purchase — the window still runs to today");
+      + "closed at that purchase — the window still runs to today");
   }
-  // Headings alone prove nothing: a group can carry the right title over an
-  // empty list, which is exactly what happens if the payload's lot ids stop
-  // matching the lots. Each period's own entries must be inside its own
-  // group, so the page is checked section by section rather than as one
-  // haystack that any entry anywhere satisfies.
-  const page = String(out[`detail:${s.ticker}`] ?? "");
-  // Everything above the lot history describes ONE holding, and Previous
-  // holdings has a row per holding — so arriving from the older row must not
-  // land on a page that silently describes a different one.
-  const meta = (page.match(/<div class="meta">([^<]*)/) || [])[1] || "";
-  if (!/holding/i.test(meta)) {
-    problems.push(`detail:${s.ticker}: the header does not say which of `
-                  + `${s._cycles.length} holdings the figures describe — "${meta.trim()}"`);
-  }
-  const groups = page.split('<div class="cyc">').slice(1);
-  if (groups.length !== s._cycles.length) {
-    problems.push(`detail:${s.ticker}: ${s._cycles.length} holdings but `
-                  + `${groups.length} groups in the lot history`);
-  }
-  // rendered newest first, so the payload's periods reverse onto the groups
-  s._cycles.slice().reverse().forEach((c, i) => {
-    const g = groups[i] || "";
-    for (const id of c.buys.concat(c.sells)) {
-      const lot = (s._lots || []).concat(s._sales || []).find((l) => l.id === id);
-      if (!lot) continue;
-      if (!g.includes(`<time>${String(lot.date).slice(0, 10)}</time>`)) {
-        problems.push(`detail:${s.ticker}: lot ${id} (${lot.date}) is missing `
-                      + `from the "${c.open ? "open" : "closed " + c.closed}" `
-                      + "holding it belongs to");
-      }
-    }
-  });
 }
-/* Text that reaches the page through `esc` arrives HTML-escaped, so an
-   apostrophe in a source's name is `&#39;` in the markup. Both readings
-   count: the expectation is that the words are on screen, not which entity
-   the escaper chose. */
+
+// ------------------------------------------------------------- verdicts
 const asMarkup = (v) => String(v).replace(/[&<>"']/g, (c) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-/* Whitespace-insensitive. Every screen here is built from template literals,
-   so a sentence breaks across source lines wherever that happens to be
-   convenient — an assertion failing on a line break would be testing the
-   indentation rather than the copy, and would break again the next time
-   somebody rewrapped a paragraph. */
 const flat = (t) => String(t ?? "").replace(/\s+/g, " ");
 for (const [screen, text, why] of must) {
   const html = flat(out[screen]);
   if (!html.includes(flat(text)) && !html.includes(flat(asMarkup(text)))) {
-    problems.push(`${screen}: ${why} — expected "${text}"`);
+    problems.push(`${screen}: ${why} — expected "${String(text).slice(0, 70)}"`);
   }
 }
 for (const [screen, text, why] of mustNot) {
-  if (String(out[screen] ?? "").includes(text)) {
-    problems.push(`${screen}: ${why} — did not expect "${text}"`);
+  if (flat(out[screen]).includes(flat(text))) {
+    problems.push(`${screen}: ${why} — did not expect "${String(text).slice(0, 70)}"`);
   }
 }
-// Nothing on any screen may name a strategy the view was not handed, or a
-// setting one of them happens to declare. The view renders from
-// declaration; a hardcoded id means a wrong turn.
-const viewSource = fs.readFileSync(appPath, "utf8");
-// A caution says what a number rests on; it is not a failure. Rendering it as
-// a warning glyph puts a red flag on twelve of a company's twenty-nine
-// measures, and a warning that fires that often is one nobody reads — which
-// is the same outcome as dropping it. One vocabulary, in cautionLines(), and
-// nothing else in the view gets to invent a louder one.
+// The view never names a strategy, a strategy's setting, or a warning glyph.
 if (viewSource.includes("⚠")) {
-  problems.push("app.js renders a warning glyph — a caution is a "
-                + "qualification, not a failure, and every one of them goes "
-                + "through cautionLines()");
+  problems.push("ui/js renders a warning glyph — a caution is a "
+    + "qualification, not a failure");
 }
-for (const sid of ["graham", "buffett", "lynch", "discount-closure",
-                   "contract-proof", "verdicts", "awkward",
-                   "free-cash", "cash-floor", "patience"]) {
+for (const sid of ["graham", "buffett", "lynch", "magic-formula",
+                   "discount-closure", "contract-proof", "verdicts",
+                   "awkward", "free-cash", "cash-floor", "patience"]) {
   if (viewSource.includes(`"${sid}"`) || viewSource.includes(`'${sid}'`)) {
-    problems.push(`app.js names "${sid}" — the view layer must know nothing `
-                  + "about which strategies or settings exist");
+    problems.push(`ui/js names "${sid}" — the view layer must know nothing `
+      + "about which strategies or settings exist");
   }
 }
 

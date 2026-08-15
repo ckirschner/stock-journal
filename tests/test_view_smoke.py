@@ -25,7 +25,7 @@ everything else, and a test that cannot run must say so rather than pass.
 import json
 import shutil
 import subprocess
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -37,7 +37,7 @@ from engine import snapshots, strategy_loader
 
 import app as app_mod
 
-UI = Path(__file__).resolve().parent.parent / "ui" / "app.js"
+UI = Path(__file__).resolve().parent.parent / "ui" / "js"
 HARNESS = Path(__file__).resolve().parent / "view_smoke.mjs"
 
 pytestmark = pytest.mark.skipif(shutil.which("node") is None,
@@ -330,6 +330,25 @@ def _state(strategies, answers=ANSWERS, redefine=None) -> dict:
     state["__coverage"] = {
         s["ticker"]: api.get_coverage(s["ticker"])
         for s in state["securities"]}
+    # The bank behind the measures screen and the margin glosses, the
+    # chosen-timeframe reply behind the header, the EV prefills behind the
+    # valuation pane, and one snapshot comparison — all rendered from
+    # backend replies, so the harness needs real ones.
+    state["__bank"] = api.get_bank()
+    assert state["__bank"]["ok"], state["__bank"]
+    state["__timeframe"] = api.timeframe_view(
+        (date.today() - timedelta(days=30)).isoformat())
+    assert state["__timeframe"]["ok"], state["__timeframe"]
+    state["__ev"] = {s["ticker"]: api.ev_prefill(s["ticker"])
+                     for s in state["securities"]}
+    state["__compare"] = {}
+    for s in state["securities"]:
+        rows = (s["_snapshots"] or {}).get("rows") or []
+        if len(rows) >= 2:
+            state["__compare"][s["ticker"]] = api.compare_snapshots(
+                s["ticker"], [r["seq"] for r in rows])
+            assert state["__compare"][s["ticker"]]["ok"], \
+                state["__compare"][s["ticker"]]
     return state
 
 
@@ -595,7 +614,11 @@ def test_a_blocked_journal_offers_the_way_out(strategies, tmp_path):
 
     # The harness asserts the way out is on the page: every state the host
     # says has a screen behind it must render the button that opens it.
-    r = _render(state, tmp_path)
+    # Render-only, because this payload was rebuilt after the mutation and
+    # carries no captured backend replies — the must-checks (including the
+    # fix button this test exists for) run in that mode too; only the
+    # coverage complaints about uncaptured surfaces are dropped.
+    r = _render(state, tmp_path, "render-only")
     assert r.returncode == 0, r.stdout + r.stderr
 
     # ...and supplying it in the app resolves the block, which is the half
