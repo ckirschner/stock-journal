@@ -20,11 +20,14 @@ async function paneBuy(ticker, dateChosen, keep, fallbackDate) {
       <h3>The preview could not be built</h3><p>${esc(p.error)}</p>`;
   }
   const d = p.decision;
-  const commit = d.render === "commit";
+  /* Which of the four ways this would go on the record, from the engine
+     alone. The dialog never works it out again from the render — a second
+     copy of that judgement is how a dialog and the entry it wrote once came
+     to disagree about the same purchase. */
   const asRecorded = p.recorded_as;
   const noVerdict = asRecorded === "without";
   const cannotRebuild = asRecorded === "unreconstructed";
-  const bad = !commit && !cannotRebuild;
+  const bad = asRecorded === "against" || asRecorded === "without";
   const who = (d.strategy || {}).name || "Your strategy";
   const recon = p.basis === "reconstructed";
   const back = s.bucket === "previous";
@@ -43,14 +46,14 @@ async function paneBuy(ticker, dateChosen, keep, fallbackDate) {
   const th = p.thesis || {};
   const pv = p.valuation || {};
   const thesisBox = th.status === "known"
-    ? `<details><summary>Buying on your thesis of ${esc(th.amended || "")}${(th.cautions || []).length ? " — qualified" : ""}</summary>
+    ? `<details><summary>Buying on your written case of ${esc(th.amended || "")}${(th.cautions || []).length ? " — qualified" : ""}</summary>
        ${prose((th.version || {}).thesis)}
        ${(th.version || {}).falsifier ? `<div class="m-h">What would make me wrong</div>${prose(th.version.falsifier)}` : ""}
        ${mCautions(th.cautions)}
        ${pv.status === "known" ? `<p class="m-quiet">A valuation claim of ${esc((pv.claim || {}).made || "")} is frozen with it.</p>`
          : '<p class="m-quiet">No valuation is on record for this day, so this purchase records none.</p>'}
-       <p class="m-quiet">This version is frozen onto the purchase. To change it, amend the thesis first — nothing here edits it.</p></details>`
-    : `<p class="m-quiet">No thesis is on record${recon ? ` for ${esc(when)}` : ""} — ${esc(th.reason || "nothing is written yet")}. The purchase records that. Nothing here stops you.</p>`;
+       <p class="m-quiet">This version is frozen onto the purchase. To change it, amend “Why I own this” first — nothing here edits it.</p></details>`
+    : `<p class="m-quiet">Nothing under “Why I own this” is on record${recon ? ` for ${esc(when)}` : ""} — ${esc(th.reason || "nothing is written yet")}. The purchase records that. Nothing here stops you.</p>`;
 
   return `<p class="m-kicker">Record a purchase · ${esc(ticker)}</p>
 <h3>Today’s verdict is in front of you</h3>
@@ -252,7 +255,9 @@ async function paneEV(ticker, methodOverride, keep) {
   const v = s._valuation || {};
   const standing = v.status === "known" ? v.claim : null;
   const methods = S.ev_methods || {};
-  const method = methodOverride || (standing || {}).method || Object.keys(methods)[0];
+  const method = methodOverride || (standing || {}).method
+    || ((S.journal || {}).settings || {}).default_ev_method
+    || Object.keys(methods)[0];
   const spec = methods[method] || {};
   const seed = keep || (standing && standing.method === method ? standing.inputs : {}) || {};
   const defaults = (S.journal || {}).settings || {};
@@ -272,29 +277,39 @@ async function paneEV(ticker, methodOverride, keep) {
       : dflt !== undefined && dflt !== null ? dflt : "";
     const src = known
       ? `<small>${esc((got.provenance || [])[0] || `prefilled${got.asof ? ` as of ${got.asof}` : ""}`)}</small>`
-      : dflt !== undefined && dflt !== null && val === dflt
-        ? "<small>your journal default</small>" : "";
+      : got && got.status === "absent" && got.reason
+        ? `<small>not prefilled — ${esc(oneline(got.reason))}</small>`
+        : dflt !== undefined && dflt !== null && val === dflt
+          ? "<small>your journal default</small>" : "";
+    /* The method's own declared references render under the input they
+       belong to, with the declared labels — never a label invented from an
+       id, and never a reference the method did not ask to show. */
+    const refRows = ((spec.references || {})[id] || []).map(([rid, rlabel]) => {
+      const rgot = refs[rid];
+      const ok2 = rgot && (rgot.status === "computed" || rgot.status === "known");
+      return `<tr><td>${esc(rlabel)}</td><td class="num">${ok2
+        ? esc(String(rgot.value)) + "M"
+        : `<span class="absent" title="${esc((rgot || {}).reason || "")}">not known</span>`}</td></tr>`;
+    }).join("");
     return `<label>${esc(label || id)} ${src}</label>
       <input name="ev_${id}" type="number" step="any" value="${esc(val)}">
       ${known ? mCautions(got.cautions) : ""}
-      ${help ? `<p class="m-quiet">${esc(help)}</p>` : ""}`;
+      ${help ? `<p class="m-quiet">${esc(help)}</p>` : ""}
+      ${refRows ? `<table class="m-series">${refRows}</table>` : ""}`;
   }).join("");
   const standingBox = standing
     ? `<p class="m-quiet">A ${esc((methods[standing.method] || {}).label || standing.method)} claim of ${esc((v.claim || {}).made || "")} is standing${v.result ? ` — ${esc(v.result.label || "")} ${esc(v.result.display || "")}` : ""}. Recording with different assumptions appends a new claim above it.</p>` : "";
-  const refLines = Object.entries(refs).map(([k, r]) =>
-    r && (r.status === "computed" || r.status === "known")
-      ? `<tr><td>${esc(k.replace(/_/g, " "))}</td><td class="num">${esc(String(r.value))}M</td></tr>` : "").join("");
+
   return `<p class="m-kicker">Expected value · ${esc(ticker)}</p>
 <h3>${esc(spec.label || "Value it")}</h3>
 ${spec.blurb || spec.explain ? `<p>${esc(spec.blurb || spec.explain)}</p>` : ""}
 <p class="m-quiet">You enter assumptions; the value is solved for. There is no field anywhere that accepts a target price — when an estimate turns out wrong, you can see which assumption was.</p>
-${!pf.ok ? `<div class="m-err">Prefills could not be read: ${esc(pf.error)}. Typed values are recorded without provenance.</div>` : ""}
+${!pf.ok ? `<div class="m-err">Prefills could not be read: ${esc(pf.error)}. Typed values are recorded without a note of where they came from.</div>` : ""}
 ${standingBox}
 <label>Method</label>
 <select name="ev_method" id="ev_method">${Object.entries(methods).map(([id, m]) =>
     `<option value="${esc(id)}" ${id === method ? "selected" : ""}>${esc(m.label || id)}</option>`).join("")}</select>
 ${inputs}
-${refLines ? `<div class="m-h">For reference</div><table class="m-series">${refLines}</table>` : ""}
 <button class="m-act" data-do="ev" data-t="${esc(ticker)}">Record the claim</button>
 <p class="m-quiet">Assumptions identical to the standing claim record nothing — a claim is a change of mind, not a bookmark.</p>`;
 }
@@ -409,9 +424,19 @@ PANES.thesisedit = (a) => {
 <p>Plain words, yours. The strategy tests numbers; this is the part only you can write — and the version standing on the day of a purchase is frozen onto it.</p>
 <label>Why I own this</label>
 <textarea name="thesis" rows="4">${esc(v.thesis || "")}</textarea>
+<details><summary>What a good one looks like</summary>
+<div class="m-note">“Fenwick Springs sells replacement parts for machines it stopped making —
+customers are locked in for the machine’s life, which is why margins have held
+above 30% for a decade. I am paying 9× typical earnings for that.”
+<p class="m-quiet">Invented company. Notice it names the mechanism, not a feeling — and a price.</p></div></details>
 <label>What would make me wrong</label>
 <textarea name="falsifier" rows="3">${esc(v.falsifier || "")}</textarea>
-<p class="m-quiet">A good “wrong” names something observable — a number falling, a customer leaving — not a feeling. Both parts are optional; both are strongly recommended.</p>
+<details><summary>What a good one looks like</summary>
+<div class="m-note">“Parts revenue falling two years running, or a competitor cross-licensed to
+make the parts — either means the lock-in I am paying for is gone.”
+<p class="m-quiet">Invented company. A good “wrong” names something observable — a number
+falling, a customer leaving — not a feeling.</p></div></details>
+<p class="m-quiet">Both parts are optional; both are strongly recommended.</p>
 ${amending ? `<label>What changed? <small>Required — an amendment keeps the old version and this sentence beside it.</small></label>
 <textarea name="reason" rows="2"></textarea>` : ""}
 <button class="m-act" data-do="thesis" data-t="${esc(a.t)}" data-amend="${amending ? "1" : ""}">${amending ? "Amend — it adds a new version above it" : "Write it down"}</button>`;
@@ -433,7 +458,8 @@ async function doThesis(btn) {
 PANES.noteadd = (a) => `<p class="m-kicker">Add a note · ${esc(a.t)}</p>
 <h3>Dated, appended, never edited</h3>
 <label>The note</label><textarea name="text" rows="4"></textarea>
-<button class="m-act" data-do="note" data-t="${esc(a.t)}">Add it</button>`;
+<button class="m-act" data-do="note" data-t="${esc(a.t)}">Add it</button>
+<p class="m-quiet">A note is anchored by its date. To anchor it to everything the page says today, <button class="dim" style="border-bottom:1px dotted var(--hair-dark)" data-m="snapshot" data-arg="${escAttr({ t: a.t })}">save today’s reading</button> as well — the two share the day.</p>`;
 async function doNote(btn) {
   const f = marginForm();
   if (!(f.text || "").trim()) return marginErr("Write the note first.");
@@ -535,7 +561,7 @@ function snapshotVsToday(s, entry) {
     const nowTxt = now && (now.status === "computed" || now.status === "known")
       ? fmtMetric(id, now.value)
       : now && now.status === "inapplicable" ? "not applicable" : "not known now";
-    return `<tr><td>${esc(labelOf(id))}</td><td class="num">${esc(fmtMetric(id, then.value))}</td><td class="num">${esc(nowTxt)}</td></tr>`;
+    return `<tr><td>${esc(labelOf(id))}</td><td class="num">${esc(fmtMetric(id, then.value))}${cmMark(then.cautions)}</td><td class="num">${esc(nowTxt)}${now && (now.status === "computed" || now.status === "known") ? cmMark(now.cautions) : ""}</td></tr>`;
   }).join("");
   return `<p class="m-kicker">Saved reading · ${esc(day)}</p>
 <h3>Compared with today</h3>
@@ -551,12 +577,18 @@ function comparisonHtml(t, cmp) {
   const verdictRow = `<tr><td>Verdict</td>${(cmp.verdict || []).map((v) =>
     `<td>${esc((v.state || {}).name || "")}</td>`).join("")}<td></td></tr>`;
   const priceRow = `<tr><td>Price</td>${(cmp.price || []).map((p) =>
-    `<td class="num">${p.value != null ? money(p.value) : "—"}</td>`).join("")}<td></td></tr>`;
+    `<td class="num">${p.status === "known"
+      ? money(p.value) + (p.source === "manual"
+        ? ' <span class="typed" title="Entered by hand — it carried no date when it was frozen.">typed°</span>'
+        : p.date ? ` <span class="dim">${esc(fmtCloseDate(p.date))}</span>` : "")
+      : `<span class="absent" title="${esc(p.reason || "")}">—</span>`}</td>`).join("")}<td></td></tr>`;
   const ids = Object.keys(cmp.measures || {}).sort((a, b) => labelOf(a).localeCompare(labelOf(b)));
   const rows = ids.map((id) => {
     const m = cmp.measures[id];
     const cells = (m.readings || []).map((r) =>
-      `<td class="num">${r.status === "known" ? esc(fmtMetric(id, r.value)) : '<span class="absent" title="' + esc(r.reason || "") + '">—</span>'}</td>`).join("");
+      `<td class="num">${r.status === "known"
+        ? esc(fmtMetric(id, r.value)) + cmMark(r.cautions)
+        : '<span class="absent" title="' + esc(r.reason || "") + '">—</span>'}</td>`).join("");
     const moved = m.moved && m.moved.status === "known"
       ? `<td class="num">${esc(fmtMetric(id, m.moved.value))}</td>`
       : `<td><button class="absent" data-m="absent" data-arg="${escAttr({ label: labelOf(id) + " — the move between these days", reason: (m.moved || {}).reason || "" })}">—</button></td>`;
@@ -752,6 +784,7 @@ async function doAdd() {
     else toast(fr.error, true);
   }
   await refresh();
+  refreshTimeframe();
   openSecurity(ticker); render();
   marginRest();
 }
@@ -766,6 +799,7 @@ async function doAddBulk() {
     if (!r.ok) failed.push(`${m[1].toUpperCase()}: ${r.error}`);
   }
   await refresh();
+  refreshTimeframe();
   if (failed.length) return marginErr(`${lines.length - failed.length} added. Not added — ${failed.join(" · ")}`);
   toast(`${lines.length} added to the watchlist — no data yet, by design. Fetch each from its page, or as you get to it.`);
   marginRest();
@@ -884,8 +918,11 @@ PANES.valdefaults = () => {
 <h3>Prefills, not conclusions</h3>
 <p>These seed every expected-value calculation in this journal. Each can be changed at the moment of use, and the value solved for is never typed anywhere.</p>
 <label>Discount rate <small>%</small></label><input name="discount_rate" type="number" step="any" value="${esc(d.discount_rate ?? "")}">
+<p class="m-quiet">The yearly return you demand for tying money up in something this uncertain. Higher makes every valuation stingier. Something near what a whole-market fund has returned — 8 to 10 — is a common anchor.</p>
 <label>Terminal growth <small>%</small></label><input name="terminal_growth" type="number" step="any" value="${esc(d.terminal_growth ?? "")}">
+<p class="m-quiet">How fast the business grows forever, after the years you can see. Inflation plus a little — 2 to 3 — is the defensible range; above that you are claiming it outgrows the economy for eternity.</p>
 <label>Margin of safety <small>%</small></label><input name="margin_of_safety" type="number" step="any" value="${esc(d.margin_of_safety ?? "")}">
+<p class="m-quiet">The discount you demand below your own estimate — room to be wrong, not a return target. Graham's traditional number is 30.</p>
 <button class="m-act" data-do="valdefaults">Save</button>`;
 };
 async function doValDefaults() {
@@ -959,12 +996,24 @@ function startFetchPoll(ticker) {
     const st = r.ok ? r.status : null;
     if (st && st.running) { setTimeout(tick, 1500); return; }
     FETCH_POLLS[ticker] = false;
-    if (st && st.report) {
+    if (st && st.error) {
+      /* The crash path: the fetch died and said why. Never a plain
+         "finished" — nothing fails silently. */
+      toast(`${ticker}: the fetch failed — ${st.error}`, true);
+    } else if (st && st.report) {
       const rep = st.report;
       const bits = [];
-      if (rep.filings_new !== undefined) bits.push(`${rep.filings_new} new filings`);
-      if (rep.error) bits.push(rep.error);
-      toast(`${ticker}: fetch finished${bits.length ? " — " + bits.join(" · ") : ""}.`, !!rep.error);
+      if (rep.filings_new !== undefined) {
+        bits.push(`${rep.filings_new} new filing${rep.filings_new === 1 ? "" : "s"}`);
+      }
+      const said = rep.conflict || rep.ticker_unmapped || rep.no_coverage;
+      if (said) bits.push(said);
+      const errs = rep.errors || [];
+      if (errs.length) {
+        bits.push(`${errs.length} problem${errs.length === 1 ? "" : "s"} — the first: ${errs[0]}`);
+      }
+      toast(`${ticker}: fetch finished${bits.length ? " — " + bits.join(" · ") : ""}.`,
+        !!(said || errs.length));
     } else {
       toast(`${ticker}: fetch finished.`);
     }

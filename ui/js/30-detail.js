@@ -57,11 +57,13 @@ function verdictCard(s, d) {
             : escAttr({ ev: evFor(d, x) || { subject: x, observed: {} } })}">${esc(x.label || x.id)}</button>`).join(" · ")}</span>`
     : "";
   const since = s._since_reading;
+  const canAnchor = !((s._snapshots || {}).refusal) && s._decision;
   const sinceLine = since && since.status === "known"
     ? `<span>Since your reading of ${esc(since.since)}: <b>${since.changed
         ? `it moved — it read ${esc((since.from || {}).name || "")} then`
         : "the verdict stands where it stood"}</b> <button data-m="readings" data-arg="${escAttr({ t: s.ticker })}">compare</button></span>`
-    : `<span class="dim">No reading of this is saved yet — <button data-m="snapshot" data-arg="${escAttr({ t: s.ticker })}">save today’s</button> and “what changed” gets an anchor.</span>`;
+    : `<span class="dim">${esc((since || {}).reason || "no saved reading stands to measure against")}${
+        canAnchor ? ` — <button data-m="snapshot" data-arg="${escAttr({ t: s.ticker })}">save today’s</button> and “what changed” gets an anchor` : ""}.</span>`;
   const needs = d.render === "blocked" && (p.needs || []).length
     ? `<ul>${p.needs.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` : "";
   const plan = d.render === "commit" && (p.plan || []).length
@@ -84,8 +86,12 @@ function commitLine(s, p) {
     .find((e) => e.ticker === s.ticker);
   const amt = alloc && alloc.amount;
   if (amt && amt.status === "known") {
-    const px = s._price || {};
-    const sh = px.value ? ` — ≈ ${Math.floor(amt.value / px.value)} sh at ${money(px.value)}` : "";
+    /* Served figures only: the dollar amount is the host's, and a share
+       count appears only where the strategy itself sized in shares. A count
+       derived here from amount ÷ price would be view arithmetic on the one
+       number a sizing decision reads (principles 5 and 13). */
+    const sh = (p.size || {}).unit === "shares"
+      ? ` — ${Number(p.size.value).toLocaleString()} sh` : "";
     const pct = (p.size || {}).unit === "weight" ? ` (${p.size.value}% of the account)` : "";
     return `${money0(amt.value)} may go in${sh}${pct}`;
   }
@@ -110,21 +116,33 @@ function factsStrip(s, period, isOpen, isClosed) {
   const priceBtn = `<button data-m="price" data-arg="${escAttr({ t: s.ticker })}">${priceFactVal(s)}</button>`;
   cells.push(cell("Price", priceBtn));
   if (isOpen) {
-    cells.push(cell("Avg cost", `<span class="num">${money(s._cost_basis)}</span>`));
-    cells.push(cell("Shares", `<span class="num">${esc(String(s._shares))}</span>`));
     const h = ((S.portfolio || {}).holdings || []).find((x) => x.ticker === s.ticker);
-    cells.push(cell("Value", nodeFactBtn(h && h.market_value, money0, "Market value")));
-    cells.push(cell("Of account", nodeFactBtn(h && h.weight, (v) => Number(v).toFixed(1) + "%", "Share of the account")));
-    cells.push(cell("Since buy", pctCell(s._return)));
+    cells.push(cell("Avg cost", factBtn(`<span class="num">${money(s._cost_basis)}</span>`,
+      { label: "Average cost", text: money(s._cost_basis),
+        explain: "What you paid per share, averaged across this holding's open lots. Read off your own purchase record." })));
+    cells.push(cell("Shares", factBtn(`<span class="num">${esc(String(s._shares))}</span>`,
+      { label: "Shares held", text: String(s._shares),
+        explain: "What the open lots hold — everything bought less everything sold, oldest shares first. Derived from the lots on every read; a stored total would be a second opinion about a fact they already settle." })));
+    cells.push(cell("Value", factBtn(nodeFactBtn(h && h.market_value, money0, "Market value"),
+      { label: "Market value", text: h && h.market_value && h.market_value.status === "known" ? money0(h.market_value.value) : "",
+        explain: "Shares times the price of this security's own instrument — never a sibling share class's.",
+        cautions: (h && h.market_value && h.market_value.cautions) || [],
+        provenance: (h && h.market_value && h.market_value.provenance) || [] })));
+    cells.push(cell("Of account", factBtn(nodeFactBtn(h && h.weight, (v) => Number(v).toFixed(1) + "%", "Share of the account"),
+      { label: "Share of the account", text: h && h.weight && h.weight.status === "known" ? Number(h.weight.value).toFixed(1) + "%" : "",
+        explain: "This holding's market value over everything the account is worth — cash included. It is the figure a sizing rule binds on.",
+        cautions: (h && h.weight && h.weight.cautions) || [],
+        provenance: (h && h.weight && h.weight.provenance) || [] })));
+    cells.push(cell("Since buy", factBtn(pctCell(s._return),
+      { label: "Since buy", text: s._return && s._return.status === "known" ? `${s._return.value >= 0 ? "+" : "−"}${Math.abs(s._return.value).toFixed(1)}%` : "",
+        explain: "This holding against what it cost — the open round trip, not the ticker's lifetime. A name closed and bought back starts a fresh figure.",
+        provenance: (s._return && s._return.provenance) || [] })));
   }
   if (isClosed) {
     cells.push(cell("Exit price", nodeFactBtn((period.exit || {}).price,
       (v) => money(v), "The share-weighted price this holding got out at")));
     cells.push(cell("While held", pctCell(period.return)));
-    const se = period.since_exit;
-    cells.push(cell("Since exit", se && se.pct != null
-      ? `<span class="num ${se.pct >= 0 ? "pos" : "neg"}">${se.pct >= 0 ? "+" : "−"}${Math.abs(se.pct).toFixed(1)}%</span>${se.until === "purchase" ? "<small> to your next buy</small>" : ""}`
-      : '<span class="dim">—</span>'));
+    cells.push(cell("Since exit", sinceExitCell(period.since_exit)));
     const reasons = exitWords(period);
     if (reasons.length) cells.push(cell("Sold because", esc(reasons.join(", "))));
     if (periods(s).length > 1 && s._lifetime_return) {
@@ -134,7 +152,13 @@ function factsStrip(s, period, isOpen, isClosed) {
   if (!period) {
     cells.push(cell("Added", `<span class="num">${esc(String(s.added || s.created || "").slice(0, 10) || "—")}</span>`));
   }
-  cells.push(cell((T && T.label) || "Timeframe", pctCell(T && T.rows ? T.rows[s.ticker] : null)));
+  const tfNode = T && T.rows ? T.rows[s.ticker] : null;
+  cells.push(cell((T && T.label) || "Timeframe", factBtn(pctCell(tfNode, tfWhy()),
+    { label: (T && T.label) || "Timeframe",
+      text: tfNode && tfNode.status === "known" ? `${tfNode.value >= 0 ? "+" : "−"}${Math.abs(tfNode.value).toFixed(1)}%` : "",
+      explain: "This security's own price move over the window chosen in the header — nothing about your position is in it.",
+      cautions: (tfNode && tfNode.cautions) || [],
+      provenance: (tfNode && tfNode.provenance) || [] })));
   const dstat = s._fetch && s._fetch.running ? "fetching…"
     : s._data ? `<span class="num">${esc(String(s._data.filings_held))}</span> <small>fetched ${esc(s._data.last_fetch ? String(s._data.last_fetch.at).slice(0, 10) : "never")}</small>`
     : "never fetched";
@@ -142,6 +166,10 @@ function factsStrip(s, period, isOpen, isClosed) {
   return `<div class="facts">${cells.join("")}</div>`;
 }
 const cell = (l, v) => `<div class="cell"><div class="l">${esc(l)}</div><div class="v">${v}</div></div>`;
+/* A known figure wraps in a button into its gloss; a figure that already
+   renders as a button (an absence with its reason) is left as it is. */
+const factBtn = (html, gloss) => html.includes("<button")
+  ? html : `<button data-m="figure" data-arg="${escAttr(gloss)}">${html}</button>`;
 function priceFactVal(s) {
   const p = s._price || {};
   if (p.value == null) return '<span class="absent">not known</span>';
@@ -332,7 +360,7 @@ function recordSection(s) {
     else if (!sale && l.override) chipBits.push('<span class="chip" style="color:var(--exit)">against the signal</span>');
     const what = `${sale ? "Sold" : "Bought"} ${esc(String(l.shares))} at ${money(l.price)}`;
     return recLine(
-      `<b>${what}</b>${sale && l.reason ? ` — ${esc(l.reason.toLowerCase())}` : ""} ${chipBits.join(" ")}
+      `<b>${what}</b>${sale && l.reason ? ` — ${esc(l.reason)}` : ""} ${chipBits.join(" ")}
        · <button data-m="lot" data-arg="${escAttr({ t: s.ticker, id: l.id })}">the record of that day</button>`,
       l.date);
   };
@@ -351,10 +379,10 @@ function recordSection(s) {
 
   const falsifierNudge = s.bucket === "holdings"
     && !(t.status === "known" && (t.version || {}).falsifier)
-    ? `<p class="quiet">No “what would make me wrong” is on record. It is the half of the thesis that catches you before a loss does — <button class="dim" data-m="thesisedit" data-arg="${escAttr({ t: s.ticker })}" style="border-bottom:1px dotted var(--hair-dark)">write it</button>.</p>` : "";
+    ? recLine(`<b>What would make me wrong</b> — <span class="absent">nothing on record</span> · <button data-m="thesisedit" data-arg="${escAttr({ t: s.ticker })}">write it</button>`, null) : "";
 
   return `<h2 class="sect">Your record on this security<span class="aside">append-only · nothing is ever edited</span></h2>
-    ${lines.join("")}${falsifierNudge}`;
+    ${falsifierNudge}${lines.join("")}`;
 }
 const recLine = (main, when) =>
   `<div class="recline"><span class="rmain">${main}</span><time>${esc(when || "—")}</time></div>`;
@@ -362,17 +390,22 @@ const recLine = (main, when) =>
 /* -------------------------------------- 3 · the rest of what is stored */
 function coverageSection(s) {
   if (!s.cik) {
-    return `<h2 class="sect">The rest of what is stored</h2>
+    return `<h2 class="sect">Everything stored about this security</h2>
       <p class="quiet">Nothing has been fetched for ${esc(s.ticker)}, so only what you type exists here. <button class="dim" style="border-bottom:1px dotted var(--hair-dark)" data-act="fetch" data-t="${esc(s.ticker)}">Fetch data</button> and every measure the bank defines is worked out from the filings.</p>`;
   }
   if (C.coverageFor !== s.ticker || (!C.coverage && !C.loadingCoverage)) {
     loadCoverage(s.ticker);
   }
   if (!C.coverage || C.coverageFor !== s.ticker) {
-    return `<h2 class="sect">The rest of what is stored</h2>
+    return `<h2 class="sect">Everything stored about this security</h2>
       <p class="quiet">Reading the stored filings…</p>`;
   }
   const cov = C.coverage;
+  if (cov.error) {
+    return `<h2 class="sect">Everything stored about this security</h2>
+      <p class="quiet">The stored filings could not be read: ${esc(cov.error)}
+      <button class="dim" style="border-bottom:1px dotted var(--hair-dark)" data-act="coverage-retry" data-t="${esc(s.ticker)}">Try again</button></p>`;
+  }
   const entries = (cov.entries || []).filter((e) => (bankMeta(e.id) || {}).kind !== "qualitative");
   const computed = entries.filter((e) => e.status === "computed");
   const absent = entries.filter((e) => e.status === "absent");
@@ -387,8 +420,8 @@ function coverageSection(s) {
       <td class="ev-o o-noted"></td></tr>`;
   };
   const cc = cov.crosscheck || null;
-  const ccLine = cc ? crosscheckLine(cc) : "";
-  return `<h2 class="sect">The rest of what is stored<span class="aside">every measure the bank defines, worked out from the filings held</span></h2>
+  const ccLine = cc ? crosscheckBlock(cc) : "";
+  return `<h2 class="sect">Everything stored about this security<span class="aside">every measure the bank defines — including the ones the verdict above read</span></h2>
     ${computed.length ? `<div class="grp"><div class="gh"><span class="gn">Worked out</span><span class="gtally"><b>${computed.length}</b> of ${entries.length}</span></div>
       <table class="ev"><tbody>${computed.map(row).join("")}</tbody></table></div>` : ""}
     ${absent.length ? `<div class="grp"><div class="gh"><span class="gn">Not known</span><span class="gtally">each says why — a fetch, a filing or a typed figure may close it</span></div>
@@ -407,12 +440,27 @@ async function loadCoverage(ticker) {
   C.coverage = r.ok ? (r.coverage || { entries: [] }) : { entries: [], error: r.error };
   if (openTicker === ticker) render();
 }
-function crosscheckLine(cc) {
-  const runs = cc.runs || cc.rows || [];
-  if (!runs.length && !cc.summary) return "";
-  const worst = runs.find((r2) => r2.verdict === "Inconsistent") || null;
-  const head = worst
-    ? `<b style="color:var(--exit)">Look closer:</b> the tool’s own price × shares disagrees with a public float a filing states about itself.`
-    : `The tool’s own price × shares was checked against the public float each 10-K states about itself${runs.length ? ` — ${runs.length} filings compared` : ""}.`;
-  return `<p class="quiet">${head} Details are in the margin under Filings.</p>`;
+function crosscheckBlock(cc) {
+  const checks = cc.checks || [];
+  const sum = cc.summary || {};
+  if (!checks.length) return "";
+  /* The words carry the state; colour repeats it and never stands alone. */
+  const word = { pass: ["consistent", "o-pass"], warn: ["look closer", "o-unknown"],
+    fail: ["inconsistent", "o-fail"], skipped: ["could not run", "o-noted"] };
+  const head = sum.fail
+    ? `<b class="o-fail">Inconsistent:</b> the tool’s own price × shares disagrees with a public float a filing states about itself — the signature of a wrong price basis, a split, a currency or a share-class error. The rows below say which filings.`
+    : sum.warn
+      ? `<b class="o-unknown">Look closer:</b> the price × shares comparison is off by more than rounding on ${sum.warn} filing${sum.warn === 1 ? "" : "s"} below.`
+      : `The tool’s own price × shares agrees with the public float each 10-K states about itself${sum.ran ? ` — ${sum.ran} filing${sum.ran === 1 ? "" : "s"} compared${sum.skipped ? `, ${sum.skipped} could not run` : ""}` : ""}.`;
+  const rows = checks.map((k) => {
+    const [w, cls] = word[k.status] || [k.status || "", "o-noted"];
+    return `<tr class="hot"><td class="en">${esc(k.form || "10-K")} · ${esc(k.period || "")} <span class="dim">${esc(k.accession || "")}</span></td>
+      <td class="ev-v">${k.ratio !== null && k.ratio !== undefined ? `<span class="num">${Number(k.ratio).toFixed(2)}×</span>` : ""}</td>
+      <td class="ev-t">${esc(oneline(k.note || ""))}</td>
+      <td class="ev-o ${cls}">${esc(w)}</td></tr>`;
+  }).join("");
+  return `<div class="grp"><div class="gh"><span class="gn">The cross-check</span>
+      <span class="gtally">price × shares against the public float each 10-K states about itself — an independent test the filings themselves supply</span></div>
+    <p class="quiet">${head}</p>
+    <table class="ev"><tbody>${rows}</tbody></table></div>`;
 }

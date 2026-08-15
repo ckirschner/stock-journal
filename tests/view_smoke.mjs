@@ -789,10 +789,10 @@ for (const [ticker, reply] of Object.entries(state.__previews || {})) {
   if (th.status === "known") {
     must.push([label, th.version.thesis || th.version.falsifier,
       `${ticker}: the pane shows the thesis it is about to freeze`]);
-    mustNot.push([label, "No thesis is on record",
-      `${ticker}: the pane denies a thesis it was handed`]);
+    mustNot.push([label, "Nothing under \u201cWhy I own this\u201d is on record",
+      `${ticker}: the pane denies a written case it was handed`]);
   } else {
-    must.push([label, "No thesis is on record",
+    must.push([label, "is on record",
       `${ticker}: buying with nothing written says so`]);
   }
 }
@@ -865,6 +865,28 @@ for (const [screen, text, why] of must) {
 for (const [screen, text, why] of mustNot) {
   if (flat(out[screen]).includes(flat(text))) {
     problems.push(`${screen}: ${why} — did not expect "${String(text).slice(0, 70)}"`);
+  }
+}
+// The banned words never appear in the view's own copy (§8). Checked in
+// the SOURCE, not the rendered output: everything else on a screen is
+// payload — strategy prose, the user's own notes, recorded vocabulary —
+// which renders verbatim and is not the view's to rewrite (the engine-side
+// renames are reported findings). Comments are stripped; identifiers
+// (doThesis, _thesis, name="thesis", PANES.thesis) are excluded by the
+// boundary classes, so what remains is words a reader would see.
+{
+  const code = viewSource.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  for (const word of ["thesis", "falsifier", "provenance"]) {
+    const re = new RegExp(String.raw`(?<![A-Za-z_$.\/"'\-])${word}(?![A-Za-z_$:"])`, "gi");
+    let m;
+    while ((m = re.exec(code)) !== null) {
+      problems.push(`banned word "${word}" in view copy: "…${code.slice(Math.max(0, m.index - 60), m.index + 60).replace(/\s+/g, " ")}…"`);
+    }
+  }
+  for (const phrase of ["Need a look", "Nothing needs you"]) {
+    if (code.includes(phrase)) {
+      problems.push(`banned phrase "${phrase}" in view copy`);
+    }
   }
 }
 // The view never names a strategy, a strategy's setting, or a warning glyph.

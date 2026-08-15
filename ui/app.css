@@ -121,7 +121,7 @@ aside.margin{width:24rem;flex-shrink:0;border-left:1px solid var(--hair);backgro
 .s-blocked{color:var(--blocked)} .s-unknown{color:var(--unknown)} .s-scope{color:var(--scope)}
 .o-pass{color:var(--clean)} .o-fail{color:var(--exit)} .o-unknown{color:var(--unknown)} .o-noted{color:var(--dim)}
 .absent{color:var(--unknown);font-style:italic}
-.cm{color:var(--ink);cursor:pointer}
+.cm{color:var(--ink);cursor:help}
 
 /* ---- banners ---- */
 .banner{border:1px solid var(--hair-dark);border-left:3px solid var(--blocked);border-radius:8px;
@@ -156,7 +156,7 @@ table.list .tk button:hover{border-bottom-color:var(--ink)}
 table.list .tk small{display:block;font-weight:400;color:var(--faint);font-size:.72rem}
 table.list td .sub{display:block;font-size:.66rem;color:var(--dim);white-space:normal;max-width:26rem}
 .listnote{font-size:.76rem;color:var(--dim);padding:.9rem 0}
-.moved{font-size:.62rem;color:var(--unknown);border:1px dotted var(--hair-dark);border-radius:999px;padding:.02em .5em;white-space:nowrap}
+.moved{font-size:.62rem;color:var(--faint);border:1px dotted var(--hair-dark);border-radius:999px;padding:.02em .5em;white-space:nowrap}
 .chip{font-family:var(--mono);font-size:.6rem;border:1px dashed var(--hair-dark);border-radius:999px;
   padding:.06em .55em;color:var(--faint);white-space:nowrap;vertical-align:.15em}
 .toolrow{display:flex;gap:.7rem;align-items:center;padding:.2rem 0 .9rem;font-size:.8rem}

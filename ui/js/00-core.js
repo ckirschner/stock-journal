@@ -184,8 +184,13 @@ const cmMark = (cs) => (cs || []).length
 
 /* A return figure: signed, coloured by its own sign — the one place colour
    carries the figure's own state rather than a verdict's. */
-function pctCell(r, key) {
-  if (r === null || r === undefined) return '<span class="dim">—</span>';
+function pctCell(r, why) {
+  if (r === null || r === undefined) {
+    return why
+      ? `<button class="dim" data-m="absent" data-arg="${escAttr({
+          label: "This figure", reason: why })}">—</button>`
+      : '<span class="dim">—</span>';
+  }
   const node = (typeof r === "object") ? r : { status: "known", value: r };
   if (node.status !== "known") {
     return `<button class="dim" data-m="absent" data-arg="${escAttr({
@@ -234,9 +239,12 @@ async function refresh() {
 }
 /* The timeframe reply, fetched beside the state. Absences render per row —
    a failure here never blanks the list. */
+let _tfSeq = 0;
 async function refreshTimeframe() {
   const spec = TIMEFRAMES.find((t) => t.id === timeframe) || TIMEFRAMES[1];
+  const seq = ++_tfSeq;
   const r = await apiRaw("timeframe_view", daysAgo(spec.days));
+  if (seq !== _tfSeq) return;    /* a later window was chosen; let it win */
   T = r.ok ? { ...r, label: spec.label }
     : { label: spec.label, account: null, rows: {}, error: r.error };
   render();

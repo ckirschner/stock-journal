@@ -111,6 +111,17 @@ document.addEventListener("click", async (ev) => {
     let arg = {};
     try { arg = JSON.parse(btn.dataset.arg || "{}"); } catch (e) { arg = {}; }
     if (btn.dataset.m === "row") arg.rowKey = (btn.closest("tr") || {}).dataset ? btn.closest("tr").dataset.rowkey : null;
+    if (btn.dataset.m === "newjournal" && M.id === "newjournal") {
+      /* Re-picking the strategy repaints the pane; the typed name and
+         answers survive it. */
+      const kept = marginForm();
+      margin("newjournal", arg);
+      $("margin").querySelectorAll("[name]").forEach((el) => {
+        if (kept[el.name] !== undefined && el.type !== "checkbox") el.value = kept[el.name];
+      });
+      applyGates($("margin"));
+      return;
+    }
     margin(btn.dataset.m, arg);
     return;
   }
@@ -150,6 +161,20 @@ document.addEventListener("click", async (ev) => {
   else if (act === "back") { closeSecurity(); if (tab === "analytics") tab = "list"; render(); }
   else if (act === "analytics") { closeSecurity(); tab = "analytics"; render(); marginRest(); }
   else if (act === "problemsfirst") { problemsFirst = !problemsFirst; render(); }
+  else if (act === "coverage-retry") { C.coverage = null; C.coverageFor = null; render(); }
+  else if (act === "fetchall") {
+    /* Per-name, never blocking: each fetch runs in the backend's own
+       thread and lands its own toast; the first name that finishes can be
+       acted on without waiting for the last. */
+    const targets = (S.securities || []).filter((s) =>
+      !s._data && !(s._fetch && s._fetch.running));
+    for (const s of targets) {
+      const r = await apiRaw("fetch_security", s.ticker);
+      if (r.ok) startFetchPoll(s.ticker);
+      else toast(`${s.ticker}: ${r.error}`, true);
+    }
+    await refresh();
+  }
   else if (act === "bankscope") { showWholeBank = btn.dataset.scope === "all"; render(); }
   else if (act === "timeframe") { timeframe = btn.dataset.tf; refreshTimeframe().then(() => margin("timeframe", {})); }
   else if (act === "fetch") {
@@ -179,6 +204,7 @@ document.addEventListener("click", async (ev) => {
     const r = await apiRaw("add_security", btn.dataset.t, btn.dataset.name || "");
     if (!r.ok && !/already/.test(r.error || "")) { toast(r.error, true); return; }
     await refresh();
+    refreshTimeframe();
     openSecurity(btn.dataset.t); render();
   }
   else if (FIX_ACTIONS[act]) FIX_ACTIONS[act](btn.dataset.t || openTicker);
@@ -190,15 +216,24 @@ document.addEventListener("change", (ev) => {
   const el = ev.target;
   if (el.id === "buy_date") {
     const f = marginForm();
-    margin("buy", { t: (M.arg || {}).t, when: el.value, keep: f, fallback: f.opened });
+    /* The fallback is the date the pane was last built for — by the time
+       this fires, the field already holds the new one. */
+    margin("buy", { t: (M.arg || {}).t, when: el.value, keep: f,
+      fallback: (M.arg || {}).when || localToday() });
   } else if (el.id === "sell_date") {
     const f = marginForm();
-    margin("sell", { t: (M.arg || {}).t, when: el.value, keep: f, fallback: f.exited });
+    margin("sell", { t: (M.arg || {}).t, when: el.value, keep: f,
+      fallback: (M.arg || {}).when || localToday() });
   } else if (el.id === "ev_method") {
     const f = marginForm();
     const keep = {};
     Object.entries(f).forEach(([k, v]) => { if (k.startsWith("ev_") && k !== "ev_method") keep[k.slice(3)] = v; });
     margin("ev", { t: (M.arg || {}).t, method: el.value, keep });
+  } else if (el.closest && el.closest("[data-bfrow]") && M.id === "backfill") {
+    /* An edit after a check makes the shown per-row verdicts stale; the
+       form re-renders unchecked, keeping what was typed. */
+    const st = bfRead();
+    margin("backfill", { t: (M.arg || {}).t, state: { ...st, preview: null } });
   } else if (el.closest && el.closest("#margin")) {
     applyGates($("margin"));
   } else if (el.closest && el.closest("#view")) {
@@ -217,7 +252,15 @@ document.addEventListener("input", (ev) => {
 });
 document.addEventListener("keydown", (ev) => {
   if (ev.key !== "Escape") return;
-  if (M.id !== "rest") { marginRest(); return; }
+  if (M.id !== "rest") {
+    /* A pane holding typed work is closed with ✕, never wiped by a stray
+       Escape — a written override reason is the one thing this program
+       asks for and must not destroy. */
+    const typed = Array.from($("margin").querySelectorAll("textarea[name], input[name]:not([type=date])"))
+      .some((el) => (el.value || "").trim() !== "" && !el.readOnly);
+    if (!typed) marginRest();
+    return;
+  }
   if (openTicker) { closeSecurity(); render(); }
 });
 

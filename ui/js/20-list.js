@@ -30,8 +30,8 @@ function renderMast() {
      unknown colour, because blindness must never hide inside a to-do count. */
   const saying = holdings.filter((s) => needsAttention(s._decision)
     && (s._decision || {}).tier === "position").length;
-  const blind = holdings.filter((s) => needsAttention(s._decision)
-    && (s._decision || {}).tier === "evaluation").length;
+  const blind = holdings.filter((s) => renderOf(s._decision) === "unknown").length;
+  const owed = holdings.filter((s) => renderOf(s._decision) === "blocked").length;
   const tf = TIMEFRAMES.find((x) => x.id === timeframe) || TIMEFRAMES[1];
   const change = T && T.account ? T.account.percent : null;
 
@@ -54,6 +54,10 @@ function renderMast() {
   if (blind) {
     cells.push(`<div class="cell"><div class="l"><button data-m="acct" data-arg="${escAttr({ which: "blind" })}">Cannot be watched</button></div>
       <div class="v"><b class="num" style="color:var(--unknown)">${blind}</b> <small>— exit checks cannot run</small></div></div>`);
+  }
+  if (owed) {
+    cells.push(`<div class="cell"><div class="l">Waiting on you</div>
+      <div class="v"><b class="num" style="color:var(--blocked)">${owed}</b> <small>— a decision is owed before any verdict</small></div></div>`);
   }
   $("maststats").innerHTML = cells.join("");
 }
@@ -86,18 +90,9 @@ function banners() {
     out.push(`<div class="banner"><b>${esc(S.strategy_missing.name || "This journal's strategy")} is not installed on this machine.</b>
       Every verdict says so rather than guessing. Your record is untouched; installing the strategy brings the verdicts back.</div>`);
   }
-  const pending = S.pending_changes || [];
-  if (pending.length) {
-    const words = S.change_records || {};
-    out.push(`<div class="banner">${pending.map((c) => {
-      const w = (words[c.record] || {});
-      const lines = (c.moved || []).map((m) =>
-        `<div class="bline">${esc(m.label || m.id)}: ${esc(fmtDefined(m.from))} → ${esc(fmtDefined(m.to))}</div>`).join("");
-      return `<b>${esc(cap(w.noun || c.record))} ${esc(String(c.seq))} moved without a reason on it.</b>${lines}
-        <div class="bline"><button class="link" data-m="explain" data-arg="${escAttr({ record: c.record, seq: c.seq })}">Write the reason</button>
-        <span class="dim">— the change is already recorded; only the sentence is owed.</span></div>`;
-    }).join("")}</div>`);
-  }
+  /* No banner for a recorded rule change: §6.19 dropped that friction to a
+     quiet record. The change histories on the Strategy page list every entry
+     with the way to attach the sentence. */
   if (S.journal_problem) {
     out.push(`<div class="banner err"><b>A journal could not be read.</b> ${esc(S.journal_problem)}</div>`);
   }
@@ -147,8 +142,11 @@ function listView() {
   const head = `<div class="filters">${filters}
     <span class="sort">ordered by ${sortable
       ? `<button data-act="sort">${esc(sortLabel)} ⇅</button>` : esc(sortLabel)}</span></div>`;
+  const unfetched = (S.securities || []).filter((s) =>
+    !s._data && !(s._fetch && s._fetch.running));
   const toolbar = `<div class="toolrow">
     <button data-m="add" data-arg="{}">Add securities</button>
+    ${unfetched.length > 1 ? `<button data-act="fetchall">Fetch the ${unfetched.length} without data</button>` : ""}
     ${S.list ? `<button data-m="importlist" data-arg="{}">Import a fresh list</button>` : ""}
   </div>`;
 
@@ -168,8 +166,8 @@ function listView() {
   rows = orderRows(pool);
   if (!rows.length) {
     const invite = filter === "holdings"
-      ? "Nothing is held. A purchase records itself here — and if you already own things, add each security and enter its history from your records."
-      : "Nothing is being tracked. Add a security and this journal's strategy will say what it makes of it.";
+      ? `Nothing is held. A purchase records itself here — and if you already own things, <button class="dim" style="border-bottom:1px dotted var(--hair-dark)" data-m="add" data-arg="{}">add each security</button> and enter its history from your records. Those holdings are then judged for exit, not entry: the buy decision is behind them.`
+      : `Nothing is being tracked. <button class="dim" style="border-bottom:1px dotted var(--hair-dark)" data-m="add" data-arg="{}">Add a security</button> and this journal's strategy will say what it makes of it.`;
     return head + toolbar + `<p class="quiet">${invite}</p>`;
   }
   const tfLabel = (T && T.label) || "Timeframe";
@@ -224,10 +222,10 @@ function priceCellHtml(s) {
     return `<button class="dim" data-m="price" data-arg="${escAttr({ t: s.ticker })}">—</button><span class="sub">no price — click for why</span>`;
   }
   const label = p.terminal
-    ? `<span class="typed" title="This series has ended. This is the last close it ever had, not what it trades at.">ended°</span>`
+    ? `<button class="typed" data-m="price" data-arg="${escAttr({ t: s.ticker })}" title="This series has ended. This is the last close it ever had, not what it trades at.">ended°</button>`
     : p.source === "fetched"
       ? `close ${esc(fmtCloseDate(p.date))}`
-      : `<span class="typed" title="Entered by hand — carries no date. Click for what that qualifies.">typed°</span>`;
+      : `<button class="typed" data-m="price" data-arg="${escAttr({ t: s.ticker })}" title="Entered by hand — carries no date. Click for what that qualifies.">typed°</button>`;
   return `<span class="num">${money(p.value)}</span><span class="sub">${label}</span>`;
 }
 
@@ -239,7 +237,7 @@ function weightCell(s) {
   if (w.status !== "known") {
     return `<button class="dim" data-m="absent" data-arg="${escAttr({ label: "Share of the account", reason: w.reason || "" })}">—</button>`;
   }
-  return `<span class="num">${Number(w.value).toFixed(1)}%</span><span class="sub">${
+  return `<span class="num">${Number(w.value).toFixed(1)}%</span>${cmMark(w.cautions)}<span class="sub">${
     mv.status === "known" ? money0(mv.value) : ""}</span>`;
 }
 
@@ -259,7 +257,7 @@ function securityRow(s) {
     <td>${sayCell(s)}</td>
     <td>${priceCellHtml(s)}</td>
     <td>${sinceBuy}</td>
-    <td>${pctCell(tfNode)}</td>
+    <td>${pctCell(tfNode, tfWhy())}</td>
     <td>${held ? weightCell(s) : '<span class="num dim">—</span>'}</td>
   </tr>`;
 }
@@ -273,32 +271,39 @@ function trackTable(rows) {
     const heldAgain = s.bucket === "holdings"
       ? ' <span class="chip">held again</span>' : "";
     const today = (s._decision || {}).state || {};
-    const sinceExit = c.since_exit
-      ? (c.since_exit.pct !== null && c.since_exit.pct !== undefined
-        ? `<span class="num ${c.since_exit.pct >= 0 ? "pos" : "neg"}">${c.since_exit.pct >= 0 ? "+" : "−"}${Math.abs(c.since_exit.pct).toFixed(1)}%</span>`
-          + (c.since_exit.until === "purchase" ? '<span class="sub">to your next buy</span>' : "")
-        : '<span class="num dim">—</span>')
-      : '<span class="num dim">—</span>';
+    const sinceExit = sinceExitCell(c.since_exit);
     return `<tr class="sec" data-rowkey="p:${esc(s.ticker)}:${esc(String(c.seq))}" data-m="row" data-arg="${escAttr({ t: s.ticker, period: c.seq })}">
       <td class="tk"><button data-act="open" data-t="${esc(s.ticker)}" data-p="${esc(String((c.buys || [])[0] || ""))}">${esc(s.ticker)}</button><small>${esc(s.name || "")}${heldAgain}</small></td>
       <td><span class="recstate">Closed${reasons.length ? " — sold: " + esc(reasons.join(", ")) : ""}</span>
         <span class="sub">${esc(c.opened || "")} → ${esc(c.closed || "")}${today.name ? ` · today it reads: ${esc(today.name)}` : ""}</span></td>
       <td>${priceCellHtml(s)}</td>
       <td>${pctCell(c.return)}</td>
-      <td>${pctCell(T && T.rows ? T.rows[s.ticker] : null)}</td>
+      <td>${pctCell(T && T.rows ? T.rows[s.ticker] : null, tfWhy())}</td>
       <td>${sinceExit}</td>
     </tr>`;
   }).join("")}</tbody></table>`;
 }
 
-/* Cash is a position. The line renders only what the host serves. */
+/* The allocation's own standing speaks for the list — four host-worded
+   states with the arithmetic behind them, never a sentence composed here. */
 function listNote() {
-  const cash = (S.portfolio || {}).cash;
-  if (!cash || cash.status !== "known") return "";
-  const eligible = ((S.allocation || {}).ready || []).length;
-  return `<p class="listnote">Cash is a position: ${money0(cash.value)} sits uncommitted${
-    eligible ? `, and ${eligible === 1 ? "one name qualifies" : eligible + " names qualify"} for it`
-      : ", and nothing qualifies for it today. That is the strategy working"}.</p>`;
+  const standing = ((S.allocation || {}).standing) || null;
+  if (!standing) return "";
+  return `<p class="listnote"><b>${esc(standing.headline || "")}</b> ${esc(standing.detail || "")}${
+    standing.action ? ` <button class="dim" style="border-bottom:1px dotted var(--hair-dark)" data-m="add" data-arg="{}">${esc(standing.action)}</button>` : ""}</p>`;
+}
+
+/* A since-exit figure, or its absence with the host's own reason. The node
+   is {pct, reason, until, ...}, not known-or-absent, so it has its own
+   renderer rather than passing through pctCell. */
+function sinceExitCell(se) {
+  if (!se) return '<span class="num dim">—</span>';
+  if (se.pct === null || se.pct === undefined) {
+    return `<button class="dim" data-m="absent" data-arg="${escAttr({
+      label: "Since exit", reason: se.reason || "" })}">—</button>`;
+  }
+  return `<span class="num ${se.pct >= 0 ? "pos" : "neg"}">${se.pct >= 0 ? "+" : "−"}${Math.abs(se.pct).toFixed(1)}%</span>`
+    + (se.until === "purchase" ? '<span class="sub">to your next buy</span>' : "");
 }
 
 /* The list a list-strategy journal works from. */
@@ -358,7 +363,7 @@ PANES.row = (a) => {
 <h3>Held ${esc(period.opened || "")} → ${esc(period.closed || "")}</h3>
 <table class="m-series">
 <tr><td>While held</td><td>${mNode(period.return, (v) => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(1) + "%")}</td></tr>
-${period.since_exit && period.since_exit.pct != null ? `<tr><td>Since exit</td><td class="num">${period.since_exit.pct >= 0 ? "+" : "−"}${Math.abs(period.since_exit.pct).toFixed(1)}%${period.since_exit.until === "purchase" ? " · to your next buy" : ""}</td></tr>` : ""}
+${period.since_exit ? `<tr><td>Since exit</td><td>${sinceExitCell(period.since_exit)}</td></tr>` : ""}
 ${reasons.length ? `<tr><td>Sold because</td><td>${esc(reasons.join(", "))}</td></tr>` : ""}
 ${st.name ? `<tr><td>Today it reads</td><td>${esc(st.name)}</td></tr>` : ""}
 </table>
@@ -379,10 +384,10 @@ ${st.name ? `<tr><td>Today it reads</td><td>${esc(st.name)}</td></tr>` : ""}
     const h = ((S.portfolio || {}).holdings || []).find((x) => x.ticker === s.ticker);
     const p = openPeriod(s);
     return `<table class="m-series">
-      <tr><td>${esc(String(s._shares))} sh at ${money(s._cost_basis)} avg</td><td>${h ? mNode(h.market_value, money0) : ""}</td></tr>
+      <tr><td>${esc(String(s._shares))} sh at ${money(s._cost_basis)} avg</td><td>${h ? mNode(h.market_value, money0, "Market value") + cmMark((h.market_value || {}).cautions) : ""}</td></tr>
       <tr><td>Since buy</td><td>${mNode(s._return, (v) => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(1) + "%")}</td></tr>
       ${p && p.opened ? `<tr><td>Held since</td><td class="num">${esc(p.opened)}</td></tr>` : ""}
-      ${h && h.weight && h.weight.status === "known" ? `<tr><td>Of the account</td><td class="num">${Number(h.weight.value).toFixed(1)}%</td></tr>` : ""}
+      ${h && h.weight && h.weight.status === "known" ? `<tr><td>Of the account</td><td class="num">${Number(h.weight.value).toFixed(1)}%${cmMark(h.weight.cautions)}</td></tr>` : ""}
     </table>`;
   })() : "";
 
@@ -437,8 +442,8 @@ ${cashMini()}`;
   return `<p class="m-kicker">The account</p>
 <h3>Positions</h3>
 <p>How many names the account holds now.</p>
-${limits.length ? `<div class="m-h">What your strategy says about size</div>${limits.map((l) =>
-    `<p><b>${esc(l.title || "")}</b> ${esc(l.body || "")}</p>`).join("")}`
+${limits.length ? `<div class="m-h">What this method does not promise</div>${limits.map((l) =>
+    `<p><b>${esc(l.title || "")}</b></p>${prose(l.body || "")}`).join("")}`
     : `<p class="m-quiet">This strategy declares no limit of its own here — that is a true fact about the method, not a gap in the screen.</p>`}`;
 };
 
@@ -472,6 +477,11 @@ ${body}
 <p>${rows}</p>
 <p class="m-quiet">Every row's "${esc((T && T.label) || "timeframe")}" column reads over the same window.</p>`;
 };
+
+/* Why a timeframe cell can be empty when the whole reply is missing. */
+const tfWhy = () => !T ? "the timeframe has not been read yet"
+  : T.error ? `the timeframe could not be read — ${T.error}`
+  : "this security was not in the last timeframe reading — it may have just been added";
 
 /* Every reason a holding period's exit gave, in words — with the share of
    the exit each accounts for when there was more than one. The host counted

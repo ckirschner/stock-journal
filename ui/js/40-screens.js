@@ -18,7 +18,7 @@ function strategyView() {
       <p class="panelnote">Settled from the SEC’s own industry code inside a company’s filings, on the first fetch. A declined company is not a failed one — nothing was tested.</p></div>` : "";
   const limits = (st.limits || []).length ? `
     <div class="panel"><h3>What this method does not promise</h3>
-      ${st.limits.map((l) => `<p><b>${esc(l.title || "")}</b> ${esc(l.body || "")}</p>`).join("")}</div>` : "";
+      ${st.limits.map((l) => `<p><b>${esc(l.title || "")}</b></p>${prose(l.body || "")}`).join("")}</div>` : "";
   const states = `
     <div class="panel"><h3>What it can say</h3>
       ${(st.states || []).map((x) => {
@@ -182,7 +182,7 @@ function dataView() {
       ${["discount_rate", "terminal_growth", "margin_of_safety"].map((k) => {
         const v = ((S.journal || {}).settings || {})[k];
         const label = { discount_rate: "Discount rate", terminal_growth: "Terminal growth", margin_of_safety: "Margin of safety" }[k];
-        return `<div class="kv"><span class="k">${label}</span><span class="v num">${v !== undefined && v !== null ? esc(String(v)) + "%" : "—"}</span></div>`;
+        return `<div class="kv"><span class="k"><button data-m="valdefaults" data-arg="{}">${label}</button></span><span class="v num">${v !== undefined && v !== null ? esc(String(v)) + "%" : "—"}</span></div>`;
       }).join("")}
       <button class="m-act quiet" data-m="valdefaults" data-arg="{}">Change these</button></div>
     <div class="panel"><h3>Back up</h3>

@@ -401,11 +401,21 @@ def compare(security: dict, journal: dict, seqs, comparable) -> dict:
             "summary": (decision.get("reason") or {}).get("summary"),
             "strategy": snap.get("strategy"),
         })
-        price.append({
-            "seq": row["seq"], "value": snap.get("price"),
-            "source": snap.get("price_source"), "date": snap.get("price_date"),
-            "ticker": snap.get("price_ticker"),
-        })
+        # Known-or-absent like every other served figure: a day kept without
+        # a price is a fact with the same honest wording as a measure the
+        # record does not carry, never a bare None a screen shows as a
+        # reasonless dash.
+        if snap.get("price") is None:
+            price.append({"seq": row["seq"], "status": "absent",
+                          "reason": _NOT_ON_RECORD})
+        else:
+            price.append({
+                "seq": row["seq"], "status": "known",
+                "value": snap.get("price"),
+                "source": snap.get("price_source"),
+                "date": snap.get("price_date"),
+                "ticker": snap.get("price_ticker"),
+            })
 
     # The gate's window, in positions. None where either snapshot predates
     # the change record — no stamp, no claim, and the absence says so.

@@ -628,6 +628,18 @@ def price_return(security: dict, cik: int | None, ticker: str,
         return absent(f'the close stored for {then.get("date")} is '
                       f'{float(then["value"]):g}, which is not a price a '
                       "move can be measured from")
+    # A fetched now-end no newer than the then-end means the stores hold no
+    # close inside the window at all — the same close would stand at both
+    # ends and the move would read as a confident 0.0%, which is an answer
+    # about a window nothing was observed in. Absent, with the newest close
+    # named. A typed now-end is different: it is a real later quote, and its
+    # undatedness is already the caution below.
+    if (now.get("source") == "fetched" and now.get("date")
+            and str(now["date"])[:10] <= str(then.get("date") or "")[:10]):
+        return absent(
+            f"no close is stored after {since} — the newest close on "
+            f'record is {now["date"]}, which is on or before the window\'s '
+            "start. Fetching brings this up to date")
     cautions = []
     if now.get("source") == "manual":
         cautions.append(

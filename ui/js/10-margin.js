@@ -17,14 +17,21 @@ const PANES = {};
 
 let M = { id: "rest", arg: null };
 
+let _marginSeq = 0;
 function margin(id, arg) {
   const pane = PANES[id] || PANES.rest;
   M = { id, arg };
+  const seq = ++_marginSeq;
   const el = $("margin");
   const paint = (html) => {
+    /* A pane that resolved after the reader moved on stays unpainted —
+       without this, a slow preview could clobber whatever they opened
+       next, or re-open a margin they had closed. */
+    if (seq !== _marginSeq) return;
     el.innerHTML = '<button class="m-close" data-mclose aria-label="Close">✕</button>' + html;
     el.scrollTop = 0;
     el.classList.toggle("open", id !== "rest");
+    applyGates(el);
   };
   const out = pane(arg);
   if (out && typeof out.then === "function") {
@@ -80,12 +87,35 @@ async function marginGo(fn, after) {
 }
 
 /* ---------------------------------------------------------------- shared */
-const mCautions = (cs) => (cs || []).map((c) =>
-  `<p class="caution">Qualified — ${esc(c)}</p>`).join("");
+/* Cautions render whole, one line each — except where several are the SAME
+   sentence about different holdings ("HARW: entered by hand…" seven times
+   over). Those fold to one line naming every subject, because a wall of
+   repeated text is exactly how the one that mattered gets scrolled past.
+   The sentence itself is never altered; only identical tails group. */
+const mCautions = (cs) => {
+  const list = cs || [];
+  if (list.length < 4) {
+    return list.map((c) => `<p class="caution">Qualified — ${esc(c)}</p>`).join("");
+  }
+  const groups = [];
+  const byTail = {};
+  list.forEach((c) => {
+    const m = /^([A-Z0-9.\-]+): (.+)$/s.exec(String(c));
+    if (m && byTail[m[2]]) { byTail[m[2]].subjects.push(m[1]); return; }
+    const g = m ? { subjects: [m[1]], tail: m[2] } : { subjects: null, tail: String(c) };
+    groups.push(g);
+    if (m) byTail[m[2]] = g;
+  });
+  return groups.map((g) => `<p class="caution">Qualified — ${g.subjects && g.subjects.length > 1
+    ? `${esc(g.subjects.join(", "))}: ${esc(g.tail)}`
+    : esc(g.subjects ? `${g.subjects[0]}: ${g.tail}` : g.tail)}</p>`).join("");
+};
 const mProv = (ps) => (ps || []).map((p) => `<p class="m-quiet">${esc(p)}</p>`).join("");
-const mNode = (node, renderVal) => node && node.status === "known"
+const mNode = (node, renderVal, label) => node && node.status === "known"
   ? `<b class="num">${renderVal ? renderVal(node.value) : esc(String(node.value))}</b>`
-  : `<span class="absent">${node && node.status === "inapplicable" ? "not applicable" : "not known"}</span>`;
+  : `<button class="absent" data-m="absent" data-arg="${escAttr({
+      label: label || "This figure",
+      reason: (node || {}).reason || "" })}">${node && node.status === "inapplicable" ? "not applicable" : "not known"}</button>`;
 
 /* ----------------------------------------------------------------- panes */
 PANES.rest = () => `<p class="m-kicker">The margin</p>
@@ -95,6 +125,17 @@ explained here — what it means in plain words, how it is worked out, where
 the number came from, and what qualifies it.</p>
 <p class="m-hint">The page never moves while you read. Close this with ✕ or
 open something else.</p>`;
+
+/* A derived figure, glossed: what it is in plain words, the value with
+   what qualifies it, and where it came from. */
+PANES.figure = (a) => `<p class="m-kicker">A figure the journal derives</p>
+<h3>${esc(a.label || "This figure")}</h3>
+<p>${a.text ? `<b class="num">${esc(a.text)}</b>` : `<span class="absent">not known</span>`}${
+  a.reason ? ` — ${esc(a.reason)}` : ""}</p>
+${a.explain ? prose(a.explain) : ""}
+${mCautions(a.cautions)}
+${mProv(a.provenance)}
+<p class="m-quiet">Derived from your own record and the stored data — never typed, so when it looks wrong the input it came from is the thing to check.</p>`;
 
 /* A generic absence: the label and the host's own reason. */
 PANES.absent = (a) => `<p class="m-kicker">Why there is no figure</p>
@@ -181,7 +222,10 @@ PANES.measure = (a) => {
       + (t && t.absent ? `<div class="m-h">Why the test never ran</div><p>${esc(t.absent)}</p>` : "")
       + mCautions(obs.cautions) + mProv(obs.provenance);
   } else if (s) {
-    const c = (s._computed || {})[a.sid];
+    const c = (s._computed || {})[a.sid]
+      || (C.coverageFor === s.ticker
+          && ((C.coverage || {}).entries || []).find((e) => e.id === a.sid))
+      || null;
     if (c) {
       headline = c.status === "computed" || c.status === "known"
         ? `<p><b class="num">${esc(fmtMetric(a.sid, c.value))}</b> on the current reading.</p>`
@@ -214,8 +258,12 @@ PANES.measure = (a) => {
     ? `<div class="m-h">The question you answer</div>${prose(full.question)}` : "";
   const kicker = meta.kind === "qualitative" ? "A question only you can answer"
     : a.kicker || "Measure";
+  /* A measure the bank has dropped keeps its row for as long as something
+     was typed; its gloss keeps the words it was entered under. */
+  const droppedWords = !meta.label && entered ? entered : null;
   return `<p class="m-kicker">${esc(kicker)}</p>
-<h3>${esc(meta.label || a.sid)}</h3>
+<h3>${esc(meta.label || (droppedWords || {}).label || a.sid)}</h3>
+${droppedWords ? '<p class="m-quiet">The bank no longer defines this measure; the words here are the ones it was entered under.</p>' : ""}
 ${headline}
 ${meta.plain ? prose(meta.plain) : ""}
 ${asks}${deriv}${series}${misfires}${whose}
@@ -248,7 +296,7 @@ PANES.subject = (a) => {
     judgement: "Your own assessment, not a figure the journal worked out.",
   };
   const t = a.ev.test || null;
-  return `<p class="m-kicker">${esc(subj.kind === "fact" ? "A fact about your position" : "Cited by this verdict")}</p>
+  return `<p class="m-kicker">${esc(subj.kind === "fact" ? "A fact the journal reports" : "Cited by this verdict")}</p>
 <h3>${esc(subj.label || subj.id || "")}</h3>
 <p>${obs.status === "known"
     ? `<b class="num">${esc(fmtSubject(subj, obs.value))}</b>`
@@ -260,8 +308,8 @@ ${t && t.absent ? `<div class="m-h">Why the test never ran</div><p>${esc(t.absen
 ${subj.explain ? prose(subj.explain) : ""}
 ${subj.asks ? `<div class="m-h">What you are asked</div>${prose(subj.asks)}` : ""}
 ${mCautions(obs.cautions)}
-<div class="m-h">Where this comes from</div>
-<p>${esc(kindWords[subj.kind] || "A figure the strategy worked out itself.")}</p>
+${kindWords[subj.kind] ? `<div class="m-h">Where this comes from</div>
+<p>${esc(kindWords[subj.kind])}</p>` : ""}
 ${mProv(obs.provenance)}`;
 };
 
@@ -409,7 +457,7 @@ function frozenEvidence(d) {
     const obs = ev.observed || {};
     const [word] = OUTCOME[ev.outcome] || [ev.outcome];
     const val = obs.status === "known"
-      ? `<span class="num">${esc(fmtSubject(subj, obs.value))}</span>`
+      ? `<span class="num">${esc(fmtSubject(subj, obs.value))}</span>${cmMark(obs.cautions)}`
       : `<span class="absent">${obs.status === "inapplicable" ? "not applicable" : "not known"}</span>`;
     return `<tr><td>${esc(subj.label || subj.id || "")}</td><td>${val} · ${esc(word)}</td></tr>`;
   }).join("");

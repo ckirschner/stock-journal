@@ -444,3 +444,41 @@ class TestTheServedPayload:
         r = api.compare_snapshots("TUBE", [one])
         assert not r["ok"]
         assert "two" in r["error"]
+
+
+class TestTheReviewsFindings:
+    """Two honest-absence gaps an adversarial review caught in the code this
+    branch added, pinned so they stay closed."""
+
+    def test_a_window_with_no_close_in_it_is_absent_not_a_confident_zero(
+            self, api):
+        # The newest close on record predates the window's start: the same
+        # close would stand at both ends, and 0.0% would be an answer about
+        # a window nothing was observed in.
+        cik = company(rows=[["2026-05-30", 10.0, 100]])
+        add(api, "TUBE", cik)
+        got = dataview.price_return(security("TUBE"), cik, "TUBE",
+                                    "2026-07-15")
+        assert got["status"] == "absent"
+        assert "no close is stored after 2026-07-15" in got["reason"]
+
+    def test_a_typed_now_end_still_measures_across_the_window(self, api):
+        cik = company(rows=[["2026-05-30", 10.0, 100]])
+        add(api, "TUBE", cik)
+        assert api.save_metrics("TUBE", {}, 12.0)["ok"]
+        got = dataview.price_return(security("TUBE"), cik, "TUBE",
+                                    "2026-07-15")
+        assert got["status"] == "known"
+        assert any("carries no date" in c for c in got["cautions"])
+
+    def test_a_day_kept_without_a_price_compares_as_absent_with_its_reason(
+            self, api):
+        add(api, "DARK")
+        assert api.save_metrics("DARK", {"fcf_ttm": 1_000_000}, None)["ok"]
+        one = kept_seq(api, "DARK")
+        two = kept_seq(api, "DARK")
+        got = snapshots.compare(security("DARK"), journal(), [one, two],
+                                bank.COMPARABLE_FIELDS)
+        for p in got["price"]:
+            assert p["status"] == "absent"
+            assert "not on this snapshot's record" in p["reason"]
