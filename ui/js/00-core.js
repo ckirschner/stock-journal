@@ -278,8 +278,12 @@ const periodLots = (s, c) => {
 const ORDINALS = ["", "First", "Second", "Third", "Fourth", "Fifth", "Sixth"];
 const ordinal = (n) => ORDINALS[n] || `${n}th`;
 
+/* Paragraphs, with the one markdown habit the declared prose actually uses:
+   **emphasis** becomes bold. Applied after escaping, so nothing else in the
+   text can become markup. */
 const prose = (t) => !t ? "" : String(t).trim().split(/\n{2,}/)
-  .map((p) => `<p>${esc(p).replace(/\n/g, "<br>")}</p>`).join("");
+  .map((p) => `<p>${esc(p).replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+    .replace(/\n/g, " ")}</p>`).join("");
 const oneline = (t) => esc(String(t == null ? "" : t).trim().replace(/\s+/g, " "));
 const cap = (s) => String(s).charAt(0).toUpperCase() + String(s).slice(1);
 

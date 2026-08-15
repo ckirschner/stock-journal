@@ -9,6 +9,9 @@ function render() {
   if (!S) return;
   renderMast();
   renderTabs();
+  /* The margin's resting state paints once at startup; render never touches
+     an open pane, so typing in one survives a background refresh. */
+  if (!$("margin").innerHTML) marginRest();
   const v = $("view");
   if (!S.journal) {
     v.innerHTML = welcomeView();

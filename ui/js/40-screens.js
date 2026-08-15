@@ -207,28 +207,38 @@ function analyticsView() {
   if (!anything) {
     return banners() + head + `<p class="quiet">Not enough history to mean anything yet. Once positions close and overrides age, this page reports both directions — your error rate against the rules, and the rules’ error rate against you. If overriding a particular rule keeps working out, that rule is miscalibrated; this page is where you would find out.</p>`;
   }
+  const signed = (v) => v === null || v === undefined ? "—"
+    : `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}%`;
+  /* Cohort labels are the host's — "seen at the time" against
+     "reconstructed" is the line the engine draws, in its words. */
   const cohort = (c, label) => !c || !c.n_purchases ? "" : `
-    <div class="kv"><span class="k">${esc(label)}</span><span class="v">
-      ${c.n_purchases} purchase${c.n_purchases === 1 ? "" : "s"} · scored ${c.n_scored ?? "—"} of ${c.n_purchases}
+    <div class="kv"><span class="k">${esc(cap(label || ""))}</span><span class="v">
+      ${c.n_purchases} purchase${c.n_purchases === 1 ? "" : "s"} · scored ${c.n ?? "—"} of ${c.n_purchases}
       ${c.win_rate !== undefined && c.win_rate !== null ? ` · win rate ${esc(String(c.win_rate))}%` : ""}
-      ${c.avg_return !== undefined && c.avg_return !== null ? ` · avg ${c.avg_return >= 0 ? "+" : "−"}${Math.abs(c.avg_return).toFixed(1)}%` : ""}
+      ${c.avg !== undefined && c.avg !== null ? ` · avg ${signed(c.avg)}` : ""}
       ${(c.unscored || []).length ? `<small>${c.unscored.map(esc).join(" · ")}</small>` : ""}</span></div>`;
   const sides = (side, label) => `
     <div class="panel"><h3>${esc(label)}</h3>
-      ${cohort((card.live || {})[side], "Seen at the time")}
-      ${cohort((card.reconstructed || {})[side], "Entered from history")}
+      ${cohort((card.live || {})[side], (card.live || {}).label)}
+      ${cohort((card.reconstructed || {})[side], (card.reconstructed || {}).label)}
       ${!((card.live || {})[side] || {}).n_purchases && !((card.reconstructed || {})[side] || {}).n_purchases
         ? '<p class="panelnote">Nothing in this cohort yet.</p>' : ""}</div>`;
   const unrecon = (card.unreconstructed || {}).n_purchases ? `
     <div class="panel"><h3>Could not be reconstructed</h3>
       <p>${card.unreconstructed.n_purchases} purchase${card.unreconstructed.n_purchases === 1 ? "" : "s"} whose day no verdict could be rebuilt for. Counted in neither comparison — there was no signal to obey or defy.</p></div>` : "";
-  const perRule = Object.entries(card.per_rule || {}).map(([rule, r2]) =>
-    `<div class="kv"><span class="k"><code>${esc(rule)}</code></span><span class="v">${esc(String(r2.wins ?? "—"))} of ${esc(String(r2.n_scored ?? "—"))} worked out · ${r2.avg !== undefined && r2.avg !== null ? (r2.avg >= 0 ? "+" : "−") + Math.abs(r2.avg).toFixed(1) + "%" : "—"}</span></div>`).join("");
+  const perRule = ["live", "reconstructed"].flatMap((k) =>
+    Object.values(((card[k] || {}).per_rule) || {}).map((r2) =>
+      `<div class="kv"><span class="k">${esc(r2.label || "")}</span><span class="v">
+        ${esc(String(r2.wins ?? "—"))} of ${esc(String(r2.n_scored ?? "—"))} overrides worked out
+        ${r2.n_scored !== r2.n ? ` · of ${esc(String(r2.n))} in all` : ""}
+        · avg ${signed(r2.avg)}
+        <small>${esc(cap((card[k] || {}).label || k))}</small></span></div>`)).join("");
   const exitRows = Object.entries(exits).map(([reason, x]) => `
     <div class="kv"><span class="k">${esc(reason)}</span><span class="v">
-      ${x.n ?? x.count ?? "—"} exit${(x.n ?? x.count) === 1 ? "" : "s"}
-      ${x.avg_held !== undefined && x.avg_held !== null ? ` · held avg ${x.avg_held >= 0 ? "+" : "−"}${Math.abs(x.avg_held).toFixed(1)}%` : ""}
-      ${x.avg_after !== undefined && x.avg_after !== null ? ` · after avg ${x.avg_after >= 0 ? "+" : "−"}${Math.abs(x.avg_after).toFixed(1)}%` : ""}
+      ${x.n ?? "—"} exit${x.n === 1 ? "" : "s"}
+      ${x.avg_held !== undefined && x.avg_held !== null ? ` · held avg ${signed(x.avg_held)}` : ""}
+      ${x.avg_after !== undefined && x.avg_after !== null ? ` · after avg ${signed(x.avg_after)}` : ""}
+      ${(x.against || {}).n ? `<small>${x.against.n} of these went against the signal${x.against.avg_after !== null && x.against.avg_after !== undefined ? ` — after avg ${signed(x.against.avg_after)}` : ""}</small>` : ""}
       ${x.bought_again ? `<small>${x.bought_again} bought again — the after-window stops at your re-purchase</small>` : ""}</span></div>`).join("");
   const passRows = (passed.rows || []).map((p) => `
     <div class="kv"><span class="k">${esc(p.ticker)}</span><span class="v">

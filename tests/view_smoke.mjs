@@ -457,10 +457,12 @@ if ((card.unreconstructed || {}).n_purchases) {
   must.push(["analytics", "Could not be reconstructed",
     "the third population is reported apart, never folded in"]);
 }
+const capWord = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 if (((card.live || {}).override || {}).n_purchases
   && ((card.reconstructed || {}).override || {}).n_purchases) {
-  must.push(["analytics", "Seen at the time", "the cohorts are labelled"],
-    ["analytics", "Entered from history", "both of them"]);
+  // The cohort labels are the host's own words, read off the payload.
+  must.push(["analytics", capWord(card.live.label), "the cohorts are labelled"],
+    ["analytics", capWord(card.reconstructed.label), "both of them"]);
 }
 const noVerdict = state.securities.find(
   (s) => (s._lots || []).concat(s._sales || []).some((l) => l.unreconstructed));
