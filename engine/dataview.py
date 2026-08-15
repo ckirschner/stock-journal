@@ -594,6 +594,73 @@ def price_series(cik: int | None, ticker: str, until: str | None = None):
     return closes, events
 
 
+def price_return(security: dict, cik: int | None, ticker: str,
+                 since: str) -> dict:
+    """How far ONE security's own price has moved since a day, ending now.
+
+    The now-end is the journal's effective price — hand-entered wins — with
+    its qualifications travelling: a return measured to an undated typed
+    figure says so, because nothing here can tell how long ago it was typed.
+    The then-end is always a fetched close. A typed figure is a statement
+    about now, and anchoring the past to it would invent the very move being
+    measured; a security with no dated history has no return over a window,
+    and says why.
+
+    One symbol, like every price reader here — a sibling class's move is a
+    real move in a different instrument.
+    """
+    _one_symbol(ticker, "price_return")
+    since = str(since)[:10]
+    now = price_view(security, cik, ticker)
+    if now.get("value") is None:
+        return absent(now.get("reason")
+                      or "no current price is on record for this security")
+    if not cik:
+        return absent(
+            f"{ticker} is not matched to a company at the SEC, so no dated "
+            "price history exists to measure a move against — only the "
+            "figure entered by hand, which carries no date")
+    then = price_view_asof(cik, ticker, since)
+    if then.get("value") is None:
+        return absent(f"the move since {since} needs the close of that day, "
+                      f'and {then.get("reason") or "none is stored"}')
+    if float(then["value"]) <= 0:
+        return absent(f'the close stored for {then.get("date")} is '
+                      f'{float(then["value"]):g}, which is not a price a '
+                      "move can be measured from")
+    # A fetched now-end no newer than the then-end means the stores hold no
+    # close inside the window at all — the same close would stand at both
+    # ends and the move would read as a confident 0.0%, which is an answer
+    # about a window nothing was observed in. Absent, with the newest close
+    # named. A typed now-end is different: it is a real later quote, and its
+    # undatedness is already the caution below.
+    if (now.get("source") == "fetched" and now.get("date")
+            and str(now["date"])[:10] <= str(then.get("date") or "")[:10]):
+        return absent(
+            f"no close is stored after {since} — the newest close on "
+            f'record is {now["date"]}, which is on or before the window\'s '
+            "start. Fetching brings this up to date")
+    cautions = []
+    if now.get("source") == "manual":
+        cautions.append(
+            "measured to a price entered by hand, which carries no date — "
+            "the move ends at whatever day you typed it, not necessarily "
+            "today")
+    if now.get("terminal"):
+        cautions.append(
+            f"the {ticker} price series has ended; the newest close is the "
+            "last it ever had, not what it trades at")
+    gap = then.get("days_before") or 0
+    start = (f'the close of {then["date"]}'
+             + (f", {gap} day{'s' if gap != 1 else ''} before {since}"
+                if gap else ""))
+    end = ("the price entered by hand" if now.get("source") == "manual"
+           else f'the close of {now.get("date")}')
+    pct = (float(now["value"]) / float(then["value"]) - 1.0) * 100
+    return known(round(pct, 2), "computed", cautions,
+                 [f"{start}, to {end}"])
+
+
 def ev_reference(cik: int, tickers: list[str]) -> dict:
     """The computed figures an expected-value dialog may prefill or cite:
     free cash flow TTM, shares outstanding, and the owner-earnings

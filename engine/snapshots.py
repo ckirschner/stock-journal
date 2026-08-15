@@ -313,6 +313,215 @@ def entry(security: dict, seq) -> dict | None:
     return None
 
 
+_NOT_ON_RECORD = (
+    "not on this snapshot's record — the day was kept without a known "
+    "figure for it. A frozen record holds only what was known when it was "
+    "written, and it cannot say whether the figure was absent or simply "
+    "never asked about")
+
+_PREDATES = (
+    "this snapshot predates the change record, so whether the measure's "
+    "definition moved between these two days cannot be said — and a "
+    "distance across a definition that may have moved would not be a "
+    "distance in one measure")
+
+
+def _quantity(v) -> bool:
+    """A value a subtraction means something on. Booleans are ints in
+    Python and a judgement's pass minus fail is not a move in anything."""
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def compare(security: dict, journal: dict, seqs, comparable) -> dict:
+    """Two or more saved days of one security, side by side::
+
+        {"columns":  [{"seq", "day", "note", "discarded"}],   # oldest first
+         "verdict":  [{"seq", "state", "render", "rule", "summary",
+                       "strategy"}],
+         "price":    [{"seq", "value", "source", "date", "ticker"}],
+         "measures": {entry id: {"readings": [...one per column],
+                                 "moved": known-or-absent}},
+         "refusal":  None}
+
+    Everything is read off what each snapshot froze and nothing is worked
+    out again — a comparison that recomputed a column would be a second
+    opinion about a record whose whole purpose is that it has only one.
+
+    A measure missing from one column is served absent with the reason a
+    frozen record can honestly give: the record cannot distinguish "was
+    absent that day" from "was never asked", so the comparison says neither.
+
+    `moved` is the newest reading against the oldest, and it is only served
+    where the subtraction means something: both endpoints known, both
+    quantities, and the measure's definition not moved in between. The gate
+    is placed on the change record's *positions* — each snapshot recorded
+    how far the record had got when it was frozen — never on wall-clock
+    stamps, which do not sort across timezones. `comparable` is
+    bank.COMPARABLE_FIELDS, handed in for the reason
+    journals.measures_incomparable takes it: this module owns the record's
+    shape and holds no opinion about what a measure is.
+
+    Raises where the record cannot be read or a named day was never saved —
+    a comparison is a deliberate act, and the refusal is a sentence the
+    person who asked reads in place. A discarded snapshot is comparable:
+    a discard retires a baseline, not the evidence.
+    """
+    got = read(security)
+    if got["refusal"]:
+        raise ValueError(got["refusal"])
+    want = sorted({_seq(s) for s in (seqs or [])})
+    if len(want) < 2:
+        raise ValueError("A comparison needs at least two saved days.")
+    by = {r["seq"]: r for r in got["entries"]}
+    gone = [str(s) for s in want if s not in by]
+    if gone:
+        named = security.get("ticker") or "this security"
+        raise ValueError(
+            f'No snapshot numbered {", ".join(gone)} was ever saved for '
+            f"{named}.")
+    rows = [by[s] for s in want]
+
+    columns, verdict, price = [], [], []
+    for row in rows:
+        snap = row.get("snapshot") or {}
+        decision = snap.get("decision") or {}
+        state = decision.get("state") or {}
+        left = row["discarded"]
+        columns.append({
+            "seq": row["seq"], "day": dated.day_of(row),
+            "note": row.get("note") or "",
+            "discarded": None if not left else {
+                "day": dated.day_of(left), "reason": left.get("reason") or ""},
+        })
+        verdict.append({
+            "seq": row["seq"],
+            "state": {"id": state.get("id"), "name": state.get("name")},
+            "render": decision.get("render"),
+            "rule": (decision.get("reason") or {}).get("rule"),
+            "summary": (decision.get("reason") or {}).get("summary"),
+            "strategy": snap.get("strategy"),
+        })
+        # Known-or-absent like every other served figure: a day kept without
+        # a price is a fact with the same honest wording as a measure the
+        # record does not carry, never a bare None a screen shows as a
+        # reasonless dash.
+        if snap.get("price") is None:
+            price.append({"seq": row["seq"], "status": "absent",
+                          "reason": _NOT_ON_RECORD})
+        else:
+            price.append({
+                "seq": row["seq"], "status": "known",
+                "value": snap.get("price"),
+                "source": snap.get("price_source"),
+                "date": snap.get("price_date"),
+                "ticker": snap.get("price_ticker"),
+            })
+
+    # The gate's window, in positions. None where either snapshot predates
+    # the change record — no stamp, no claim, and the absence says so.
+    def _position(row):
+        marks = (row.get("snapshot") or {}).get("changes_recorded")
+        return None if marks is None else marks.get("measures")
+
+    lo, hi = _position(rows[0]), _position(rows[-1])
+    redefined = journals.measures_incomparable(journal or {}, comparable)
+
+    measures: dict = {}
+    ids = sorted({eid for row in rows
+                  for eid in ((row.get("snapshot") or {}).get("metrics")
+                              or {})})
+    for eid in ids:
+        readings = []
+        for row in rows:
+            held = ((row.get("snapshot") or {}).get("metrics") or {}).get(eid)
+            if held is None:
+                readings.append({"status": "absent",
+                                 "reason": _NOT_ON_RECORD})
+            else:
+                readings.append({"status": "known", **held})
+        first, last = readings[0], readings[-1]
+        if first["status"] != "known" or last["status"] != "known":
+            moved = {"status": "absent",
+                     "reason": "the figure is not on both records, so there "
+                               "is no distance to measure"}
+        elif not (_quantity(first.get("value"))
+                  and _quantity(last.get("value"))):
+            moved = {"status": "absent",
+                     "reason": "not a quantity — the readings sit beside "
+                               "each other to be read, not subtracted"}
+        elif lo is None or hi is None:
+            moved = {"status": "absent", "reason": _PREDATES}
+        else:
+            between = [m for m in redefined.get(eid) or []
+                       if m.get("seq") is not None and lo < m["seq"] <= hi]
+            if between:
+                day = str(between[0].get("seen") or "")[:10]
+                moved = {"status": "absent",
+                         "reason": (
+                             f"what this measure means moved on {day}, "
+                             "between these two days, so the readings were "
+                             "not worked out to the same definition and the "
+                             "distance between them would not be a distance "
+                             "in one measure")}
+            else:
+                moved = {"status": "known",
+                         "value": round(float(last["value"])
+                                        - float(first["value"]), 6),
+                         "source": "computed", "cautions": [],
+                         "provenance": [
+                             f'{first["value"]} on {columns[0]["day"]}, '
+                             f'against {last["value"]} on '
+                             f'{columns[-1]["day"]}, both read off what was '
+                             "frozen"]}
+        measures[eid] = {"readings": readings, "moved": moved}
+
+    return {"columns": columns, "verdict": verdict, "price": price,
+            "measures": measures, "refusal": None}
+
+
+def since_last(security: dict, decision: dict | None) -> dict:
+    """Whether the verdict has changed since the last saved day, as a row
+    reads it on every render::
+
+        {"status": "known", "seq", "since", "changed",
+         "from": {"id", "name", "render"}, "to": {...}}
+      | {"status": "absent", "reason"}
+
+    "New" means changed since the last snapshot that stands — a meaning tied
+    to something the user deliberately did, needing no continuous history.
+    Absent, with the difference stated, where there is nothing to measure
+    against: no standing snapshot is not the same fact as unchanged, and an
+    unreadable record is neither. Returned rather than raised, because this
+    runs once per security on every render and the refusal must never take
+    the screen down — the same decision `read` documents.
+    """
+    got = read(security)
+    if got["refusal"]:
+        return {"status": "absent", "reason": got["refusal"]}
+    kept = [e for e in got["entries"] if not e["discarded"]]
+    if not kept:
+        return {"status": "absent",
+                "reason": "no saved reading stands to measure against — "
+                          "nothing has been kept, or every kept day was "
+                          "discarded"}
+    if not decision:
+        return {"status": "absent",
+                "reason": "there is no verdict today to measure against the "
+                          "saved one"}
+    last = kept[0]
+    frozen = (last.get("snapshot") or {}).get("decision") or {}
+    state = frozen.get("state") or {}
+    now = decision.get("state") or {}
+    return {"status": "known", "seq": last["seq"],
+            "since": dated.day_of(last),
+            "changed": (state.get("id") != now.get("id")
+                        or frozen.get("render") != decision.get("render")),
+            "from": {"id": state.get("id"), "name": state.get("name"),
+                     "render": frozen.get("render")},
+            "to": {"id": now.get("id"), "name": now.get("name"),
+                   "render": decision.get("render")}}
+
+
 def summaries(security: dict) -> dict:
     """The list a screen draws::
 

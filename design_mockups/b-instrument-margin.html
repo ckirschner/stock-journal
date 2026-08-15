@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ledger — Direction B · Instrument and margin</title>
+<style>
+/* ============================================================
+   DIRECTION B — INSTRUMENT AND MARGIN
+   Two surfaces, one page. The left plane is the instrument:
+   terse, fixed, it never grows a paragraph. The right margin
+   is where every explanation lives — click any figure, state,
+   or heading and it is glossed there, without the table moving.
+   Reading and studying stop competing for the same column.
+   ============================================================ */
+:root{
+  --paper:#f7f6f2;
+  --margin-bg:#efede6;
+  --ink:#23211d;
+  --faint:#716c62;
+  --dim:#9a948a;
+  --hair:#dcd7cc;
+  --hair-dark:#b9b3a6;
+  --commit:#1d6b45;
+  --exit:#9c3430;
+  --blocked:#8a6a00;
+  --unknown:#4f4d95;
+  --scope:#9a948a;
+  --sans:Seravek,"Avenir Next","Gill Sans",system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);
+  font-size:.92rem;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;text-align:left;padding:0}
+.num{font-family:var(--mono);font-size:.86em;font-weight:500}
+.pos{color:var(--commit)} .neg{color:var(--exit)}
+.recstate{color:var(--faint)}
+
+/* ---- frame: header + two planes ---- */
+.frame{max-width:73rem;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}
+header.mast{padding:1.4rem 2rem .0rem;border-bottom:2px solid var(--ink)}
+.mast-top{display:flex;justify-content:space-between;align-items:baseline}
+.brand{font-weight:700;font-size:1.05rem}
+.journal{font-size:.78rem;color:var(--faint)}
+.journal b{color:var(--ink)}
+.acct{display:flex;gap:2rem;flex-wrap:wrap;padding:.9rem 0 .8rem}
+.acct .cell .l{font-size:.62rem;text-transform:uppercase;letter-spacing:.11em;color:var(--faint)}
+.acct .cell .v{font-size:.98rem;margin-top:.1rem}
+.acct .cell .v small{font-size:.7rem;color:var(--faint)}
+nav.tabs{display:flex;gap:1.5rem;padding:0 2rem;border-bottom:1px solid var(--hair);font-size:.76rem;
+  text-transform:uppercase;letter-spacing:.1em}
+nav.tabs button{color:var(--faint);padding:.5rem 0;border-bottom:2px solid transparent}
+nav.tabs button.on{color:var(--ink);border-bottom-color:var(--ink);font-weight:600}
+.body{flex:1;display:flex;align-items:stretch}
+main.plane{flex:1;min-width:0;padding:0 2rem 4rem}
+aside.margin{width:23.5rem;flex-shrink:0;border-left:1px solid var(--hair-dark);background:var(--margin-bg);
+  padding:1.4rem 1.6rem 3rem;position:sticky;top:0;align-self:flex-start;height:100vh;overflow-y:auto}
+
+/* ---- margin ---- */
+.margin .m-kicker{font-size:.62rem;text-transform:uppercase;letter-spacing:.13em;color:var(--faint);margin-bottom:.3rem}
+.margin h3{font-size:1rem;font-weight:650;margin-bottom:.6rem;line-height:1.3}
+.margin p{margin:0 0 .65rem;font-size:.85rem}
+.margin .m-h{font-size:.62rem;text-transform:uppercase;letter-spacing:.13em;color:var(--faint);margin:1.05rem 0 .25rem}
+.margin pre{font-family:var(--mono);font-size:.72rem;line-height:1.55;white-space:pre-wrap;
+  border-left:2px solid var(--hair-dark);padding:.2rem 0 .2rem .7rem;margin:.3rem 0 .6rem}
+.margin .caution{font-size:.8rem;color:var(--faint)}
+.margin .caution::before{content:"° ";color:var(--ink)}
+.margin .m-close{position:absolute;top:1rem;right:1.2rem;color:var(--dim);font-size:.8rem}
+.margin .m-hint{color:var(--faint);font-size:.85rem;font-style:italic}
+.margin .m-act{display:inline-block;border:1px solid var(--ink);padding:.4rem .9rem;font-size:.8rem;
+  font-weight:600;margin-top:.4rem}
+.margin .m-act.warn{border-color:var(--exit);color:var(--exit)}
+.margin label{display:block;font-size:.68rem;text-transform:uppercase;letter-spacing:.1em;color:var(--faint);margin:.8rem 0 .2rem}
+.margin input,.margin textarea,.margin select{width:100%;font:inherit;font-size:.9rem;padding:.35rem .5rem;
+  border:1px solid var(--hair-dark);background:var(--paper);color:var(--ink)}
+.margin .m-quiet{font-size:.78rem;color:var(--faint)}
+.margin .m-series{width:100%;border-collapse:collapse;font-size:.78rem;margin:.2rem 0 .6rem}
+.margin .m-series td{padding:.18rem 0;border-bottom:1px solid var(--hair)}
+.margin .m-series td:last-child{text-align:right}
+
+/* ---- states ---- */
+.state{white-space:nowrap}
+.state::before{content:"";display:inline-block;width:.5em;height:.5em;border-radius:50%;margin-right:.4em;background:currentColor;vertical-align:.05em}
+.s-commit{color:var(--commit)} .s-exit{color:var(--exit)} .s-hold{color:var(--ink)}
+.s-hold::before{background:none;border:1px solid var(--hair-dark)}
+.s-blocked{color:var(--blocked)} .s-unknown{color:var(--unknown)} .s-scope{color:var(--scope)}
+
+/* ---- list plane ---- */
+.filters{display:flex;gap:1.3rem;align-items:baseline;padding:1.1rem 0 .6rem;font-size:.8rem}
+.filters button{color:var(--faint)}
+.filters button.on{color:var(--ink);font-weight:650;border-bottom:2px solid var(--ink)}
+.filters .n{font-size:.68rem;color:var(--dim);margin-left:.2rem}
+.filters .sort{margin-left:auto;color:var(--dim);font-size:.72rem}
+table.list{width:100%;border-collapse:collapse}
+table.list th{font-size:.6rem;text-transform:uppercase;letter-spacing:.11em;color:var(--faint);
+  text-align:right;font-weight:500;padding:.4rem .6rem .25rem;border-bottom:1px solid var(--hair-dark)}
+table.list th:first-child,table.list th:nth-child(2){text-align:left;padding-left:0}
+table.list td{padding:.55rem .6rem;border-bottom:1px solid var(--hair);text-align:right;white-space:nowrap}
+table.list td:first-child,table.list td:nth-child(2){text-align:left;padding-left:0;white-space:normal}
+table.list tr.sec{cursor:pointer}
+table.list tr.sec:hover td,table.list tr.sec.sel td{background:#edeae1}
+table.list .tk{font-weight:700}
+table.list .tk small{display:block;font-weight:400;color:var(--faint);font-size:.72rem}
+table.list td .sub{display:block;font-size:.66rem;color:var(--dim)}
+.listnote{font-size:.76rem;color:var(--dim);padding:.8rem 0;font-style:italic}
+
+/* ---- detail plane ---- */
+.crumb{font-size:.72rem;color:var(--dim);padding:1rem 0 0}
+.crumb button{color:var(--faint)}
+.dhead{display:flex;justify-content:space-between;align-items:flex-start;gap:2rem;padding:.6rem 0 0}
+.dhead h1{font-size:1.35rem;font-weight:700}
+.dhead h1 small{font-weight:400;color:var(--faint);font-size:.9rem;margin-left:.5rem}
+.dhead .meta{font-size:.74rem;color:var(--faint);margin-top:.1rem}
+.chip{font-family:var(--mono);font-size:.6rem;border:1px dashed var(--hair-dark);border-radius:2px;
+  padding:.02em .4em;color:var(--faint);white-space:nowrap}
+.vcard{margin-top:1.1rem;border:1px solid var(--hair-dark);background:#fbfaf7;padding:1rem 1.2rem}
+.vcard .vname{font-size:1.18rem;font-weight:650}
+.vcard .vname button{font-weight:650}
+.vcard .vwait{font-size:.92rem;color:var(--faint);font-style:italic}
+.vcard .vsum{font-size:.88rem;margin-top:.4rem;max-width:44rem}
+.vcard .vrow{display:flex;gap:1.5rem;flex-wrap:wrap;margin-top:.6rem;font-size:.78rem;color:var(--faint)}
+.vcard .vrow b{color:var(--ink);font-weight:600}
+.vcard .vrow button{text-decoration:underline;text-decoration-color:var(--hair-dark)}
+.facts{display:flex;gap:1.7rem;flex-wrap:wrap;padding:.9rem 0;border-bottom:1px solid var(--hair)}
+.facts .cell .l{font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--faint)}
+.facts .cell .v{margin-top:.1rem;font-size:.94rem}
+.facts .cell .v small{font-size:.68rem;color:var(--dim)}
+.facts .cell button{border-bottom:1px dotted var(--hair-dark)}
+.acts{display:flex;gap:1.3rem;flex-wrap:wrap;padding:.7rem 0 .2rem;font-size:.74rem;text-transform:uppercase;letter-spacing:.09em}
+.acts button{color:var(--faint)}
+.acts button.pri{color:var(--ink);font-weight:700}
+.acts button.warn{color:var(--exit)}
+
+h2.sect{font-size:.66rem;text-transform:uppercase;letter-spacing:.13em;color:var(--faint);font-weight:600;
+  padding:1.7rem 0 .25rem;border-bottom:1px solid var(--hair-dark);display:flex;justify-content:space-between}
+h2.sect .aside{text-transform:none;letter-spacing:.02em;font-weight:400;color:var(--dim)}
+.grp{padding:.75rem 0 .2rem}
+.grp .gh{display:flex;justify-content:space-between;align-items:baseline;font-size:.84rem;padding-bottom:.3rem}
+.grp .gh .gn{font-weight:650}
+.grp .gh .gtally{font-size:.7rem;color:var(--faint)}
+.grp .gh .gtally b{color:var(--ink)}
+table.ev{width:100%;border-collapse:collapse}
+table.ev td{padding:.4rem 0;border-top:1px solid var(--hair);font-size:.86rem;vertical-align:baseline}
+table.ev td.en button{border-bottom:1px dotted var(--hair-dark)}
+table.ev td.ev-v{text-align:right;white-space:nowrap}
+table.ev td.ev-t{text-align:right;color:var(--faint);font-size:.78rem;white-space:nowrap}
+table.ev td.ev-o{text-align:right;width:5rem;font-size:.7rem;text-transform:uppercase;letter-spacing:.07em}
+.o-pass{color:var(--commit)} .o-fail{color:var(--exit)} .o-unknown{color:var(--unknown)} .o-noted{color:var(--dim)}
+.absent{color:var(--unknown);font-style:italic}
+td .cm{color:var(--ink)}
+tr.hot:hover td{background:#edeae1}
+tr.sel td{background:#edeae1}
+.recline{display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid var(--hair);padding:.5rem 0;font-size:.85rem}
+.recline:first-of-type{border-top:none}
+.recline time{font-size:.7rem;color:var(--dim);font-family:var(--mono);flex-shrink:0;margin-left:1rem}
+.recline button{border-bottom:1px dotted var(--hair-dark)}
+.quiet{font-size:.82rem;color:var(--faint);font-style:italic;padding:.6rem 0}
+.foot{padding:2.5rem 2rem 2rem;font-size:.66rem;color:var(--dim);font-family:var(--mono);border-top:1px solid var(--hair)}
+.screen{display:none}.screen.on{display:block}
+</style>
+</head>
+<body>
+<div class="frame">
+
+<header class="mast">
+  <div class="mast-top">
+    <div class="brand">Ledger</div>
+    <div class="journal"><b>Sample — Graham</b> · Graham ▾</div>
+  </div>
+  <div class="acct">
+    <div class="cell"><div class="l">Account value</div><div class="v num">$99,648</div></div>
+    <div class="cell"><div class="l">Past month ▾</div><div class="v num pos">+0.6%</div></div>
+    <div class="cell"><div class="l">Cash</div><div class="v num">$62,000</div></div>
+    <div class="cell"><div class="l">Positions</div><div class="v num">6 <small>of 20 places</small></div></div>
+    <div class="cell"><div class="l">Something to say</div><div class="v">about <b class="num">4</b> of your 6</div></div>
+  </div>
+</header>
+<nav class="tabs">
+  <button class="on" data-go="list">The list</button>
+  <button>Strategy</button>
+  <button>Measures · 22</button>
+  <button>Data</button>
+</nav>
+
+<div class="body">
+<main class="plane">
+
+<!-- ================= LIST ================= -->
+<section class="screen on" id="scr-list">
+  <div class="filters">
+    <button class="on">Everything<span class="n">10</span></button>
+    <button>Holdings<span class="n">6</span></button>
+    <button>Watchlist<span class="n">3</span></button>
+    <button>Track record<span class="n">1</span></button>
+    <span class="sort">ordered by what asks most of you ▾</span>
+  </div>
+  <table class="list">
+    <thead><tr>
+      <th>Security</th><th>What your strategy says</th><th>Price</th><th>Since buy</th><th>Month</th><th>Of acct.</th>
+    </tr></thead>
+    <tbody>
+      <tr class="sec" onclick="m('row-pelham',this)">
+        <td class="tk">PELHAM<small>Pelham Bindery</small></td>
+        <td><span class="state s-commit">Cheap enough to buy</span><span class="sub">$4,982 may go in · 5% of the account</span></td>
+        <td><span class="num">$18.45</span><span class="sub">close 08-13</span></td>
+        <td><span class="num" style="color:var(--dim)">—</span><span class="sub">not held</span></td>
+        <td class="num pos">+1.9%</td><td><span class="num" style="color:var(--dim)">—</span></td>
+      </tr>
+      <tr class="sec" onclick="m('row-okell',this)">
+        <td class="tk">OKELL<small>Okell Marine Supply</small></td>
+        <td><span class="state s-exit">Too big a share of the account</span><span class="sub">trim to 10% · 12.4% now</span></td>
+        <td><span class="num">$41.20</span><span class="sub">typed°</span></td>
+        <td class="num pos">+105.0%</td><td class="num pos">+4.2%</td>
+        <td><span class="num">12.4%</span><span class="sub">$12,360</span></td>
+      </tr>
+      <tr class="sec" onclick="m('row-brent',this)">
+        <td class="tk">BRENT<small>Brentford Chemical Works</small></td>
+        <td><span class="state s-exit">The safety has gone</span><span class="sub">exit due today</span></td>
+        <td><span class="num">$9.40</span><span class="sub">typed°</span></td>
+        <td class="num neg">−40.7%</td><td class="num neg">−6.1%</td>
+        <td><span class="num">4.9%</span><span class="sub">$4,888</span></td>
+      </tr>
+      <tr class="sec" onclick="m('row-meridn',this)">
+        <td class="tk">MERIDN<small>Meridian Casting</small></td>
+        <td><span class="state s-exit">The holding period is up</span><span class="sub">exit fell due 2026-03-08</span></td>
+        <td><span class="num">$27.55</span><span class="sub">typed°</span></td>
+        <td class="num pos">+6.4%</td><td class="num pos">+0.8%</td>
+        <td><span class="num">5.5%</span><span class="sub">$5,510</span></td>
+      </tr>
+      <tr class="sec" onclick="m('row-thrap',this)">
+        <td class="tk">THRAP<small>Thrapston Rail Components</small></td>
+        <td><span class="state s-unknown">Exit checks cannot run</span><span class="sub">no figures on record — not calm, blind</span></td>
+        <td><span class="num">$16.30</span><span class="sub">typed°</span></td>
+        <td class="num pos">+8.0%</td><td class="num pos">+1.1%</td>
+        <td><span class="num">3.1%</span><span class="sub">$3,097</span></td>
+      </tr>
+      <tr class="sec" onclick="m('row-stanm',this)">
+        <td class="tk">STANM<small>Stanmore Regional Bank</small></td>
+        <td><span class="state s-scope">Outside these rules</span><span class="sub">Graham doesn’t evaluate banks · declined, not failed</span></td>
+        <td><span class="num">$32.80</span><span class="sub">close 08-13</span></td>
+        <td><span class="num" style="color:var(--dim)">—</span><span class="sub">not held</span></td>
+        <td class="num neg">−0.6%</td><td><span class="num" style="color:var(--dim)">—</span></td>
+      </tr>
+      <tr class="sec sel" onclick="m('row-caldr',this)">
+        <td class="tk">CALDR<small>Caldera Tube &amp; Steel</small></td>
+        <td><span class="state s-hold">One reading past the line</span><span class="sub">waiting on the next filing · nothing owed</span></td>
+        <td><span class="num">$21.75</span><span class="sub">typed°</span></td>
+        <td class="num pos">+75.4%</td><td class="num pos">+3.1%</td>
+        <td><span class="num">5.7%</span><span class="sub">$5,655</span></td>
+      </tr>
+      <tr class="sec" onclick="m('row-harw',this)">
+        <td class="tk">HARW<small>Harwick Paper Mills</small></td>
+        <td><span class="state s-hold">Nothing to do</span><span class="sub">all 8 exit tests that could run came back clear</span></td>
+        <td><span class="num">$34.10</span><span class="sub">typed°</span></td>
+        <td class="num pos">+10.5%</td><td class="num pos">+2.6%</td>
+        <td><span class="num">6.2%</span><span class="sub">$6,138</span></td>
+      </tr>
+      <tr class="sec" onclick="m('row-vantr',this)">
+        <td class="tk">VANTR<small>Vantris Analytics</small></td>
+        <td><span class="state s-hold">Not cheap enough</span><span class="sub">2 of 4 unbending tests against it</span></td>
+        <td><span class="num">$96.30</span><span class="sub">close 08-13</span></td>
+        <td><span class="num" style="color:var(--dim)">—</span><span class="sub">not held</span></td>
+        <td class="num pos">+0.4%</td><td><span class="num" style="color:var(--dim)">—</span></td>
+      </tr>
+      <tr class="sec" onclick="m('row-lowfd',this)">
+        <td class="tk">LOWFD<small>Lowfield Ceramics</small></td>
+        <td><span class="recstate">Closed — sold: hit valuation</span><span class="sub">2024-06-04 → 2025-10-15 · today it reads: not cheap enough</span></td>
+        <td><span class="num">$24.60</span><span class="sub">close 08-13</span></td>
+        <td><span class="num pos">+76.8%</span><span class="sub">while held</span></td>
+        <td class="num pos">+1.3%</td>
+        <td><span class="num" style="color:var(--dim)">—</span><span class="sub">closed</span></td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="listnote">Cash is a position: $62,000 sits uncommitted, and one name qualifies for it. That is the strategy working.</p>
+</section>
+
+<!-- ================= DETAIL ================= -->
+<section class="screen" id="scr-detail">
+  <div class="crumb"><button data-go="list">← The list</button></div>
+  <div class="dhead">
+    <div>
+      <h1>CALDR <small>Caldera Tube &amp; Steel</small> <span class="chip">from history</span></h1>
+      <div class="meta">Held since 2025-06-12 · 14 months · judged by Graham</div>
+    </div>
+  </div>
+
+  <div class="vcard">
+    <div class="vname"><button onclick="m('state-orp')" class="state s-hold">One reading past the line</button>
+      <span class="vwait">— waiting on the next filing to say it again</span></div>
+    <p class="vsum">2 exit levels have been crossed on the current reading and have not yet been crossed on
+      enough consecutive trading days to act on. Nothing is owed from you today.</p>
+    <div class="vrow">
+      <span><b>What decided it:</b> <button onclick="m('m-ptb')">Price to book</button> · <button onclick="m('m-gcm')">Graham combined multiple</button></span>
+      <span>Since your reading of 02 Aug: <b>nothing has moved</b> <button onclick="m('g-reading')">compare</button></span>
+    </div>
+  </div>
+
+  <div class="facts">
+    <div class="cell"><div class="l">Price</div><div class="v"><button onclick="m('g-price')"><span class="num">$21.75</span> <small>typed°</small></button></div></div>
+    <div class="cell"><div class="l">Avg cost</div><div class="v num">$12.40</div></div>
+    <div class="cell"><div class="l">Shares</div><div class="v num">260</div></div>
+    <div class="cell"><div class="l">Value</div><div class="v num">$5,655</div></div>
+    <div class="cell"><div class="l">Of account</div><div class="v"><button onclick="m('m-weight')" class="num">5.7%</button></div></div>
+    <div class="cell"><div class="l">Since buy</div><div class="v num pos">+75.4%</div></div>
+    <div class="cell"><div class="l">Past month</div><div class="v num pos">+3.1%</div></div>
+  </div>
+
+  <div class="acts">
+    <button class="pri">Fetch data</button>
+    <button>Save today’s reading</button>
+    <button>Add note</button>
+    <button onclick="m('act-buy')">Buy more</button>
+    <button class="warn" onclick="m('act-sell')">Record a sale</button>
+    <button style="color:var(--dim)">More ▾</button>
+  </div>
+
+  <h2 class="sect">What your rules are checking<span class="aside">problems first ⇅ · click anything for the margin</span></h2>
+
+  <div class="grp">
+    <div class="gh"><span class="gn"><button onclick="m('g-discount')">The discount you bought</button></span>
+      <span class="gtally">reported on every reading · <b>1 of 3</b> holds</span></div>
+    <table class="ev"><tbody>
+      <tr class="hot"><td class="en"><button onclick="m('m-ptb',this)">Price to book</button></td>
+        <td class="ev-v num">3.28×<span class="cm">°</span></td>
+        <td class="ev-t">below 3.00× — your exit level</td>
+        <td class="ev-o o-fail">misses it</td></tr>
+      <tr class="hot"><td class="en"><button onclick="m('m-gcm',this)">Graham combined multiple</button></td>
+        <td class="ev-v num">63.0<span class="cm">°</span></td>
+        <td class="ev-t">below 50.0 — your exit level</td>
+        <td class="ev-o o-fail">misses it</td></tr>
+      <tr class="hot"><td class="en"><button onclick="m('m-pe3',this)">Price to earnings, three-year average EPS</button></td>
+        <td class="ev-v num">19.2×<span class="cm">°</span></td>
+        <td class="ev-t">below 25.00× — your exit level</td>
+        <td class="ev-o o-pass">meets it</td></tr>
+    </tbody></table>
+  </div>
+
+  <div class="grp">
+    <div class="gh"><span class="gn"><button onclick="m('g-safety')">The balance sheet and the earnings record</button></span>
+      <span class="gtally">reported on every reading · <b>4 of 5</b> hold · 1 could not be worked out</span></div>
+    <table class="ev"><tbody>
+      <tr class="hot"><td class="en"><button onclick="m('m-cr',this)">Current ratio</button></td>
+        <td class="ev-v num">2.10<span class="cm">°</span></td>
+        <td class="ev-t">at least 1.20 — your exit level</td>
+        <td class="ev-o o-pass">meets it</td></tr>
+      <tr class="hot"><td class="en"><button onclick="m('m-ltd',this)">Long-term debt to working capital</button></td>
+        <td class="ev-v num">0.55<span class="cm">°</span></td>
+        <td class="ev-t">at most 2.00 — your exit level</td>
+        <td class="ev-o o-pass">meets it</td></tr>
+      <tr class="hot"><td class="en"><button onclick="m('m-z',this)">Altman Z″-score, non-manufacturers</button></td>
+        <td class="ev-v"><span class="absent">not known</span></td>
+        <td class="ev-t">at least 1.10 — your exit level</td>
+        <td class="ev-o o-unknown">can’t say</td></tr>
+      <tr class="hot"><td class="en"><button onclick="m('m-de',this)">Debt to equity</button></td>
+        <td class="ev-v num">0.35<span class="cm">°</span></td>
+        <td class="ev-t">below 2.00 — your exit level</td>
+        <td class="ev-o o-pass">meets it</td></tr>
+      <tr class="hot"><td class="en"><button onclick="m('m-loss',this)">Consecutive annual losses</button></td>
+        <td class="ev-v num">0<span class="cm">°</span></td>
+        <td class="ev-t">below 2 — losing years that end the position</td>
+        <td class="ev-o o-pass">meets it</td></tr>
+    </tbody></table>
+  </div>
+
+  <div class="grp">
+    <div class="gh"><span class="gn"><button onclick="m('g-clock')">The holding period</button></span>
+      <span class="gtally">it must pass · <b>passes</b></span></div>
+    <table class="ev"><tbody>
+      <tr class="hot"><td class="en"><button onclick="m('m-months',this)">Months held</button></td>
+        <td class="ev-v num">14</td>
+        <td class="ev-t">below 24 — your months before time is up</td>
+        <td class="ev-o o-pass">meets it</td></tr>
+    </tbody></table>
+  </div>
+
+  <div class="grp">
+    <div class="gh"><span class="gn"><button onclick="m('g-size')">How big it has got</button></span>
+      <span class="gtally">it must pass · <b>passes</b></span></div>
+    <table class="ev"><tbody>
+      <tr class="hot"><td class="en"><button onclick="m('m-weight',this)">Position weight</button></td>
+        <td class="ev-v num">5.7%<span class="cm">°</span></td>
+        <td class="ev-t">at most 10.0% — your largest one name may get</td>
+        <td class="ev-o o-pass">meets it</td></tr>
+    </tbody></table>
+  </div>
+
+  <h2 class="sect">Everything else this strategy reads<span class="aside">not part of today’s verdict</span></h2>
+  <table class="ev"><tbody>
+    <tr class="hot"><td class="en"><button onclick="m('m-ncav',this)">Net current asset value over market cap</button></td>
+      <td class="ev-v num">0.28<span class="cm">°</span></td><td class="ev-t"></td><td class="ev-o o-noted">read</td></tr>
+    <tr class="hot"><td class="en"><button onclick="m('m-acc',this)">Accruals ratio</button></td>
+      <td class="ev-v num">0.04<span class="cm">°</span></td><td class="ev-t"></td><td class="ev-o o-noted">read</td></tr>
+    <tr class="hot"><td class="en"><button onclick="m('m-eps',this)">Ten-year EPS growth, averaged at both ends</button></td>
+      <td class="ev-v num">+58.0%<span class="cm">°</span></td><td class="ev-t"></td><td class="ev-o o-noted">read</td></tr>
+    <tr class="hot"><td class="en"><button onclick="m('m-rev',this)">Revenue, trailing twelve months</button></td>
+      <td class="ev-v num">$880M<span class="cm">°</span></td><td class="ev-t"></td><td class="ev-o o-noted">read</td></tr>
+    <tr class="hot"><td class="en"><button onclick="m('m-py',this)">Years of positive net income, of the last ten</button></td>
+      <td class="ev-v num">10 of 10<span class="cm">°</span></td><td class="ev-t"></td><td class="ev-o o-noted">read</td></tr>
+  </tbody></table>
+
+  <h2 class="sect">Questions only you can answer</h2>
+  <p class="quiet">Graham asks none. This strategy forms no opinion about whether the business is any good — that is its point, not a gap.</p>
+
+  <h2 class="sect">Your record on this security<span class="aside">append-only · nothing is ever edited</span></h2>
+  <div class="recline"><span><b>Why I own this</b> — <button onclick="m('g-thesis')">read it</button> · and what would make you wrong</span><time>2026-08-02</time></div>
+  <div class="recline"><span><b>Saved reading</b> — it read <i>One reading past the line</i> then too · <button onclick="m('g-reading')">compare with today</button></span><time>2026-08-02</time></div>
+  <div class="recline"><span><b>Note</b> — “Bought this under the size floor…” · <button onclick="m('g-note1')">read</button></span><time>2025-06-12</time></div>
+  <div class="recline"><span><b>Bought 260 at $12.40</b> — with the signal · <button onclick="m('g-lot')">the record of that day</button></span><time>2025-06-12</time></div>
+</section>
+
+<div class="foot">
+  <p>This tool never places a trade and holds no broker credentials. A journal has one strategy, chosen when it is created.</p>
+  <p>Mockup — invented companies and invented figures throughout. Direction B: instrument and margin.</p>
+</div>
+</main>
+
+<!-- ================= THE MARGIN ================= -->
+<aside class="margin" id="margin"></aside>
+</div>
+</div>
+
+<script>
+const M = {
+/* ---------- resting ---------- */
+rest:`<p class="m-kicker">The margin</p>
+<h3>Nothing is open</h3>
+<p class="m-hint">Click any figure, state name, or group heading and it is explained here — what it means in plain words, how it is worked out, where the number came from, and what qualifies it.</p>
+<p class="m-hint">The table never moves while you read. Close this with ✕ or open something else.</p>`,
+
+/* ---------- state gloss ---------- */
+'state-orp':`<p class="m-kicker">A state this strategy declares</p>
+<h3>One reading past the line</h3>
+<p>An exit level has been crossed on the current reading, and this strategy will not act on it until the next filings say the same thing. One impairment or one settlement can push a measure over a line without anything having changed, and selling on that would be the panic this is here to prevent. Nothing is owed from you today.</p>
+<div class="m-h">Where it sits</div>
+<p>It renders as <b>hold — no action</b>. Of the things this strategy can say, it is the one that watches rather than acts.</p>
+<div class="m-h">What produced it</div>
+<p class="num">rule breach-awaiting-confirmation · Graham v9 · settings v5</p>`,
+
+/* ---------- group glosses ---------- */
+'g-discount':`<p class="m-kicker">A group of tests</p>
+<h3>The discount you bought</h3>
+<p>The gap between price and what the company owns and earns is the only protection this strategy believes in. These lines watch that gap closing.</p>
+<p>Exit levels sit looser than entry bars on purpose: you demanded 1.5× book to get in, and the exit at 3.0× is the discount being fully gone, not merely thinner.</p>
+<div class="m-h">How the tally works</div>
+<p>The group is reported on every reading. A crossed line becomes an exit only when consecutive filings agree — that confirmation rule is what the verdict above is waiting on.</p>`,
+'g-safety':`<p class="m-kicker">A group of tests</p>
+<h3>The balance sheet and the earnings record</h3>
+<p>Whether the company can still carry itself: liquidity, debt against cushion, solvency, and the loss streak. When one of these fails the cushion that made an unremarkable business acceptable is gone.</p>
+<p>“4 of 5 hold · 1 could not be worked out” counts the unreadable test as neither a pass nor a failure. Absence never reads as success here.</p>`,
+'g-clock':`<p class="m-kicker">A group of tests</p>
+<h3>The holding period</h3>
+<p>Graham sells a discount that refuses to close. Two years is the time you gave it, and nothing about the company can extend the clock — a discount that has not closed in the time you gave it is the case this rule exists for.</p>`,
+'g-size':`<p class="m-kicker">A group of tests</p>
+<h3>How big it has got</h3>
+<p>Your strategy speaking about risk. Graham’s protection is the spread of twenty places, and one name outgrowing its place erodes it. The cap of 10% is your setting, readable on the Strategy page, changeable only there.</p>`,
+
+/* ---------- measures ---------- */
+'m-ptb':`<p class="m-kicker">Measure · read by this strategy</p>
+<h3>Price to book</h3>
+<p><b class="num">3.28×</b> against your exit level of <b class="num">3.00×</b> — misses it.</p>
+<p>What you pay for a dollar of the company’s accounting net worth — the assets it reports, less what it owes.</p>
+<pre>market capitalization ÷ total shareholders’ equity</pre>
+<div class="m-h">Where this number came from</div>
+<p>Entered by hand on 2026-08-02. A typed value beats a fetched one and is never overwritten by a fetch.</p>
+<p class="caution">Qualified — entered by hand, so it carries no date. This is what you saw the market quote, not something you worked out; nothing here can tell how long ago you typed it.</p>
+<div class="m-h">Your readings</div>
+<table class="m-series">
+<tr><td>2025-06-08 · typed</td><td class="num">1.02×</td></tr>
+<tr><td>2026-08-02 · typed</td><td class="num">3.28×</td></tr>
+</table>
+<div class="m-h">Where it misfires</div>
+<p>Book value stopped describing modern businesses around 1990: software, brands and services carry their real assets off the balance sheet, so this measure systematically rejects them. It still works well on banks, insurers, and asset-heavy industrials — like this one.</p>
+<div class="m-h">Whose idea</div>
+<p>Graham. The exit level is twice the entry bar: the discount closing, not the business changing.</p>`,
+'m-gcm':`<p class="m-kicker">Measure · read by this strategy</p>
+<h3>Graham combined multiple</h3>
+<p><b class="num">63.0</b> against your exit level of <b class="num">50.0</b> — misses it.</p>
+<p>A single test that lets one number be high if the other is low. A stock at 18× earnings and 1.2× book scores 21.6; one at 18× and 2.0× scores 36.</p>
+<pre>P/E (3-yr average EPS) × price to book</pre>
+<div class="m-h">Where this number came from</div>
+<p>Entered by hand on 2026-08-02. It read 8.98 when you bought.</p>
+<p class="caution">Qualified — entered by hand, so it carries no date.</p>
+<div class="m-h">Where it misfires</div>
+<p>Inherits every problem of both components, and compounds them: a cyclical at trough earnings with an asset-light model fails twice for two unrelated bad reasons.</p>
+<div class="m-h">Whose idea</div>
+<p>Graham. Often called the Graham Number in his honour.</p>`,
+'m-pe3':`<p class="m-kicker">Measure · read by this strategy</p>
+<h3>Price to earnings on three-year average EPS</h3>
+<p><b class="num">19.2×</b> against your exit level of <b class="num">25.00×</b> — meets it.</p>
+<p>What you’re paying for a dollar of typical earnings. Averaging three years is the point: it stops you paying a low multiple on a fluke good year.</p>
+<pre>market capitalization ÷ shares outstanding
+÷ mean(diluted EPS, last 3 fiscal years)</pre>
+<div class="m-h">Where this number came from</div>
+<p>Entered by hand on 2026-08-02. It read 8.8 when you bought.</p>
+<p class="caution">Qualified — entered by hand, so it carries no date.</p>
+<div class="m-h">Whose idea</div>
+<p>Graham, <i>The Intelligent Investor</i>, ch. 14. The averaging is his method.</p>`,
+'m-cr':`<p class="m-kicker">Measure · read by this strategy</p>
+<h3>Current ratio</h3>
+<p><b class="num">2.10</b> against your exit level of at least <b class="num">1.20</b> — meets it.</p>
+<p>Whether the company holds enough short-term assets — cash, receivables, inventory — to cover the bills coming due within a year.</p>
+<pre>total current assets ÷ total current liabilities</pre>
+<div class="m-h">Where this number came from</div>
+<p>Entered by hand on 2026-08-02.</p>
+<p class="caution">Qualified — entered by hand, so it carries no date.</p>
+<div class="m-h">Where it misfires</div>
+<p>Retailers and subscription businesses with large deferred revenue routinely run below 1.0 and are fine. Negative working capital has been read as both weakness and strength, depending on who is reading.</p>
+<div class="m-h">Whose idea</div>
+<p>Graham, as a solvency test. The exit level of 1.20 is looser than the entry bar of 2.0 on purpose — a cushion eroding is watched; a cushion gone is acted on.</p>`,
+'m-ltd':`<p class="m-kicker">Measure · read by this strategy</p>
+<h3>Long-term debt to working capital</h3>
+<p><b class="num">0.55</b> against your exit level of at most <b class="num">2.00</b> — meets it.</p>
+<p>Whether the company’s long-term borrowings could be covered by the liquid cushion it already has. It ignores fixed assets entirely, which is deliberate: in liquidation, the factory sells for a fraction of book.</p>
+<pre>long-term debt ÷ (current assets − current liabilities)</pre>
+<div class="m-h">Where this number came from</div>
+<p>Entered by hand on 2026-08-02.</p>
+<p class="caution">Qualified — entered by hand, so it carries no date.</p>
+<div class="m-h">Whose idea</div>
+<p>Graham’s own test, stated in exactly this form.</p>`,
+'m-z':`<p class="m-kicker">Measure · read by this strategy</p>
+<h3>Altman Z″-score, for companies that do not manufacture</h3>
+<p><span class="absent">not known</span> — the test could not run, and “could not run” is counted as neither pass nor failure.</p>
+<div class="m-h">Why there is no number</div>
+<p>No filing data is stored for this security — fetch data first. Every other figure on this page was typed by hand; this one cannot be worked out from typed figures alone.</p>
+<div class="m-h">What it is</div>
+<p>A bankruptcy score, in the version its author built for companies that do not make things. The equity term uses what the books say rather than what the market says, so the score does not move when the share price does — which a solvency test inside a valuation rule set needs.</p>
+<pre>6.56 × (working capital / total assets)
++ 3.26 × (retained earnings / total assets)
++ 6.72 × (EBIT / total assets)
++ 1.05 × (book equity / total liabilities)</pre>
+<div class="m-h">Whose idea</div>
+<p>Altman. The four-variable variant is his, published for non-manufacturers.</p>`,
+'m-de':`<p class="m-kicker">Measure · read by this strategy</p>
+<h3>Debt to equity</h3>
+<p><b class="num">0.35</b> against your exit level of below <b class="num">2.00</b> — meets it.</p>
+<p>How much of the company is financed by lenders versus by its owners. At 1.0 there is a dollar of debt for every dollar of shareholder money.</p>
+<pre>total debt ÷ total shareholders’ equity</pre>
+<div class="m-h">Where this number came from</div>
+<p>Entered by hand on 2026-08-02.</p>
+<p class="caution">Qualified — entered by hand, so it carries no date.</p>`,
+'m-loss':`<p class="m-kicker">Measure · read by this strategy</p>
+<h3>Consecutive annual losses, most recent backward</h3>
+<p><b class="num">0</b> against your limit of below <b class="num">2</b> — meets it.</p>
+<p>How many years in a row the company has lost money right now. One loss year can be an impairment or a settlement; a run of them is the business.</p>
+<div class="m-h">Where this number came from</div>
+<p>Entered by hand on 2025-06-08.</p>
+<p class="caution">Qualified — entered by hand, so it carries no date.</p>
+<div class="m-h">Whose idea</div>
+<p>Graham. The streak form of his earnings-stability test.</p>`,
+'m-months':`<p class="m-kicker">A fact about your position</p>
+<h3>Months held</h3>
+<p><b class="num">14</b> against your limit of below <b class="num">24</b> — meets it.</p>
+<p>Held since 2025-06-12. Graham sells a discount that refuses to close: two years is the time you gave it, and nothing about the company can extend it.</p>
+<div class="m-h">Where this number came from</div>
+<p>Worked out from your own purchase record. Never typed.</p>`,
+'m-weight':`<p class="m-kicker">A fact about your position</p>
+<h3>Position weight</h3>
+<p><b class="num">5.7%</b> against your cap of <b class="num">10.0%</b> — meets it.</p>
+<p>This holding’s share of everything the account is worth. The cap is your strategy speaking about risk: the spread of twenty places is the protection, and one name outgrowing its place erodes it.</p>
+<div class="m-h">Where this number came from</div>
+<p>$5,655 of an account of $99,648 — worked out from your lots and your cash record, never typed.</p>
+<p class="caution">Qualified — every holding here is priced from a hand-typed quote that carries no date, so the account value this weight is measured against inherits that. Six holdings, one sentence.</p>`,
+'m-ncav':`<p class="m-kicker">Measure · read, never blocking</p>
+<h3>Net current asset value over market capitalization</h3>
+<p><b class="num">0.28</b> — reported, never blocking.</p>
+<p>How much of the purchase price is covered by liquid assets net of all debts. That’s Graham’s net-net, and it barely exists in modern markets outside of Japan and micro-caps.</p>
+<pre>(current assets − total liabilities) ÷ market capitalization</pre>
+<div class="m-h">Where this number came from</div>
+<p>Entered by hand on 2026-08-02. It read 0.61 when you bought.</p>
+<p class="caution">Qualified — entered by hand, so it carries no date.</p>`,
+'m-acc':`<p class="m-kicker">Measure · read, never blocking</p>
+<h3>Accruals ratio</h3>
+<p><b class="num">0.04</b> — reported, never blocking.</p>
+<p>How much of the reported profit is bookkeeping rather than cash. High accruals predict poor subsequent returns with unusual reliability.</p>
+<pre>(net income − cash from operations) ÷ total assets</pre>
+<div class="m-h">Whose idea</div>
+<p>Sloan (1996). Not Graham, but a check that reported numbers are real, which is doing Graham’s job with better tools.</p>`,
+'m-eps':`<p class="m-kicker">Measure · read, never blocking</p>
+<h3>Ten-year EPS growth, three-year averages at both ends</h3>
+<p><b class="num">+58.0%</b> — reported, never blocking.</p>
+<p>How much more the company earns per share than it did a decade ago, stated as a total rather than an annual rate. A third more over ten years is under 3% a year.</p>
+<div class="m-h">Where this number came from</div>
+<p>Entered by hand on 2025-06-08.</p>
+<p class="caution">Qualified — entered by hand, so it carries no date.</p>`,
+'m-rev':`<p class="m-kicker">Measure · read, never blocking</p>
+<h3>Revenue, trailing twelve months</h3>
+<p><b class="num">$880M</b> — reported, never blocking.</p>
+<p>What the company sold in the last year, in money. It is here as a measure of how big a company is that does not depend on what the market thinks it is worth — sales do not move when the share price does.</p>
+<div class="m-h">Where this number came from</div>
+<p>Entered by hand on 2025-06-08.</p>`,
+'m-py':`<p class="m-kicker">Measure · read, never blocking</p>
+<h3>Years of positive net income out of the last ten</h3>
+<p><b class="num">10 of 10</b> — reported, never blocking.</p>
+<p>Ten out of ten means it has never lost money in a decade — not “usually profitable”, never lost money.</p>
+<div class="m-h">Where this number came from</div>
+<p>Entered by hand on 2025-06-08.</p>`,
+
+/* ---------- facts / record glosses ---------- */
+'g-price':`<p class="m-kicker">Where this number came from</p>
+<h3>Price · $21.75 · typed</h3>
+<p class="caution">Qualified — entered by hand, so it carries no date. This is what you saw the market quote, not something you worked out, and the dated version of it is the price history a fetch keeps. Nothing here can tell how long ago you typed it.</p>
+<p>Fetching this security would replace the typed quote with dated closes, and every measure that leans on price inherits the same sentence until then.</p>
+<a class="m-act" href="#" onclick="return false">Fetch data</a>`,
+'g-reading':`<p class="m-kicker">Saved reading · 2026-08-02</p>
+<h3>Compared with today</h3>
+<p>It read <b>One reading past the line</b> that day too, on the same two crossed lines.</p>
+<table class="m-series">
+<tr><td>Price to book</td><td class="num">3.28× — unchanged, past your 3.00× line</td></tr>
+<tr><td>Everything else</td><td>stands where it stood</td></tr>
+</table>
+<p>Nothing has moved — which is what the waiting rule needs to know. The filing that confirms or clears it has not arrived.</p>
+<div class="m-h">Your note that day</div>
+<p>“The price has run and both valuation lines are crossed on this reading. The strategy will not act until a second filing says the same thing, which is the rule doing its job.”</p>
+<p class="m-quiet">A reading is frozen when you save it and never updated. The difference between then and now is the thing worth reading.</p>`,
+'g-thesis':`<p class="m-kicker">Your record · written 2026-08-02</p>
+<h3>Why I own this</h3>
+<p>“Bought at a third of what the tubes and the plant are worth on the books, after a customer cancelled a contract that was 8% of revenue. The cancellation is real and it is not the business.”</p>
+<div class="m-h">What would make me wrong</div>
+<p>“Book value falling for two straight years, which would mean the plant is worth less than I thought rather than the market being wrong about it.”</p>
+<p class="m-quiet">Amending keeps every prior version and asks why it changed.</p>
+<a class="m-act" href="#" onclick="return false">Amend</a>`,
+'g-note1':`<p class="m-kicker">Your note · 2025-06-12</p>
+<h3>On the size floor</h3>
+<p>“Bought this under the size floor. $278M against a floor of $300M is not far under it, and the strategy still said no — a floor that bends for a near miss is not a floor. What I am actually taking on is a company small enough that getting out of a position this size may not be quick, and that is a different risk from the one every other test here measures. Written down so that if it turns out to matter, it is on the record that I knew.”</p>`,
+'g-lot':`<p class="m-kicker">The record of 2025-06-12 · frozen</p>
+<h3>Bought 260 at $12.40 — with the signal</h3>
+<p>The verdict that day read <b>Cheap enough to buy</b>. Frozen with it: every figure, in the words and thresholds in force then. It is never recomputed — today’s page and this record may disagree, and that difference is the story.</p>
+<div class="m-h">Your note, written at the time</div>
+<p>“Under the $300M size floor, at $278M. I am taking that on deliberately: the discount is on the plant and the tubes, which do not care what the market capitalisation is, and I am buying a size I could still get out of. If I am wrong it will be because I could not sell it, not because the plant was worth less than I thought.”</p>
+<a class="m-act" href="#" onclick="return false">Read every frozen figure</a>`,
+
+/* ---------- act panes ---------- */
+'act-buy':`<p class="m-kicker">Record a purchase · CALDR</p>
+<h3>Today’s verdict is in front of you</h3>
+<p><span class="state s-hold">One reading past the line</span> — this strategy has not said to add. Buying now goes against your own rules. Nothing here stops you; it asks one sentence.</p>
+<label>Shares</label><input value="40">
+<label>Cost per share</label><input placeholder="what you actually paid">
+<label>Date</label><input value="2026-08-14">
+<label>Why are you buying anyway? <span style="text-transform:none;letter-spacing:0">Required. One sentence. You will read this again later.</span></label>
+<textarea rows="3"></textarea>
+<a class="m-act warn" href="#" onclick="return false">Record anyway</a>
+<p class="m-quiet" style="margin-top:.8rem">This records what you already did; the tool cannot place trades.</p>`,
+'act-sell':`<p class="m-kicker">Record a sale · CALDR</p>
+<h3>Today’s verdict is in front of you</h3>
+<p><span class="state s-hold">One reading past the line</span> — no rule calls for this exit. Selling now goes against your own rules; the record will say so, with your reason.</p>
+<label>Why are you selling?</label>
+<select><option>Why I owned it broke</option><option>Hit valuation</option><option>Better opportunity</option><option>Risk limit</option><option>Panic</option></select>
+<label>Shares sold</label><input value="260">
+<label>Sale price <span style="text-transform:none;letter-spacing:0">— never prefilled; a number off the tape is not the number you got</span></label><input>
+<label>Date</label><input value="2026-08-14">
+<label>Why, in your own words? <span style="text-transform:none;letter-spacing:0">Required when no rule called for it.</span></label>
+<textarea rows="3"></textarea>
+<a class="m-act warn" href="#" onclick="return false">Record it anyway</a>`,
+
+/* ---------- list row previews ---------- */
+'row-caldr':`<p class="m-kicker">Holding · CALDR</p>
+<h3><span class="state s-hold">One reading past the line</span></h3>
+<p>2 exit levels have been crossed on the current reading and have not yet been crossed on enough consecutive trading days to act on. Nothing is owed from you today.</p>
+<div class="m-h">What decided it</div>
+<p>Price to book · Graham combined multiple</p>
+<table class="m-series">
+<tr><td>260 sh at $12.40 avg</td><td class="num">$5,655</td></tr>
+<tr><td>Since buy</td><td class="num" style="color:var(--commit)">+75.4%</td></tr>
+<tr><td>Held</td><td class="num">14 months</td></tr>
+<tr><td>Of the account</td><td class="num">5.7% (cap 10%)</td></tr>
+</table>
+<a class="m-act" href="#" onclick="go('detail');return false">Open CALDR</a>`,
+'row-pelham':`<p class="m-kicker">Watchlist · PELHAM</p>
+<h3><span class="state s-commit">Cheap enough to buy</span></h3>
+<p>Every test this strategy will not bend passed, all five questions about the company are answered — 8 of the 8 tests behind them did — and the size is 5% of the account, set by an equal share of your places.</p>
+<table class="m-series">
+<tr><td>May go in now</td><td class="num">$4,982</td></tr>
+<tr><td>At $18.45</td><td class="num">≈ 270 sh</td></tr>
+<tr><td>Free cash covers it</td><td class="num">$62,000</td></tr>
+</table>
+<div class="m-h">The tests this strategy will not bend</div>
+<table class="m-series">
+<tr><td>P/E, three-year average</td><td class="num" style="color:var(--commit)">8.4× · meets</td></tr>
+<tr><td>Price to book</td><td class="num" style="color:var(--commit)">1.12× · meets</td></tr>
+<tr><td>Current ratio</td><td class="num" style="color:var(--commit)">2.6 · meets</td></tr>
+<tr><td>Revenue, trailing year</td><td class="num" style="color:var(--commit)">$910M · meets</td></tr>
+</table>
+<p class="m-quiet">The dollar figure is the strategy’s 5% sizing read against your account — not advice to spend it.</p>
+<a class="m-act" href="#" onclick="return false">Record a purchase</a>
+<p class="m-quiet" style="margin-top:.7rem">In the full app this pane is the one buy screen — every door leads here, with today’s verdict on top.</p>`,
+'row-okell':`<p class="m-kicker">Holding · OKELL</p>
+<h3><span class="state s-exit">Too big a share of the account</span></h3>
+<p>This holding has grown past the largest share of the account any one name is allowed here. Trimming it back to the cap restores the spread this strategy relies on instead of the business being good.</p>
+<table class="m-series">
+<tr><td>Now</td><td class="num">12.4% · $12,360</td></tr>
+<tr><td>Your cap</td><td class="num">10.0%</td></tr>
+<tr><td>Trim to the cap</td><td class="num">sell ≈58 sh · $2,390</td></tr>
+</table>
+<p class="m-quiet">A trim reads as “Sell — trim” and goes down the same recording path as any sale.</p>
+<a class="m-act" href="#" onclick="return false">Open OKELL</a>`,
+'row-brent':`<p class="m-kicker">Holding · BRENT</p>
+<h3><span class="state s-exit">The safety has gone</span></h3>
+<p>1 of the balance-sheet and earnings tests has failed on the current reading, which is all a measure this smooth can be asked for, so this is a change and not a wobble. The cushion that made an unremarkable business acceptable is gone.</p>
+<table class="m-series">
+<tr><td>Exit due</td><td class="num">today</td></tr>
+<tr><td>Since buy</td><td class="num" style="color:var(--exit)">−40.7%</td></tr>
+</table>
+<a class="m-act" href="#" onclick="return false">Open BRENT</a>`,
+'row-meridn':`<p class="m-kicker">Holding · MERIDN</p>
+<h3><span class="state s-exit">The holding period is up</span></h3>
+<p>You have held this 29 months and the exit fell due on 2026-03-08. Nothing about the company decided that: a discount that has not closed in the time you gave it is the case this clock exists for.</p>
+<a class="m-act" href="#" onclick="return false">Open MERIDN</a>`,
+'row-thrap':`<p class="m-kicker">Holding · THRAP</p>
+<h3><span class="state s-unknown">Exit checks cannot run</span></h3>
+<p>Not one of the 8 exit tests could be worked out from the data on record, so this strategy has nothing to say about whether to stay. That is not calm — it is blindness, and it has its own colour so it never reads as “nothing to do”.</p>
+<div class="m-h">The way back</div>
+<p>Fetch filing data, or type the figures you have. Your own note here: “Bought on a conversation, not on numbers.”</p>
+<a class="m-act" href="#" onclick="return false">Fetch data</a>`,
+'row-stanm':`<p class="m-kicker">Watchlist · STANM</p>
+<h3><span class="state s-scope">Outside these rules</span></h3>
+<p>Graham doesn’t evaluate banks, lenders, insurers or property companies. That was settled from the SEC industry code inside this company’s own filings, on the first fetch, before anything computed.</p>
+<div class="m-h">Why this kind is different</div>
+<p>This strategy buys statistical discounts to what a company owns and typically earns, and a bank’s balance sheet does not present those tests the way the rules mean them. The strategy declines the company; nothing failed, and no amount of looking will change it.</p>
+<p class="m-quiet">The name stays on your watchlist with this badge. A journal built on a strategy that does evaluate banks would read it fresh.</p>`,
+'row-harw':`<p class="m-kicker">Holding · HARW</p>
+<h3><span class="state s-hold">Nothing to do</span></h3>
+<p>All 8 exit tests that could be run came back clear and the holding period has not elapsed. It is already at 6.2% of the account against a target of 5%, so no more money goes into it here.</p>
+<a class="m-act" href="#" onclick="return false">Open HARW</a>`,
+'row-vantr':`<p class="m-kicker">Watchlist · VANTR</p>
+<h3><span class="state s-hold">Not cheap enough</span></h3>
+<p>2 of the 4 tests this strategy will not bend came back against it, and one is enough.</p>
+<div class="m-h">Your note</div>
+<p>“This is the strategy working as designed rather than failing: book value stopped describing companies like this around 1990… A strategy that buys statistical discounts to book has nothing to say about it.”</p>`,
+'row-lowfd':`<p class="m-kicker">Track record · LOWFD</p>
+<h3>Held 2024-06-04 → 2025-10-15</h3>
+<table class="m-series">
+<tr><td>While held</td><td class="num" style="color:var(--commit)">+76.8%</td></tr>
+<tr><td>Since exit</td><td class="num">+24.2%</td></tr>
+<tr><td>Sold because</td><td>Hit valuation</td></tr>
+<tr><td>Today it reads</td><td>Not cheap enough</td></tr>
+</table>
+<p>Since-exit is how your sell rules are graded, not an invitation to regret. Your own note: “if selling on a closed discount keeps leaving money on the table, the limit is the thing to look at and not my nerve.”</p>
+<p class="m-quiet">Considering it again? It re-enters through the watchlist and is judged from scratch.</p>`,
+};
+const marginEl = document.getElementById('margin');
+function m(id, row){
+  marginEl.innerHTML = '<button class="m-close" onclick="m(\'rest\')">✕</button>' + (M[id]||M.rest);
+  marginEl.scrollTop = 0;
+  document.querySelectorAll('tr.sel').forEach(r=>r.classList.remove('sel'));
+  if(row){ const tr = row.closest('tr'); if(tr) tr.classList.add('sel'); }
+}
+function go(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
+  document.getElementById('scr-'+id).classList.add('on');
+  m('rest'); window.scrollTo(0,0);
+}
+document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.go)));
+if(location.hash.startsWith('#detail')){ go('detail'); const q=location.hash.split('=')[1]; if(q) m(q); }
+else m('rest');
+</script>
+</body>
+</html>
