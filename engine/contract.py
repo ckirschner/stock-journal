@@ -430,7 +430,7 @@ INDUSTRY_CLASSES = MappingProxyType({
 #
 # `cites` is the part that keeps a fix honest. Most destinations are fixed
 # screens and are reachable whatever the decision said. One is not: the
-# questions under "Your judgement" are built from the decision's own
+# answering surface's questions are built from the decision's own
 # citations, so a verdict that says "answer these" and cites none of them
 # sends the reader to an empty section — a dead end one screen further along,
 # which is worse than the first one because it looks like it worked. Where
@@ -459,7 +459,7 @@ STATE_FIXES = MappingProxyType({
                    "that supplies it."}),
     "judgement": MappingProxyType({
         "label": "Answer these questions",
-        "where": '"Your judgement" on this security\'s page',
+        "where": "the answering surface on this security's page",
         "cites": "qualitative",
         "explain": "The questions no filing can answer, asked per security. "
                    "They are built from what the decision cited, which is "
@@ -1621,7 +1621,16 @@ _DECL_KEYS = {"id", "name", "summary", "version", "contract", "changelog",
 _DECLINE_KEYS = {"class", "because"}
 _LIMIT_KEYS = {"title", "body"}
 _LIST_KEYS = {"label", "explain", "source"}
-_STATE_KEYS = {"id", "name", "description", "render", "fix"}
+_STATE_KEYS = {"id", "name", "description", "render", "fix", "consequence"}
+
+# The one line a list row may carry for a state whose payload carries no
+# figures: what this state means for the reader today. A third thing beside
+# the name and the description — the name states the condition, the
+# description explains, the consequence says what it asks of you now. The
+# cap is what makes "one line" structural rather than aspirational: a field
+# a strategy could fill with a paragraph would reintroduce, under a new
+# name, exactly the row prose it exists to replace.
+MAX_CONSEQUENCE = 80
 _FIELD_KEYS = {"id", "label", "type", "unit", "required", "min", "max",
                "explain", "options", "role", "when", "min_from", "max_from",
                "source"}
@@ -2048,6 +2057,50 @@ def _check_state_fix(where: str, s: dict, errors: list) -> None:
             "missing from that list is a request against the host.")
 
 
+def _check_consequence(where: str, s: dict, errors: list) -> None:
+    """The optional one-liner a list row shows for this state, checked to be
+    genuinely one line — and refused entirely where nothing would read it.
+
+    A row already carries a structured line for a state whose payload holds
+    figures (an exit's date, a commit's size) and for a blocked state (the
+    fix the host names), and those win because they are resolved facts. A
+    `consequence` on such a state would be a declaration nothing reads, and
+    this contract refuses those rather than letting them sit — the same
+    reasoning that refuses `fix` on a state that does not stop.
+
+    Optional on the rest, deliberately. Where the name already carries the
+    consequence, no line beats a redundant one; a row showing nothing is a
+    row saying the name said it all.
+    """
+    if "consequence" not in s:
+        return
+    render = s.get("render")
+    if render in RENDER_TYPES and RENDER_TYPES[render]["payload_keys"]:
+        errors.append(
+            f"{where} declares a `consequence`, but a `{render}` row already "
+            "carries its one line — resolved payload facts, or the fix the "
+            "host names on a blocked state — and those win because the host "
+            "resolved them. This line would never render. It belongs only on "
+            "a state whose payload carries nothing.")
+        return
+    line = s.get("consequence")
+    if not _is_text(line):
+        errors.append(f"{where}: `consequence` must be a non-empty line of "
+                      "plain text, or be left out where the name already "
+                      "carries it.")
+        return
+    if "\n" in line or line != line.strip():
+        errors.append(f"{where}: `consequence` is the one line a list row "
+                      "shows — no newlines, no leading or trailing "
+                      "whitespace. What needs more room belongs in the "
+                      "`description`.")
+    if len(line) > MAX_CONSEQUENCE:
+        errors.append(f"{where}: `consequence` is {len(line)} characters and "
+                      f"the cap is {MAX_CONSEQUENCE}. One line means one "
+                      "line: say what this state asks of the reader today, "
+                      "and put the rest in the `description`.")
+
+
 def _check_declines(decl: dict, errors: list) -> None:
     """The kinds of company this strategy will not evaluate, and every way
     the list goes wrong.
@@ -2330,6 +2383,7 @@ def validate_declaration(decl) -> list[str]:
         if not _is_text(s.get("description")):
             errors.append(f"{where} needs a `description` in plain "
                           "language.")
+        _check_consequence(where, s, errors)
         if s.get("render") not in RENDER_TYPES:
             errors.append(f"{where} must set `render` to one of the host's "
                           f"{len(RENDER_TYPES)} types "
@@ -4249,7 +4303,7 @@ def _unanswerable_block(record, state, evidence) -> str | None:
     decision's own citations and was handed none.
 
     Only one destination works that way, and it is the one an author reaches
-    for first. The questions under "Your judgement" are exactly the ones the
+    for first. The answering surface's questions are exactly the ones the
     decision cited — that is the whole discovery mechanism for anything asked
     per security, because a question about one security cannot be declared on
     a setup screen before there is a security to ask it about. So a verdict
@@ -4483,7 +4537,8 @@ def _result(state_id, state, payload, reason, produced_by, record):
         # state it is looking at.
         "state": {"id": state_id, "name": state["name"],
                   "description": state["description"],
-                  "fix": state.get("fix")},
+                  "fix": state.get("fix"),
+                  "consequence": state.get("consequence")},
         "payload": payload,
         "reason": reason,
         "produced_by": produced_by,
@@ -4748,8 +4803,7 @@ def evaluate(record: dict, ctx: dict) -> dict:
               "groups": groups,
               "rests_on": rests_on,
               "note": decision["reason"].get("note")}
-    payload = _owed_by(state, decision["payload"], evidence)
-    return _result(decision["state"], state, payload,
+    return _result(decision["state"], state, decision["payload"],
                    reason, "strategy", record)
 
 
@@ -4781,31 +4835,12 @@ def _resolve_rests_on(named, evidence) -> tuple:
     return [dict(by_id[n]["subject"]) for n in named], []
 
 
-def _owed_by(state, payload, evidence) -> dict:
-    """A blocked verdict's payload, with what is owed named by the host.
-
-    `needs` is prose and stays the strategy's, because most of it is genuinely
-    the strategy's to say — where to go, and why this method will not act
-    until it has been answered. What is NOT the strategy's is the list of
-    which questions are outstanding: those are bank entries, the decision
-    already cited every one of them, and the host resolved each label as it
-    resolved every other. A strategy writing them itself is a strategy
-    quoting the host, and the one that did kept three hand-written
-    paraphrases with a fallback that printed the raw id.
-
-    Derived from the citations that came back UNANSWERED rather than from all
-    of them, and matched against the kind the state's own way out leads to —
-    the same call the section itself is built from, so the sentence and the
-    page it sends the reader to cannot disagree about what is outstanding.
-    """
-    spec = STATE_FIXES.get(state.get("fix")) or {}
-    if state["render"] != "blocked" or not spec.get("cites"):
-        return payload
-    owed = [row for row in evidence
-            if row.get("outcome") == UNKNOWN
-            and str((row.get("subject") or {}).get("kind") or "") == "judgement"]
-    if not owed:
-        return payload
-    named = [f'{(row["subject"].get("label") or row["subject"]["id"])} — '
-             "unanswered." for row in owed]
-    return {**payload, "needs": named + list(payload.get("needs") or [])}
+# A blocked verdict's `needs` stays the strategy's prose — where to go, and
+# why this method will not act until it is answered. The host used to prepend
+# one "<label> — unanswered." line per outstanding question here, so the
+# verdict card could name them; the card now points at the one surface that
+# owns the questions instead of restating them, so nothing read those lines
+# and they are gone. Which questions are outstanding is still the host's
+# fact, carried where it always was: in the citations themselves, which is
+# what the answering surface is built from and what _unanswerable_block
+# refuses a blocked state without.

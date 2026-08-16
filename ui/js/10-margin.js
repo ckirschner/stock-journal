@@ -339,8 +339,10 @@ ${p.terminal ? `<p class="caution">Qualified — this price series has ended (${
 };
 
 /* The data behind one security: what is held, when it was fetched, what the
-   SEC says the filer is, and what went wrong. */
-PANES.datastatus = (a) => {
+   SEC says the filer is, what went wrong — and the cross-check, because
+   whether the stored numbers agree with what the filings say about
+   themselves is part of the same trust question. */
+PANES.datastatus = async (a) => {
   const s = find(a.t);
   if (!s) return PANES.rest();
   const d = s._data;
@@ -356,6 +358,17 @@ PANES.datastatus = (a) => {
     : `<p><span class="absent">Industry not established</span> — ${esc(ind.reason || "nothing on record says what kind of filer this is")}.</p>`;
   const errs = (d.extraction_error_detail || []).map((e) =>
     `<p class="m-quiet">${esc(e.accession)}: ${esc(e.error)}</p>`).join("");
+  /* The cross-check rides on the coverage reply, cached per security. */
+  let cc = null;
+  if (s.cik) {
+    if (C.coverageFor !== s.ticker || !C.coverage) {
+      const r = await apiRaw("get_coverage", s.ticker);
+      C.coverageFor = s.ticker;
+      C.coverage = r.ok ? (r.coverage || { entries: [] })
+        : { entries: [], error: r.error };
+    }
+    cc = (C.coverage || {}).crosscheck || null;
+  }
   return `<p class="m-kicker">The data behind this security</p>
 <h3>${esc(String(d.filings_held))} filings on record</h3>
 <p>Last fetched ${esc(d.last_fetch ? String(d.last_fetch.at).slice(0, 10) : "never")}.
@@ -365,8 +378,37 @@ ${d.pre_xbrl_filings ? `<p class="m-quiet">${d.pre_xbrl_filings} older filings c
 ${d.extraction_errors ? `<div class="m-h">What could not be read</div>${errs}` : ""}
 ${(d.terminal_series || []).map((t) => `<p class="caution">The ${esc(t.ticker)} price series has ended${t.reason ? ` — ${esc(t.reason)}` : ""}.</p>`).join("")}
 ${(d.unquoted_symbols || []).map((u) => `<p class="m-quiet">${esc(u.ticker)}: not carried by the price source${u.reason ? ` — ${esc(u.reason)}` : ""}.</p>`).join("")}
-<p class="m-quiet">The full per-measure coverage — what computes, what refuses, and the public-float cross-check — is at the bottom of this security's page.</p>`;
+${cc ? crosscheckMargin(cc) : ""}
+<p class="m-quiet">The full per-measure inventory — every measure the bank defines and what each computes to here — is behind “Everything stored about this security” at the bottom of its page.</p>`;
 };
+
+/* The cross-check, told in the margin: price × shares against the public
+   float each 10-K states about itself — an independent test the filings
+   themselves supply, which someone wants once. The words carry the state;
+   colour repeats it and never stands alone. */
+function crosscheckMargin(cc) {
+  const checks = cc.checks || [];
+  const sum = cc.summary || {};
+  if (!checks.length) return "";
+  const word = { pass: ["consistent", "o-pass"], warn: ["look closer", "o-unknown"],
+    fail: ["inconsistent", "o-fail"], skipped: ["could not run", "o-noted"] };
+  const head = sum.fail
+    ? `<b class="o-fail">Inconsistent:</b> the tool’s own price × shares disagrees with a public float a filing states about itself — the signature of a wrong price basis, a split, a currency or a share-class error. The rows below say which filings.`
+    : sum.warn
+      ? `<b class="o-unknown">Look closer:</b> the price × shares comparison is off by more than rounding on ${sum.warn} filing${sum.warn === 1 ? "" : "s"} below.`
+      : `The tool’s own price × shares agrees with the public float each 10-K states about itself${sum.ran ? ` — ${sum.ran} filing${sum.ran === 1 ? "" : "s"} compared${sum.skipped ? `, ${sum.skipped} could not run` : ""}` : ""}.`;
+  const rows = checks.map((k) => {
+    const [w, cls] = word[k.status] || [k.status || "", "o-noted"];
+    return `<tr><td>${esc(k.form || "10-K")} · ${esc(k.period || "")}${
+      k.ratio !== null && k.ratio !== undefined ? ` <span class="num">${Number(k.ratio).toFixed(2)}×</span>` : ""}
+      <br><span class="dim"><code>${esc(k.accession || "")}</code>${k.note ? ` — ${esc(oneline(k.note))}` : ""}</span></td>
+      <td class="${cls}">${esc(w)}</td></tr>`;
+  }).join("");
+  return `<div class="m-h">The cross-check</div>
+<p class="m-quiet">${head}</p>
+<details><summary>${checks.length} filing${checks.length === 1 ? "" : "s"}, each by accession</summary>
+<table class="m-series">${rows}</table></details>`;
+}
 
 /* One note, read whole. */
 PANES.note = (a) => {

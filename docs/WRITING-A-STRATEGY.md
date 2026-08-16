@@ -1136,7 +1136,7 @@ whatever the verdict said.
 | `fix` | button | where it goes | must cite |
 |---|---|---|---|
 | `settings` | Fix this journal's settings | this journal's setup screen | — |
-| `judgement` | Answer these questions | "Your judgement" on this security's page | a bank entry of kind `qualitative`, however it is cited |
+| `judgement` | Answer these questions | the answering surface on this security's page | a bank entry of kind `qualitative`, however it is cited |
 | `thesis` | Write down what you think now | this security's thesis record | — |
 | `list` | Import a list | the list this journal works from | — |
 <!-- end: state-fixes -->
@@ -1328,6 +1328,7 @@ against the SEC's published list in
 <!-- generated: vocabulary -->
 - **Contract version** — `8`. A declaration naming any other is refused at load.
 - **Most states one strategy may declare** — `16`.
+- **Longest one-line `consequence` a state may declare** — `80` characters. The optional third thing beside a state's `name` and `description`: the one line a list row shows for what this state means for the reader today. Only legal on a state whose payload carries no figures — a row already shows an exit's date, a commit's size, or a blocked state's fix, and those win because the host resolved them. Leave it out where the name already carries the consequence; a row showing nothing beats a redundant line.
 - **Declared field types** — `number`, `integer`, `boolean`, `text`.
 - **Units a `size` may be in** — `weight`, `usd`, `shares` (`weight` is a percent number).
 - **Units a cited figure may render in** — `percent`, `percentage_points`, `times`, `ratio`, `score`, `usd`, `shares`, `years`, `months`, `days`, `count`, `times_own_median`, `date`, `text`, `yes_no`, `none`. A strategy picks one; it never invents a rendering.

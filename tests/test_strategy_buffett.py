@@ -574,26 +574,26 @@ class TestABlockedVerdictIsNeverADeadEnd:
                       judged={"moat_durability": True})
         assert cited_judgements(out) == list(QUALITATIVE)
 
-    def test_the_needs_name_the_questions_in_the_banks_own_words(self,
-                                                                 buffett):
-        """And this file no longer writes them. The strategy used to keep a
-        paraphrase of each of the three, because the context handed it a
-        value and not a label — a strategy quoting the host, with a fallback
-        that printed the raw bank id when the map missed. It cites them; the
-        host names them, in the same words the rows beneath this verdict and
-        the section it sends the reader to already carry."""
+    def test_the_needs_carry_prose_and_never_the_question_names(self,
+                                                                buffett):
+        """The host used to prepend one "<label> — unanswered." line per
+        outstanding question here so the verdict card could name them. The
+        card points at the one surface that owns the questions now, so the
+        payload carries the strategy's prose alone — and which questions
+        are outstanding stays the host's fact, carried in the citations,
+        which is where the answering surface reads it from."""
         from engine import bank
         out = verdict(buffett, known=CLEARS_ENTRY,
                       judged={"moat_durability": True,
                               "management_integrity": True})
         needs = out["payload"]["needs"]
         label = bank.meta()["capital_allocation"]["label"]
-        assert needs[0] == f"{label} — unanswered."
-        # only the one that is outstanding, not all three it cited
-        assert len([n for n in needs if n.endswith("— unanswered.")]) == 1
+        assert not any(n.endswith("— unanswered.") for n in needs)
+        assert not any(label in n for n in needs)
         assert not any("capital_allocation" in n for n in needs)
-        assert any("Your judgement" in n for n in needs)
         assert any("not a fail" in n for n in needs)
+        # the outstanding question is still discoverable, from the citation
+        assert "capital_allocation" in cited_judgements(out)
 
     def test_the_names_are_not_written_in_this_strategy_at_all(self,
                                                                buffett):

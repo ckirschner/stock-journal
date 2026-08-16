@@ -516,11 +516,27 @@ STRATEGY = {
                "what its assets and its typical earnings justify, and sells "
                "when that gap closes, when the balance sheet stops being "
                "safe, or when two years are up — whichever comes first.",
-    "version": 9,
+    "version": 10,
     "contract": 8,
     "declines": DECLINES,
     "limits": LIMITS,
     "changelog": {
+    10: "NO LEVEL MOVED AND NO LOGIC CHANGED — TWO SENTENCES MISSTATED THE "
+        "ARITHMETIC. A question about the company that cannot reach its bar "
+        "even if every unreadable row under it passed was described as \"not "
+        "answered\", on the candidate verdict and on the would-not-buy-it-"
+        "today holding verdict. Unanswered is a different verdict in this "
+        "strategy — it is what cannot-screen and screen-unreadable mean. "
+        "Both sentences now say what the rollup under them already said: "
+        "the question was answered, and the answer is no.\n\n"
+        "Three states also declare the contract's new one-line "
+        "`consequence` for the list row. One reading past the line: waiting "
+        "on the next readings, nothing owed — and its description now says "
+        "readings rather than filings, which version 9 made true when the "
+        "discount exits moved to trading days. Not enough to go on: "
+        "undecided, not rejected. Exit checks cannot run: not being "
+        "watched. The rest carry their consequence in their names and "
+        "declare none.",
     9: "THE THREE DISCOUNT EXITS NOW ACT IN DAYS RATHER THAN IN QUARTERS. No "
        "level moved.\n\n"
        "`exit-pe-3y-avg`, `exit-price-to-book` and `exit-combined-multiple` "
@@ -802,6 +818,7 @@ STRATEGY = {
 
         {"id": "cannot-screen", "render": "unknown",
          "name": "Not enough to go on",
+         "consequence": "undecided, not rejected — more data may settle it",
          "description": "Some of the figures this strategy needs are "
                         "missing, and the ones that are present do not "
                         "settle it either way. A missing number is not a "
@@ -861,13 +878,16 @@ STRATEGY = {
 
         {"id": "one-reading-past", "render": "hold",
          "name": "One reading past the line",
+         "consequence": "waiting on the next readings to confirm · nothing owed",
          "description": "An exit level has been crossed on the current "
                         "reading, and this strategy will not act on it "
-                        "until the next filings say the same thing. One "
-                        "impairment or one settlement can push a measure "
-                        "over a line without anything having changed, and "
-                        "selling on that would be the panic this is here to "
-                        "prevent. Nothing is owed from you today."},
+                        "until the next readings say the same thing — "
+                        "trading days for the discount exits, filings for "
+                        "the safety ones. One impairment or one settlement "
+                        "can push a measure over a line without anything "
+                        "having changed, and selling on that would be the "
+                        "panic this is here to prevent. Nothing is owed "
+                        "from you today."},
 
         {"id": "too-big", "render": "reduce",
          "name": "Too big a share of the account",
@@ -911,6 +931,7 @@ STRATEGY = {
 
         {"id": "cannot-watch", "render": "unknown",
          "name": "Exit checks cannot run",
+         "consequence": "not being watched — a fetch or typed figures restore it",
          "description": "You hold it, and not one of the exit tests could "
                         "be worked out from the data on record — so this "
                         "strategy has nothing to say about whether to "
@@ -2172,13 +2193,14 @@ def _on_a_candidate(ctx):
                     "enough."
                     if req_fail else
                     "This strategy asks five separate questions about a "
-                    "company and needs every one of them answered. "
-                    + ("One is" if len(screen["short"]) == 1
-                       else f'{len(screen["short"])} are')
-                    + " not: " + _names_of(screen["short"])
+                    "company and needs a yes to every one. "
+                    + ("One has come back no"
+                       if len(screen["short"]) == 1
+                       else f'{len(screen["short"])} have come back no')
+                    + ": " + _names_of(screen["short"])
                     + f'. Across all five, {screen["passed"]} of the '
                       f'{screen["tested"]} tests behind them passed, and no '
-                      "amount of passing elsewhere settles what is short."),
+                      "amount of passing elsewhere turns a no into a yes."),
                 "evidence": evidence, "groups": groups,
             },
         }
@@ -2688,7 +2710,9 @@ def _more_money(ctx, evidence, groups, note, clear):
             + (f'{req_fail} of the {entry["req_tested"]} tests this strategy '
                "will not bend came back against it"
                if req_fail else
-               "nothing here answers " + _names_of(entry["short"]))
+               _names_of(entry["short"])
+               + (" has come back no" if len(entry["short"]) == 1
+                  else " have come back no"))
             + f', and {entry["passed"]} of the {entry["tested"]} tests behind '
             "the five questions passed. Holding what you have is a different "
             "question, and every exit test above came back clear.",

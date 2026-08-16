@@ -196,14 +196,15 @@ function dataView() {
 }
 
 /* ------------------------------------------------------------ analytics */
+/* A tab of its own: not about one security, and not chrome — a reading
+   surface about the journal, reached where the other screens are. */
 function analyticsView() {
   const card = S.override_scorecard || {};
   const exits = S.exit_scorecard || {};
   const passed = S.pass_over_scorecard || {};
   const anything = (card.live || {}).n_purchases || (card.reconstructed || {}).n_purchases
     || Object.keys(exits).length || (passed.rows || []).length;
-  const head = `<div class="crumb"><button data-act="back">← The list</button></div>
-    <h2 class="sect">Looking back<span class="aside">how your decisions and your rules have actually done</span></h2>`;
+  const head = `<h2 class="sect">Looking back<span class="aside">how your decisions and your rules have actually done</span></h2>`;
   if (!anything) {
     return banners() + head + `<p class="quiet">Not enough history to mean anything yet. Once positions close and overrides age, this page reports both directions — your error rate against the rules, and the rules’ error rate against you. If overriding a particular rule keeps working out, that rule is miscalibrated; this page is where you would find out.</p>`;
   }

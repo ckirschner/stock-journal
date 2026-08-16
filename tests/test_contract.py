@@ -101,6 +101,72 @@ class TestDeclarationValidation:
         errors = contract.validate_declaration(decl(states=[s, dict(s)]))
         assert any("twice" in e for e in errors)
 
+    # -- the one-line consequence ----------------------------------------
+    # The name states the condition, the description explains, and the
+    # consequence is the third thing: the one line a list row shows for a
+    # state whose payload carries no figures. The cap is what makes "one
+    # line" structural — a field a strategy could fill with a paragraph
+    # would reintroduce the row prose it exists to replace.
+
+    def consequence_state(self, **over):
+        s = {"id": "wait", "name": "Waiting", "render": "hold",
+             "description": "The line under test.",
+             "consequence": "waiting on the next readings · nothing owed"}
+        s.update(over)
+        return s
+
+    def test_a_one_line_consequence_is_accepted(self):
+        errors = contract.validate_declaration(
+            decl(states=[self.consequence_state()]))
+        assert errors == []
+
+    def test_a_consequence_with_a_newline_is_refused(self):
+        errors = contract.validate_declaration(decl(states=[
+            self.consequence_state(consequence="waiting\nand explaining")]))
+        assert any("one line" in e for e in errors)
+
+    def test_a_consequence_over_the_cap_is_refused(self):
+        errors = contract.validate_declaration(decl(states=[
+            self.consequence_state(
+                consequence="x" * (contract.MAX_CONSEQUENCE + 1))]))
+        assert any(str(contract.MAX_CONSEQUENCE) in e for e in errors)
+
+    def test_an_empty_consequence_is_refused_not_ignored(self):
+        """Absence is declared by leaving the key out, never by an empty
+        string that would render as a blank line."""
+        errors = contract.validate_declaration(decl(states=[
+            self.consequence_state(consequence="   ")]))
+        assert any("left out" in e for e in errors)
+
+    def test_a_consequence_on_a_payload_carrying_state_is_refused(self):
+        """A close row already shows "exit due <day>" and a blocked row the
+        fix the host names — resolved facts that win. A `consequence` there
+        would be a declaration nothing reads, and this contract refuses
+        those rather than letting them sit."""
+        for render, extra in (("close", {}), ("commit", {}),
+                              ("blocked", {"fix": "settings"})):
+            errors = contract.validate_declaration(decl(states=[
+                self.consequence_state(render=render, **extra)]))
+            assert any("never render" in e for e in errors), render
+
+    def test_the_consequence_reaches_the_served_state(self):
+        """Declared beside the name, served beside the name — one path from
+        the declaration to the row that shows it. A state that declares
+        none serves None, which the row renders as nothing."""
+        rec = record(
+            states=[self.consequence_state(id="sit", name="Sit",
+                                           description="Do nothing.")])
+        out = contract.evaluate(rec, {
+            "contract": contract.CONTRACT_VERSION, "today": "2026-08-15",
+            "inputs": {}, "values": {}, "measures": {}})
+        assert out["state"]["consequence"] \
+            == "waiting on the next readings · nothing owed"
+        bare = record()
+        quiet = contract.evaluate(bare, {
+            "contract": contract.CONTRACT_VERSION, "today": "2026-08-15",
+            "inputs": {}, "values": {}, "measures": {}})
+        assert quiet["state"]["consequence"] is None
+
     def test_the_host_namespace_cannot_be_impersonated(self):
         """Host states are "host:..." — a colon the id alphabet excludes,
         so a strategy structurally cannot declare one."""

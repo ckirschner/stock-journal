@@ -1,5 +1,5 @@
 {
- "built": "2026-08-13T05:54:50+00:00",
+ "built": "2026-08-16T01:20:44+00:00",
  "as_of": "2026-08-13",
  "free_cash": 48000.0,
  "strategy": "magic-formula",
@@ -7,7 +7,7 @@
   {
    "ticker": "MARLBK",
    "name": "Marlbrook Ceramics",
-   "added": "2026-08-13",
+   "added": "2026-08-15",
    "price": 41.2,
    "lots": [
     {
@@ -29,7 +29,8 @@
         "id": "buy-it",
         "name": "Buy it",
         "description": "It is on the list you are working from, that list is still current, and there is room to start another name without breaking the staging rule.\n\nNothing was tested about the company, and that is not an oversight. The ranking that put this name in front of you was run against three thousand others and is the whole of the judgement in this method. The size is an equal share of the number of positions this journal is meant to run — equal dollar amounts, which is Greenblatt's own answer and differs from every other strategy here.",
-        "fix": null
+        "fix": null,
+        "consequence": null
        },
        "payload": {
         "size": {
@@ -188,7 +189,8 @@
            "reads": "earnings_yield",
            "label": "Earnings yield",
            "unit": "percent",
-           "explain": null
+           "explain": "What the business earns before interest and tax, as a percentage of\nwhat the whole thing would cost you — the shares plus the debts you\nwould take on with them, less the cash you would get. A 12% earnings\nyield says the operating profit is twelve cents a year on every\ndollar it costs to own the whole company.\n\nIt is a yield rather than a multiple so that it reads the way a\nsavings rate reads: higher is cheaper. Enterprise value rather than\nmarket capitalisation because buying a company with borrowings means\nbuying the borrowings, and a price tag that leaves them out flatters\nevery leveraged business.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "known",
@@ -210,7 +212,8 @@
            "reads": "return_on_capital",
            "label": "Return on capital",
            "unit": "percent",
-           "explain": null
+           "explain": "How many cents of operating profit the business earns on every dollar\nof capital it actually needs to run — the stock and receivables it\nhas to carry, less what its suppliers fund for free, plus the\nbuildings and equipment. A company earning 40 cents on the dollar is\na far better business than one earning 8, and it can grow without\nraising money to do it.\n\nThree things are deliberately left out of the bottom. Debt and equity,\nbecause how a business is financed is a different question from how\ngood it is. Cash, because money sitting in the bank is not earning the\noperating profit. And what a previous owner overpaid for an\nacquisition, because goodwill tells you about a past purchase and not\nabout the return the assets throw off.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "known",
@@ -264,23 +267,24 @@
           "outcome": "noted"
          }
         ],
+        "rests_on": [],
         "note": null
        },
        "produced_by": "strategy",
        "strategy": {
         "id": "magic-formula",
         "name": "Magic Formula",
-        "version": 1,
+        "version": 2,
         "values_version": 1,
-        "contract": 6
+        "contract": 8
        }
       },
       "strategy": {
        "id": "magic-formula",
        "name": "Magic Formula",
-       "version": 1,
+       "version": 2,
        "values_version": 1,
-       "contract": 6
+       "contract": 8
       },
       "metrics": {
        "earnings_yield": {
@@ -315,11 +319,15 @@
         "return_on_capital"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2025-08-11 could be consulted; 2 hand-entered values on record by 2025-08-11; judged by Magic Formula v1 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2025-08-11 could be consulted; 2 hand-entered values on record by 2025-08-11; judged by Magic Formula v2 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": null,
       "valuation": null,
-      "recollection": null
+      "recollection": null,
+      "changes_recorded": {
+       "rules": 0,
+       "measures": 0
+      }
      }
     },
     {
@@ -342,10 +350,11 @@
      "strategy": {
       "id": "magic-formula",
       "name": "Magic Formula",
-      "version": 1,
+      "version": 2,
       "values_version": 1,
-      "contract": 6
+      "contract": 8
      },
+     "override": null,
      "snapshot": {
       "frozen": "2026-08-12T12:00:00-04:00",
       "decision": {
@@ -355,7 +364,8 @@
         "id": "time-is-up",
         "name": "The year is up",
         "description": "This has been held for about the year the method gives it, and no later list has carried the name since. Nothing about the company decided that — this is the only exit this strategy has.\n\nThe date shown is the anniversary itself, and a few days either side of it is free. Greenblatt's own refinement is to sell a position you are down on shortly before that date and one you are up on shortly after, which is worth a week of anybody's patience in a taxable account. This journal will not choose for you: it never holds what you paid, which is the same reason it will never tell you to buy more of something because it has fallen.\n\nSelling here is half a decision. The other half is a fresh list and a replacement bought from it.",
-        "fix": null
+        "fix": null,
+        "consequence": null
        },
        "payload": {
         "when": "2026-08-11"
@@ -442,7 +452,8 @@
            "reads": "earnings_yield",
            "label": "Earnings yield",
            "unit": "percent",
-           "explain": null
+           "explain": "What the business earns before interest and tax, as a percentage of\nwhat the whole thing would cost you — the shares plus the debts you\nwould take on with them, less the cash you would get. A 12% earnings\nyield says the operating profit is twelve cents a year on every\ndollar it costs to own the whole company.\n\nIt is a yield rather than a multiple so that it reads the way a\nsavings rate reads: higher is cheaper. Enterprise value rather than\nmarket capitalisation because buying a company with borrowings means\nbuying the borrowings, and a price tag that leaves them out flatters\nevery leveraged business.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "known",
@@ -464,7 +475,8 @@
            "reads": "return_on_capital",
            "label": "Return on capital",
            "unit": "percent",
-           "explain": null
+           "explain": "How many cents of operating profit the business earns on every dollar\nof capital it actually needs to run — the stock and receivables it\nhas to carry, less what its suppliers fund for free, plus the\nbuildings and equipment. A company earning 40 cents on the dollar is\na far better business than one earning 8, and it can grow without\nraising money to do it.\n\nThree things are deliberately left out of the bottom. Debt and equity,\nbecause how a business is financed is a different question from how\ngood it is. Cash, because money sitting in the bank is not earning the\noperating profit. And what a previous owner overpaid for an\nacquisition, because goodwill tells you about a past purchase and not\nabout the return the assets throw off.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "known",
@@ -506,23 +518,24 @@
           "outcome": "noted"
          }
         ],
+        "rests_on": [],
         "note": null
        },
        "produced_by": "strategy",
        "strategy": {
         "id": "magic-formula",
         "name": "Magic Formula",
-        "version": 1,
+        "version": 2,
         "values_version": 1,
-        "contract": 6
+        "contract": 8
        }
       },
       "strategy": {
        "id": "magic-formula",
        "name": "Magic Formula",
-       "version": 1,
+       "version": 2,
        "values_version": 1,
-       "contract": 6
+       "contract": 8
       },
       "metrics": {
        "earnings_yield": {
@@ -557,11 +570,15 @@
         "return_on_capital"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2026-08-12 could be consulted; 2 hand-entered values on record by 2026-08-12; judged by Magic Formula v1 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2026-08-12 could be consulted; 2 hand-entered values on record by 2026-08-12; judged by Magic Formula v2 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": null,
       "valuation": null,
-      "recollection": null
+      "recollection": null,
+      "changes_recorded": {
+       "rules": 0,
+       "measures": 0
+      }
      }
     }
    ],
@@ -571,17 +588,26 @@
      "seq": 1,
      "id": "earnings_yield",
      "value": 13.9,
+     "label": "Earnings yield",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "What the business earns before interest and tax, as a percentage of\nwhat the whole thing would cost you — the shares plus the debts you\nwould take on with them, less the cash you would get. A 12% earnings\nyield says the operating profit is twelve cents a year on every\ndollar it costs to own the whole company.\n\nIt is a yield rather than a multiple so that it reads the way a\nsavings rate reads: higher is cheaper. Enterprise value rather than\nmarket capitalisation because buying a company with borrowings means\nbuying the borrowings, and a price tag that leaves them out flatters\nevery leveraged business.\n",
      "recorded": "2025-08-04T12:00:00-04:00"
     },
     {
      "seq": 2,
      "id": "return_on_capital",
      "value": 44.0,
+     "label": "Return on capital",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How many cents of operating profit the business earns on every dollar\nof capital it actually needs to run — the stock and receivables it\nhas to carry, less what its suppliers fund for free, plus the\nbuildings and equipment. A company earning 40 cents on the dollar is\na far better business than one earning 8, and it can grow without\nraising money to do it.\n\nThree things are deliberately left out of the bottom. Debt and equity,\nbecause how a business is financed is a different question from how\ngood it is. Cash, because money sitting in the bank is not earning the\noperating profit. And what a previous owner overpaid for an\nacquisition, because goodwill tells you about a past purchase and not\nabout the return the assets throw off.\n",
      "recorded": "2025-08-04T12:00:00-04:00"
     }
    ],
    "thesis": [],
    "valuations": [],
+   "snapshots": [],
    "notes": [
     {
      "date": "2025-08-04T12:00:00-04:00",
@@ -601,7 +627,7 @@
   {
    "ticker": "BRAMLY",
    "name": "Bramley Tool Works",
-   "added": "2026-08-13",
+   "added": "2026-08-15",
    "price": 27.6,
    "lots": [
     {
@@ -623,7 +649,8 @@
         "id": "buy-it",
         "name": "Buy it",
         "description": "It is on the list you are working from, that list is still current, and there is room to start another name without breaking the staging rule.\n\nNothing was tested about the company, and that is not an oversight. The ranking that put this name in front of you was run against three thousand others and is the whole of the judgement in this method. The size is an equal share of the number of positions this journal is meant to run — equal dollar amounts, which is Greenblatt's own answer and differs from every other strategy here.",
-        "fix": null
+        "fix": null,
+        "consequence": null
        },
        "payload": {
         "size": {
@@ -782,7 +809,8 @@
            "reads": "earnings_yield",
            "label": "Earnings yield",
            "unit": "percent",
-           "explain": null
+           "explain": "What the business earns before interest and tax, as a percentage of\nwhat the whole thing would cost you — the shares plus the debts you\nwould take on with them, less the cash you would get. A 12% earnings\nyield says the operating profit is twelve cents a year on every\ndollar it costs to own the whole company.\n\nIt is a yield rather than a multiple so that it reads the way a\nsavings rate reads: higher is cheaper. Enterprise value rather than\nmarket capitalisation because buying a company with borrowings means\nbuying the borrowings, and a price tag that leaves them out flatters\nevery leveraged business.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "known",
@@ -804,7 +832,8 @@
            "reads": "return_on_capital",
            "label": "Return on capital",
            "unit": "percent",
-           "explain": null
+           "explain": "How many cents of operating profit the business earns on every dollar\nof capital it actually needs to run — the stock and receivables it\nhas to carry, less what its suppliers fund for free, plus the\nbuildings and equipment. A company earning 40 cents on the dollar is\na far better business than one earning 8, and it can grow without\nraising money to do it.\n\nThree things are deliberately left out of the bottom. Debt and equity,\nbecause how a business is financed is a different question from how\ngood it is. Cash, because money sitting in the bank is not earning the\noperating profit. And what a previous owner overpaid for an\nacquisition, because goodwill tells you about a past purchase and not\nabout the return the assets throw off.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "known",
@@ -858,23 +887,24 @@
           "outcome": "noted"
          }
         ],
+        "rests_on": [],
         "note": null
        },
        "produced_by": "strategy",
        "strategy": {
         "id": "magic-formula",
         "name": "Magic Formula",
-        "version": 1,
+        "version": 2,
         "values_version": 1,
-        "contract": 6
+        "contract": 8
        }
       },
       "strategy": {
        "id": "magic-formula",
        "name": "Magic Formula",
-       "version": 1,
+       "version": 2,
        "values_version": 1,
-       "contract": 6
+       "contract": 8
       },
       "metrics": {
        "earnings_yield": {
@@ -909,11 +939,15 @@
         "return_on_capital"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2025-08-11 could be consulted; 2 hand-entered values on record by 2025-08-11; judged by Magic Formula v1 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2025-08-11 could be consulted; 2 hand-entered values on record by 2025-08-11; judged by Magic Formula v2 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": null,
       "valuation": null,
-      "recollection": null
+      "recollection": null,
+      "changes_recorded": {
+       "rules": 0,
+       "measures": 0
+      }
      }
     }
    ],
@@ -923,17 +957,26 @@
      "seq": 1,
      "id": "earnings_yield",
      "value": 15.2,
+     "label": "Earnings yield",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "What the business earns before interest and tax, as a percentage of\nwhat the whole thing would cost you — the shares plus the debts you\nwould take on with them, less the cash you would get. A 12% earnings\nyield says the operating profit is twelve cents a year on every\ndollar it costs to own the whole company.\n\nIt is a yield rather than a multiple so that it reads the way a\nsavings rate reads: higher is cheaper. Enterprise value rather than\nmarket capitalisation because buying a company with borrowings means\nbuying the borrowings, and a price tag that leaves them out flatters\nevery leveraged business.\n",
      "recorded": "2025-08-04T12:00:00-04:00"
     },
     {
      "seq": 2,
      "id": "return_on_capital",
      "value": 38.5,
+     "label": "Return on capital",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How many cents of operating profit the business earns on every dollar\nof capital it actually needs to run — the stock and receivables it\nhas to carry, less what its suppliers fund for free, plus the\nbuildings and equipment. A company earning 40 cents on the dollar is\na far better business than one earning 8, and it can grow without\nraising money to do it.\n\nThree things are deliberately left out of the bottom. Debt and equity,\nbecause how a business is financed is a different question from how\ngood it is. Cash, because money sitting in the bank is not earning the\noperating profit. And what a previous owner overpaid for an\nacquisition, because goodwill tells you about a past purchase and not\nabout the return the assets throw off.\n",
      "recorded": "2025-08-04T12:00:00-04:00"
     }
    ],
    "thesis": [],
    "valuations": [],
+   "snapshots": [],
    "notes": [
     {
      "date": "2025-08-11T12:00:00-04:00",
@@ -945,7 +988,7 @@
   {
    "ticker": "FENWCK",
    "name": "Fenwick Abrasives",
-   "added": "2026-08-13",
+   "added": "2026-08-15",
    "price": 18.4,
    "lots": [
     {
@@ -967,7 +1010,8 @@
         "id": "buy-it",
         "name": "Buy it",
         "description": "It is on the list you are working from, that list is still current, and there is room to start another name without breaking the staging rule.\n\nNothing was tested about the company, and that is not an oversight. The ranking that put this name in front of you was run against three thousand others and is the whole of the judgement in this method. The size is an equal share of the number of positions this journal is meant to run — equal dollar amounts, which is Greenblatt's own answer and differs from every other strategy here.",
-        "fix": null
+        "fix": null,
+        "consequence": null
        },
        "payload": {
         "size": {
@@ -1126,7 +1170,8 @@
            "reads": "earnings_yield",
            "label": "Earnings yield",
            "unit": "percent",
-           "explain": null
+           "explain": "What the business earns before interest and tax, as a percentage of\nwhat the whole thing would cost you — the shares plus the debts you\nwould take on with them, less the cash you would get. A 12% earnings\nyield says the operating profit is twelve cents a year on every\ndollar it costs to own the whole company.\n\nIt is a yield rather than a multiple so that it reads the way a\nsavings rate reads: higher is cheaper. Enterprise value rather than\nmarket capitalisation because buying a company with borrowings means\nbuying the borrowings, and a price tag that leaves them out flatters\nevery leveraged business.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "known",
@@ -1148,7 +1193,8 @@
            "reads": "return_on_capital",
            "label": "Return on capital",
            "unit": "percent",
-           "explain": null
+           "explain": "How many cents of operating profit the business earns on every dollar\nof capital it actually needs to run — the stock and receivables it\nhas to carry, less what its suppliers fund for free, plus the\nbuildings and equipment. A company earning 40 cents on the dollar is\na far better business than one earning 8, and it can grow without\nraising money to do it.\n\nThree things are deliberately left out of the bottom. Debt and equity,\nbecause how a business is financed is a different question from how\ngood it is. Cash, because money sitting in the bank is not earning the\noperating profit. And what a previous owner overpaid for an\nacquisition, because goodwill tells you about a past purchase and not\nabout the return the assets throw off.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "known",
@@ -1202,23 +1248,24 @@
           "outcome": "noted"
          }
         ],
+        "rests_on": [],
         "note": null
        },
        "produced_by": "strategy",
        "strategy": {
         "id": "magic-formula",
         "name": "Magic Formula",
-        "version": 1,
+        "version": 2,
         "values_version": 1,
-        "contract": 6
+        "contract": 8
        }
       },
       "strategy": {
        "id": "magic-formula",
        "name": "Magic Formula",
-       "version": 1,
+       "version": 2,
        "values_version": 1,
-       "contract": 6
+       "contract": 8
       },
       "metrics": {
        "earnings_yield": {
@@ -1253,11 +1300,15 @@
         "return_on_capital"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2025-08-18 could be consulted; 2 hand-entered values on record by 2025-08-18; judged by Magic Formula v1 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2025-08-18 could be consulted; 2 hand-entered values on record by 2025-08-18; judged by Magic Formula v2 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": null,
       "valuation": null,
-      "recollection": null
+      "recollection": null,
+      "changes_recorded": {
+       "rules": 0,
+       "measures": 0
+      }
      }
     }
    ],
@@ -1267,17 +1318,26 @@
      "seq": 1,
      "id": "earnings_yield",
      "value": 12.1,
+     "label": "Earnings yield",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "What the business earns before interest and tax, as a percentage of\nwhat the whole thing would cost you — the shares plus the debts you\nwould take on with them, less the cash you would get. A 12% earnings\nyield says the operating profit is twelve cents a year on every\ndollar it costs to own the whole company.\n\nIt is a yield rather than a multiple so that it reads the way a\nsavings rate reads: higher is cheaper. Enterprise value rather than\nmarket capitalisation because buying a company with borrowings means\nbuying the borrowings, and a price tag that leaves them out flatters\nevery leveraged business.\n",
      "recorded": "2025-08-04T12:00:00-04:00"
     },
     {
      "seq": 2,
      "id": "return_on_capital",
      "value": 51.0,
+     "label": "Return on capital",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How many cents of operating profit the business earns on every dollar\nof capital it actually needs to run — the stock and receivables it\nhas to carry, less what its suppliers fund for free, plus the\nbuildings and equipment. A company earning 40 cents on the dollar is\na far better business than one earning 8, and it can grow without\nraising money to do it.\n\nThree things are deliberately left out of the bottom. Debt and equity,\nbecause how a business is financed is a different question from how\ngood it is. Cash, because money sitting in the bank is not earning the\noperating profit. And what a previous owner overpaid for an\nacquisition, because goodwill tells you about a past purchase and not\nabout the return the assets throw off.\n",
      "recorded": "2025-08-04T12:00:00-04:00"
     }
    ],
    "thesis": [],
    "valuations": [],
+   "snapshots": [],
    "notes": [
     {
      "date": "2025-08-18T12:00:00-04:00",
@@ -1289,7 +1349,7 @@
   {
    "ticker": "TARRNT",
    "name": "Tarrant Freight",
-   "added": "2026-08-13",
+   "added": "2026-08-15",
    "price": 55.1,
    "lots": [
     {
@@ -1311,7 +1371,8 @@
         "id": "buy-it",
         "name": "Buy it",
         "description": "It is on the list you are working from, that list is still current, and there is room to start another name without breaking the staging rule.\n\nNothing was tested about the company, and that is not an oversight. The ranking that put this name in front of you was run against three thousand others and is the whole of the judgement in this method. The size is an equal share of the number of positions this journal is meant to run — equal dollar amounts, which is Greenblatt's own answer and differs from every other strategy here.",
-        "fix": null
+        "fix": null,
+        "consequence": null
        },
        "payload": {
         "size": {
@@ -1470,7 +1531,8 @@
            "reads": "earnings_yield",
            "label": "Earnings yield",
            "unit": "percent",
-           "explain": null
+           "explain": "What the business earns before interest and tax, as a percentage of\nwhat the whole thing would cost you — the shares plus the debts you\nwould take on with them, less the cash you would get. A 12% earnings\nyield says the operating profit is twelve cents a year on every\ndollar it costs to own the whole company.\n\nIt is a yield rather than a multiple so that it reads the way a\nsavings rate reads: higher is cheaper. Enterprise value rather than\nmarket capitalisation because buying a company with borrowings means\nbuying the borrowings, and a price tag that leaves them out flatters\nevery leveraged business.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "known",
@@ -1492,7 +1554,8 @@
            "reads": "return_on_capital",
            "label": "Return on capital",
            "unit": "percent",
-           "explain": null
+           "explain": "How many cents of operating profit the business earns on every dollar\nof capital it actually needs to run — the stock and receivables it\nhas to carry, less what its suppliers fund for free, plus the\nbuildings and equipment. A company earning 40 cents on the dollar is\na far better business than one earning 8, and it can grow without\nraising money to do it.\n\nThree things are deliberately left out of the bottom. Debt and equity,\nbecause how a business is financed is a different question from how\ngood it is. Cash, because money sitting in the bank is not earning the\noperating profit. And what a previous owner overpaid for an\nacquisition, because goodwill tells you about a past purchase and not\nabout the return the assets throw off.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "known",
@@ -1546,23 +1609,24 @@
           "outcome": "noted"
          }
         ],
+        "rests_on": [],
         "note": null
        },
        "produced_by": "strategy",
        "strategy": {
         "id": "magic-formula",
         "name": "Magic Formula",
-        "version": 1,
+        "version": 2,
         "values_version": 1,
-        "contract": 6
+        "contract": 8
        }
       },
       "strategy": {
        "id": "magic-formula",
        "name": "Magic Formula",
-       "version": 1,
+       "version": 2,
        "values_version": 1,
-       "contract": 6
+       "contract": 8
       },
       "metrics": {
        "earnings_yield": {
@@ -1597,11 +1661,15 @@
         "return_on_capital"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2026-05-11 could be consulted; 2 hand-entered values on record by 2026-05-11; judged by Magic Formula v1 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2026-05-11 could be consulted; 2 hand-entered values on record by 2026-05-11; judged by Magic Formula v2 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": null,
       "valuation": null,
-      "recollection": null
+      "recollection": null,
+      "changes_recorded": {
+       "rules": 0,
+       "measures": 0
+      }
      }
     }
    ],
@@ -1611,17 +1679,26 @@
      "seq": 1,
      "id": "earnings_yield",
      "value": 11.4,
+     "label": "Earnings yield",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "What the business earns before interest and tax, as a percentage of\nwhat the whole thing would cost you — the shares plus the debts you\nwould take on with them, less the cash you would get. A 12% earnings\nyield says the operating profit is twelve cents a year on every\ndollar it costs to own the whole company.\n\nIt is a yield rather than a multiple so that it reads the way a\nsavings rate reads: higher is cheaper. Enterprise value rather than\nmarket capitalisation because buying a company with borrowings means\nbuying the borrowings, and a price tag that leaves them out flatters\nevery leveraged business.\n",
      "recorded": "2025-08-04T12:00:00-04:00"
     },
     {
      "seq": 2,
      "id": "return_on_capital",
      "value": 29.8,
+     "label": "Return on capital",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How many cents of operating profit the business earns on every dollar\nof capital it actually needs to run — the stock and receivables it\nhas to carry, less what its suppliers fund for free, plus the\nbuildings and equipment. A company earning 40 cents on the dollar is\na far better business than one earning 8, and it can grow without\nraising money to do it.\n\nThree things are deliberately left out of the bottom. Debt and equity,\nbecause how a business is financed is a different question from how\ngood it is. Cash, because money sitting in the bank is not earning the\noperating profit. And what a previous owner overpaid for an\nacquisition, because goodwill tells you about a past purchase and not\nabout the return the assets throw off.\n",
      "recorded": "2025-08-04T12:00:00-04:00"
     }
    ],
    "thesis": [],
    "valuations": [],
+   "snapshots": [],
    "notes": [
     {
      "date": "2026-05-11T12:00:00-04:00",
@@ -1633,7 +1710,7 @@
   {
    "ticker": "WOOLSN",
    "name": "Woolston Fasteners",
-   "added": "2026-08-13",
+   "added": "2026-08-15",
    "price": 9.85,
    "lots": [
     {
@@ -1655,7 +1732,8 @@
         "id": "buy-it",
         "name": "Buy it",
         "description": "It is on the list you are working from, that list is still current, and there is room to start another name without breaking the staging rule.\n\nNothing was tested about the company, and that is not an oversight. The ranking that put this name in front of you was run against three thousand others and is the whole of the judgement in this method. The size is an equal share of the number of positions this journal is meant to run — equal dollar amounts, which is Greenblatt's own answer and differs from every other strategy here.",
-        "fix": null
+        "fix": null,
+        "consequence": null
        },
        "payload": {
         "size": {
@@ -1814,7 +1892,8 @@
            "reads": "earnings_yield",
            "label": "Earnings yield",
            "unit": "percent",
-           "explain": null
+           "explain": "What the business earns before interest and tax, as a percentage of\nwhat the whole thing would cost you — the shares plus the debts you\nwould take on with them, less the cash you would get. A 12% earnings\nyield says the operating profit is twelve cents a year on every\ndollar it costs to own the whole company.\n\nIt is a yield rather than a multiple so that it reads the way a\nsavings rate reads: higher is cheaper. Enterprise value rather than\nmarket capitalisation because buying a company with borrowings means\nbuying the borrowings, and a price tag that leaves them out flatters\nevery leveraged business.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "known",
@@ -1836,7 +1915,8 @@
            "reads": "return_on_capital",
            "label": "Return on capital",
            "unit": "percent",
-           "explain": null
+           "explain": "How many cents of operating profit the business earns on every dollar\nof capital it actually needs to run — the stock and receivables it\nhas to carry, less what its suppliers fund for free, plus the\nbuildings and equipment. A company earning 40 cents on the dollar is\na far better business than one earning 8, and it can grow without\nraising money to do it.\n\nThree things are deliberately left out of the bottom. Debt and equity,\nbecause how a business is financed is a different question from how\ngood it is. Cash, because money sitting in the bank is not earning the\noperating profit. And what a previous owner overpaid for an\nacquisition, because goodwill tells you about a past purchase and not\nabout the return the assets throw off.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "known",
@@ -1890,23 +1970,24 @@
           "outcome": "noted"
          }
         ],
+        "rests_on": [],
         "note": null
        },
        "produced_by": "strategy",
        "strategy": {
         "id": "magic-formula",
         "name": "Magic Formula",
-        "version": 1,
+        "version": 2,
         "values_version": 1,
-        "contract": 6
+        "contract": 8
        }
       },
       "strategy": {
        "id": "magic-formula",
        "name": "Magic Formula",
-       "version": 1,
+       "version": 2,
        "values_version": 1,
-       "contract": 6
+       "contract": 8
       },
       "metrics": {
        "earnings_yield": {
@@ -1941,11 +2022,15 @@
         "return_on_capital"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2026-06-15 could be consulted; 2 hand-entered values on record by 2026-06-15; judged by Magic Formula v1 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2026-06-15 could be consulted; 2 hand-entered values on record by 2026-06-15; judged by Magic Formula v2 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": null,
       "valuation": null,
-      "recollection": null
+      "recollection": null,
+      "changes_recorded": {
+       "rules": 0,
+       "measures": 0
+      }
      }
     }
    ],
@@ -1955,17 +2040,26 @@
      "seq": 1,
      "id": "earnings_yield",
      "value": 14.6,
+     "label": "Earnings yield",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "What the business earns before interest and tax, as a percentage of\nwhat the whole thing would cost you — the shares plus the debts you\nwould take on with them, less the cash you would get. A 12% earnings\nyield says the operating profit is twelve cents a year on every\ndollar it costs to own the whole company.\n\nIt is a yield rather than a multiple so that it reads the way a\nsavings rate reads: higher is cheaper. Enterprise value rather than\nmarket capitalisation because buying a company with borrowings means\nbuying the borrowings, and a price tag that leaves them out flatters\nevery leveraged business.\n",
      "recorded": "2025-08-04T12:00:00-04:00"
     },
     {
      "seq": 2,
      "id": "return_on_capital",
      "value": 33.2,
+     "label": "Return on capital",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How many cents of operating profit the business earns on every dollar\nof capital it actually needs to run — the stock and receivables it\nhas to carry, less what its suppliers fund for free, plus the\nbuildings and equipment. A company earning 40 cents on the dollar is\na far better business than one earning 8, and it can grow without\nraising money to do it.\n\nThree things are deliberately left out of the bottom. Debt and equity,\nbecause how a business is financed is a different question from how\ngood it is. Cash, because money sitting in the bank is not earning the\noperating profit. And what a previous owner overpaid for an\nacquisition, because goodwill tells you about a past purchase and not\nabout the return the assets throw off.\n",
      "recorded": "2025-08-04T12:00:00-04:00"
     }
    ],
    "thesis": [],
    "valuations": [],
+   "snapshots": [],
    "notes": [
     {
      "date": "2026-06-15T12:00:00-04:00",
@@ -1977,7 +2071,7 @@
   {
    "ticker": "KINVER",
    "name": "Kinver Packaging",
-   "added": "2026-08-13",
+   "added": "2026-08-15",
    "price": 62.3,
    "lots": [
     {
@@ -1999,7 +2093,8 @@
         "id": "buy-it",
         "name": "Buy it",
         "description": "It is on the list you are working from, that list is still current, and there is room to start another name without breaking the staging rule.\n\nNothing was tested about the company, and that is not an oversight. The ranking that put this name in front of you was run against three thousand others and is the whole of the judgement in this method. The size is an equal share of the number of positions this journal is meant to run — equal dollar amounts, which is Greenblatt's own answer and differs from every other strategy here.",
-        "fix": null
+        "fix": null,
+        "consequence": null
        },
        "payload": {
         "size": {
@@ -2158,7 +2253,8 @@
            "reads": "earnings_yield",
            "label": "Earnings yield",
            "unit": "percent",
-           "explain": null
+           "explain": "What the business earns before interest and tax, as a percentage of\nwhat the whole thing would cost you — the shares plus the debts you\nwould take on with them, less the cash you would get. A 12% earnings\nyield says the operating profit is twelve cents a year on every\ndollar it costs to own the whole company.\n\nIt is a yield rather than a multiple so that it reads the way a\nsavings rate reads: higher is cheaper. Enterprise value rather than\nmarket capitalisation because buying a company with borrowings means\nbuying the borrowings, and a price tag that leaves them out flatters\nevery leveraged business.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "known",
@@ -2180,7 +2276,8 @@
            "reads": "return_on_capital",
            "label": "Return on capital",
            "unit": "percent",
-           "explain": null
+           "explain": "How many cents of operating profit the business earns on every dollar\nof capital it actually needs to run — the stock and receivables it\nhas to carry, less what its suppliers fund for free, plus the\nbuildings and equipment. A company earning 40 cents on the dollar is\na far better business than one earning 8, and it can grow without\nraising money to do it.\n\nThree things are deliberately left out of the bottom. Debt and equity,\nbecause how a business is financed is a different question from how\ngood it is. Cash, because money sitting in the bank is not earning the\noperating profit. And what a previous owner overpaid for an\nacquisition, because goodwill tells you about a past purchase and not\nabout the return the assets throw off.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "known",
@@ -2234,23 +2331,24 @@
           "outcome": "noted"
          }
         ],
+        "rests_on": [],
         "note": null
        },
        "produced_by": "strategy",
        "strategy": {
         "id": "magic-formula",
         "name": "Magic Formula",
-        "version": 1,
+        "version": 2,
         "values_version": 1,
-        "contract": 6
+        "contract": 8
        }
       },
       "strategy": {
        "id": "magic-formula",
        "name": "Magic Formula",
-       "version": 1,
+       "version": 2,
        "values_version": 1,
-       "contract": 6
+       "contract": 8
       },
       "metrics": {
        "earnings_yield": {
@@ -2285,13 +2383,17 @@
         "return_on_capital"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2026-07-06 could be consulted; 2 hand-entered values on record by 2026-07-06; judged by Magic Formula v1 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2026-07-06 could be consulted; 2 hand-entered values on record by 2026-07-06; judged by Magic Formula v2 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": null,
       "valuation": null,
       "recollection": {
        "text": "Last one off the old list. It was eleven months old and I could feel the deadline; I would rather have waited three weeks and bought off the new one.",
        "written": "2026-07-06T12:00:00-04:00"
+      },
+      "changes_recorded": {
+       "rules": 0,
+       "measures": 0
       }
      }
     }
@@ -2302,17 +2404,26 @@
      "seq": 1,
      "id": "earnings_yield",
      "value": 10.8,
+     "label": "Earnings yield",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "What the business earns before interest and tax, as a percentage of\nwhat the whole thing would cost you — the shares plus the debts you\nwould take on with them, less the cash you would get. A 12% earnings\nyield says the operating profit is twelve cents a year on every\ndollar it costs to own the whole company.\n\nIt is a yield rather than a multiple so that it reads the way a\nsavings rate reads: higher is cheaper. Enterprise value rather than\nmarket capitalisation because buying a company with borrowings means\nbuying the borrowings, and a price tag that leaves them out flatters\nevery leveraged business.\n",
      "recorded": "2025-08-04T12:00:00-04:00"
     },
     {
      "seq": 2,
      "id": "return_on_capital",
      "value": 41.7,
+     "label": "Return on capital",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How many cents of operating profit the business earns on every dollar\nof capital it actually needs to run — the stock and receivables it\nhas to carry, less what its suppliers fund for free, plus the\nbuildings and equipment. A company earning 40 cents on the dollar is\na far better business than one earning 8, and it can grow without\nraising money to do it.\n\nThree things are deliberately left out of the bottom. Debt and equity,\nbecause how a business is financed is a different question from how\ngood it is. Cash, because money sitting in the bank is not earning the\noperating profit. And what a previous owner overpaid for an\nacquisition, because goodwill tells you about a past purchase and not\nabout the return the assets throw off.\n",
      "recorded": "2025-08-04T12:00:00-04:00"
     }
    ],
    "thesis": [],
    "valuations": [],
+   "snapshots": [],
    "notes": [
     {
      "date": "2026-07-06T12:00:00-04:00",
@@ -2324,7 +2435,7 @@
   {
    "ticker": "CRANWL",
    "name": "Cranwell Instruments",
-   "added": "2026-08-13",
+   "added": "2026-08-15",
    "price": 33.75,
    "lots": [],
    "judgements": [],
@@ -2333,23 +2444,32 @@
      "seq": 1,
      "id": "earnings_yield",
      "value": 12.7,
+     "label": "Earnings yield",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "What the business earns before interest and tax, as a percentage of\nwhat the whole thing would cost you — the shares plus the debts you\nwould take on with them, less the cash you would get. A 12% earnings\nyield says the operating profit is twelve cents a year on every\ndollar it costs to own the whole company.\n\nIt is a yield rather than a multiple so that it reads the way a\nsavings rate reads: higher is cheaper. Enterprise value rather than\nmarket capitalisation because buying a company with borrowings means\nbuying the borrowings, and a price tag that leaves them out flatters\nevery leveraged business.\n",
      "recorded": "2025-08-04T12:00:00-04:00"
     },
     {
      "seq": 2,
      "id": "return_on_capital",
      "value": 36.1,
+     "label": "Return on capital",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How many cents of operating profit the business earns on every dollar\nof capital it actually needs to run — the stock and receivables it\nhas to carry, less what its suppliers fund for free, plus the\nbuildings and equipment. A company earning 40 cents on the dollar is\na far better business than one earning 8, and it can grow without\nraising money to do it.\n\nThree things are deliberately left out of the bottom. Debt and equity,\nbecause how a business is financed is a different question from how\ngood it is. Cash, because money sitting in the bank is not earning the\noperating profit. And what a previous owner overpaid for an\nacquisition, because goodwill tells you about a past purchase and not\nabout the return the assets throw off.\n",
      "recorded": "2025-08-04T12:00:00-04:00"
     }
    ],
    "thesis": [],
    "valuations": [],
+   "snapshots": [],
    "notes": []
   },
   {
    "ticker": "HALSTD",
    "name": "Halstead Marine",
-   "added": "2026-08-13",
+   "added": "2026-08-15",
    "price": 14.05,
    "lots": [
     {
@@ -2371,9 +2491,9 @@
       "strategy": {
        "id": "magic-formula",
        "name": "Magic Formula",
-       "version": 1,
+       "version": 2,
        "values_version": 1,
-       "contract": 6
+       "contract": 8
       },
       "failed": [
        {
@@ -2394,7 +2514,8 @@
         "id": "not-on-your-list",
         "name": "Not on your list",
         "description": "The screen did not return this name, so this method has nothing to say about buying it.\n\nRead that as a statement about your list rather than about the company. It has not been judged and found wanting: it was ranked against three thousand others somewhere else and did not reach the top thirty or fifty, and the ranking itself is not in this journal. If you want this name in a Magic Formula portfolio, the honest route is a list it appears on.",
-        "fix": null
+        "fix": null,
+        "consequence": null
        },
        "payload": {},
        "reason": {
@@ -2483,7 +2604,8 @@
            "reads": "earnings_yield",
            "label": "Earnings yield",
            "unit": "percent",
-           "explain": null
+           "explain": "What the business earns before interest and tax, as a percentage of\nwhat the whole thing would cost you — the shares plus the debts you\nwould take on with them, less the cash you would get. A 12% earnings\nyield says the operating profit is twelve cents a year on every\ndollar it costs to own the whole company.\n\nIt is a yield rather than a multiple so that it reads the way a\nsavings rate reads: higher is cheaper. Enterprise value rather than\nmarket capitalisation because buying a company with borrowings means\nbuying the borrowings, and a price tag that leaves them out flatters\nevery leveraged business.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "known",
@@ -2505,7 +2627,8 @@
            "reads": "return_on_capital",
            "label": "Return on capital",
            "unit": "percent",
-           "explain": null
+           "explain": "How many cents of operating profit the business earns on every dollar\nof capital it actually needs to run — the stock and receivables it\nhas to carry, less what its suppliers fund for free, plus the\nbuildings and equipment. A company earning 40 cents on the dollar is\na far better business than one earning 8, and it can grow without\nraising money to do it.\n\nThree things are deliberately left out of the bottom. Debt and equity,\nbecause how a business is financed is a different question from how\ngood it is. Cash, because money sitting in the bank is not earning the\noperating profit. And what a previous owner overpaid for an\nacquisition, because goodwill tells you about a past purchase and not\nabout the return the assets throw off.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "known",
@@ -2547,23 +2670,24 @@
           "outcome": "noted"
          }
         ],
+        "rests_on": [],
         "note": null
        },
        "produced_by": "strategy",
        "strategy": {
         "id": "magic-formula",
         "name": "Magic Formula",
-        "version": 1,
+        "version": 2,
         "values_version": 1,
-        "contract": 6
+        "contract": 8
        }
       },
       "strategy": {
        "id": "magic-formula",
        "name": "Magic Formula",
-       "version": 1,
+       "version": 2,
        "values_version": 1,
-       "contract": 6
+       "contract": 8
       },
       "metrics": {
        "earnings_yield": {
@@ -2598,11 +2722,15 @@
         "return_on_capital"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2026-07-20 could be consulted; 2 hand-entered values on record by 2026-07-20; judged by Magic Formula v1 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2026-07-20 could be consulted; 2 hand-entered values on record by 2026-07-20; judged by Magic Formula v2 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": null,
       "valuation": null,
-      "recollection": null
+      "recollection": null,
+      "changes_recorded": {
+       "rules": 0,
+       "measures": 0
+      }
      }
     }
    ],
@@ -2612,17 +2740,26 @@
      "seq": 1,
      "id": "earnings_yield",
      "value": 9.2,
+     "label": "Earnings yield",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "What the business earns before interest and tax, as a percentage of\nwhat the whole thing would cost you — the shares plus the debts you\nwould take on with them, less the cash you would get. A 12% earnings\nyield says the operating profit is twelve cents a year on every\ndollar it costs to own the whole company.\n\nIt is a yield rather than a multiple so that it reads the way a\nsavings rate reads: higher is cheaper. Enterprise value rather than\nmarket capitalisation because buying a company with borrowings means\nbuying the borrowings, and a price tag that leaves them out flatters\nevery leveraged business.\n",
      "recorded": "2026-07-18T12:00:00-04:00"
     },
     {
      "seq": 2,
      "id": "return_on_capital",
      "value": 18.4,
+     "label": "Return on capital",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How many cents of operating profit the business earns on every dollar\nof capital it actually needs to run — the stock and receivables it\nhas to carry, less what its suppliers fund for free, plus the\nbuildings and equipment. A company earning 40 cents on the dollar is\na far better business than one earning 8, and it can grow without\nraising money to do it.\n\nThree things are deliberately left out of the bottom. Debt and equity,\nbecause how a business is financed is a different question from how\ngood it is. Cash, because money sitting in the bank is not earning the\noperating profit. And what a previous owner overpaid for an\nacquisition, because goodwill tells you about a past purchase and not\nabout the return the assets throw off.\n",
      "recorded": "2026-07-18T12:00:00-04:00"
     }
    ],
    "thesis": [],
    "valuations": [],
+   "snapshots": [],
    "notes": [
     {
      "date": "2026-07-18T12:00:00-04:00",
@@ -2638,7 +2775,7 @@
   {
    "ticker": "ODDGLY",
    "name": "Oddingley Chemical",
-   "added": "2026-08-13",
+   "added": "2026-08-15",
    "price": 71.9,
    "lots": [],
    "judgements": [],
@@ -2647,23 +2784,32 @@
      "seq": 1,
      "id": "earnings_yield",
      "value": 16.3,
+     "label": "Earnings yield",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "What the business earns before interest and tax, as a percentage of\nwhat the whole thing would cost you — the shares plus the debts you\nwould take on with them, less the cash you would get. A 12% earnings\nyield says the operating profit is twelve cents a year on every\ndollar it costs to own the whole company.\n\nIt is a yield rather than a multiple so that it reads the way a\nsavings rate reads: higher is cheaper. Enterprise value rather than\nmarket capitalisation because buying a company with borrowings means\nbuying the borrowings, and a price tag that leaves them out flatters\nevery leveraged business.\n",
      "recorded": "2026-08-03T12:00:00-04:00"
     },
     {
      "seq": 2,
      "id": "return_on_capital",
      "value": 47.2,
+     "label": "Return on capital",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How many cents of operating profit the business earns on every dollar\nof capital it actually needs to run — the stock and receivables it\nhas to carry, less what its suppliers fund for free, plus the\nbuildings and equipment. A company earning 40 cents on the dollar is\na far better business than one earning 8, and it can grow without\nraising money to do it.\n\nThree things are deliberately left out of the bottom. Debt and equity,\nbecause how a business is financed is a different question from how\ngood it is. Cash, because money sitting in the bank is not earning the\noperating profit. And what a previous owner overpaid for an\nacquisition, because goodwill tells you about a past purchase and not\nabout the return the assets throw off.\n",
      "recorded": "2026-08-03T12:00:00-04:00"
     }
    ],
    "thesis": [],
    "valuations": [],
+   "snapshots": [],
    "notes": []
   },
   {
    "ticker": "SUTTBY",
    "name": "Sutterby Glassworks",
-   "added": "2026-08-13",
+   "added": "2026-08-15",
    "price": 24.15,
    "lots": [],
    "judgements": [],
@@ -2672,17 +2818,26 @@
      "seq": 1,
      "id": "earnings_yield",
      "value": 13.1,
+     "label": "Earnings yield",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "What the business earns before interest and tax, as a percentage of\nwhat the whole thing would cost you — the shares plus the debts you\nwould take on with them, less the cash you would get. A 12% earnings\nyield says the operating profit is twelve cents a year on every\ndollar it costs to own the whole company.\n\nIt is a yield rather than a multiple so that it reads the way a\nsavings rate reads: higher is cheaper. Enterprise value rather than\nmarket capitalisation because buying a company with borrowings means\nbuying the borrowings, and a price tag that leaves them out flatters\nevery leveraged business.\n",
      "recorded": "2026-08-03T12:00:00-04:00"
     },
     {
      "seq": 2,
      "id": "return_on_capital",
      "value": 39.6,
+     "label": "Return on capital",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How many cents of operating profit the business earns on every dollar\nof capital it actually needs to run — the stock and receivables it\nhas to carry, less what its suppliers fund for free, plus the\nbuildings and equipment. A company earning 40 cents on the dollar is\na far better business than one earning 8, and it can grow without\nraising money to do it.\n\nThree things are deliberately left out of the bottom. Debt and equity,\nbecause how a business is financed is a different question from how\ngood it is. Cash, because money sitting in the bank is not earning the\noperating profit. And what a previous owner overpaid for an\nacquisition, because goodwill tells you about a past purchase and not\nabout the return the assets throw off.\n",
      "recorded": "2026-08-03T12:00:00-04:00"
     }
    ],
    "thesis": [],
    "valuations": [],
+   "snapshots": [],
    "notes": [],
    "passed_over": [
     {

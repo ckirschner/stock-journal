@@ -148,13 +148,15 @@ await check("missing-strategy",
   + " const h = strategyView(); S.strategy = a; S.strategy_missing = b;"
   + " return h; })()");
 
-// Detail per security, the coverage panel primed with its captured reply so
-// the whole page renders rather than the loading placeholder.
+// Detail per security, the coverage panel primed with its captured reply
+// and the inventory fold held open, so the whole page renders rather than
+// the loading placeholder or the resting fold.
 const prime = (ticker) => {
   const cov = (state.__coverage || {})[ticker];
   run(`C.coverage = ${JSON.stringify(cov && cov.ok
     ? cov.coverage || { entries: [] } : { entries: [] })};`
-    + ` C.coverageFor = ${JSON.stringify(ticker)}; C.loadingCoverage = false;`);
+    + ` C.coverageFor = ${JSON.stringify(ticker)};`
+    + " C.loadingCoverage = false; coverageOpen = true;");
 };
 for (const s of state.securities) {
   const t = JSON.stringify(s.ticker);
@@ -196,12 +198,21 @@ for (const s of state.securities) {
   }
 }
 
+// ----------------------------------------------------------- the menus
+// Chrome opens where it was clicked: the journal pill, the window picker
+// and the per-security toolbox are dropdowns, not margin panes.
+await check("menu:journal", "MENUS.journal({})");
+await check("menu:newjournal", "MENUS.newjournal({})");
+if ((state.strategies || []).length) {
+  await check("menu:newjournal:chosen",
+    `MENUS.newjournal({ id: ${JSON.stringify(state.strategies[0].id)} })`);
+}
+await check("menu:renamejournal", "MENUS.renamejournal({})");
+await check("menu:deletejournal", "MENUS.deletejournal({})");
+await check("menu:timeframe", "MENUS.timeframe({})");
+
 // ---------------------------------------------------------- margin panes
 await pane("m:rest", "rest", null);
-await pane("m:journal", "journal", {});
-await pane("m:newjournal", "newjournal", {});
-await pane("m:renamejournal", "renamejournal", {});
-await pane("m:deletejournal", "deletejournal", {});
 await pane("m:add", "add", {});
 await pane("m:cash", "cash", {});
 await pane("m:settings", "settings", {});
@@ -232,7 +243,7 @@ for (const s of state.securities) {
   await pane(`m:thesis:${t}`, "thesis", { t });
   await pane(`m:thesisedit:${t}`, "thesisedit", { t });
   await pane(`m:values:${t}`, "values", { t });
-  await pane(`m:more:${t}`, "more", { t });
+  await check(`menu:more:${t}`, `MENUS.more({ t: ${JSON.stringify(t)} })`);
   await pane(`m:snapshot:${t}`, "snapshot", { t });
   await pane(`m:readings:${t}`, "readings", { t });
   await pane(`m:buy:${t}`, "buy", { t });
@@ -376,7 +387,7 @@ if (!stamped) {
 const mustNot = [];
 const must = [
   ["mast", state.journal.name, "the open journal is named in the chip"],
-  ["mast", 'data-m="journal"', "the journal menu is reachable"],
+  ["mast", 'data-menu="journal"', "the journal menu opens from the pill"],
   ["mast", "Something to say", "the header reports; it never demands"],
   ["strategy", state.journal.strategy.name, "the stamped strategy is named"],
   ["strategy", "Append-only: entries are never edited",
@@ -388,13 +399,15 @@ const must = [
   ["welcome", "exit", "existing holdings are framed as evaluated for exit"],
   ["welcome", "tiingo.com", "the setup wall links the way in"],
   ["data", "Back up", "export is reachable"],
-  ["m:deletejournal", "Export it first",
-   "the destructive pane offers the backup before the deletion"],
-  ["m:deletejournal", "none of it can be recovered",
-   "the destructive pane names the cost"],
-  ["m:deletejournal", 'name="confirm_name"',
+  ["menu:deletejournal", "Export it first",
+   "the destructive menu offers the backup before the deletion"],
+  ["menu:deletejournal", "none of it can be recovered",
+   "the destructive menu names the cost"],
+  ["menu:deletejournal", 'name="confirm_name"',
    "deletion is confirmed by typing the name, not a bare yes"],
-  ["m:renamejournal", 'name="name"', "the rename pane asks for a name"],
+  ["menu:renamejournal", 'name="name"', "the rename menu asks for a name"],
+  ["menu:journal", "one strategy per journal",
+   "the journal menu carries the journal's own facts"],
   ["m:add", "Fetch its data now", "one added name auto-fetches by default"],
   ["evidence:change", "−6.0 pp", "a percent measure moves in points"],
   ["evidence:change", "+2.0 pp", "a rise shows its sign"],
@@ -408,6 +421,38 @@ mustNot.push(
    "a saved reading offers no date picker — today only, by design"]);
 must.push([`m:snapshot:${state.securities[0].ticker}`, "no date field",
   "and says why not"]);
+
+// One line of consequence in the row; the strategy's explanation renders in
+// the margin the row opens, never beside thirty rows at a time. Where a
+// state declares its one-line consequence (only legal on renders whose
+// payload carries nothing), that line is what the row shows.
+for (const s of state.securities) {
+  const summary = (((s._decision || {}).reason || {}).summary || "").trim();
+  if (summary) {
+    mustNot.push(["list:everything", summary,
+      `${s.ticker}: the verdict's explaining prose is duplicated into the list row`]);
+  }
+  const line = (((s._decision || {}).state || {}).consequence || "").trim();
+  if (line) {
+    must.push(["list:everything", line,
+      `${s.ticker}: the state's declared consequence reaches its row`]);
+  }
+}
+// Exercised synthetically as well, because a payload need not carry one:
+// a state that declares its line shows it, and never the summary beside it.
+await check("row:consequence", `(() => {
+  const was = filter; filter = "everything";
+  const s = { ...S.securities[0], bucket: "ideas", _cycles: [],
+    _decision: { render: "unknown", tier: "evaluation",
+      state: { id: "x", name: "Nothing to measure against",
+               consequence: "unmeasured, not fine — the record is the way back" },
+      reason: { summary: "A long explanation that belongs in the margin." },
+      payload: {} } };
+  const h = securityRow(s); filter = was; return h; })()`);
+must.push(["row:consequence", "unmeasured, not fine",
+  "a declared consequence line reaches the row that exists for it"]);
+mustNot.push(["row:consequence", "belongs in the margin",
+  "the summary stays out of the row even beside a declared consequence"]);
 
 const fromHistory = state.securities.find((s) => s._backfilled);
 if (fromHistory) {
@@ -451,6 +496,18 @@ if (classified) {
 if (unclassified) {
   must.push([`m:datastatus:${unclassified.ticker}`, "not established",
     "an unclassified filer says so rather than reading as ordinary"]);
+}
+// The cross-check lives with the rest of the data-trust story, in the
+// margin's data pane — someone wants it once, not on every page visit.
+const crosschecked = state.securities.find((s) =>
+  (((((state.__coverage || {})[s.ticker] || {}).coverage || {}).crosscheck
+    || {}).checks || []).length);
+if (crosschecked) {
+  must.push([`m:datastatus:${crosschecked.ticker}`, "The cross-check",
+    "the price × shares cross-check reaches the data pane"]);
+} else {
+  gap("no captured coverage carries a cross-check — its rendering in the "
+    + "data pane is unexercised");
 }
 const card = state.override_scorecard || {};
 if ((card.unreconstructed || {}).n_purchases) {
@@ -566,7 +623,7 @@ for (const v of (state.strategy || {}).values || []) {
       `"${v.id}" says where its number came from`]);
   }
 }
-const FIX_ANCHOR = { judgement: 'id="judgements"' };
+const FIX_ANCHOR = { judgement: "data-jrow" };
 for (const s of state.securities) {
   const fix = ((s._decision || {}).state || {}).fix;
   if (fix) {
@@ -613,10 +670,23 @@ const judged = state.securities.filter((s) => (s._judgements || []).length);
 if (spoke && !judged.length) {
   gap("no security has a judgement to answer — the surface is unexercised");
 }
+// One surface owns the questions: a cited one is asked and answered in the
+// evidence table; only an answer nothing currently asks gets the leftover
+// section. A security nothing was ever asked of gets no section at all —
+// a page must never claim in one place what it denies in another.
+const unasked = state.securities.find(
+  (s) => !((s._judgements || []).length) && (s._decision || {}).render !== "inapplicable");
+if (unasked) {
+  mustNot.push([`detail:${unasked.ticker}`, "Questions only you can answer",
+    `${unasked.ticker}: a security nothing was asked of gets no questions section`]);
+}
 let answered = 0, unanswered = 0, revised = 0;
 for (const s of judged) {
-  must.push([`detail:${s.ticker}`, "Questions only you can answer",
-    `${s.ticker} shows the questions it was asked`]);
+  const leftovers = s._judgements.filter((j) => !j.cited);
+  if (leftovers.length) {
+    must.push([`detail:${s.ticker}`, "Questions only you can answer",
+      `${s.ticker} keeps answers on record that nothing currently asks`]);
+  }
   for (const j of s._judgements) {
     must.push([`detail:${s.ticker}`, j.label, `${s.ticker}: "${j.id}" is named`]);
     must.push([`detail:${s.ticker}`, `data-jid="${j.id}"`,
@@ -806,7 +876,7 @@ if (!closed.length) {
   for (const s of closed) {
     must.push([`detail:${s.ticker}`, "Buy it back",
       `a closed position (${s.ticker}) can be bought again`]);
-    must.push([`m:more:${s.ticker}`, "unavailable",
+    must.push([`menu:more:${s.ticker}`, "unavailable",
       `a closed position (${s.ticker}) says why it cannot be removed`]);
   }
   must.push(["list:track", closed[0].ticker,
