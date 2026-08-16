@@ -81,17 +81,43 @@ const FIX_ACTIONS = {
   settings: () => margin("settings", {}),
   thesis: (t) => margin("thesisedit", { t }),
   judgement: () => {
-    const el = document.getElementById("judgements");
+    /* The questions live in the evidence table, answerable in place; the
+       leftover section is the fallback for answers nothing asks today. */
+    const el = document.querySelector("[data-jrow]")
+      || document.getElementById("judgements");
     if (el && el.scrollIntoView) el.scrollIntoView({ behavior: "smooth" });
   },
   list: () => margin("importlist", {}),
 };
 
 document.addEventListener("click", async (ev) => {
-  const btn = ev.target.closest("[data-m],[data-do],[data-act],[data-mclose],[data-bfadd],[data-bfdel]");
+  /* An open menu closes on any click that is neither inside it nor on a
+     menu anchor — before the click does whatever else it does. */
+  if (MENU.id && !ev.target.closest("#menu") && !ev.target.closest("[data-menu]")) {
+    menuClose();
+  }
+  const btn = ev.target.closest("[data-menu],[data-m],[data-do],[data-act],[data-mclose],[data-bfadd],[data-bfdel]");
   if (!btn) return;
 
   if (btn.hasAttribute("data-mclose")) { marginRest(); return; }
+
+  if (btn.dataset.menu) {
+    ev.stopPropagation();
+    let arg = {};
+    try { arg = JSON.parse(btn.dataset.arg || "{}"); } catch (e) { arg = {}; }
+    const id = btn.dataset.menu;
+    if (btn.closest("#menu")) {
+      /* A choice inside the menu that leads to another menu swaps in
+         place; re-picking the same one (a strategy card) keeps what was
+         typed. */
+      menuSwap(id, arg, MENU.id === id);
+    } else if (MENU.id === id) {
+      menuClose();
+    } else {
+      menuOpen(id, arg, btn);
+    }
+    return;
+  }
 
   if (btn.dataset.bfadd) {
     const st = bfRead();
@@ -111,17 +137,8 @@ document.addEventListener("click", async (ev) => {
     let arg = {};
     try { arg = JSON.parse(btn.dataset.arg || "{}"); } catch (e) { arg = {}; }
     if (btn.dataset.m === "row") arg.rowKey = (btn.closest("tr") || {}).dataset ? btn.closest("tr").dataset.rowkey : null;
-    if (btn.dataset.m === "newjournal" && M.id === "newjournal") {
-      /* Re-picking the strategy repaints the pane; the typed name and
-         answers survive it. */
-      const kept = marginForm();
-      margin("newjournal", arg);
-      $("margin").querySelectorAll("[name]").forEach((el) => {
-        if (kept[el.name] !== undefined && el.type !== "checkbox") el.value = kept[el.name];
-      });
-      applyGates($("margin"));
-      return;
-    }
+    /* A door inside a menu leads to the margin; the menu's job is done. */
+    if (btn.closest("#menu")) menuClose();
     margin(btn.dataset.m, arg);
     return;
   }
@@ -158,8 +175,7 @@ document.addEventListener("click", async (ev) => {
   else if (act === "filter") { closeSecurity(); tab = "list"; filter = btn.dataset.filter; render(); }
   else if (act === "sort") { sortBy = sortBy === "asks" ? "amount" : "asks"; render(); }
   else if (act === "open") { openSecurity(btn.dataset.t, btn.dataset.p || null); C.coverageFor = null; render(); window.scrollTo(0, 0); }
-  else if (act === "back") { closeSecurity(); if (tab === "analytics") tab = "list"; render(); }
-  else if (act === "analytics") { closeSecurity(); tab = "analytics"; render(); marginRest(); }
+  else if (act === "back") { closeSecurity(); render(); }
   else if (act === "problemsfirst") { problemsFirst = !problemsFirst; render(); }
   else if (act === "coverage-retry") { C.coverage = null; C.coverageFor = null; render(); }
   else if (act === "fetchall") {
@@ -176,7 +192,11 @@ document.addEventListener("click", async (ev) => {
     await refresh();
   }
   else if (act === "bankscope") { showWholeBank = btn.dataset.scope === "all"; render(); }
-  else if (act === "timeframe") { timeframe = btn.dataset.tf; refreshTimeframe().then(() => margin("timeframe", {})); }
+  else if (act === "timeframe") {
+    timeframe = btn.dataset.tf;
+    menuClose();
+    refreshTimeframe().then(() => { if (M.id === "timeframe") marginStill(); });
+  }
   else if (act === "fetch") {
     const t = btn.dataset.t;
     const r = await apiRaw("fetch_security", t);
@@ -192,6 +212,7 @@ document.addEventListener("click", async (ev) => {
   else if (act === "openjournal") {
     const r = await apiRaw("open_journal", btn.dataset.id);
     if (!r.ok) { toast(r.error, true); return; }
+    menuClose();
     closeSecurity(); tab = "list"; filter = "everything";
     marginRest();
     await refresh(); refreshTimeframe();
@@ -234,6 +255,8 @@ document.addEventListener("change", (ev) => {
        form re-renders unchecked, keeping what was typed. */
     const st = bfRead();
     margin("backfill", { t: (M.arg || {}).t, state: { ...st, preview: null } });
+  } else if (el.closest && el.closest("#menu")) {
+    applyGates($("menu"));
   } else if (el.closest && el.closest("#margin")) {
     applyGates($("margin"));
   } else if (el.closest && el.closest("#view")) {
@@ -250,8 +273,26 @@ document.addEventListener("input", (ev) => {
     if (again) { again.focus(); again.setSelectionRange(pos, pos); }
   }
 });
+/* The measure inventory folds; its contents are read from disk the first
+   time it is opened, not on every visit to the page. */
+document.addEventListener("toggle", (ev) => {
+  const el = ev.target;
+  if (!el || !el.hasAttribute || !el.hasAttribute("data-covfold")) return;
+  if (el.open === coverageOpen) return;
+  coverageOpen = el.open;
+  if (coverageOpen) render();
+}, true);
+
 document.addEventListener("keydown", (ev) => {
   if (ev.key !== "Escape") return;
+  if (MENU.id) {
+    /* Same protection the margin has: typed work is closed deliberately,
+       never wiped by a stray Escape. */
+    const typed = Array.from($("menu").querySelectorAll("textarea[name], input[name]:not([type=date])"))
+      .some((el) => (el.value || "").trim() !== "" && !el.readOnly);
+    if (!typed) menuClose();
+    return;
+  }
   if (M.id !== "rest") {
     /* A pane holding typed work is closed with ✕, never wiped by a stray
        Escape — a written override reason is the one thing this program

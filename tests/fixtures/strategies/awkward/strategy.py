@@ -45,8 +45,11 @@ STRATEGY = {
          "fix": "settings",
          "description": "You said you are not opening positions right now, "
                         "so the fixture will not propose one."},
+        # The one state here whose row carries no payload facts, so it is the
+        # one that exercises the declared one-line consequence.
         {"id": "no-account", "name": "Nothing to measure against",
          "render": "unknown",
+         "consequence": "unmeasured, not fine — the cash record is the way back",
          "description": "The share of the account this position takes up "
                         "cannot be worked out, so a rule about size has "
                         "nothing to read."},

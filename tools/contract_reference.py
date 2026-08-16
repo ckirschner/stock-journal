@@ -175,6 +175,15 @@ def _vocabulary() -> str:
         "declaration naming any other is refused at load.",
         f"- **Most states one strategy may declare** — "
         f"`{contract.MAX_STATES}`.",
+        f"- **Longest one-line `consequence` a state may declare** — "
+        f"`{contract.MAX_CONSEQUENCE}` characters. The optional third thing "
+        "beside a state's `name` and `description`: the one line a list row "
+        "shows for what this state means for the reader today. Only legal "
+        "on a state whose payload carries no figures — a row already shows "
+        "an exit's date, a commit's size, or a blocked state's fix, and "
+        "those win because the host resolved them. Leave it out where the "
+        "name already carries the consequence; a row showing nothing beats "
+        "a redundant line.",
         f"- **Declared field types** — {_code(contract.VALUE_TYPES)}.",
         f"- **Units a `size` may be in** — {_code(contract.SIZE_UNITS)} "
         "(`weight` is a percent number).",

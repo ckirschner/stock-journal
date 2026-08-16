@@ -539,11 +539,27 @@ STRATEGY = {
                "and only at a price that leaves something on the table. "
                "Sells when the business breaks — never when the price gets "
                "high, and never because time has passed.",
-    "version": 6,
+    "version": 7,
     "contract": 8,
     "declines": DECLINES,
     "limits": LIMITS,
     "changelog": {
+    7: "NO LEVEL MOVED AND NO LOGIC CHANGED — TWO SENTENCES MISSTATED THE "
+       "ARITHMETIC. A question about the business that cannot reach its bar "
+       "even if every unreadable row under it passed was described as \"not "
+       "answered\", on the candidate verdict and on the would-not-buy-it-"
+       "today holding verdict. Unanswered is a different verdict in this "
+       "strategy — it is what cannot-screen means, and what the three "
+       "questions only you can answer mean — and beside a page saying no "
+       "such question is outstanding, the old sentence read as a "
+       "contradiction. Both sentences now say what the rollup under them "
+       "already said: the question was answered, and the answer is no.\n\n"
+       "Three states also declare the contract's new one-line `consequence` "
+       "for the list row — what each means for the reader today. One "
+       "reading past the line: waiting on the next filings, nothing owed. "
+       "Not enough to go on: undecided, not rejected. Exit checks cannot "
+       "run: not being watched. The rest carry their consequence in their "
+       "names and declare none.",
     6: "`exit-debt-to-fcf` NOW ASKS WHETHER ONE YEAR IS CARRYING THE BREACH. "
        "No level moved, and this exit is now HARDER to fire, not easier.\n\n"
        "The measure is debt at one balance-sheet date over five fiscal years "
@@ -767,8 +783,8 @@ STRATEGY = {
                         "spare cash has gone somewhere worth more than "
                         "paying it out.\n\n"
                         "Those are yours to answer, in your own words, and "
-                        "they are listed under \"Your judgement\" further "
-                        "down this page. Leaving one blank is not a fail and "
+                        "each is listed on this page with the way to answer "
+                        "it beside it. Leaving one blank is not a fail and "
                         "is not held against the company — it is simply not "
                         "an answer, and this strategy will not put money "
                         "behind a question nobody asked."},
@@ -797,6 +813,7 @@ STRATEGY = {
 
         {"id": "cannot-screen", "render": "unknown",
          "name": "Not enough to go on",
+         "consequence": "undecided, not rejected — more data may settle it",
          "description": "Some of the figures this strategy needs are "
                         "missing, and the ones that are present do not "
                         "settle it either way. A missing number is not a "
@@ -849,6 +866,7 @@ STRATEGY = {
 
         {"id": "one-reading-past", "render": "hold",
          "name": "One reading past the line",
+         "consequence": "waiting on the next filings to confirm · nothing owed",
          "description": "An exit level has been crossed on the current "
                         "reading, and this strategy will not act on it until "
                         "the next filings say the same thing. One "
@@ -885,6 +903,7 @@ STRATEGY = {
 
         {"id": "cannot-watch", "render": "unknown",
          "name": "Exit checks cannot run",
+         "consequence": "not being watched — a fetch or typed figures restore it",
          "description": "You own it, and not one of the exit tests could be "
                         "worked out from the data on record — so this "
                         "strategy has nothing to say about whether to stay. "
@@ -2108,15 +2127,13 @@ def _on_a_candidate(ctx):
                     "enough."
                     if screen["req_fail"] else
                     "This strategy asks six separate questions about a "
-                    "business and needs every one of them answered. "
-                    + ("One is" if len(screen["short"]) == 1
-                       else f'{len(screen["short"])} are')
-                    + " not: " + _names_of(screen["short"])
+                    "business and needs a yes to every one. "
+                    + ("One has come back no"
+                       if len(screen["short"]) == 1
+                       else f'{len(screen["short"])} have come back no')
+                    + ": " + _names_of(screen["short"])
                     + f'. Across all six, {_covered(screen)}, and no amount '
-                      "of passing elsewhere settles the "
-                    + ("one that is short."
-                       if len(screen["short"]) == 1 else "ones that are "
-                       "short.")),
+                      "of passing elsewhere turns a no into a yes."),
                 "evidence": screen["evidence"], "groups": screen["groups"],
             },
         }
@@ -2174,7 +2191,7 @@ def _on_a_candidate(ctx):
             # handed over a value and not a label. It cites them instead now,
             # which is what it should have been doing.
             "payload": {"needs": [
-                "Answer them under \"Your judgement\" on this page. Each one "
+                "Answer them where they are listed on this page. Each one "
                 "takes a pass or a fail and your reasoning in your own "
                 "words, and the reasoning is what makes the record worth "
                 "reading back in five years.",
@@ -2479,9 +2496,9 @@ def _more_money(ctx, values, evidence, groups, clear, judged_out):
             + ("one of the three questions" if len(owed) == 1
                else f"{len(owed)} of the three questions")
             + " this strategy asks has no answer on record, so nothing more "
-              "goes in. They are listed under \"Your judgement\" below. "
-              "Nothing is owed on the position you have — this is a bar on "
-              "adding to it, not a verdict on holding it.",
+              "goes in. Each is listed on this page with the way to answer "
+              "it. Nothing is owed on the position you have — this is a bar "
+              "on adding to it, not a verdict on holding it.",
             sizing, [SIZING_GROUP])
 
     screen = _entry_screen(ctx)
@@ -2494,7 +2511,9 @@ def _more_money(ctx, values, evidence, groups, clear, judged_out):
             + (f"{screen['req_fail']} of the {len(REQUIRED)} tests this "
                "strategy will not bend came back against it"
                if screen["req_fail"] else
-               "nothing here answers " + _names_of(screen["short"]))
+               _names_of(screen["short"])
+               + (" has come back no" if len(screen["short"]) == 1
+                  else " have come back no"))
             + f", and {_covered(screen)}. Holding what you have is a "
             "different question, and every exit test above came back clear — "
             "a business that has stopped being cheap enough to buy again is "

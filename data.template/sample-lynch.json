@@ -1,5 +1,5 @@
 {
- "built": "2026-08-12T19:49:24+00:00",
+ "built": "2026-08-16T01:20:43+00:00",
  "as_of": "2026-08-12",
  "free_cash": 30000.0,
  "strategy": "lynch",
@@ -7,7 +7,7 @@
   {
    "ticker": "DUNSFOLD",
    "name": "Dunsfold Diagnostics",
-   "added": "2026-08-12",
+   "added": "2026-08-15",
    "price": 74.0,
    "lots": [
     {
@@ -29,7 +29,8 @@
         "id": "worth-buying",
         "name": "Worth buying, at this price",
         "description": "Every test this strategy will not bend has passed, and all four questions it asks about the business are answered.\n\nThat is a claim about the price and the growth together, and neither on its own. A company growing quickly at a price that has already paid for the growth is not a buy here, and neither is a cheap company that has stopped growing. The size is an equal share of the names this strategy runs at once.",
-        "fix": null
+        "fix": null,
+        "consequence": null
        },
        "payload": {
         "size": {
@@ -50,7 +51,8 @@
            "reads": "earnings_base_share_5y",
            "label": "Earnings at the base of the growth window, as a share of earnings now",
            "unit": "percent",
-           "explain": null
+           "explain": "How much the company was earning at the start of the period a growth\nrate is measured over, compared with what it earns at the end of it.\nAt 40% it earned two fifths then of what it earns now; at 2% it was\nearning almost nothing, and what looks like growth is mostly the\ndistance from almost nothing.\n\nThis is published because a compound growth rate cannot tell the two\napart on its own. A company going from 1 to 100 and a company going\nfrom 40 to 100 can carry rates that look alike over enough years, and\nonly one of them describes a business that was already working.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "known",
@@ -83,7 +85,8 @@
            "reads": "net_margin_base_share_5y",
            "label": "Net margin at the base of the growth window, as a share of the margin now",
            "unit": "percent",
-           "explain": null
+           "explain": "How profitable each dollar of sales was at the start of the period a\ngrowth rate is measured over, compared with how profitable it is at\nthe end. A business that scaled up keeps roughly the margin it had,\nor improves it a little: going from 8% to 12% over five years reads\nas 67% here and is ordinary operating leverage. A business whose\nmargin came back from nothing — 0.5% to 8% — reads as 6%, and its\nearnings did not grow so much as appear.\n\nIt is a ratio of two ratios, so it says the same thing to a company\nselling ten dollars and one selling ten billion, and a share split\ncannot move it.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "known",
@@ -116,7 +119,8 @@
            "reads": "peg_trailing",
            "label": "PEG ratio, trailing",
            "unit": "ratio",
-           "explain": null
+           "explain": "Whether the price you're paying is justified by the speed the company is\ngrowing. Lynch's formulation: the P/E of any fairly priced company will\nequal its growth rate.",
+           "format": "0.00"
           },
           "observed": {
            "status": "known",
@@ -149,7 +153,8 @@
            "reads": "eps_cagr_5y",
            "label": "Diluted EPS CAGR, 5-year",
            "unit": "percent",
-           "explain": null
+           "explain": "How fast the profit attributable to each share you own has grown per\nyear over five years. Per-share rather than total, so a company that\ngrew by issuing stock gets no credit for it.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "known",
@@ -182,7 +187,8 @@
            "reads": "eps_cagr_5y",
            "label": "Diluted EPS CAGR, 5-year",
            "unit": "percent",
-           "explain": null
+           "explain": "How fast the profit attributable to each share you own has grown per\nyear over five years. Per-share rather than total, so a company that\ngrew by issuing stock gets no credit for it.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "known",
@@ -215,7 +221,8 @@
            "reads": "debt_to_equity",
            "label": "Debt to equity",
            "unit": "ratio",
-           "explain": null
+           "explain": "How much of the company is financed by lenders versus by its owners.\nAt 1.0 there is a dollar of debt for every dollar of shareholder money.",
+           "format": "0.00"
           },
           "observed": {
            "status": "known",
@@ -248,7 +255,8 @@
            "reads": "eps_minus_revenue_cagr_spread_5y",
            "label": "Diluted EPS CAGR minus revenue CAGR, 5-year",
            "unit": "percentage_points",
-           "explain": null
+           "explain": "Whether the earnings growth is coming from the business or from\nfinancial engineering. Margin expansion and buybacks are real and\nlegitimate, but a company growing EPS at 30% on 4% revenue growth has\nnearly exhausted both, and there is no third act.",
+           "format": "+0.0 pp"
           },
           "observed": {
            "status": "known",
@@ -281,7 +289,8 @@
            "reads": "dividend_adjusted_peg",
            "label": "Dividend-adjusted PEG",
            "unit": "ratio",
-           "explain": null
+           "explain": "The same question as PEG, but counting the dividend as part of what the\ncompany gives you. A company growing 6% and paying a 4% yield is\nreturning 10% a year in total, and this measure prices it that way.",
+           "format": "0.00"
           },
           "observed": {
            "status": "known",
@@ -314,7 +323,8 @@
            "reads": "pe_to_own_5y_median_pe",
            "label": "P/E versus its own five-year median P/E",
            "unit": "times_own_median",
-           "explain": null
+           "explain": "Whether the stock is cheap compared to how the market has usually priced\nthis particular company. Absolute multiples mean different things for\ndifferent businesses; this asks a company-specific question instead.",
+           "format": "0.00x"
           },
           "observed": {
            "status": "known",
@@ -347,7 +357,8 @@
            "reads": "revenue_cagr_3y",
            "label": "Revenue CAGR, 3-year",
            "unit": "percent",
-           "explain": null
+           "explain": "How fast sales have grown per year over three years. The shorter window\nis the faster-moving signal: it shows whether the top line has\ndecelerated recently, which a five-year window would smooth away. The\ntwo three-year averages it compares do not overlap, so it is still a\nstatement about recent years rather than a slower version of the\nfive-year measure.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "known",
@@ -380,7 +391,8 @@
            "reads": "inventory_minus_revenue_growth_yoy",
            "label": "Inventory growth minus revenue growth, year over year",
            "unit": "percentage_points",
-           "explain": null
+           "explain": "Whether product is piling up in the warehouse faster than it's selling.\nThis is one of the oldest and most reliable early warnings that demand\nis softening, and it shows up in the balance sheet a quarter or two\nbefore it shows up in the income statement.",
+           "format": "+0.0 pp"
           },
           "observed": {
            "status": "known",
@@ -413,7 +425,8 @@
            "reads": "receivables_minus_revenue_growth_yoy",
            "label": "Receivables growth minus revenue growth, year over year",
            "unit": "percentage_points",
-           "explain": null
+           "explain": "Whether sales are being booked but not collected. Rising receivables\noutpacing sales means either customers are struggling or the company is\npushing product into the channel to make a quarter.",
+           "format": "+0.0 pp"
           },
           "observed": {
            "status": "known",
@@ -446,7 +459,8 @@
            "reads": "gross_margin_change_3y",
            "label": "Gross margin change over three years",
            "unit": "percentage_points",
-           "explain": null
+           "explain": "Whether the growth is being bought with discounts. Rapid revenue growth\nwith falling gross margin usually means the company is purchasing market\nshare, and that stops working when the money runs out.",
+           "format": "+0.0 pp"
           },
           "observed": {
            "status": "known",
@@ -479,7 +493,8 @@
            "reads": "interest_coverage",
            "label": "Interest coverage",
            "unit": "times",
-           "explain": null
+           "explain": "How many times over the company's operating profit covers its interest\nbill. At 8x, earnings could fall by half and the lenders still get paid\nwithout anyone noticing.",
+           "format": "0.0x"
           },
           "observed": {
            "status": "known",
@@ -512,7 +527,8 @@
            "reads": "fcf_ttm",
            "label": "Free cash flow, trailing twelve months",
            "unit": "usd",
-           "explain": null
+           "explain": "The cash left over after running the business and keeping its equipment\ncurrent. Positive means the company funds itself. Negative means it\nneeds someone else's money to keep going.",
+           "format": "$0,0"
           },
           "observed": {
            "status": "known",
@@ -545,7 +561,8 @@
            "reads": "net_cash_to_market_cap",
            "label": "Net cash over market capitalization",
            "unit": "ratio",
-           "explain": null
+           "explain": "How much of the price you're paying is already sitting in the bank. It\nlowers the effective multiple on the operating business and it's a\ncushion during a stumble.",
+           "format": "0.00"
           },
           "observed": {
            "status": "known",
@@ -578,7 +595,8 @@
            "reads": "insider_net_buying_6m",
            "label": "Insider net buying, trailing six months",
            "unit": "shares",
-           "explain": null
+           "explain": "Whether the people who know the most about the company are putting their\nown money in.",
+           "format": "+0,0 sh"
           },
           "observed": {
            "status": "absent",
@@ -658,7 +676,7 @@
            "reads": null,
            "label": "Most this will put into one name",
            "unit": "percent",
-           "explain": "The largest share of your account this strategy will take a single holding up to **by buying more of it**.\n\nIt is a limit on your purchases, not on the position. If a holding multiplies until it is half the account, nothing here tells you to trim it — this strategy has no trim, on purpose, because a position that got large by rising is precisely what the method is trying to produce. What this number does is stop you *adding* past it.\n\nTwenty-five percent is twice the share a first purchase takes, so a company can be added to twice as its story keeps proving out, and it is far short of the forty percent the Buffett strategy in this program will commit to one name. That difference is the point rather than a matter of taste. Buffett's concentration rests on a judgement about a business that is meant to hold for decades; this strategy's holding periods are measured in quarters to a few years and its exits fire on things that can change in one filing, so a position sized for a decade of conviction is sized wrong here.\n\n**Lynch published no such figure and none is claimed for him.** He advised individuals on how many companies to hold and not on how much to put in one. This number is this file's, derived from the slot count above, and it is the one in this strategy with the least behind it.\n\nIt needs your free cash to be answered in settings, because a share of the account cannot be worked out without knowing what the account is. Unanswered, the size rules report that they could not be run."
+           "explain": "The largest share of your account this strategy will take a single holding up to **by buying more of it**.\n\nIt is a limit on your purchases, not on the position. If a holding multiplies until it is half the account, nothing here tells you to trim it — this strategy has no trim, on purpose, because a position that got large by rising is precisely what the method is trying to produce. What this number does is stop you *adding* past it.\n\nTwenty-five percent is twice the share a first purchase takes, so a company can be added to twice as its story keeps proving out, and it is far short of the forty percent the Buffett strategy in this program will commit to one name. That difference is the point rather than a matter of taste. Buffett's concentration rests on a judgement about a business that is meant to hold for decades; this strategy's holding periods are measured in quarters to a few years and its exits fire on things that can change in one filing, so a position sized for a decade of conviction is sized wrong here.\n\n**Lynch published no such figure and none is claimed for him.** He advised individuals on how many companies to hold and not on how much to put in one. This number is this file's, derived from the slot count above, and it is the one in this strategy with the least behind it.\n\nIt needs this journal's cash record to be open, because a share of the account cannot be worked out without knowing what the account is. Until it is, the size rules report that they could not be run."
           },
           "observed": {
            "status": "known",
@@ -812,23 +830,24 @@
           "outcome": "pass"
          }
         ],
+        "rests_on": [],
         "note": null
        },
        "produced_by": "strategy",
        "strategy": {
         "id": "lynch",
         "name": "Lynch",
-        "version": 1,
+        "version": 3,
         "values_version": 1,
-        "contract": 6
+        "contract": 8
        }
       },
       "strategy": {
        "id": "lynch",
        "name": "Lynch",
-       "version": 1,
+       "version": 3,
        "values_version": 1,
-       "contract": 6
+       "contract": 8
       },
       "metrics": {
        "earnings_base_share_5y": {
@@ -998,11 +1017,15 @@
         "revenue_change_yoy"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2021-05-17 could be consulted; 17 hand-entered values on record by 2021-05-17; judged by Lynch v1 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; this journal was created on 2024-01-02, so it held no answers on 2021-05-17 — free cash, and every figure measured against the account, are absent rather than taken from what you have told it since"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2021-05-17 could be consulted; 17 hand-entered values on record by 2021-05-17; judged by Lynch v3 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; what this account held in cash on 2021-05-17 is not on record — this journal's cash record opens on 2024-01-02 and has no answer for 2021-05-17 — what the account held before it started being kept is not something the record can say, and carrying the opening balance backwards would state a figure for a day nothing was recorded about — so the account total and every share of it are absent"
       },
       "thesis": null,
       "valuation": null,
-      "recollection": null
+      "recollection": null,
+      "changes_recorded": {
+       "rules": 0,
+       "measures": 0
+      }
      }
     }
    ],
@@ -1012,150 +1035,250 @@
      "seq": 1,
      "id": "earnings_base_share_5y",
      "value": 46.0,
+     "label": "Earnings at the base of the growth window, as a share of earnings now",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How much the company was earning at the start of the period a growth\nrate is measured over, compared with what it earns at the end of it.\nAt 40% it earned two fifths then of what it earns now; at 2% it was\nearning almost nothing, and what looks like growth is mostly the\ndistance from almost nothing.\n\nThis is published because a compound growth rate cannot tell the two\napart on its own. A company going from 1 to 100 and a company going\nfrom 40 to 100 can carry rates that look alike over enough years, and\nonly one of them describes a business that was already working.\n",
      "recorded": "2021-05-10T12:00:00-04:00"
     },
     {
      "seq": 2,
      "id": "net_margin_base_share_5y",
      "value": 79.0,
+     "label": "Net margin at the base of the growth window, as a share of the margin now",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How profitable each dollar of sales was at the start of the period a\ngrowth rate is measured over, compared with how profitable it is at\nthe end. A business that scaled up keeps roughly the margin it had,\nor improves it a little: going from 8% to 12% over five years reads\nas 67% here and is ordinary operating leverage. A business whose\nmargin came back from nothing — 0.5% to 8% — reads as 6%, and its\nearnings did not grow so much as appear.\n\nIt is a ratio of two ratios, so it says the same thing to a company\nselling ten dollars and one selling ten billion, and a share split\ncannot move it.\n",
      "recorded": "2021-05-10T12:00:00-04:00"
     },
     {
      "seq": 3,
      "id": "peg_trailing",
      "value": 0.61,
+     "label": "PEG ratio, trailing",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "Whether the price you're paying is justified by the speed the company is\ngrowing. Lynch's formulation: the P/E of any fairly priced company will\nequal its growth rate.\n",
      "recorded": "2021-05-10T12:00:00-04:00"
     },
     {
      "seq": 4,
      "id": "eps_cagr_5y",
      "value": 24.0,
+     "label": "Diluted EPS CAGR, 5-year",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How fast the profit attributable to each share you own has grown per\nyear over five years. Per-share rather than total, so a company that\ngrew by issuing stock gets no credit for it.\n",
      "recorded": "2021-05-10T12:00:00-04:00"
     },
     {
      "seq": 5,
      "id": "debt_to_equity",
      "value": 0.24,
+     "label": "Debt to equity",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "How much of the company is financed by lenders versus by its owners.\nAt 1.0 there is a dollar of debt for every dollar of shareholder money.\n",
      "recorded": "2021-05-10T12:00:00-04:00"
     },
     {
      "seq": 6,
      "id": "eps_minus_revenue_cagr_spread_5y",
      "value": 5.0,
+     "label": "Diluted EPS CAGR minus revenue CAGR, 5-year",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether the earnings growth is coming from the business or from\nfinancial engineering. Margin expansion and buybacks are real and\nlegitimate, but a company growing EPS at 30% on 4% revenue growth has\nnearly exhausted both, and there is no third act.\n",
      "recorded": "2021-05-10T12:00:00-04:00"
     },
     {
      "seq": 7,
      "id": "dividend_adjusted_peg",
      "value": 0.61,
+     "label": "Dividend-adjusted PEG",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "The same question as PEG, but counting the dividend as part of what the\ncompany gives you. A company growing 6% and paying a 4% yield is\nreturning 10% a year in total, and this measure prices it that way.\n",
      "recorded": "2021-05-10T12:00:00-04:00"
     },
     {
      "seq": 8,
      "id": "pe_to_own_5y_median_pe",
      "value": 0.78,
+     "label": "P/E versus its own five-year median P/E",
+     "unit": "times_own_median",
+     "format": "0.00x",
+     "plain": "Whether the stock is cheap compared to how the market has usually priced\nthis particular company. Absolute multiples mean different things for\ndifferent businesses; this asks a company-specific question instead.\n",
      "recorded": "2021-05-10T12:00:00-04:00"
     },
     {
      "seq": 9,
      "id": "revenue_cagr_3y",
      "value": 19.0,
+     "label": "Revenue CAGR, 3-year",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How fast sales have grown per year over three years. The shorter window\nis the faster-moving signal: it shows whether the top line has\ndecelerated recently, which a five-year window would smooth away. The\ntwo three-year averages it compares do not overlap, so it is still a\nstatement about recent years rather than a slower version of the\nfive-year measure.\n",
      "recorded": "2021-05-10T12:00:00-04:00"
     },
     {
      "seq": 10,
      "id": "inventory_minus_revenue_growth_yoy",
      "value": 1.2,
+     "label": "Inventory growth minus revenue growth, year over year",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether product is piling up in the warehouse faster than it's selling.\nThis is one of the oldest and most reliable early warnings that demand\nis softening, and it shows up in the balance sheet a quarter or two\nbefore it shows up in the income statement.\n",
      "recorded": "2021-05-10T12:00:00-04:00"
     },
     {
      "seq": 11,
      "id": "receivables_minus_revenue_growth_yoy",
      "value": 2.4,
+     "label": "Receivables growth minus revenue growth, year over year",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether sales are being booked but not collected. Rising receivables\noutpacing sales means either customers are struggling or the company is\npushing product into the channel to make a quarter.\n",
      "recorded": "2021-05-10T12:00:00-04:00"
     },
     {
      "seq": 12,
      "id": "gross_margin_change_3y",
      "value": 0.6,
+     "label": "Gross margin change over three years",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether the growth is being bought with discounts. Rapid revenue growth\nwith falling gross margin usually means the company is purchasing market\nshare, and that stops working when the money runs out.\n",
      "recorded": "2021-05-10T12:00:00-04:00"
     },
     {
      "seq": 13,
      "id": "interest_coverage",
      "value": 17.0,
+     "label": "Interest coverage",
+     "unit": "times",
+     "format": "0.0x",
+     "plain": "How many times over the company's operating profit covers its interest\nbill. At 8x, earnings could fall by half and the lenders still get paid\nwithout anyone noticing.\n",
      "recorded": "2021-05-10T12:00:00-04:00"
     },
     {
      "seq": 14,
      "id": "fcf_ttm",
      "value": 38000000.0,
+     "label": "Free cash flow, trailing twelve months",
+     "unit": "usd",
+     "format": "$0,0",
+     "plain": "The cash left over after running the business and keeping its equipment\ncurrent. Positive means the company funds itself. Negative means it\nneeds someone else's money to keep going.\n",
      "recorded": "2021-05-10T12:00:00-04:00"
     },
     {
      "seq": 15,
      "id": "net_cash_to_market_cap",
      "value": 0.05,
+     "label": "Net cash over market capitalization",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "How much of the price you're paying is already sitting in the bank. It\nlowers the effective multiple on the operating business and it's a\ncushion during a stumble.\n",
      "recorded": "2021-05-10T12:00:00-04:00"
     },
     {
      "seq": 16,
      "id": "eps_change_yoy",
      "value": 26.0,
+     "label": "Diluted EPS change, year over year",
+     "unit": "percent",
+     "format": "+0.0%",
+     "plain": "How much more the company is earning per share than it was a year ago.\nThis is the growth rate as it stands today, not the average of the\nlast several years — it is the number that changes when a company\nstops growing, and it changes about two quarters afterwards rather\nthan several years afterwards.\n",
      "recorded": "2021-05-10T12:00:00-04:00"
     },
     {
      "seq": 17,
      "id": "revenue_change_yoy",
      "value": 20.0,
+     "label": "Revenue change, year over year",
+     "unit": "percent",
+     "format": "+0.0%",
+     "plain": "Whether the company is selling more or less than it was a year ago. This\nis the difference between a business having a bad year and a business\ndisappearing: a 5% decline in a cyclical downturn is one thing, a 20%\ndecline in a structurally challenged industry is another.\n",
      "recorded": "2021-05-10T12:00:00-04:00"
     },
     {
      "seq": 18,
      "id": "peg_trailing",
      "value": 0.94,
+     "label": "PEG ratio, trailing",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "Whether the price you're paying is justified by the speed the company is\ngrowing. Lynch's formulation: the P/E of any fairly priced company will\nequal its growth rate.\n",
      "recorded": "2026-08-04T12:00:00-04:00"
     },
     {
      "seq": 19,
      "id": "eps_cagr_5y",
      "value": 23.0,
+     "label": "Diluted EPS CAGR, 5-year",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How fast the profit attributable to each share you own has grown per\nyear over five years. Per-share rather than total, so a company that\ngrew by issuing stock gets no credit for it.\n",
      "recorded": "2026-08-04T12:00:00-04:00"
     },
     {
      "seq": 20,
      "id": "eps_minus_revenue_cagr_spread_5y",
      "value": 4.0,
+     "label": "Diluted EPS CAGR minus revenue CAGR, 5-year",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether the earnings growth is coming from the business or from\nfinancial engineering. Margin expansion and buybacks are real and\nlegitimate, but a company growing EPS at 30% on 4% revenue growth has\nnearly exhausted both, and there is no third act.\n",
      "recorded": "2026-08-04T12:00:00-04:00"
     },
     {
      "seq": 21,
      "id": "dividend_adjusted_peg",
      "value": 0.94,
+     "label": "Dividend-adjusted PEG",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "The same question as PEG, but counting the dividend as part of what the\ncompany gives you. A company growing 6% and paying a 4% yield is\nreturning 10% a year in total, and this measure prices it that way.\n",
      "recorded": "2026-08-04T12:00:00-04:00"
     },
     {
      "seq": 22,
      "id": "pe_to_own_5y_median_pe",
      "value": 0.97,
+     "label": "P/E versus its own five-year median P/E",
+     "unit": "times_own_median",
+     "format": "0.00x",
+     "plain": "Whether the stock is cheap compared to how the market has usually priced\nthis particular company. Absolute multiples mean different things for\ndifferent businesses; this asks a company-specific question instead.\n",
      "recorded": "2026-08-04T12:00:00-04:00"
     },
     {
      "seq": 23,
      "id": "revenue_cagr_3y",
      "value": 18.0,
+     "label": "Revenue CAGR, 3-year",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How fast sales have grown per year over three years. The shorter window\nis the faster-moving signal: it shows whether the top line has\ndecelerated recently, which a five-year window would smooth away. The\ntwo three-year averages it compares do not overlap, so it is still a\nstatement about recent years rather than a slower version of the\nfive-year measure.\n",
      "recorded": "2026-08-04T12:00:00-04:00"
     },
     {
      "seq": 24,
      "id": "eps_change_yoy",
      "value": 21.0,
+     "label": "Diluted EPS change, year over year",
+     "unit": "percent",
+     "format": "+0.0%",
+     "plain": "How much more the company is earning per share than it was a year ago.\nThis is the growth rate as it stands today, not the average of the\nlast several years — it is the number that changes when a company\nstops growing, and it changes about two quarters afterwards rather\nthan several years afterwards.\n",
      "recorded": "2026-08-04T12:00:00-04:00"
     },
     {
      "seq": 25,
      "id": "revenue_change_yoy",
      "value": 17.0,
+     "label": "Revenue change, year over year",
+     "unit": "percent",
+     "format": "+0.0%",
+     "plain": "Whether the company is selling more or less than it was a year ago. This\nis the difference between a business having a bad year and a business\ndisappearing: a 5% decline in a cyclical downturn is one thing, a 20%\ndecline in a structurally challenged industry is another.\n",
      "recorded": "2026-08-04T12:00:00-04:00"
     }
    ],
@@ -1169,6 +1292,7 @@
     }
    ],
    "valuations": [],
+   "snapshots": [],
    "notes": [
     {
      "date": "2024-02-11T12:00:00-05:00",
@@ -1188,7 +1312,7 @@
   {
    "ticker": "ORRELL",
    "name": "Orrell Fastenings",
-   "added": "2026-08-12",
+   "added": "2026-08-15",
    "price": 58.0,
    "lots": [
     {
@@ -1210,7 +1334,8 @@
         "id": "worth-buying",
         "name": "Worth buying, at this price",
         "description": "Every test this strategy will not bend has passed, and all four questions it asks about the business are answered.\n\nThat is a claim about the price and the growth together, and neither on its own. A company growing quickly at a price that has already paid for the growth is not a buy here, and neither is a cheap company that has stopped growing. The size is an equal share of the names this strategy runs at once.",
-        "fix": null
+        "fix": null,
+        "consequence": null
        },
        "payload": {
         "size": {
@@ -1231,7 +1356,8 @@
            "reads": "earnings_base_share_5y",
            "label": "Earnings at the base of the growth window, as a share of earnings now",
            "unit": "percent",
-           "explain": null
+           "explain": "How much the company was earning at the start of the period a growth\nrate is measured over, compared with what it earns at the end of it.\nAt 40% it earned two fifths then of what it earns now; at 2% it was\nearning almost nothing, and what looks like growth is mostly the\ndistance from almost nothing.\n\nThis is published because a compound growth rate cannot tell the two\napart on its own. A company going from 1 to 100 and a company going\nfrom 40 to 100 can carry rates that look alike over enough years, and\nonly one of them describes a business that was already working.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "known",
@@ -1264,7 +1390,8 @@
            "reads": "net_margin_base_share_5y",
            "label": "Net margin at the base of the growth window, as a share of the margin now",
            "unit": "percent",
-           "explain": null
+           "explain": "How profitable each dollar of sales was at the start of the period a\ngrowth rate is measured over, compared with how profitable it is at\nthe end. A business that scaled up keeps roughly the margin it had,\nor improves it a little: going from 8% to 12% over five years reads\nas 67% here and is ordinary operating leverage. A business whose\nmargin came back from nothing — 0.5% to 8% — reads as 6%, and its\nearnings did not grow so much as appear.\n\nIt is a ratio of two ratios, so it says the same thing to a company\nselling ten dollars and one selling ten billion, and a share split\ncannot move it.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "known",
@@ -1297,7 +1424,8 @@
            "reads": "peg_trailing",
            "label": "PEG ratio, trailing",
            "unit": "ratio",
-           "explain": null
+           "explain": "Whether the price you're paying is justified by the speed the company is\ngrowing. Lynch's formulation: the P/E of any fairly priced company will\nequal its growth rate.",
+           "format": "0.00"
           },
           "observed": {
            "status": "known",
@@ -1330,7 +1458,8 @@
            "reads": "eps_cagr_5y",
            "label": "Diluted EPS CAGR, 5-year",
            "unit": "percent",
-           "explain": null
+           "explain": "How fast the profit attributable to each share you own has grown per\nyear over five years. Per-share rather than total, so a company that\ngrew by issuing stock gets no credit for it.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "known",
@@ -1363,7 +1492,8 @@
            "reads": "eps_cagr_5y",
            "label": "Diluted EPS CAGR, 5-year",
            "unit": "percent",
-           "explain": null
+           "explain": "How fast the profit attributable to each share you own has grown per\nyear over five years. Per-share rather than total, so a company that\ngrew by issuing stock gets no credit for it.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "known",
@@ -1396,7 +1526,8 @@
            "reads": "debt_to_equity",
            "label": "Debt to equity",
            "unit": "ratio",
-           "explain": null
+           "explain": "How much of the company is financed by lenders versus by its owners.\nAt 1.0 there is a dollar of debt for every dollar of shareholder money.",
+           "format": "0.00"
           },
           "observed": {
            "status": "known",
@@ -1429,7 +1560,8 @@
            "reads": "eps_minus_revenue_cagr_spread_5y",
            "label": "Diluted EPS CAGR minus revenue CAGR, 5-year",
            "unit": "percentage_points",
-           "explain": null
+           "explain": "Whether the earnings growth is coming from the business or from\nfinancial engineering. Margin expansion and buybacks are real and\nlegitimate, but a company growing EPS at 30% on 4% revenue growth has\nnearly exhausted both, and there is no third act.",
+           "format": "+0.0 pp"
           },
           "observed": {
            "status": "known",
@@ -1462,7 +1594,8 @@
            "reads": "dividend_adjusted_peg",
            "label": "Dividend-adjusted PEG",
            "unit": "ratio",
-           "explain": null
+           "explain": "The same question as PEG, but counting the dividend as part of what the\ncompany gives you. A company growing 6% and paying a 4% yield is\nreturning 10% a year in total, and this measure prices it that way.",
+           "format": "0.00"
           },
           "observed": {
            "status": "known",
@@ -1495,7 +1628,8 @@
            "reads": "pe_to_own_5y_median_pe",
            "label": "P/E versus its own five-year median P/E",
            "unit": "times_own_median",
-           "explain": null
+           "explain": "Whether the stock is cheap compared to how the market has usually priced\nthis particular company. Absolute multiples mean different things for\ndifferent businesses; this asks a company-specific question instead.",
+           "format": "0.00x"
           },
           "observed": {
            "status": "known",
@@ -1528,7 +1662,8 @@
            "reads": "revenue_cagr_3y",
            "label": "Revenue CAGR, 3-year",
            "unit": "percent",
-           "explain": null
+           "explain": "How fast sales have grown per year over three years. The shorter window\nis the faster-moving signal: it shows whether the top line has\ndecelerated recently, which a five-year window would smooth away. The\ntwo three-year averages it compares do not overlap, so it is still a\nstatement about recent years rather than a slower version of the\nfive-year measure.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "known",
@@ -1561,7 +1696,8 @@
            "reads": "inventory_minus_revenue_growth_yoy",
            "label": "Inventory growth minus revenue growth, year over year",
            "unit": "percentage_points",
-           "explain": null
+           "explain": "Whether product is piling up in the warehouse faster than it's selling.\nThis is one of the oldest and most reliable early warnings that demand\nis softening, and it shows up in the balance sheet a quarter or two\nbefore it shows up in the income statement.",
+           "format": "+0.0 pp"
           },
           "observed": {
            "status": "known",
@@ -1594,7 +1730,8 @@
            "reads": "receivables_minus_revenue_growth_yoy",
            "label": "Receivables growth minus revenue growth, year over year",
            "unit": "percentage_points",
-           "explain": null
+           "explain": "Whether sales are being booked but not collected. Rising receivables\noutpacing sales means either customers are struggling or the company is\npushing product into the channel to make a quarter.",
+           "format": "+0.0 pp"
           },
           "observed": {
            "status": "known",
@@ -1627,7 +1764,8 @@
            "reads": "gross_margin_change_3y",
            "label": "Gross margin change over three years",
            "unit": "percentage_points",
-           "explain": null
+           "explain": "Whether the growth is being bought with discounts. Rapid revenue growth\nwith falling gross margin usually means the company is purchasing market\nshare, and that stops working when the money runs out.",
+           "format": "+0.0 pp"
           },
           "observed": {
            "status": "known",
@@ -1660,7 +1798,8 @@
            "reads": "interest_coverage",
            "label": "Interest coverage",
            "unit": "times",
-           "explain": null
+           "explain": "How many times over the company's operating profit covers its interest\nbill. At 8x, earnings could fall by half and the lenders still get paid\nwithout anyone noticing.",
+           "format": "0.0x"
           },
           "observed": {
            "status": "known",
@@ -1693,7 +1832,8 @@
            "reads": "fcf_ttm",
            "label": "Free cash flow, trailing twelve months",
            "unit": "usd",
-           "explain": null
+           "explain": "The cash left over after running the business and keeping its equipment\ncurrent. Positive means the company funds itself. Negative means it\nneeds someone else's money to keep going.",
+           "format": "$0,0"
           },
           "observed": {
            "status": "known",
@@ -1726,7 +1866,8 @@
            "reads": "net_cash_to_market_cap",
            "label": "Net cash over market capitalization",
            "unit": "ratio",
-           "explain": null
+           "explain": "How much of the price you're paying is already sitting in the bank. It\nlowers the effective multiple on the operating business and it's a\ncushion during a stumble.",
+           "format": "0.00"
           },
           "observed": {
            "status": "known",
@@ -1759,7 +1900,8 @@
            "reads": "insider_net_buying_6m",
            "label": "Insider net buying, trailing six months",
            "unit": "shares",
-           "explain": null
+           "explain": "Whether the people who know the most about the company are putting their\nown money in.",
+           "format": "+0,0 sh"
           },
           "observed": {
            "status": "absent",
@@ -1839,7 +1981,7 @@
            "reads": null,
            "label": "Most this will put into one name",
            "unit": "percent",
-           "explain": "The largest share of your account this strategy will take a single holding up to **by buying more of it**.\n\nIt is a limit on your purchases, not on the position. If a holding multiplies until it is half the account, nothing here tells you to trim it — this strategy has no trim, on purpose, because a position that got large by rising is precisely what the method is trying to produce. What this number does is stop you *adding* past it.\n\nTwenty-five percent is twice the share a first purchase takes, so a company can be added to twice as its story keeps proving out, and it is far short of the forty percent the Buffett strategy in this program will commit to one name. That difference is the point rather than a matter of taste. Buffett's concentration rests on a judgement about a business that is meant to hold for decades; this strategy's holding periods are measured in quarters to a few years and its exits fire on things that can change in one filing, so a position sized for a decade of conviction is sized wrong here.\n\n**Lynch published no such figure and none is claimed for him.** He advised individuals on how many companies to hold and not on how much to put in one. This number is this file's, derived from the slot count above, and it is the one in this strategy with the least behind it.\n\nIt needs your free cash to be answered in settings, because a share of the account cannot be worked out without knowing what the account is. Unanswered, the size rules report that they could not be run."
+           "explain": "The largest share of your account this strategy will take a single holding up to **by buying more of it**.\n\nIt is a limit on your purchases, not on the position. If a holding multiplies until it is half the account, nothing here tells you to trim it — this strategy has no trim, on purpose, because a position that got large by rising is precisely what the method is trying to produce. What this number does is stop you *adding* past it.\n\nTwenty-five percent is twice the share a first purchase takes, so a company can be added to twice as its story keeps proving out, and it is far short of the forty percent the Buffett strategy in this program will commit to one name. That difference is the point rather than a matter of taste. Buffett's concentration rests on a judgement about a business that is meant to hold for decades; this strategy's holding periods are measured in quarters to a few years and its exits fire on things that can change in one filing, so a position sized for a decade of conviction is sized wrong here.\n\n**Lynch published no such figure and none is claimed for him.** He advised individuals on how many companies to hold and not on how much to put in one. This number is this file's, derived from the slot count above, and it is the one in this strategy with the least behind it.\n\nIt needs this journal's cash record to be open, because a share of the account cannot be worked out without knowing what the account is. Until it is, the size rules report that they could not be run."
           },
           "observed": {
            "status": "known",
@@ -1993,23 +2135,24 @@
           "outcome": "pass"
          }
         ],
+        "rests_on": [],
         "note": null
        },
        "produced_by": "strategy",
        "strategy": {
         "id": "lynch",
         "name": "Lynch",
-        "version": 1,
+        "version": 3,
         "values_version": 1,
-        "contract": 6
+        "contract": 8
        }
       },
       "strategy": {
        "id": "lynch",
        "name": "Lynch",
-       "version": 1,
+       "version": 3,
        "values_version": 1,
-       "contract": 6
+       "contract": 8
       },
       "metrics": {
        "earnings_base_share_5y": {
@@ -2179,11 +2322,15 @@
         "revenue_change_yoy"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2024-04-09 could be consulted; 17 hand-entered values on record by 2024-04-09; judged by Lynch v1 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2024-04-09 could be consulted; 17 hand-entered values on record by 2024-04-09; judged by Lynch v3 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": null,
       "valuation": null,
-      "recollection": null
+      "recollection": null,
+      "changes_recorded": {
+       "rules": 0,
+       "measures": 0
+      }
      }
     }
    ],
@@ -2193,144 +2340,240 @@
      "seq": 1,
      "id": "earnings_base_share_5y",
      "value": 46.0,
+     "label": "Earnings at the base of the growth window, as a share of earnings now",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How much the company was earning at the start of the period a growth\nrate is measured over, compared with what it earns at the end of it.\nAt 40% it earned two fifths then of what it earns now; at 2% it was\nearning almost nothing, and what looks like growth is mostly the\ndistance from almost nothing.\n\nThis is published because a compound growth rate cannot tell the two\napart on its own. A company going from 1 to 100 and a company going\nfrom 40 to 100 can carry rates that look alike over enough years, and\nonly one of them describes a business that was already working.\n",
      "recorded": "2024-04-02T12:00:00-04:00"
     },
     {
      "seq": 2,
      "id": "net_margin_base_share_5y",
      "value": 79.0,
+     "label": "Net margin at the base of the growth window, as a share of the margin now",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How profitable each dollar of sales was at the start of the period a\ngrowth rate is measured over, compared with how profitable it is at\nthe end. A business that scaled up keeps roughly the margin it had,\nor improves it a little: going from 8% to 12% over five years reads\nas 67% here and is ordinary operating leverage. A business whose\nmargin came back from nothing — 0.5% to 8% — reads as 6%, and its\nearnings did not grow so much as appear.\n\nIt is a ratio of two ratios, so it says the same thing to a company\nselling ten dollars and one selling ten billion, and a share split\ncannot move it.\n",
      "recorded": "2024-04-02T12:00:00-04:00"
     },
     {
      "seq": 3,
      "id": "peg_trailing",
      "value": 0.71,
+     "label": "PEG ratio, trailing",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "Whether the price you're paying is justified by the speed the company is\ngrowing. Lynch's formulation: the P/E of any fairly priced company will\nequal its growth rate.\n",
      "recorded": "2024-04-02T12:00:00-04:00"
     },
     {
      "seq": 4,
      "id": "eps_cagr_5y",
      "value": 18.0,
+     "label": "Diluted EPS CAGR, 5-year",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How fast the profit attributable to each share you own has grown per\nyear over five years. Per-share rather than total, so a company that\ngrew by issuing stock gets no credit for it.\n",
      "recorded": "2024-04-02T12:00:00-04:00"
     },
     {
      "seq": 5,
      "id": "debt_to_equity",
      "value": 0.24,
+     "label": "Debt to equity",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "How much of the company is financed by lenders versus by its owners.\nAt 1.0 there is a dollar of debt for every dollar of shareholder money.\n",
      "recorded": "2024-04-02T12:00:00-04:00"
     },
     {
      "seq": 6,
      "id": "eps_minus_revenue_cagr_spread_5y",
      "value": 5.0,
+     "label": "Diluted EPS CAGR minus revenue CAGR, 5-year",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether the earnings growth is coming from the business or from\nfinancial engineering. Margin expansion and buybacks are real and\nlegitimate, but a company growing EPS at 30% on 4% revenue growth has\nnearly exhausted both, and there is no third act.\n",
      "recorded": "2024-04-02T12:00:00-04:00"
     },
     {
      "seq": 7,
      "id": "dividend_adjusted_peg",
      "value": 0.7,
+     "label": "Dividend-adjusted PEG",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "The same question as PEG, but counting the dividend as part of what the\ncompany gives you. A company growing 6% and paying a 4% yield is\nreturning 10% a year in total, and this measure prices it that way.\n",
      "recorded": "2024-04-02T12:00:00-04:00"
     },
     {
      "seq": 8,
      "id": "pe_to_own_5y_median_pe",
      "value": 0.84,
+     "label": "P/E versus its own five-year median P/E",
+     "unit": "times_own_median",
+     "format": "0.00x",
+     "plain": "Whether the stock is cheap compared to how the market has usually priced\nthis particular company. Absolute multiples mean different things for\ndifferent businesses; this asks a company-specific question instead.\n",
      "recorded": "2024-04-02T12:00:00-04:00"
     },
     {
      "seq": 9,
      "id": "revenue_cagr_3y",
      "value": 13.0,
+     "label": "Revenue CAGR, 3-year",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How fast sales have grown per year over three years. The shorter window\nis the faster-moving signal: it shows whether the top line has\ndecelerated recently, which a five-year window would smooth away. The\ntwo three-year averages it compares do not overlap, so it is still a\nstatement about recent years rather than a slower version of the\nfive-year measure.\n",
      "recorded": "2024-04-02T12:00:00-04:00"
     },
     {
      "seq": 10,
      "id": "inventory_minus_revenue_growth_yoy",
      "value": 1.2,
+     "label": "Inventory growth minus revenue growth, year over year",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether product is piling up in the warehouse faster than it's selling.\nThis is one of the oldest and most reliable early warnings that demand\nis softening, and it shows up in the balance sheet a quarter or two\nbefore it shows up in the income statement.\n",
      "recorded": "2024-04-02T12:00:00-04:00"
     },
     {
      "seq": 11,
      "id": "receivables_minus_revenue_growth_yoy",
      "value": 2.4,
+     "label": "Receivables growth minus revenue growth, year over year",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether sales are being booked but not collected. Rising receivables\noutpacing sales means either customers are struggling or the company is\npushing product into the channel to make a quarter.\n",
      "recorded": "2024-04-02T12:00:00-04:00"
     },
     {
      "seq": 12,
      "id": "gross_margin_change_3y",
      "value": 0.6,
+     "label": "Gross margin change over three years",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether the growth is being bought with discounts. Rapid revenue growth\nwith falling gross margin usually means the company is purchasing market\nshare, and that stops working when the money runs out.\n",
      "recorded": "2024-04-02T12:00:00-04:00"
     },
     {
      "seq": 13,
      "id": "interest_coverage",
      "value": 17.0,
+     "label": "Interest coverage",
+     "unit": "times",
+     "format": "0.0x",
+     "plain": "How many times over the company's operating profit covers its interest\nbill. At 8x, earnings could fall by half and the lenders still get paid\nwithout anyone noticing.\n",
      "recorded": "2024-04-02T12:00:00-04:00"
     },
     {
      "seq": 14,
      "id": "fcf_ttm",
      "value": 38000000.0,
+     "label": "Free cash flow, trailing twelve months",
+     "unit": "usd",
+     "format": "$0,0",
+     "plain": "The cash left over after running the business and keeping its equipment\ncurrent. Positive means the company funds itself. Negative means it\nneeds someone else's money to keep going.\n",
      "recorded": "2024-04-02T12:00:00-04:00"
     },
     {
      "seq": 15,
      "id": "net_cash_to_market_cap",
      "value": 0.05,
+     "label": "Net cash over market capitalization",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "How much of the price you're paying is already sitting in the bank. It\nlowers the effective multiple on the operating business and it's a\ncushion during a stumble.\n",
      "recorded": "2024-04-02T12:00:00-04:00"
     },
     {
      "seq": 16,
      "id": "eps_change_yoy",
      "value": 19.0,
+     "label": "Diluted EPS change, year over year",
+     "unit": "percent",
+     "format": "+0.0%",
+     "plain": "How much more the company is earning per share than it was a year ago.\nThis is the growth rate as it stands today, not the average of the\nlast several years — it is the number that changes when a company\nstops growing, and it changes about two quarters afterwards rather\nthan several years afterwards.\n",
      "recorded": "2024-04-02T12:00:00-04:00"
     },
     {
      "seq": 17,
      "id": "revenue_change_yoy",
      "value": 14.0,
+     "label": "Revenue change, year over year",
+     "unit": "percent",
+     "format": "+0.0%",
+     "plain": "Whether the company is selling more or less than it was a year ago. This\nis the difference between a business having a bad year and a business\ndisappearing: a 5% decline in a cyclical downturn is one thing, a 20%\ndecline in a structurally challenged industry is another.\n",
      "recorded": "2024-04-02T12:00:00-04:00"
     },
     {
      "seq": 18,
      "id": "peg_trailing",
      "value": 0.88,
+     "label": "PEG ratio, trailing",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "Whether the price you're paying is justified by the speed the company is\ngrowing. Lynch's formulation: the P/E of any fairly priced company will\nequal its growth rate.\n",
      "recorded": "2026-08-06T12:00:00-04:00"
     },
     {
      "seq": 19,
      "id": "eps_cagr_5y",
      "value": 17.0,
+     "label": "Diluted EPS CAGR, 5-year",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How fast the profit attributable to each share you own has grown per\nyear over five years. Per-share rather than total, so a company that\ngrew by issuing stock gets no credit for it.\n",
      "recorded": "2026-08-06T12:00:00-04:00"
     },
     {
      "seq": 20,
      "id": "dividend_adjusted_peg",
      "value": 0.86,
+     "label": "Dividend-adjusted PEG",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "The same question as PEG, but counting the dividend as part of what the\ncompany gives you. A company growing 6% and paying a 4% yield is\nreturning 10% a year in total, and this measure prices it that way.\n",
      "recorded": "2026-08-06T12:00:00-04:00"
     },
     {
      "seq": 21,
      "id": "pe_to_own_5y_median_pe",
      "value": 0.95,
+     "label": "P/E versus its own five-year median P/E",
+     "unit": "times_own_median",
+     "format": "0.00x",
+     "plain": "Whether the stock is cheap compared to how the market has usually priced\nthis particular company. Absolute multiples mean different things for\ndifferent businesses; this asks a company-specific question instead.\n",
      "recorded": "2026-08-06T12:00:00-04:00"
     },
     {
      "seq": 22,
      "id": "revenue_cagr_3y",
      "value": 12.5,
+     "label": "Revenue CAGR, 3-year",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How fast sales have grown per year over three years. The shorter window\nis the faster-moving signal: it shows whether the top line has\ndecelerated recently, which a five-year window would smooth away. The\ntwo three-year averages it compares do not overlap, so it is still a\nstatement about recent years rather than a slower version of the\nfive-year measure.\n",
      "recorded": "2026-08-06T12:00:00-04:00"
     },
     {
      "seq": 23,
      "id": "eps_change_yoy",
      "value": 15.0,
+     "label": "Diluted EPS change, year over year",
+     "unit": "percent",
+     "format": "+0.0%",
+     "plain": "How much more the company is earning per share than it was a year ago.\nThis is the growth rate as it stands today, not the average of the\nlast several years — it is the number that changes when a company\nstops growing, and it changes about two quarters afterwards rather\nthan several years afterwards.\n",
      "recorded": "2026-08-06T12:00:00-04:00"
     },
     {
      "seq": 24,
      "id": "revenue_change_yoy",
      "value": 11.0,
+     "label": "Revenue change, year over year",
+     "unit": "percent",
+     "format": "+0.0%",
+     "plain": "Whether the company is selling more or less than it was a year ago. This\nis the difference between a business having a bad year and a business\ndisappearing: a 5% decline in a cyclical downturn is one thing, a 20%\ndecline in a structurally challenged industry is another.\n",
      "recorded": "2026-08-06T12:00:00-04:00"
     }
    ],
@@ -2344,6 +2587,7 @@
     }
    ],
    "valuations": [],
+   "snapshots": [],
    "notes": [
     {
      "date": "2026-08-06T12:00:00-04:00",
@@ -2359,7 +2603,7 @@
   {
    "ticker": "HAVERTY",
    "name": "Haverty Tooling",
-   "added": "2026-08-12",
+   "added": "2026-08-15",
    "price": 26.5,
    "lots": [
     {
@@ -2381,7 +2625,8 @@
         "id": "worth-buying",
         "name": "Worth buying, at this price",
         "description": "Every test this strategy will not bend has passed, and all four questions it asks about the business are answered.\n\nThat is a claim about the price and the growth together, and neither on its own. A company growing quickly at a price that has already paid for the growth is not a buy here, and neither is a cheap company that has stopped growing. The size is an equal share of the names this strategy runs at once.",
-        "fix": null
+        "fix": null,
+        "consequence": null
        },
        "payload": {
         "size": {
@@ -2402,7 +2647,8 @@
            "reads": "earnings_base_share_5y",
            "label": "Earnings at the base of the growth window, as a share of earnings now",
            "unit": "percent",
-           "explain": null
+           "explain": "How much the company was earning at the start of the period a growth\nrate is measured over, compared with what it earns at the end of it.\nAt 40% it earned two fifths then of what it earns now; at 2% it was\nearning almost nothing, and what looks like growth is mostly the\ndistance from almost nothing.\n\nThis is published because a compound growth rate cannot tell the two\napart on its own. A company going from 1 to 100 and a company going\nfrom 40 to 100 can carry rates that look alike over enough years, and\nonly one of them describes a business that was already working.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "known",
@@ -2435,7 +2681,8 @@
            "reads": "net_margin_base_share_5y",
            "label": "Net margin at the base of the growth window, as a share of the margin now",
            "unit": "percent",
-           "explain": null
+           "explain": "How profitable each dollar of sales was at the start of the period a\ngrowth rate is measured over, compared with how profitable it is at\nthe end. A business that scaled up keeps roughly the margin it had,\nor improves it a little: going from 8% to 12% over five years reads\nas 67% here and is ordinary operating leverage. A business whose\nmargin came back from nothing — 0.5% to 8% — reads as 6%, and its\nearnings did not grow so much as appear.\n\nIt is a ratio of two ratios, so it says the same thing to a company\nselling ten dollars and one selling ten billion, and a share split\ncannot move it.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "known",
@@ -2468,7 +2715,8 @@
            "reads": "peg_trailing",
            "label": "PEG ratio, trailing",
            "unit": "ratio",
-           "explain": null
+           "explain": "Whether the price you're paying is justified by the speed the company is\ngrowing. Lynch's formulation: the P/E of any fairly priced company will\nequal its growth rate.",
+           "format": "0.00"
           },
           "observed": {
            "status": "known",
@@ -2501,7 +2749,8 @@
            "reads": "eps_cagr_5y",
            "label": "Diluted EPS CAGR, 5-year",
            "unit": "percent",
-           "explain": null
+           "explain": "How fast the profit attributable to each share you own has grown per\nyear over five years. Per-share rather than total, so a company that\ngrew by issuing stock gets no credit for it.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "known",
@@ -2534,7 +2783,8 @@
            "reads": "eps_cagr_5y",
            "label": "Diluted EPS CAGR, 5-year",
            "unit": "percent",
-           "explain": null
+           "explain": "How fast the profit attributable to each share you own has grown per\nyear over five years. Per-share rather than total, so a company that\ngrew by issuing stock gets no credit for it.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "known",
@@ -2567,7 +2817,8 @@
            "reads": "debt_to_equity",
            "label": "Debt to equity",
            "unit": "ratio",
-           "explain": null
+           "explain": "How much of the company is financed by lenders versus by its owners.\nAt 1.0 there is a dollar of debt for every dollar of shareholder money.",
+           "format": "0.00"
           },
           "observed": {
            "status": "known",
@@ -2600,7 +2851,8 @@
            "reads": "eps_minus_revenue_cagr_spread_5y",
            "label": "Diluted EPS CAGR minus revenue CAGR, 5-year",
            "unit": "percentage_points",
-           "explain": null
+           "explain": "Whether the earnings growth is coming from the business or from\nfinancial engineering. Margin expansion and buybacks are real and\nlegitimate, but a company growing EPS at 30% on 4% revenue growth has\nnearly exhausted both, and there is no third act.",
+           "format": "+0.0 pp"
           },
           "observed": {
            "status": "known",
@@ -2633,7 +2885,8 @@
            "reads": "dividend_adjusted_peg",
            "label": "Dividend-adjusted PEG",
            "unit": "ratio",
-           "explain": null
+           "explain": "The same question as PEG, but counting the dividend as part of what the\ncompany gives you. A company growing 6% and paying a 4% yield is\nreturning 10% a year in total, and this measure prices it that way.",
+           "format": "0.00"
           },
           "observed": {
            "status": "known",
@@ -2666,7 +2919,8 @@
            "reads": "pe_to_own_5y_median_pe",
            "label": "P/E versus its own five-year median P/E",
            "unit": "times_own_median",
-           "explain": null
+           "explain": "Whether the stock is cheap compared to how the market has usually priced\nthis particular company. Absolute multiples mean different things for\ndifferent businesses; this asks a company-specific question instead.",
+           "format": "0.00x"
           },
           "observed": {
            "status": "known",
@@ -2699,7 +2953,8 @@
            "reads": "revenue_cagr_3y",
            "label": "Revenue CAGR, 3-year",
            "unit": "percent",
-           "explain": null
+           "explain": "How fast sales have grown per year over three years. The shorter window\nis the faster-moving signal: it shows whether the top line has\ndecelerated recently, which a five-year window would smooth away. The\ntwo three-year averages it compares do not overlap, so it is still a\nstatement about recent years rather than a slower version of the\nfive-year measure.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "known",
@@ -2732,7 +2987,8 @@
            "reads": "inventory_minus_revenue_growth_yoy",
            "label": "Inventory growth minus revenue growth, year over year",
            "unit": "percentage_points",
-           "explain": null
+           "explain": "Whether product is piling up in the warehouse faster than it's selling.\nThis is one of the oldest and most reliable early warnings that demand\nis softening, and it shows up in the balance sheet a quarter or two\nbefore it shows up in the income statement.",
+           "format": "+0.0 pp"
           },
           "observed": {
            "status": "known",
@@ -2765,7 +3021,8 @@
            "reads": "receivables_minus_revenue_growth_yoy",
            "label": "Receivables growth minus revenue growth, year over year",
            "unit": "percentage_points",
-           "explain": null
+           "explain": "Whether sales are being booked but not collected. Rising receivables\noutpacing sales means either customers are struggling or the company is\npushing product into the channel to make a quarter.",
+           "format": "+0.0 pp"
           },
           "observed": {
            "status": "known",
@@ -2798,7 +3055,8 @@
            "reads": "gross_margin_change_3y",
            "label": "Gross margin change over three years",
            "unit": "percentage_points",
-           "explain": null
+           "explain": "Whether the growth is being bought with discounts. Rapid revenue growth\nwith falling gross margin usually means the company is purchasing market\nshare, and that stops working when the money runs out.",
+           "format": "+0.0 pp"
           },
           "observed": {
            "status": "known",
@@ -2831,7 +3089,8 @@
            "reads": "interest_coverage",
            "label": "Interest coverage",
            "unit": "times",
-           "explain": null
+           "explain": "How many times over the company's operating profit covers its interest\nbill. At 8x, earnings could fall by half and the lenders still get paid\nwithout anyone noticing.",
+           "format": "0.0x"
           },
           "observed": {
            "status": "known",
@@ -2864,7 +3123,8 @@
            "reads": "fcf_ttm",
            "label": "Free cash flow, trailing twelve months",
            "unit": "usd",
-           "explain": null
+           "explain": "The cash left over after running the business and keeping its equipment\ncurrent. Positive means the company funds itself. Negative means it\nneeds someone else's money to keep going.",
+           "format": "$0,0"
           },
           "observed": {
            "status": "known",
@@ -2897,7 +3157,8 @@
            "reads": "net_cash_to_market_cap",
            "label": "Net cash over market capitalization",
            "unit": "ratio",
-           "explain": null
+           "explain": "How much of the price you're paying is already sitting in the bank. It\nlowers the effective multiple on the operating business and it's a\ncushion during a stumble.",
+           "format": "0.00"
           },
           "observed": {
            "status": "known",
@@ -2930,7 +3191,8 @@
            "reads": "insider_net_buying_6m",
            "label": "Insider net buying, trailing six months",
            "unit": "shares",
-           "explain": null
+           "explain": "Whether the people who know the most about the company are putting their\nown money in.",
+           "format": "+0,0 sh"
           },
           "observed": {
            "status": "absent",
@@ -3010,7 +3272,7 @@
            "reads": null,
            "label": "Most this will put into one name",
            "unit": "percent",
-           "explain": "The largest share of your account this strategy will take a single holding up to **by buying more of it**.\n\nIt is a limit on your purchases, not on the position. If a holding multiplies until it is half the account, nothing here tells you to trim it — this strategy has no trim, on purpose, because a position that got large by rising is precisely what the method is trying to produce. What this number does is stop you *adding* past it.\n\nTwenty-five percent is twice the share a first purchase takes, so a company can be added to twice as its story keeps proving out, and it is far short of the forty percent the Buffett strategy in this program will commit to one name. That difference is the point rather than a matter of taste. Buffett's concentration rests on a judgement about a business that is meant to hold for decades; this strategy's holding periods are measured in quarters to a few years and its exits fire on things that can change in one filing, so a position sized for a decade of conviction is sized wrong here.\n\n**Lynch published no such figure and none is claimed for him.** He advised individuals on how many companies to hold and not on how much to put in one. This number is this file's, derived from the slot count above, and it is the one in this strategy with the least behind it.\n\nIt needs your free cash to be answered in settings, because a share of the account cannot be worked out without knowing what the account is. Unanswered, the size rules report that they could not be run."
+           "explain": "The largest share of your account this strategy will take a single holding up to **by buying more of it**.\n\nIt is a limit on your purchases, not on the position. If a holding multiplies until it is half the account, nothing here tells you to trim it — this strategy has no trim, on purpose, because a position that got large by rising is precisely what the method is trying to produce. What this number does is stop you *adding* past it.\n\nTwenty-five percent is twice the share a first purchase takes, so a company can be added to twice as its story keeps proving out, and it is far short of the forty percent the Buffett strategy in this program will commit to one name. That difference is the point rather than a matter of taste. Buffett's concentration rests on a judgement about a business that is meant to hold for decades; this strategy's holding periods are measured in quarters to a few years and its exits fire on things that can change in one filing, so a position sized for a decade of conviction is sized wrong here.\n\n**Lynch published no such figure and none is claimed for him.** He advised individuals on how many companies to hold and not on how much to put in one. This number is this file's, derived from the slot count above, and it is the one in this strategy with the least behind it.\n\nIt needs this journal's cash record to be open, because a share of the account cannot be worked out without knowing what the account is. Until it is, the size rules report that they could not be run."
           },
           "observed": {
            "status": "known",
@@ -3164,23 +3426,24 @@
           "outcome": "pass"
          }
         ],
+        "rests_on": [],
         "note": null
        },
        "produced_by": "strategy",
        "strategy": {
         "id": "lynch",
         "name": "Lynch",
-        "version": 1,
+        "version": 3,
         "values_version": 1,
-        "contract": 6
+        "contract": 8
        }
       },
       "strategy": {
        "id": "lynch",
        "name": "Lynch",
-       "version": 1,
+       "version": 3,
        "values_version": 1,
-       "contract": 6
+       "contract": 8
       },
       "metrics": {
        "earnings_base_share_5y": {
@@ -3350,11 +3613,15 @@
         "revenue_change_yoy"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2023-06-19 could be consulted; 17 hand-entered values on record by 2023-06-19; judged by Lynch v1 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; this journal was created on 2024-01-02, so it held no answers on 2023-06-19 — free cash, and every figure measured against the account, are absent rather than taken from what you have told it since"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2023-06-19 could be consulted; 17 hand-entered values on record by 2023-06-19; judged by Lynch v3 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; what this account held in cash on 2023-06-19 is not on record — this journal's cash record opens on 2024-01-02 and has no answer for 2023-06-19 — what the account held before it started being kept is not something the record can say, and carrying the opening balance backwards would state a figure for a day nothing was recorded about — so the account total and every share of it are absent"
       },
       "thesis": null,
       "valuation": null,
-      "recollection": null
+      "recollection": null,
+      "changes_recorded": {
+       "rules": 0,
+       "measures": 0
+      }
      }
     }
    ],
@@ -3364,156 +3631,260 @@
      "seq": 1,
      "id": "earnings_base_share_5y",
      "value": 46.0,
+     "label": "Earnings at the base of the growth window, as a share of earnings now",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How much the company was earning at the start of the period a growth\nrate is measured over, compared with what it earns at the end of it.\nAt 40% it earned two fifths then of what it earns now; at 2% it was\nearning almost nothing, and what looks like growth is mostly the\ndistance from almost nothing.\n\nThis is published because a compound growth rate cannot tell the two\napart on its own. A company going from 1 to 100 and a company going\nfrom 40 to 100 can carry rates that look alike over enough years, and\nonly one of them describes a business that was already working.\n",
      "recorded": "2023-06-12T12:00:00-04:00"
     },
     {
      "seq": 2,
      "id": "net_margin_base_share_5y",
      "value": 79.0,
+     "label": "Net margin at the base of the growth window, as a share of the margin now",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How profitable each dollar of sales was at the start of the period a\ngrowth rate is measured over, compared with how profitable it is at\nthe end. A business that scaled up keeps roughly the margin it had,\nor improves it a little: going from 8% to 12% over five years reads\nas 67% here and is ordinary operating leverage. A business whose\nmargin came back from nothing — 0.5% to 8% — reads as 6%, and its\nearnings did not grow so much as appear.\n\nIt is a ratio of two ratios, so it says the same thing to a company\nselling ten dollars and one selling ten billion, and a share split\ncannot move it.\n",
      "recorded": "2023-06-12T12:00:00-04:00"
     },
     {
      "seq": 3,
      "id": "peg_trailing",
      "value": 0.66,
+     "label": "PEG ratio, trailing",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "Whether the price you're paying is justified by the speed the company is\ngrowing. Lynch's formulation: the P/E of any fairly priced company will\nequal its growth rate.\n",
      "recorded": "2023-06-12T12:00:00-04:00"
     },
     {
      "seq": 4,
      "id": "eps_cagr_5y",
      "value": 21.0,
+     "label": "Diluted EPS CAGR, 5-year",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How fast the profit attributable to each share you own has grown per\nyear over five years. Per-share rather than total, so a company that\ngrew by issuing stock gets no credit for it.\n",
      "recorded": "2023-06-12T12:00:00-04:00"
     },
     {
      "seq": 5,
      "id": "debt_to_equity",
      "value": 0.24,
+     "label": "Debt to equity",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "How much of the company is financed by lenders versus by its owners.\nAt 1.0 there is a dollar of debt for every dollar of shareholder money.\n",
      "recorded": "2023-06-12T12:00:00-04:00"
     },
     {
      "seq": 6,
      "id": "eps_minus_revenue_cagr_spread_5y",
      "value": 5.0,
+     "label": "Diluted EPS CAGR minus revenue CAGR, 5-year",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether the earnings growth is coming from the business or from\nfinancial engineering. Margin expansion and buybacks are real and\nlegitimate, but a company growing EPS at 30% on 4% revenue growth has\nnearly exhausted both, and there is no third act.\n",
      "recorded": "2023-06-12T12:00:00-04:00"
     },
     {
      "seq": 7,
      "id": "dividend_adjusted_peg",
      "value": 0.66,
+     "label": "Dividend-adjusted PEG",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "The same question as PEG, but counting the dividend as part of what the\ncompany gives you. A company growing 6% and paying a 4% yield is\nreturning 10% a year in total, and this measure prices it that way.\n",
      "recorded": "2023-06-12T12:00:00-04:00"
     },
     {
      "seq": 8,
      "id": "pe_to_own_5y_median_pe",
      "value": 0.81,
+     "label": "P/E versus its own five-year median P/E",
+     "unit": "times_own_median",
+     "format": "0.00x",
+     "plain": "Whether the stock is cheap compared to how the market has usually priced\nthis particular company. Absolute multiples mean different things for\ndifferent businesses; this asks a company-specific question instead.\n",
      "recorded": "2023-06-12T12:00:00-04:00"
     },
     {
      "seq": 9,
      "id": "revenue_cagr_3y",
      "value": 17.0,
+     "label": "Revenue CAGR, 3-year",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How fast sales have grown per year over three years. The shorter window\nis the faster-moving signal: it shows whether the top line has\ndecelerated recently, which a five-year window would smooth away. The\ntwo three-year averages it compares do not overlap, so it is still a\nstatement about recent years rather than a slower version of the\nfive-year measure.\n",
      "recorded": "2023-06-12T12:00:00-04:00"
     },
     {
      "seq": 10,
      "id": "inventory_minus_revenue_growth_yoy",
      "value": 1.2,
+     "label": "Inventory growth minus revenue growth, year over year",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether product is piling up in the warehouse faster than it's selling.\nThis is one of the oldest and most reliable early warnings that demand\nis softening, and it shows up in the balance sheet a quarter or two\nbefore it shows up in the income statement.\n",
      "recorded": "2023-06-12T12:00:00-04:00"
     },
     {
      "seq": 11,
      "id": "receivables_minus_revenue_growth_yoy",
      "value": 2.4,
+     "label": "Receivables growth minus revenue growth, year over year",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether sales are being booked but not collected. Rising receivables\noutpacing sales means either customers are struggling or the company is\npushing product into the channel to make a quarter.\n",
      "recorded": "2023-06-12T12:00:00-04:00"
     },
     {
      "seq": 12,
      "id": "gross_margin_change_3y",
      "value": 0.6,
+     "label": "Gross margin change over three years",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether the growth is being bought with discounts. Rapid revenue growth\nwith falling gross margin usually means the company is purchasing market\nshare, and that stops working when the money runs out.\n",
      "recorded": "2023-06-12T12:00:00-04:00"
     },
     {
      "seq": 13,
      "id": "interest_coverage",
      "value": 17.0,
+     "label": "Interest coverage",
+     "unit": "times",
+     "format": "0.0x",
+     "plain": "How many times over the company's operating profit covers its interest\nbill. At 8x, earnings could fall by half and the lenders still get paid\nwithout anyone noticing.\n",
      "recorded": "2023-06-12T12:00:00-04:00"
     },
     {
      "seq": 14,
      "id": "fcf_ttm",
      "value": 38000000.0,
+     "label": "Free cash flow, trailing twelve months",
+     "unit": "usd",
+     "format": "$0,0",
+     "plain": "The cash left over after running the business and keeping its equipment\ncurrent. Positive means the company funds itself. Negative means it\nneeds someone else's money to keep going.\n",
      "recorded": "2023-06-12T12:00:00-04:00"
     },
     {
      "seq": 15,
      "id": "net_cash_to_market_cap",
      "value": 0.05,
+     "label": "Net cash over market capitalization",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "How much of the price you're paying is already sitting in the bank. It\nlowers the effective multiple on the operating business and it's a\ncushion during a stumble.\n",
      "recorded": "2023-06-12T12:00:00-04:00"
     },
     {
      "seq": 16,
      "id": "eps_change_yoy",
      "value": 22.0,
+     "label": "Diluted EPS change, year over year",
+     "unit": "percent",
+     "format": "+0.0%",
+     "plain": "How much more the company is earning per share than it was a year ago.\nThis is the growth rate as it stands today, not the average of the\nlast several years — it is the number that changes when a company\nstops growing, and it changes about two quarters afterwards rather\nthan several years afterwards.\n",
      "recorded": "2023-06-12T12:00:00-04:00"
     },
     {
      "seq": 17,
      "id": "revenue_change_yoy",
      "value": 18.0,
+     "label": "Revenue change, year over year",
+     "unit": "percent",
+     "format": "+0.0%",
+     "plain": "Whether the company is selling more or less than it was a year ago. This\nis the difference between a business having a bad year and a business\ndisappearing: a 5% decline in a cyclical downturn is one thing, a 20%\ndecline in a structurally challenged industry is another.\n",
      "recorded": "2023-06-12T12:00:00-04:00"
     },
     {
      "seq": 18,
      "id": "peg_trailing",
      "value": 0.74,
+     "label": "PEG ratio, trailing",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "Whether the price you're paying is justified by the speed the company is\ngrowing. Lynch's formulation: the P/E of any fairly priced company will\nequal its growth rate.\n",
      "recorded": "2026-08-07T12:00:00-04:00"
     },
     {
      "seq": 19,
      "id": "eps_cagr_5y",
      "value": 16.0,
+     "label": "Diluted EPS CAGR, 5-year",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How fast the profit attributable to each share you own has grown per\nyear over five years. Per-share rather than total, so a company that\ngrew by issuing stock gets no credit for it.\n",
      "recorded": "2026-08-07T12:00:00-04:00"
     },
     {
      "seq": 20,
      "id": "dividend_adjusted_peg",
      "value": 0.74,
+     "label": "Dividend-adjusted PEG",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "The same question as PEG, but counting the dividend as part of what the\ncompany gives you. A company growing 6% and paying a 4% yield is\nreturning 10% a year in total, and this measure prices it that way.\n",
      "recorded": "2026-08-07T12:00:00-04:00"
     },
     {
      "seq": 21,
      "id": "pe_to_own_5y_median_pe",
      "value": 0.66,
+     "label": "P/E versus its own five-year median P/E",
+     "unit": "times_own_median",
+     "format": "0.00x",
+     "plain": "Whether the stock is cheap compared to how the market has usually priced\nthis particular company. Absolute multiples mean different things for\ndifferent businesses; this asks a company-specific question instead.\n",
      "recorded": "2026-08-07T12:00:00-04:00"
     },
     {
      "seq": 22,
      "id": "revenue_cagr_3y",
      "value": 10.0,
+     "label": "Revenue CAGR, 3-year",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How fast sales have grown per year over three years. The shorter window\nis the faster-moving signal: it shows whether the top line has\ndecelerated recently, which a five-year window would smooth away. The\ntwo three-year averages it compares do not overlap, so it is still a\nstatement about recent years rather than a slower version of the\nfive-year measure.\n",
      "recorded": "2026-08-07T12:00:00-04:00"
     },
     {
      "seq": 23,
      "id": "inventory_minus_revenue_growth_yoy",
      "value": 4.1,
+     "label": "Inventory growth minus revenue growth, year over year",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether product is piling up in the warehouse faster than it's selling.\nThis is one of the oldest and most reliable early warnings that demand\nis softening, and it shows up in the balance sheet a quarter or two\nbefore it shows up in the income statement.\n",
      "recorded": "2026-08-07T12:00:00-04:00"
     },
     {
      "seq": 24,
      "id": "gross_margin_change_3y",
      "value": -1.4,
+     "label": "Gross margin change over three years",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether the growth is being bought with discounts. Rapid revenue growth\nwith falling gross margin usually means the company is purchasing market\nshare, and that stops working when the money runs out.\n",
      "recorded": "2026-08-07T12:00:00-04:00"
     },
     {
      "seq": 25,
      "id": "eps_change_yoy",
      "value": 1.8,
+     "label": "Diluted EPS change, year over year",
+     "unit": "percent",
+     "format": "+0.0%",
+     "plain": "How much more the company is earning per share than it was a year ago.\nThis is the growth rate as it stands today, not the average of the\nlast several years — it is the number that changes when a company\nstops growing, and it changes about two quarters afterwards rather\nthan several years afterwards.\n",
      "recorded": "2026-08-07T12:00:00-04:00"
     },
     {
      "seq": 26,
      "id": "revenue_change_yoy",
      "value": 0.4,
+     "label": "Revenue change, year over year",
+     "unit": "percent",
+     "format": "+0.0%",
+     "plain": "Whether the company is selling more or less than it was a year ago. This\nis the difference between a business having a bad year and a business\ndisappearing: a 5% decline in a cyclical downturn is one thing, a 20%\ndecline in a structurally challenged industry is another.\n",
      "recorded": "2026-08-07T12:00:00-04:00"
     }
    ],
@@ -3527,6 +3898,7 @@
     }
    ],
    "valuations": [],
+   "snapshots": [],
    "notes": [
     {
      "date": "2026-08-07T12:00:00-04:00",
@@ -3546,7 +3918,7 @@
   {
    "ticker": "PELSALL",
    "name": "Pelsall Ceramics",
-   "added": "2026-08-12",
+   "added": "2026-08-15",
    "price": 45.0,
    "lots": [
     {
@@ -3568,7 +3940,8 @@
         "id": "worth-buying",
         "name": "Worth buying, at this price",
         "description": "Every test this strategy will not bend has passed, and all four questions it asks about the business are answered.\n\nThat is a claim about the price and the growth together, and neither on its own. A company growing quickly at a price that has already paid for the growth is not a buy here, and neither is a cheap company that has stopped growing. The size is an equal share of the names this strategy runs at once.",
-        "fix": null
+        "fix": null,
+        "consequence": null
        },
        "payload": {
         "size": {
@@ -3589,7 +3962,8 @@
            "reads": "earnings_base_share_5y",
            "label": "Earnings at the base of the growth window, as a share of earnings now",
            "unit": "percent",
-           "explain": null
+           "explain": "How much the company was earning at the start of the period a growth\nrate is measured over, compared with what it earns at the end of it.\nAt 40% it earned two fifths then of what it earns now; at 2% it was\nearning almost nothing, and what looks like growth is mostly the\ndistance from almost nothing.\n\nThis is published because a compound growth rate cannot tell the two\napart on its own. A company going from 1 to 100 and a company going\nfrom 40 to 100 can carry rates that look alike over enough years, and\nonly one of them describes a business that was already working.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "known",
@@ -3622,7 +3996,8 @@
            "reads": "net_margin_base_share_5y",
            "label": "Net margin at the base of the growth window, as a share of the margin now",
            "unit": "percent",
-           "explain": null
+           "explain": "How profitable each dollar of sales was at the start of the period a\ngrowth rate is measured over, compared with how profitable it is at\nthe end. A business that scaled up keeps roughly the margin it had,\nor improves it a little: going from 8% to 12% over five years reads\nas 67% here and is ordinary operating leverage. A business whose\nmargin came back from nothing — 0.5% to 8% — reads as 6%, and its\nearnings did not grow so much as appear.\n\nIt is a ratio of two ratios, so it says the same thing to a company\nselling ten dollars and one selling ten billion, and a share split\ncannot move it.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "known",
@@ -3655,7 +4030,8 @@
            "reads": "peg_trailing",
            "label": "PEG ratio, trailing",
            "unit": "ratio",
-           "explain": null
+           "explain": "Whether the price you're paying is justified by the speed the company is\ngrowing. Lynch's formulation: the P/E of any fairly priced company will\nequal its growth rate.",
+           "format": "0.00"
           },
           "observed": {
            "status": "known",
@@ -3688,7 +4064,8 @@
            "reads": "eps_cagr_5y",
            "label": "Diluted EPS CAGR, 5-year",
            "unit": "percent",
-           "explain": null
+           "explain": "How fast the profit attributable to each share you own has grown per\nyear over five years. Per-share rather than total, so a company that\ngrew by issuing stock gets no credit for it.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "known",
@@ -3721,7 +4098,8 @@
            "reads": "eps_cagr_5y",
            "label": "Diluted EPS CAGR, 5-year",
            "unit": "percent",
-           "explain": null
+           "explain": "How fast the profit attributable to each share you own has grown per\nyear over five years. Per-share rather than total, so a company that\ngrew by issuing stock gets no credit for it.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "known",
@@ -3754,7 +4132,8 @@
            "reads": "debt_to_equity",
            "label": "Debt to equity",
            "unit": "ratio",
-           "explain": null
+           "explain": "How much of the company is financed by lenders versus by its owners.\nAt 1.0 there is a dollar of debt for every dollar of shareholder money.",
+           "format": "0.00"
           },
           "observed": {
            "status": "known",
@@ -3787,7 +4166,8 @@
            "reads": "eps_minus_revenue_cagr_spread_5y",
            "label": "Diluted EPS CAGR minus revenue CAGR, 5-year",
            "unit": "percentage_points",
-           "explain": null
+           "explain": "Whether the earnings growth is coming from the business or from\nfinancial engineering. Margin expansion and buybacks are real and\nlegitimate, but a company growing EPS at 30% on 4% revenue growth has\nnearly exhausted both, and there is no third act.",
+           "format": "+0.0 pp"
           },
           "observed": {
            "status": "known",
@@ -3820,7 +4200,8 @@
            "reads": "dividend_adjusted_peg",
            "label": "Dividend-adjusted PEG",
            "unit": "ratio",
-           "explain": null
+           "explain": "The same question as PEG, but counting the dividend as part of what the\ncompany gives you. A company growing 6% and paying a 4% yield is\nreturning 10% a year in total, and this measure prices it that way.",
+           "format": "0.00"
           },
           "observed": {
            "status": "known",
@@ -3853,7 +4234,8 @@
            "reads": "pe_to_own_5y_median_pe",
            "label": "P/E versus its own five-year median P/E",
            "unit": "times_own_median",
-           "explain": null
+           "explain": "Whether the stock is cheap compared to how the market has usually priced\nthis particular company. Absolute multiples mean different things for\ndifferent businesses; this asks a company-specific question instead.",
+           "format": "0.00x"
           },
           "observed": {
            "status": "known",
@@ -3886,7 +4268,8 @@
            "reads": "revenue_cagr_3y",
            "label": "Revenue CAGR, 3-year",
            "unit": "percent",
-           "explain": null
+           "explain": "How fast sales have grown per year over three years. The shorter window\nis the faster-moving signal: it shows whether the top line has\ndecelerated recently, which a five-year window would smooth away. The\ntwo three-year averages it compares do not overlap, so it is still a\nstatement about recent years rather than a slower version of the\nfive-year measure.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "known",
@@ -3919,7 +4302,8 @@
            "reads": "inventory_minus_revenue_growth_yoy",
            "label": "Inventory growth minus revenue growth, year over year",
            "unit": "percentage_points",
-           "explain": null
+           "explain": "Whether product is piling up in the warehouse faster than it's selling.\nThis is one of the oldest and most reliable early warnings that demand\nis softening, and it shows up in the balance sheet a quarter or two\nbefore it shows up in the income statement.",
+           "format": "+0.0 pp"
           },
           "observed": {
            "status": "known",
@@ -3952,7 +4336,8 @@
            "reads": "receivables_minus_revenue_growth_yoy",
            "label": "Receivables growth minus revenue growth, year over year",
            "unit": "percentage_points",
-           "explain": null
+           "explain": "Whether sales are being booked but not collected. Rising receivables\noutpacing sales means either customers are struggling or the company is\npushing product into the channel to make a quarter.",
+           "format": "+0.0 pp"
           },
           "observed": {
            "status": "known",
@@ -3985,7 +4370,8 @@
            "reads": "gross_margin_change_3y",
            "label": "Gross margin change over three years",
            "unit": "percentage_points",
-           "explain": null
+           "explain": "Whether the growth is being bought with discounts. Rapid revenue growth\nwith falling gross margin usually means the company is purchasing market\nshare, and that stops working when the money runs out.",
+           "format": "+0.0 pp"
           },
           "observed": {
            "status": "known",
@@ -4018,7 +4404,8 @@
            "reads": "interest_coverage",
            "label": "Interest coverage",
            "unit": "times",
-           "explain": null
+           "explain": "How many times over the company's operating profit covers its interest\nbill. At 8x, earnings could fall by half and the lenders still get paid\nwithout anyone noticing.",
+           "format": "0.0x"
           },
           "observed": {
            "status": "known",
@@ -4051,7 +4438,8 @@
            "reads": "fcf_ttm",
            "label": "Free cash flow, trailing twelve months",
            "unit": "usd",
-           "explain": null
+           "explain": "The cash left over after running the business and keeping its equipment\ncurrent. Positive means the company funds itself. Negative means it\nneeds someone else's money to keep going.",
+           "format": "$0,0"
           },
           "observed": {
            "status": "known",
@@ -4084,7 +4472,8 @@
            "reads": "net_cash_to_market_cap",
            "label": "Net cash over market capitalization",
            "unit": "ratio",
-           "explain": null
+           "explain": "How much of the price you're paying is already sitting in the bank. It\nlowers the effective multiple on the operating business and it's a\ncushion during a stumble.",
+           "format": "0.00"
           },
           "observed": {
            "status": "known",
@@ -4117,7 +4506,8 @@
            "reads": "insider_net_buying_6m",
            "label": "Insider net buying, trailing six months",
            "unit": "shares",
-           "explain": null
+           "explain": "Whether the people who know the most about the company are putting their\nown money in.",
+           "format": "+0,0 sh"
           },
           "observed": {
            "status": "absent",
@@ -4197,7 +4587,7 @@
            "reads": null,
            "label": "Most this will put into one name",
            "unit": "percent",
-           "explain": "The largest share of your account this strategy will take a single holding up to **by buying more of it**.\n\nIt is a limit on your purchases, not on the position. If a holding multiplies until it is half the account, nothing here tells you to trim it — this strategy has no trim, on purpose, because a position that got large by rising is precisely what the method is trying to produce. What this number does is stop you *adding* past it.\n\nTwenty-five percent is twice the share a first purchase takes, so a company can be added to twice as its story keeps proving out, and it is far short of the forty percent the Buffett strategy in this program will commit to one name. That difference is the point rather than a matter of taste. Buffett's concentration rests on a judgement about a business that is meant to hold for decades; this strategy's holding periods are measured in quarters to a few years and its exits fire on things that can change in one filing, so a position sized for a decade of conviction is sized wrong here.\n\n**Lynch published no such figure and none is claimed for him.** He advised individuals on how many companies to hold and not on how much to put in one. This number is this file's, derived from the slot count above, and it is the one in this strategy with the least behind it.\n\nIt needs your free cash to be answered in settings, because a share of the account cannot be worked out without knowing what the account is. Unanswered, the size rules report that they could not be run."
+           "explain": "The largest share of your account this strategy will take a single holding up to **by buying more of it**.\n\nIt is a limit on your purchases, not on the position. If a holding multiplies until it is half the account, nothing here tells you to trim it — this strategy has no trim, on purpose, because a position that got large by rising is precisely what the method is trying to produce. What this number does is stop you *adding* past it.\n\nTwenty-five percent is twice the share a first purchase takes, so a company can be added to twice as its story keeps proving out, and it is far short of the forty percent the Buffett strategy in this program will commit to one name. That difference is the point rather than a matter of taste. Buffett's concentration rests on a judgement about a business that is meant to hold for decades; this strategy's holding periods are measured in quarters to a few years and its exits fire on things that can change in one filing, so a position sized for a decade of conviction is sized wrong here.\n\n**Lynch published no such figure and none is claimed for him.** He advised individuals on how many companies to hold and not on how much to put in one. This number is this file's, derived from the slot count above, and it is the one in this strategy with the least behind it.\n\nIt needs this journal's cash record to be open, because a share of the account cannot be worked out without knowing what the account is. Until it is, the size rules report that they could not be run."
           },
           "observed": {
            "status": "known",
@@ -4351,23 +4741,24 @@
           "outcome": "pass"
          }
         ],
+        "rests_on": [],
         "note": null
        },
        "produced_by": "strategy",
        "strategy": {
         "id": "lynch",
         "name": "Lynch",
-        "version": 1,
+        "version": 3,
         "values_version": 1,
-        "contract": 6
+        "contract": 8
        }
       },
       "strategy": {
        "id": "lynch",
        "name": "Lynch",
-       "version": 1,
+       "version": 3,
        "values_version": 1,
-       "contract": 6
+       "contract": 8
       },
       "metrics": {
        "earnings_base_share_5y": {
@@ -4537,11 +4928,15 @@
         "revenue_change_yoy"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2024-09-10 could be consulted; 17 hand-entered values on record by 2024-09-10; judged by Lynch v1 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2024-09-10 could be consulted; 17 hand-entered values on record by 2024-09-10; judged by Lynch v3 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": null,
       "valuation": null,
-      "recollection": null
+      "recollection": null,
+      "changes_recorded": {
+       "rules": 0,
+       "measures": 0
+      }
      }
     }
    ],
@@ -4551,144 +4946,240 @@
      "seq": 1,
      "id": "earnings_base_share_5y",
      "value": 46.0,
+     "label": "Earnings at the base of the growth window, as a share of earnings now",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How much the company was earning at the start of the period a growth\nrate is measured over, compared with what it earns at the end of it.\nAt 40% it earned two fifths then of what it earns now; at 2% it was\nearning almost nothing, and what looks like growth is mostly the\ndistance from almost nothing.\n\nThis is published because a compound growth rate cannot tell the two\napart on its own. A company going from 1 to 100 and a company going\nfrom 40 to 100 can carry rates that look alike over enough years, and\nonly one of them describes a business that was already working.\n",
      "recorded": "2024-09-03T12:00:00-04:00"
     },
     {
      "seq": 2,
      "id": "net_margin_base_share_5y",
      "value": 79.0,
+     "label": "Net margin at the base of the growth window, as a share of the margin now",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How profitable each dollar of sales was at the start of the period a\ngrowth rate is measured over, compared with how profitable it is at\nthe end. A business that scaled up keeps roughly the margin it had,\nor improves it a little: going from 8% to 12% over five years reads\nas 67% here and is ordinary operating leverage. A business whose\nmargin came back from nothing — 0.5% to 8% — reads as 6%, and its\nearnings did not grow so much as appear.\n\nIt is a ratio of two ratios, so it says the same thing to a company\nselling ten dollars and one selling ten billion, and a share split\ncannot move it.\n",
      "recorded": "2024-09-03T12:00:00-04:00"
     },
     {
      "seq": 3,
      "id": "peg_trailing",
      "value": 0.79,
+     "label": "PEG ratio, trailing",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "Whether the price you're paying is justified by the speed the company is\ngrowing. Lynch's formulation: the P/E of any fairly priced company will\nequal its growth rate.\n",
      "recorded": "2024-09-03T12:00:00-04:00"
     },
     {
      "seq": 4,
      "id": "eps_cagr_5y",
      "value": 16.0,
+     "label": "Diluted EPS CAGR, 5-year",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How fast the profit attributable to each share you own has grown per\nyear over five years. Per-share rather than total, so a company that\ngrew by issuing stock gets no credit for it.\n",
      "recorded": "2024-09-03T12:00:00-04:00"
     },
     {
      "seq": 5,
      "id": "debt_to_equity",
      "value": 0.24,
+     "label": "Debt to equity",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "How much of the company is financed by lenders versus by its owners.\nAt 1.0 there is a dollar of debt for every dollar of shareholder money.\n",
      "recorded": "2024-09-03T12:00:00-04:00"
     },
     {
      "seq": 6,
      "id": "eps_minus_revenue_cagr_spread_5y",
      "value": 5.0,
+     "label": "Diluted EPS CAGR minus revenue CAGR, 5-year",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether the earnings growth is coming from the business or from\nfinancial engineering. Margin expansion and buybacks are real and\nlegitimate, but a company growing EPS at 30% on 4% revenue growth has\nnearly exhausted both, and there is no third act.\n",
      "recorded": "2024-09-03T12:00:00-04:00"
     },
     {
      "seq": 7,
      "id": "dividend_adjusted_peg",
      "value": 0.78,
+     "label": "Dividend-adjusted PEG",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "The same question as PEG, but counting the dividend as part of what the\ncompany gives you. A company growing 6% and paying a 4% yield is\nreturning 10% a year in total, and this measure prices it that way.\n",
      "recorded": "2024-09-03T12:00:00-04:00"
     },
     {
      "seq": 8,
      "id": "pe_to_own_5y_median_pe",
      "value": 0.88,
+     "label": "P/E versus its own five-year median P/E",
+     "unit": "times_own_median",
+     "format": "0.00x",
+     "plain": "Whether the stock is cheap compared to how the market has usually priced\nthis particular company. Absolute multiples mean different things for\ndifferent businesses; this asks a company-specific question instead.\n",
      "recorded": "2024-09-03T12:00:00-04:00"
     },
     {
      "seq": 9,
      "id": "revenue_cagr_3y",
      "value": 12.0,
+     "label": "Revenue CAGR, 3-year",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How fast sales have grown per year over three years. The shorter window\nis the faster-moving signal: it shows whether the top line has\ndecelerated recently, which a five-year window would smooth away. The\ntwo three-year averages it compares do not overlap, so it is still a\nstatement about recent years rather than a slower version of the\nfive-year measure.\n",
      "recorded": "2024-09-03T12:00:00-04:00"
     },
     {
      "seq": 10,
      "id": "inventory_minus_revenue_growth_yoy",
      "value": 1.2,
+     "label": "Inventory growth minus revenue growth, year over year",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether product is piling up in the warehouse faster than it's selling.\nThis is one of the oldest and most reliable early warnings that demand\nis softening, and it shows up in the balance sheet a quarter or two\nbefore it shows up in the income statement.\n",
      "recorded": "2024-09-03T12:00:00-04:00"
     },
     {
      "seq": 11,
      "id": "receivables_minus_revenue_growth_yoy",
      "value": 2.4,
+     "label": "Receivables growth minus revenue growth, year over year",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether sales are being booked but not collected. Rising receivables\noutpacing sales means either customers are struggling or the company is\npushing product into the channel to make a quarter.\n",
      "recorded": "2024-09-03T12:00:00-04:00"
     },
     {
      "seq": 12,
      "id": "gross_margin_change_3y",
      "value": 0.6,
+     "label": "Gross margin change over three years",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether the growth is being bought with discounts. Rapid revenue growth\nwith falling gross margin usually means the company is purchasing market\nshare, and that stops working when the money runs out.\n",
      "recorded": "2024-09-03T12:00:00-04:00"
     },
     {
      "seq": 13,
      "id": "interest_coverage",
      "value": 17.0,
+     "label": "Interest coverage",
+     "unit": "times",
+     "format": "0.0x",
+     "plain": "How many times over the company's operating profit covers its interest\nbill. At 8x, earnings could fall by half and the lenders still get paid\nwithout anyone noticing.\n",
      "recorded": "2024-09-03T12:00:00-04:00"
     },
     {
      "seq": 14,
      "id": "fcf_ttm",
      "value": 38000000.0,
+     "label": "Free cash flow, trailing twelve months",
+     "unit": "usd",
+     "format": "$0,0",
+     "plain": "The cash left over after running the business and keeping its equipment\ncurrent. Positive means the company funds itself. Negative means it\nneeds someone else's money to keep going.\n",
      "recorded": "2024-09-03T12:00:00-04:00"
     },
     {
      "seq": 15,
      "id": "net_cash_to_market_cap",
      "value": 0.05,
+     "label": "Net cash over market capitalization",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "How much of the price you're paying is already sitting in the bank. It\nlowers the effective multiple on the operating business and it's a\ncushion during a stumble.\n",
      "recorded": "2024-09-03T12:00:00-04:00"
     },
     {
      "seq": 16,
      "id": "eps_change_yoy",
      "value": 17.0,
+     "label": "Diluted EPS change, year over year",
+     "unit": "percent",
+     "format": "+0.0%",
+     "plain": "How much more the company is earning per share than it was a year ago.\nThis is the growth rate as it stands today, not the average of the\nlast several years — it is the number that changes when a company\nstops growing, and it changes about two quarters afterwards rather\nthan several years afterwards.\n",
      "recorded": "2024-09-03T12:00:00-04:00"
     },
     {
      "seq": 17,
      "id": "revenue_change_yoy",
      "value": 12.0,
+     "label": "Revenue change, year over year",
+     "unit": "percent",
+     "format": "+0.0%",
+     "plain": "Whether the company is selling more or less than it was a year ago. This\nis the difference between a business having a bad year and a business\ndisappearing: a 5% decline in a cyclical downturn is one thing, a 20%\ndecline in a structurally challenged industry is another.\n",
      "recorded": "2024-09-03T12:00:00-04:00"
     },
     {
      "seq": 18,
      "id": "peg_trailing",
      "value": 1.45,
+     "label": "PEG ratio, trailing",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "Whether the price you're paying is justified by the speed the company is\ngrowing. Lynch's formulation: the P/E of any fairly priced company will\nequal its growth rate.\n",
      "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 19,
      "id": "eps_cagr_5y",
      "value": 15.0,
+     "label": "Diluted EPS CAGR, 5-year",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How fast the profit attributable to each share you own has grown per\nyear over five years. Per-share rather than total, so a company that\ngrew by issuing stock gets no credit for it.\n",
      "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 20,
      "id": "dividend_adjusted_peg",
      "value": 1.42,
+     "label": "Dividend-adjusted PEG",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "The same question as PEG, but counting the dividend as part of what the\ncompany gives you. A company growing 6% and paying a 4% yield is\nreturning 10% a year in total, and this measure prices it that way.\n",
      "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 21,
      "id": "pe_to_own_5y_median_pe",
      "value": 1.31,
+     "label": "P/E versus its own five-year median P/E",
+     "unit": "times_own_median",
+     "format": "0.00x",
+     "plain": "Whether the stock is cheap compared to how the market has usually priced\nthis particular company. Absolute multiples mean different things for\ndifferent businesses; this asks a company-specific question instead.\n",
      "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 22,
      "id": "revenue_cagr_3y",
      "value": 11.0,
+     "label": "Revenue CAGR, 3-year",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How fast sales have grown per year over three years. The shorter window\nis the faster-moving signal: it shows whether the top line has\ndecelerated recently, which a five-year window would smooth away. The\ntwo three-year averages it compares do not overlap, so it is still a\nstatement about recent years rather than a slower version of the\nfive-year measure.\n",
      "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 23,
      "id": "eps_change_yoy",
      "value": 14.0,
+     "label": "Diluted EPS change, year over year",
+     "unit": "percent",
+     "format": "+0.0%",
+     "plain": "How much more the company is earning per share than it was a year ago.\nThis is the growth rate as it stands today, not the average of the\nlast several years — it is the number that changes when a company\nstops growing, and it changes about two quarters afterwards rather\nthan several years afterwards.\n",
      "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 24,
      "id": "revenue_change_yoy",
      "value": 10.0,
+     "label": "Revenue change, year over year",
+     "unit": "percent",
+     "format": "+0.0%",
+     "plain": "Whether the company is selling more or less than it was a year ago. This\nis the difference between a business having a bad year and a business\ndisappearing: a 5% decline in a cyclical downturn is one thing, a 20%\ndecline in a structurally challenged industry is another.\n",
      "recorded": "2026-08-05T12:00:00-04:00"
     }
    ],
@@ -4702,6 +5193,7 @@
     }
    ],
    "valuations": [],
+   "snapshots": [],
    "notes": [
     {
      "date": "2026-08-05T12:00:00-04:00",
@@ -4717,7 +5209,7 @@
   {
    "ticker": "CASTERTON",
    "name": "Casterton Papers",
-   "added": "2026-08-12",
+   "added": "2026-08-15",
    "price": 33.0,
    "lots": [
     {
@@ -4737,9 +5229,9 @@
       "strategy": {
        "id": "lynch",
        "name": "Lynch",
-       "version": 1,
+       "version": 3,
        "values_version": 1,
-       "contract": 6
+       "contract": 8
       },
       "missing": [
        {
@@ -4811,7 +5303,7 @@
         "label": "Least insider buying it likes to see"
        }
       ],
-      "note": "no company is linked to this ticker, so no stored filing or price from 2023-11-08 could be consulted; judged by Lynch v1 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; this journal was created on 2024-01-02, so it held no answers on 2023-11-08 — free cash, and every figure measured against the account, are absent rather than taken from what you have told it since"
+      "note": "no company is linked to this ticker, so no stored filing or price from 2023-11-08 could be consulted; judged by Lynch v3 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; what this account held in cash on 2023-11-08 is not on record — this journal's cash record opens on 2024-01-02 and has no answer for 2023-11-08 — what the account held before it started being kept is not something the record can say, and carrying the opening balance backwards would state a figure for a day nothing was recorded about — so the account total and every share of it are absent"
      },
      "snapshot": {
       "frozen": "2023-11-08T12:00:00-05:00",
@@ -4822,7 +5314,8 @@
         "id": "cannot-screen",
         "name": "Not enough to go on",
         "description": "Some of the figures this strategy needs are missing, and the ones that are present do not settle it either way. A missing number is not a pass and it is not a failure, so nothing is claimed. The reasons below say which figures are absent and why.\n\nThis is commoner here than you might expect and it is not a fault. The growth rates need eight fiscal years of accounts on one basis, and a company that listed five years ago simply does not have them yet — which is a fact about the record rather than about the company.",
-        "fix": null
+        "fix": null,
+        "consequence": "undecided, not rejected — more data may settle it"
        },
        "payload": {},
        "reason": {
@@ -4836,7 +5329,8 @@
            "reads": "earnings_base_share_5y",
            "label": "Earnings at the base of the growth window, as a share of earnings now",
            "unit": "percent",
-           "explain": null
+           "explain": "How much the company was earning at the start of the period a growth\nrate is measured over, compared with what it earns at the end of it.\nAt 40% it earned two fifths then of what it earns now; at 2% it was\nearning almost nothing, and what looks like growth is mostly the\ndistance from almost nothing.\n\nThis is published because a compound growth rate cannot tell the two\napart on its own. A company going from 1 to 100 and a company going\nfrom 40 to 100 can carry rates that look alike over enough years, and\nonly one of them describes a business that was already working.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "absent",
@@ -4865,7 +5359,8 @@
            "reads": "net_margin_base_share_5y",
            "label": "Net margin at the base of the growth window, as a share of the margin now",
            "unit": "percent",
-           "explain": null
+           "explain": "How profitable each dollar of sales was at the start of the period a\ngrowth rate is measured over, compared with how profitable it is at\nthe end. A business that scaled up keeps roughly the margin it had,\nor improves it a little: going from 8% to 12% over five years reads\nas 67% here and is ordinary operating leverage. A business whose\nmargin came back from nothing — 0.5% to 8% — reads as 6%, and its\nearnings did not grow so much as appear.\n\nIt is a ratio of two ratios, so it says the same thing to a company\nselling ten dollars and one selling ten billion, and a share split\ncannot move it.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "absent",
@@ -4894,7 +5389,8 @@
            "reads": "peg_trailing",
            "label": "PEG ratio, trailing",
            "unit": "ratio",
-           "explain": null
+           "explain": "Whether the price you're paying is justified by the speed the company is\ngrowing. Lynch's formulation: the P/E of any fairly priced company will\nequal its growth rate.",
+           "format": "0.00"
           },
           "observed": {
            "status": "absent",
@@ -4923,7 +5419,8 @@
            "reads": "eps_cagr_5y",
            "label": "Diluted EPS CAGR, 5-year",
            "unit": "percent",
-           "explain": null
+           "explain": "How fast the profit attributable to each share you own has grown per\nyear over five years. Per-share rather than total, so a company that\ngrew by issuing stock gets no credit for it.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "absent",
@@ -4952,7 +5449,8 @@
            "reads": "eps_cagr_5y",
            "label": "Diluted EPS CAGR, 5-year",
            "unit": "percent",
-           "explain": null
+           "explain": "How fast the profit attributable to each share you own has grown per\nyear over five years. Per-share rather than total, so a company that\ngrew by issuing stock gets no credit for it.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "absent",
@@ -4981,7 +5479,8 @@
            "reads": "debt_to_equity",
            "label": "Debt to equity",
            "unit": "ratio",
-           "explain": null
+           "explain": "How much of the company is financed by lenders versus by its owners.\nAt 1.0 there is a dollar of debt for every dollar of shareholder money.",
+           "format": "0.00"
           },
           "observed": {
            "status": "absent",
@@ -5010,7 +5509,8 @@
            "reads": "eps_minus_revenue_cagr_spread_5y",
            "label": "Diluted EPS CAGR minus revenue CAGR, 5-year",
            "unit": "percentage_points",
-           "explain": null
+           "explain": "Whether the earnings growth is coming from the business or from\nfinancial engineering. Margin expansion and buybacks are real and\nlegitimate, but a company growing EPS at 30% on 4% revenue growth has\nnearly exhausted both, and there is no third act.",
+           "format": "+0.0 pp"
           },
           "observed": {
            "status": "absent",
@@ -5039,7 +5539,8 @@
            "reads": "dividend_adjusted_peg",
            "label": "Dividend-adjusted PEG",
            "unit": "ratio",
-           "explain": null
+           "explain": "The same question as PEG, but counting the dividend as part of what the\ncompany gives you. A company growing 6% and paying a 4% yield is\nreturning 10% a year in total, and this measure prices it that way.",
+           "format": "0.00"
           },
           "observed": {
            "status": "absent",
@@ -5068,7 +5569,8 @@
            "reads": "pe_to_own_5y_median_pe",
            "label": "P/E versus its own five-year median P/E",
            "unit": "times_own_median",
-           "explain": null
+           "explain": "Whether the stock is cheap compared to how the market has usually priced\nthis particular company. Absolute multiples mean different things for\ndifferent businesses; this asks a company-specific question instead.",
+           "format": "0.00x"
           },
           "observed": {
            "status": "absent",
@@ -5097,7 +5599,8 @@
            "reads": "revenue_cagr_3y",
            "label": "Revenue CAGR, 3-year",
            "unit": "percent",
-           "explain": null
+           "explain": "How fast sales have grown per year over three years. The shorter window\nis the faster-moving signal: it shows whether the top line has\ndecelerated recently, which a five-year window would smooth away. The\ntwo three-year averages it compares do not overlap, so it is still a\nstatement about recent years rather than a slower version of the\nfive-year measure.",
+           "format": "0.0%"
           },
           "observed": {
            "status": "absent",
@@ -5126,7 +5629,8 @@
            "reads": "inventory_minus_revenue_growth_yoy",
            "label": "Inventory growth minus revenue growth, year over year",
            "unit": "percentage_points",
-           "explain": null
+           "explain": "Whether product is piling up in the warehouse faster than it's selling.\nThis is one of the oldest and most reliable early warnings that demand\nis softening, and it shows up in the balance sheet a quarter or two\nbefore it shows up in the income statement.",
+           "format": "+0.0 pp"
           },
           "observed": {
            "status": "absent",
@@ -5155,7 +5659,8 @@
            "reads": "receivables_minus_revenue_growth_yoy",
            "label": "Receivables growth minus revenue growth, year over year",
            "unit": "percentage_points",
-           "explain": null
+           "explain": "Whether sales are being booked but not collected. Rising receivables\noutpacing sales means either customers are struggling or the company is\npushing product into the channel to make a quarter.",
+           "format": "+0.0 pp"
           },
           "observed": {
            "status": "absent",
@@ -5184,7 +5689,8 @@
            "reads": "gross_margin_change_3y",
            "label": "Gross margin change over three years",
            "unit": "percentage_points",
-           "explain": null
+           "explain": "Whether the growth is being bought with discounts. Rapid revenue growth\nwith falling gross margin usually means the company is purchasing market\nshare, and that stops working when the money runs out.",
+           "format": "+0.0 pp"
           },
           "observed": {
            "status": "absent",
@@ -5213,7 +5719,8 @@
            "reads": "interest_coverage",
            "label": "Interest coverage",
            "unit": "times",
-           "explain": null
+           "explain": "How many times over the company's operating profit covers its interest\nbill. At 8x, earnings could fall by half and the lenders still get paid\nwithout anyone noticing.",
+           "format": "0.0x"
           },
           "observed": {
            "status": "absent",
@@ -5242,7 +5749,8 @@
            "reads": "fcf_ttm",
            "label": "Free cash flow, trailing twelve months",
            "unit": "usd",
-           "explain": null
+           "explain": "The cash left over after running the business and keeping its equipment\ncurrent. Positive means the company funds itself. Negative means it\nneeds someone else's money to keep going.",
+           "format": "$0,0"
           },
           "observed": {
            "status": "absent",
@@ -5271,7 +5779,8 @@
            "reads": "net_cash_to_market_cap",
            "label": "Net cash over market capitalization",
            "unit": "ratio",
-           "explain": null
+           "explain": "How much of the price you're paying is already sitting in the bank. It\nlowers the effective multiple on the operating business and it's a\ncushion during a stumble.",
+           "format": "0.00"
           },
           "observed": {
            "status": "absent",
@@ -5300,7 +5809,8 @@
            "reads": "insider_net_buying_6m",
            "label": "Insider net buying, trailing six months",
            "unit": "shares",
-           "explain": null
+           "explain": "Whether the people who know the most about the company are putting their\nown money in.",
+           "format": "+0,0 sh"
           },
           "observed": {
            "status": "absent",
@@ -5431,23 +5941,24 @@
           "outcome": "noted"
          }
         ],
+        "rests_on": [],
         "note": null
        },
        "produced_by": "strategy",
        "strategy": {
         "id": "lynch",
         "name": "Lynch",
-        "version": 1,
+        "version": 3,
         "values_version": 1,
-        "contract": 6
+        "contract": 8
        }
       },
       "strategy": {
        "id": "lynch",
        "name": "Lynch",
-       "version": 1,
+       "version": 3,
        "values_version": 1,
-       "contract": 6
+       "contract": 8
       },
       "metrics": {},
       "price": null,
@@ -5462,13 +5973,17 @@
        "priced": null,
        "manual_on_record": [],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2023-11-08 could be consulted; judged by Lynch v1 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; this journal was created on 2024-01-02, so it held no answers on 2023-11-08 — free cash, and every figure measured against the account, are absent rather than taken from what you have told it since"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2023-11-08 could be consulted; judged by Lynch v3 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; what this account held in cash on 2023-11-08 is not on record — this journal's cash record opens on 2024-01-02 and has no answer for 2023-11-08 — what the account held before it started being kept is not something the record can say, and carrying the opening balance backwards would state a figure for a day nothing was recorded about — so the account total and every share of it are absent"
       },
       "thesis": null,
       "valuation": null,
       "recollection": {
        "text": "No figures on record for this. What I remember is buying it because the speciality paper line had two customers who could not qualify anyone else inside a year.",
        "written": "2023-11-08T12:00:00-05:00"
+      },
+      "changes_recorded": {
+       "rules": 0,
+       "measures": 0
       }
      }
     }
@@ -5477,6 +5992,7 @@
    "hand_entered": [],
    "thesis": [],
    "valuations": [],
+   "snapshots": [],
    "notes": [
     {
      "date": "2026-08-03T12:00:00-04:00",
@@ -5492,7 +6008,7 @@
   {
    "ticker": "BRINDLE",
    "name": "Brindle Water Systems",
-   "added": "2026-08-12",
+   "added": "2026-08-15",
    "price": 39.5,
    "lots": [],
    "judgements": [],
@@ -5501,113 +6017,186 @@
      "seq": 1,
      "id": "earnings_base_share_5y",
      "value": 46.0,
+     "label": "Earnings at the base of the growth window, as a share of earnings now",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How much the company was earning at the start of the period a growth\nrate is measured over, compared with what it earns at the end of it.\nAt 40% it earned two fifths then of what it earns now; at 2% it was\nearning almost nothing, and what looks like growth is mostly the\ndistance from almost nothing.\n\nThis is published because a compound growth rate cannot tell the two\napart on its own. A company going from 1 to 100 and a company going\nfrom 40 to 100 can carry rates that look alike over enough years, and\nonly one of them describes a business that was already working.\n",
      "recorded": "2026-08-10T12:00:00-04:00"
     },
     {
      "seq": 2,
      "id": "net_margin_base_share_5y",
      "value": 79.0,
+     "label": "Net margin at the base of the growth window, as a share of the margin now",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How profitable each dollar of sales was at the start of the period a\ngrowth rate is measured over, compared with how profitable it is at\nthe end. A business that scaled up keeps roughly the margin it had,\nor improves it a little: going from 8% to 12% over five years reads\nas 67% here and is ordinary operating leverage. A business whose\nmargin came back from nothing — 0.5% to 8% — reads as 6%, and its\nearnings did not grow so much as appear.\n\nIt is a ratio of two ratios, so it says the same thing to a company\nselling ten dollars and one selling ten billion, and a share split\ncannot move it.\n",
      "recorded": "2026-08-10T12:00:00-04:00"
     },
     {
      "seq": 3,
      "id": "peg_trailing",
      "value": 0.79,
+     "label": "PEG ratio, trailing",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "Whether the price you're paying is justified by the speed the company is\ngrowing. Lynch's formulation: the P/E of any fairly priced company will\nequal its growth rate.\n",
      "recorded": "2026-08-10T12:00:00-04:00"
     },
     {
      "seq": 4,
      "id": "eps_cagr_5y",
      "value": 21.0,
+     "label": "Diluted EPS CAGR, 5-year",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How fast the profit attributable to each share you own has grown per\nyear over five years. Per-share rather than total, so a company that\ngrew by issuing stock gets no credit for it.\n",
      "recorded": "2026-08-10T12:00:00-04:00"
     },
     {
      "seq": 5,
      "id": "debt_to_equity",
      "value": 0.24,
+     "label": "Debt to equity",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "How much of the company is financed by lenders versus by its owners.\nAt 1.0 there is a dollar of debt for every dollar of shareholder money.\n",
      "recorded": "2026-08-10T12:00:00-04:00"
     },
     {
      "seq": 6,
      "id": "eps_minus_revenue_cagr_spread_5y",
      "value": 5.0,
+     "label": "Diluted EPS CAGR minus revenue CAGR, 5-year",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether the earnings growth is coming from the business or from\nfinancial engineering. Margin expansion and buybacks are real and\nlegitimate, but a company growing EPS at 30% on 4% revenue growth has\nnearly exhausted both, and there is no third act.\n",
      "recorded": "2026-08-10T12:00:00-04:00"
     },
     {
      "seq": 7,
      "id": "dividend_adjusted_peg",
      "value": 0.79,
+     "label": "Dividend-adjusted PEG",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "The same question as PEG, but counting the dividend as part of what the\ncompany gives you. A company growing 6% and paying a 4% yield is\nreturning 10% a year in total, and this measure prices it that way.\n",
      "recorded": "2026-08-10T12:00:00-04:00"
     },
     {
      "seq": 8,
      "id": "pe_to_own_5y_median_pe",
      "value": 0.88,
+     "label": "P/E versus its own five-year median P/E",
+     "unit": "times_own_median",
+     "format": "0.00x",
+     "plain": "Whether the stock is cheap compared to how the market has usually priced\nthis particular company. Absolute multiples mean different things for\ndifferent businesses; this asks a company-specific question instead.\n",
      "recorded": "2026-08-10T12:00:00-04:00"
     },
     {
      "seq": 9,
      "id": "revenue_cagr_3y",
      "value": 16.0,
+     "label": "Revenue CAGR, 3-year",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How fast sales have grown per year over three years. The shorter window\nis the faster-moving signal: it shows whether the top line has\ndecelerated recently, which a five-year window would smooth away. The\ntwo three-year averages it compares do not overlap, so it is still a\nstatement about recent years rather than a slower version of the\nfive-year measure.\n",
      "recorded": "2026-08-10T12:00:00-04:00"
     },
     {
      "seq": 10,
      "id": "inventory_minus_revenue_growth_yoy",
      "value": 1.2,
+     "label": "Inventory growth minus revenue growth, year over year",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether product is piling up in the warehouse faster than it's selling.\nThis is one of the oldest and most reliable early warnings that demand\nis softening, and it shows up in the balance sheet a quarter or two\nbefore it shows up in the income statement.\n",
      "recorded": "2026-08-10T12:00:00-04:00"
     },
     {
      "seq": 11,
      "id": "receivables_minus_revenue_growth_yoy",
      "value": 2.4,
+     "label": "Receivables growth minus revenue growth, year over year",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether sales are being booked but not collected. Rising receivables\noutpacing sales means either customers are struggling or the company is\npushing product into the channel to make a quarter.\n",
      "recorded": "2026-08-10T12:00:00-04:00"
     },
     {
      "seq": 12,
      "id": "gross_margin_change_3y",
      "value": 0.6,
+     "label": "Gross margin change over three years",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether the growth is being bought with discounts. Rapid revenue growth\nwith falling gross margin usually means the company is purchasing market\nshare, and that stops working when the money runs out.\n",
      "recorded": "2026-08-10T12:00:00-04:00"
     },
     {
      "seq": 13,
      "id": "interest_coverage",
      "value": 17.0,
+     "label": "Interest coverage",
+     "unit": "times",
+     "format": "0.0x",
+     "plain": "How many times over the company's operating profit covers its interest\nbill. At 8x, earnings could fall by half and the lenders still get paid\nwithout anyone noticing.\n",
      "recorded": "2026-08-10T12:00:00-04:00"
     },
     {
      "seq": 14,
      "id": "fcf_ttm",
      "value": 38000000.0,
+     "label": "Free cash flow, trailing twelve months",
+     "unit": "usd",
+     "format": "$0,0",
+     "plain": "The cash left over after running the business and keeping its equipment\ncurrent. Positive means the company funds itself. Negative means it\nneeds someone else's money to keep going.\n",
      "recorded": "2026-08-10T12:00:00-04:00"
     },
     {
      "seq": 15,
      "id": "net_cash_to_market_cap",
      "value": 0.05,
+     "label": "Net cash over market capitalization",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "How much of the price you're paying is already sitting in the bank. It\nlowers the effective multiple on the operating business and it's a\ncushion during a stumble.\n",
      "recorded": "2026-08-10T12:00:00-04:00"
     },
     {
      "seq": 16,
      "id": "eps_change_yoy",
      "value": 20.0,
+     "label": "Diluted EPS change, year over year",
+     "unit": "percent",
+     "format": "+0.0%",
+     "plain": "How much more the company is earning per share than it was a year ago.\nThis is the growth rate as it stands today, not the average of the\nlast several years — it is the number that changes when a company\nstops growing, and it changes about two quarters afterwards rather\nthan several years afterwards.\n",
      "recorded": "2026-08-10T12:00:00-04:00"
     },
     {
      "seq": 17,
      "id": "revenue_change_yoy",
      "value": 15.0,
+     "label": "Revenue change, year over year",
+     "unit": "percent",
+     "format": "+0.0%",
+     "plain": "Whether the company is selling more or less than it was a year ago. This\nis the difference between a business having a bad year and a business\ndisappearing: a 5% decline in a cyclical downturn is one thing, a 20%\ndecline in a structurally challenged industry is another.\n",
      "recorded": "2026-08-10T12:00:00-04:00"
     },
     {
      "seq": 18,
      "id": "insider_net_buying_6m",
      "value": 42000.0,
+     "label": "Insider net buying, trailing six months",
+     "unit": "shares",
+     "format": "+0,0 sh",
+     "plain": "Whether the people who know the most about the company are putting their\nown money in.\n",
      "recorded": "2026-08-10T12:00:00-04:00"
     }
    ],
    "thesis": [],
    "valuations": [],
+   "snapshots": [],
    "notes": [
     {
      "date": "2026-08-10T12:00:00-04:00",
@@ -5618,7 +6207,7 @@
   {
    "ticker": "ALDBURY",
    "name": "Aldbury Household",
-   "added": "2026-08-12",
+   "added": "2026-08-15",
    "price": 61.2,
    "lots": [],
    "judgements": [],
@@ -5627,107 +6216,176 @@
      "seq": 1,
      "id": "earnings_base_share_5y",
      "value": 61.0,
+     "label": "Earnings at the base of the growth window, as a share of earnings now",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How much the company was earning at the start of the period a growth\nrate is measured over, compared with what it earns at the end of it.\nAt 40% it earned two fifths then of what it earns now; at 2% it was\nearning almost nothing, and what looks like growth is mostly the\ndistance from almost nothing.\n\nThis is published because a compound growth rate cannot tell the two\napart on its own. A company going from 1 to 100 and a company going\nfrom 40 to 100 can carry rates that look alike over enough years, and\nonly one of them describes a business that was already working.\n",
      "recorded": "2026-08-09T12:00:00-04:00"
     },
     {
      "seq": 2,
      "id": "net_margin_base_share_5y",
      "value": 88.0,
+     "label": "Net margin at the base of the growth window, as a share of the margin now",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How profitable each dollar of sales was at the start of the period a\ngrowth rate is measured over, compared with how profitable it is at\nthe end. A business that scaled up keeps roughly the margin it had,\nor improves it a little: going from 8% to 12% over five years reads\nas 67% here and is ordinary operating leverage. A business whose\nmargin came back from nothing — 0.5% to 8% — reads as 6%, and its\nearnings did not grow so much as appear.\n\nIt is a ratio of two ratios, so it says the same thing to a company\nselling ten dollars and one selling ten billion, and a share split\ncannot move it.\n",
      "recorded": "2026-08-09T12:00:00-04:00"
     },
     {
      "seq": 3,
      "id": "peg_trailing",
      "value": 0.95,
+     "label": "PEG ratio, trailing",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "Whether the price you're paying is justified by the speed the company is\ngrowing. Lynch's formulation: the P/E of any fairly priced company will\nequal its growth rate.\n",
      "recorded": "2026-08-09T12:00:00-04:00"
     },
     {
      "seq": 4,
      "id": "eps_cagr_5y",
      "value": 11.0,
+     "label": "Diluted EPS CAGR, 5-year",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How fast the profit attributable to each share you own has grown per\nyear over five years. Per-share rather than total, so a company that\ngrew by issuing stock gets no credit for it.\n",
      "recorded": "2026-08-09T12:00:00-04:00"
     },
     {
      "seq": 5,
      "id": "debt_to_equity",
      "value": 0.24,
+     "label": "Debt to equity",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "How much of the company is financed by lenders versus by its owners.\nAt 1.0 there is a dollar of debt for every dollar of shareholder money.\n",
      "recorded": "2026-08-09T12:00:00-04:00"
     },
     {
      "seq": 6,
      "id": "eps_minus_revenue_cagr_spread_5y",
      "value": 4.5,
+     "label": "Diluted EPS CAGR minus revenue CAGR, 5-year",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether the earnings growth is coming from the business or from\nfinancial engineering. Margin expansion and buybacks are real and\nlegitimate, but a company growing EPS at 30% on 4% revenue growth has\nnearly exhausted both, and there is no third act.\n",
      "recorded": "2026-08-09T12:00:00-04:00"
     },
     {
      "seq": 7,
      "id": "dividend_adjusted_peg",
      "value": 0.72,
+     "label": "Dividend-adjusted PEG",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "The same question as PEG, but counting the dividend as part of what the\ncompany gives you. A company growing 6% and paying a 4% yield is\nreturning 10% a year in total, and this measure prices it that way.\n",
      "recorded": "2026-08-09T12:00:00-04:00"
     },
     {
      "seq": 8,
      "id": "pe_to_own_5y_median_pe",
      "value": 1.18,
+     "label": "P/E versus its own five-year median P/E",
+     "unit": "times_own_median",
+     "format": "0.00x",
+     "plain": "Whether the stock is cheap compared to how the market has usually priced\nthis particular company. Absolute multiples mean different things for\ndifferent businesses; this asks a company-specific question instead.\n",
      "recorded": "2026-08-09T12:00:00-04:00"
     },
     {
      "seq": 9,
      "id": "revenue_cagr_3y",
      "value": 6.5,
+     "label": "Revenue CAGR, 3-year",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How fast sales have grown per year over three years. The shorter window\nis the faster-moving signal: it shows whether the top line has\ndecelerated recently, which a five-year window would smooth away. The\ntwo three-year averages it compares do not overlap, so it is still a\nstatement about recent years rather than a slower version of the\nfive-year measure.\n",
      "recorded": "2026-08-09T12:00:00-04:00"
     },
     {
      "seq": 10,
      "id": "inventory_minus_revenue_growth_yoy",
      "value": 1.2,
+     "label": "Inventory growth minus revenue growth, year over year",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether product is piling up in the warehouse faster than it's selling.\nThis is one of the oldest and most reliable early warnings that demand\nis softening, and it shows up in the balance sheet a quarter or two\nbefore it shows up in the income statement.\n",
      "recorded": "2026-08-09T12:00:00-04:00"
     },
     {
      "seq": 11,
      "id": "receivables_minus_revenue_growth_yoy",
      "value": 2.4,
+     "label": "Receivables growth minus revenue growth, year over year",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether sales are being booked but not collected. Rising receivables\noutpacing sales means either customers are struggling or the company is\npushing product into the channel to make a quarter.\n",
      "recorded": "2026-08-09T12:00:00-04:00"
     },
     {
      "seq": 12,
      "id": "gross_margin_change_3y",
      "value": 0.6,
+     "label": "Gross margin change over three years",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether the growth is being bought with discounts. Rapid revenue growth\nwith falling gross margin usually means the company is purchasing market\nshare, and that stops working when the money runs out.\n",
      "recorded": "2026-08-09T12:00:00-04:00"
     },
     {
      "seq": 13,
      "id": "interest_coverage",
      "value": 17.0,
+     "label": "Interest coverage",
+     "unit": "times",
+     "format": "0.0x",
+     "plain": "How many times over the company's operating profit covers its interest\nbill. At 8x, earnings could fall by half and the lenders still get paid\nwithout anyone noticing.\n",
      "recorded": "2026-08-09T12:00:00-04:00"
     },
     {
      "seq": 14,
      "id": "fcf_ttm",
      "value": 38000000.0,
+     "label": "Free cash flow, trailing twelve months",
+     "unit": "usd",
+     "format": "$0,0",
+     "plain": "The cash left over after running the business and keeping its equipment\ncurrent. Positive means the company funds itself. Negative means it\nneeds someone else's money to keep going.\n",
      "recorded": "2026-08-09T12:00:00-04:00"
     },
     {
      "seq": 15,
      "id": "net_cash_to_market_cap",
      "value": -0.09,
+     "label": "Net cash over market capitalization",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "How much of the price you're paying is already sitting in the bank. It\nlowers the effective multiple on the operating business and it's a\ncushion during a stumble.\n",
      "recorded": "2026-08-09T12:00:00-04:00"
     },
     {
      "seq": 16,
      "id": "eps_change_yoy",
      "value": 10.0,
+     "label": "Diluted EPS change, year over year",
+     "unit": "percent",
+     "format": "+0.0%",
+     "plain": "How much more the company is earning per share than it was a year ago.\nThis is the growth rate as it stands today, not the average of the\nlast several years — it is the number that changes when a company\nstops growing, and it changes about two quarters afterwards rather\nthan several years afterwards.\n",
      "recorded": "2026-08-09T12:00:00-04:00"
     },
     {
      "seq": 17,
      "id": "revenue_change_yoy",
      "value": 6.0,
+     "label": "Revenue change, year over year",
+     "unit": "percent",
+     "format": "+0.0%",
+     "plain": "Whether the company is selling more or less than it was a year ago. This\nis the difference between a business having a bad year and a business\ndisappearing: a 5% decline in a cyclical downturn is one thing, a 20%\ndecline in a structurally challenged industry is another.\n",
      "recorded": "2026-08-09T12:00:00-04:00"
     }
    ],
    "thesis": [],
    "valuations": [],
+   "snapshots": [],
    "notes": [
     {
      "date": "2026-08-09T12:00:00-04:00",
@@ -5742,7 +6400,7 @@
   {
    "ticker": "KETTLEBY",
    "name": "Kettleby Foundries",
-   "added": "2026-08-12",
+   "added": "2026-08-15",
    "price": 12.8,
    "lots": [],
    "judgements": [],
@@ -5751,83 +6409,136 @@
      "seq": 1,
      "id": "earnings_base_share_5y",
      "value": 2.6,
+     "label": "Earnings at the base of the growth window, as a share of earnings now",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How much the company was earning at the start of the period a growth\nrate is measured over, compared with what it earns at the end of it.\nAt 40% it earned two fifths then of what it earns now; at 2% it was\nearning almost nothing, and what looks like growth is mostly the\ndistance from almost nothing.\n\nThis is published because a compound growth rate cannot tell the two\napart on its own. A company going from 1 to 100 and a company going\nfrom 40 to 100 can carry rates that look alike over enough years, and\nonly one of them describes a business that was already working.\n",
      "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 2,
      "id": "net_margin_base_share_5y",
      "value": 4.9,
+     "label": "Net margin at the base of the growth window, as a share of the margin now",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How profitable each dollar of sales was at the start of the period a\ngrowth rate is measured over, compared with how profitable it is at\nthe end. A business that scaled up keeps roughly the margin it had,\nor improves it a little: going from 8% to 12% over five years reads\nas 67% here and is ordinary operating leverage. A business whose\nmargin came back from nothing — 0.5% to 8% — reads as 6%, and its\nearnings did not grow so much as appear.\n\nIt is a ratio of two ratios, so it says the same thing to a company\nselling ten dollars and one selling ten billion, and a share split\ncannot move it.\n",
      "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 3,
      "id": "debt_to_equity",
      "value": 0.44,
+     "label": "Debt to equity",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "How much of the company is financed by lenders versus by its owners.\nAt 1.0 there is a dollar of debt for every dollar of shareholder money.\n",
      "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 4,
      "id": "revenue_cagr_3y",
      "value": 5.5,
+     "label": "Revenue CAGR, 3-year",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How fast sales have grown per year over three years. The shorter window\nis the faster-moving signal: it shows whether the top line has\ndecelerated recently, which a five-year window would smooth away. The\ntwo three-year averages it compares do not overlap, so it is still a\nstatement about recent years rather than a slower version of the\nfive-year measure.\n",
      "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 5,
      "id": "interest_coverage",
      "value": 6.2,
+     "label": "Interest coverage",
+     "unit": "times",
+     "format": "0.0x",
+     "plain": "How many times over the company's operating profit covers its interest\nbill. At 8x, earnings could fall by half and the lenders still get paid\nwithout anyone noticing.\n",
      "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 6,
      "id": "fcf_ttm",
      "value": 4100000.0,
+     "label": "Free cash flow, trailing twelve months",
+     "unit": "usd",
+     "format": "$0,0",
+     "plain": "The cash left over after running the business and keeping its equipment\ncurrent. Positive means the company funds itself. Negative means it\nneeds someone else's money to keep going.\n",
      "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 7,
      "id": "inventory_minus_revenue_growth_yoy",
      "value": 3.0,
+     "label": "Inventory growth minus revenue growth, year over year",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether product is piling up in the warehouse faster than it's selling.\nThis is one of the oldest and most reliable early warnings that demand\nis softening, and it shows up in the balance sheet a quarter or two\nbefore it shows up in the income statement.\n",
      "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 8,
      "id": "receivables_minus_revenue_growth_yoy",
      "value": 1.8,
+     "label": "Receivables growth minus revenue growth, year over year",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether sales are being booked but not collected. Rising receivables\noutpacing sales means either customers are struggling or the company is\npushing product into the channel to make a quarter.\n",
      "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 9,
      "id": "gross_margin_change_3y",
      "value": 7.4,
+     "label": "Gross margin change over three years",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether the growth is being bought with discounts. Rapid revenue growth\nwith falling gross margin usually means the company is purchasing market\nshare, and that stops working when the money runs out.\n",
      "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 10,
      "id": "pe_to_own_5y_median_pe",
      "value": 0.71,
+     "label": "P/E versus its own five-year median P/E",
+     "unit": "times_own_median",
+     "format": "0.00x",
+     "plain": "Whether the stock is cheap compared to how the market has usually priced\nthis particular company. Absolute multiples mean different things for\ndifferent businesses; this asks a company-specific question instead.\n",
      "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 11,
      "id": "net_cash_to_market_cap",
      "value": -0.22,
+     "label": "Net cash over market capitalization",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "How much of the price you're paying is already sitting in the bank. It\nlowers the effective multiple on the operating business and it's a\ncushion during a stumble.\n",
      "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 12,
      "id": "eps_change_yoy",
      "value": 96.0,
+     "label": "Diluted EPS change, year over year",
+     "unit": "percent",
+     "format": "+0.0%",
+     "plain": "How much more the company is earning per share than it was a year ago.\nThis is the growth rate as it stands today, not the average of the\nlast several years — it is the number that changes when a company\nstops growing, and it changes about two quarters afterwards rather\nthan several years afterwards.\n",
      "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 13,
      "id": "revenue_change_yoy",
      "value": 6.0,
+     "label": "Revenue change, year over year",
+     "unit": "percent",
+     "format": "+0.0%",
+     "plain": "Whether the company is selling more or less than it was a year ago. This\nis the difference between a business having a bad year and a business\ndisappearing: a 5% decline in a cyclical downturn is one thing, a 20%\ndecline in a structurally challenged industry is another.\n",
      "recorded": "2026-08-08T12:00:00-04:00"
     }
    ],
    "thesis": [],
    "valuations": [],
+   "snapshots": [],
    "notes": [
     {
      "date": "2026-08-08T12:00:00-04:00",
@@ -5842,7 +6553,7 @@
   {
    "ticker": "MOSSGIEL",
    "name": "Mossgiel Robotics",
-   "added": "2026-08-12",
+   "added": "2026-08-15",
    "price": 88.4,
    "lots": [],
    "judgements": [],
@@ -5851,107 +6562,176 @@
      "seq": 1,
      "id": "earnings_base_share_5y",
      "value": 46.0,
+     "label": "Earnings at the base of the growth window, as a share of earnings now",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How much the company was earning at the start of the period a growth\nrate is measured over, compared with what it earns at the end of it.\nAt 40% it earned two fifths then of what it earns now; at 2% it was\nearning almost nothing, and what looks like growth is mostly the\ndistance from almost nothing.\n\nThis is published because a compound growth rate cannot tell the two\napart on its own. A company going from 1 to 100 and a company going\nfrom 40 to 100 can carry rates that look alike over enough years, and\nonly one of them describes a business that was already working.\n",
      "recorded": "2026-08-11T12:00:00-04:00"
     },
     {
      "seq": 2,
      "id": "net_margin_base_share_5y",
      "value": 79.0,
+     "label": "Net margin at the base of the growth window, as a share of the margin now",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How profitable each dollar of sales was at the start of the period a\ngrowth rate is measured over, compared with how profitable it is at\nthe end. A business that scaled up keeps roughly the margin it had,\nor improves it a little: going from 8% to 12% over five years reads\nas 67% here and is ordinary operating leverage. A business whose\nmargin came back from nothing — 0.5% to 8% — reads as 6%, and its\nearnings did not grow so much as appear.\n\nIt is a ratio of two ratios, so it says the same thing to a company\nselling ten dollars and one selling ten billion, and a share split\ncannot move it.\n",
      "recorded": "2026-08-11T12:00:00-04:00"
     },
     {
      "seq": 3,
      "id": "peg_trailing",
      "value": 1.55,
+     "label": "PEG ratio, trailing",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "Whether the price you're paying is justified by the speed the company is\ngrowing. Lynch's formulation: the P/E of any fairly priced company will\nequal its growth rate.\n",
      "recorded": "2026-08-11T12:00:00-04:00"
     },
     {
      "seq": 4,
      "id": "eps_cagr_5y",
      "value": 27.0,
+     "label": "Diluted EPS CAGR, 5-year",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How fast the profit attributable to each share you own has grown per\nyear over five years. Per-share rather than total, so a company that\ngrew by issuing stock gets no credit for it.\n",
      "recorded": "2026-08-11T12:00:00-04:00"
     },
     {
      "seq": 5,
      "id": "debt_to_equity",
      "value": 0.24,
+     "label": "Debt to equity",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "How much of the company is financed by lenders versus by its owners.\nAt 1.0 there is a dollar of debt for every dollar of shareholder money.\n",
      "recorded": "2026-08-11T12:00:00-04:00"
     },
     {
      "seq": 6,
      "id": "eps_minus_revenue_cagr_spread_5y",
      "value": 5.0,
+     "label": "Diluted EPS CAGR minus revenue CAGR, 5-year",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether the earnings growth is coming from the business or from\nfinancial engineering. Margin expansion and buybacks are real and\nlegitimate, but a company growing EPS at 30% on 4% revenue growth has\nnearly exhausted both, and there is no third act.\n",
      "recorded": "2026-08-11T12:00:00-04:00"
     },
     {
      "seq": 7,
      "id": "dividend_adjusted_peg",
      "value": 1.55,
+     "label": "Dividend-adjusted PEG",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "The same question as PEG, but counting the dividend as part of what the\ncompany gives you. A company growing 6% and paying a 4% yield is\nreturning 10% a year in total, and this measure prices it that way.\n",
      "recorded": "2026-08-11T12:00:00-04:00"
     },
     {
      "seq": 8,
      "id": "pe_to_own_5y_median_pe",
      "value": 1.42,
+     "label": "P/E versus its own five-year median P/E",
+     "unit": "times_own_median",
+     "format": "0.00x",
+     "plain": "Whether the stock is cheap compared to how the market has usually priced\nthis particular company. Absolute multiples mean different things for\ndifferent businesses; this asks a company-specific question instead.\n",
      "recorded": "2026-08-11T12:00:00-04:00"
     },
     {
      "seq": 9,
      "id": "revenue_cagr_3y",
      "value": 22.0,
+     "label": "Revenue CAGR, 3-year",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How fast sales have grown per year over three years. The shorter window\nis the faster-moving signal: it shows whether the top line has\ndecelerated recently, which a five-year window would smooth away. The\ntwo three-year averages it compares do not overlap, so it is still a\nstatement about recent years rather than a slower version of the\nfive-year measure.\n",
      "recorded": "2026-08-11T12:00:00-04:00"
     },
     {
      "seq": 10,
      "id": "inventory_minus_revenue_growth_yoy",
      "value": 1.2,
+     "label": "Inventory growth minus revenue growth, year over year",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether product is piling up in the warehouse faster than it's selling.\nThis is one of the oldest and most reliable early warnings that demand\nis softening, and it shows up in the balance sheet a quarter or two\nbefore it shows up in the income statement.\n",
      "recorded": "2026-08-11T12:00:00-04:00"
     },
     {
      "seq": 11,
      "id": "receivables_minus_revenue_growth_yoy",
      "value": 2.4,
+     "label": "Receivables growth minus revenue growth, year over year",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether sales are being booked but not collected. Rising receivables\noutpacing sales means either customers are struggling or the company is\npushing product into the channel to make a quarter.\n",
      "recorded": "2026-08-11T12:00:00-04:00"
     },
     {
      "seq": 12,
      "id": "gross_margin_change_3y",
      "value": 0.6,
+     "label": "Gross margin change over three years",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether the growth is being bought with discounts. Rapid revenue growth\nwith falling gross margin usually means the company is purchasing market\nshare, and that stops working when the money runs out.\n",
      "recorded": "2026-08-11T12:00:00-04:00"
     },
     {
      "seq": 13,
      "id": "interest_coverage",
      "value": 17.0,
+     "label": "Interest coverage",
+     "unit": "times",
+     "format": "0.0x",
+     "plain": "How many times over the company's operating profit covers its interest\nbill. At 8x, earnings could fall by half and the lenders still get paid\nwithout anyone noticing.\n",
      "recorded": "2026-08-11T12:00:00-04:00"
     },
     {
      "seq": 14,
      "id": "fcf_ttm",
      "value": 38000000.0,
+     "label": "Free cash flow, trailing twelve months",
+     "unit": "usd",
+     "format": "$0,0",
+     "plain": "The cash left over after running the business and keeping its equipment\ncurrent. Positive means the company funds itself. Negative means it\nneeds someone else's money to keep going.\n",
      "recorded": "2026-08-11T12:00:00-04:00"
     },
     {
      "seq": 15,
      "id": "net_cash_to_market_cap",
      "value": 0.05,
+     "label": "Net cash over market capitalization",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "How much of the price you're paying is already sitting in the bank. It\nlowers the effective multiple on the operating business and it's a\ncushion during a stumble.\n",
      "recorded": "2026-08-11T12:00:00-04:00"
     },
     {
      "seq": 16,
      "id": "eps_change_yoy",
      "value": 26.0,
+     "label": "Diluted EPS change, year over year",
+     "unit": "percent",
+     "format": "+0.0%",
+     "plain": "How much more the company is earning per share than it was a year ago.\nThis is the growth rate as it stands today, not the average of the\nlast several years — it is the number that changes when a company\nstops growing, and it changes about two quarters afterwards rather\nthan several years afterwards.\n",
      "recorded": "2026-08-11T12:00:00-04:00"
     },
     {
      "seq": 17,
      "id": "revenue_change_yoy",
      "value": 21.0,
+     "label": "Revenue change, year over year",
+     "unit": "percent",
+     "format": "+0.0%",
+     "plain": "Whether the company is selling more or less than it was a year ago. This\nis the difference between a business having a bad year and a business\ndisappearing: a 5% decline in a cyclical downturn is one thing, a 20%\ndecline in a structurally challenged industry is another.\n",
      "recorded": "2026-08-11T12:00:00-04:00"
     }
    ],
    "thesis": [],
    "valuations": [],
+   "snapshots": [],
    "notes": [
     {
      "date": "2026-08-11T12:00:00-04:00",
@@ -5962,7 +6742,7 @@
   {
    "ticker": "TREWIN",
    "name": "Trewin Robotics Components",
-   "added": "2026-08-12",
+   "added": "2026-08-15",
    "price": 24.6,
    "lots": [],
    "judgements": [],
@@ -5971,83 +6751,136 @@
      "seq": 1,
      "id": "earnings_base_share_5y",
      "value": 46.0,
+     "label": "Earnings at the base of the growth window, as a share of earnings now",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How much the company was earning at the start of the period a growth\nrate is measured over, compared with what it earns at the end of it.\nAt 40% it earned two fifths then of what it earns now; at 2% it was\nearning almost nothing, and what looks like growth is mostly the\ndistance from almost nothing.\n\nThis is published because a compound growth rate cannot tell the two\napart on its own. A company going from 1 to 100 and a company going\nfrom 40 to 100 can carry rates that look alike over enough years, and\nonly one of them describes a business that was already working.\n",
      "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 2,
      "id": "net_margin_base_share_5y",
      "value": 79.0,
+     "label": "Net margin at the base of the growth window, as a share of the margin now",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How profitable each dollar of sales was at the start of the period a\ngrowth rate is measured over, compared with how profitable it is at\nthe end. A business that scaled up keeps roughly the margin it had,\nor improves it a little: going from 8% to 12% over five years reads\nas 67% here and is ordinary operating leverage. A business whose\nmargin came back from nothing — 0.5% to 8% — reads as 6%, and its\nearnings did not grow so much as appear.\n\nIt is a ratio of two ratios, so it says the same thing to a company\nselling ten dollars and one selling ten billion, and a share split\ncannot move it.\n",
      "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 3,
      "id": "debt_to_equity",
      "value": 0.24,
+     "label": "Debt to equity",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "How much of the company is financed by lenders versus by its owners.\nAt 1.0 there is a dollar of debt for every dollar of shareholder money.\n",
      "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 4,
      "id": "pe_to_own_5y_median_pe",
      "value": 0.93,
+     "label": "P/E versus its own five-year median P/E",
+     "unit": "times_own_median",
+     "format": "0.00x",
+     "plain": "Whether the stock is cheap compared to how the market has usually priced\nthis particular company. Absolute multiples mean different things for\ndifferent businesses; this asks a company-specific question instead.\n",
      "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 5,
      "id": "revenue_cagr_3y",
      "value": 13.0,
+     "label": "Revenue CAGR, 3-year",
+     "unit": "percent",
+     "format": "0.0%",
+     "plain": "How fast sales have grown per year over three years. The shorter window\nis the faster-moving signal: it shows whether the top line has\ndecelerated recently, which a five-year window would smooth away. The\ntwo three-year averages it compares do not overlap, so it is still a\nstatement about recent years rather than a slower version of the\nfive-year measure.\n",
      "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 6,
      "id": "inventory_minus_revenue_growth_yoy",
      "value": 1.2,
+     "label": "Inventory growth minus revenue growth, year over year",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether product is piling up in the warehouse faster than it's selling.\nThis is one of the oldest and most reliable early warnings that demand\nis softening, and it shows up in the balance sheet a quarter or two\nbefore it shows up in the income statement.\n",
      "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 7,
      "id": "receivables_minus_revenue_growth_yoy",
      "value": 2.4,
+     "label": "Receivables growth minus revenue growth, year over year",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether sales are being booked but not collected. Rising receivables\noutpacing sales means either customers are struggling or the company is\npushing product into the channel to make a quarter.\n",
      "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 8,
      "id": "gross_margin_change_3y",
      "value": 0.6,
+     "label": "Gross margin change over three years",
+     "unit": "percentage_points",
+     "format": "+0.0 pp",
+     "plain": "Whether the growth is being bought with discounts. Rapid revenue growth\nwith falling gross margin usually means the company is purchasing market\nshare, and that stops working when the money runs out.\n",
      "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 9,
      "id": "interest_coverage",
      "value": 17.0,
+     "label": "Interest coverage",
+     "unit": "times",
+     "format": "0.0x",
+     "plain": "How many times over the company's operating profit covers its interest\nbill. At 8x, earnings could fall by half and the lenders still get paid\nwithout anyone noticing.\n",
      "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 10,
      "id": "fcf_ttm",
      "value": 38000000.0,
+     "label": "Free cash flow, trailing twelve months",
+     "unit": "usd",
+     "format": "$0,0",
+     "plain": "The cash left over after running the business and keeping its equipment\ncurrent. Positive means the company funds itself. Negative means it\nneeds someone else's money to keep going.\n",
      "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 11,
      "id": "net_cash_to_market_cap",
      "value": 0.05,
+     "label": "Net cash over market capitalization",
+     "unit": "ratio",
+     "format": "0.00",
+     "plain": "How much of the price you're paying is already sitting in the bank. It\nlowers the effective multiple on the operating business and it's a\ncushion during a stumble.\n",
      "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 12,
      "id": "eps_change_yoy",
      "value": 17.0,
+     "label": "Diluted EPS change, year over year",
+     "unit": "percent",
+     "format": "+0.0%",
+     "plain": "How much more the company is earning per share than it was a year ago.\nThis is the growth rate as it stands today, not the average of the\nlast several years — it is the number that changes when a company\nstops growing, and it changes about two quarters afterwards rather\nthan several years afterwards.\n",
      "recorded": "2026-08-02T12:00:00-04:00"
     },
     {
      "seq": 13,
      "id": "revenue_change_yoy",
      "value": 13.0,
+     "label": "Revenue change, year over year",
+     "unit": "percent",
+     "format": "+0.0%",
+     "plain": "Whether the company is selling more or less than it was a year ago. This\nis the difference between a business having a bad year and a business\ndisappearing: a 5% decline in a cyclical downturn is one thing, a 20%\ndecline in a structurally challenged industry is another.\n",
      "recorded": "2026-08-02T12:00:00-04:00"
     }
    ],
    "thesis": [],
    "valuations": [],
+   "snapshots": [],
    "notes": [
     {
      "date": "2026-08-02T12:00:00-04:00",

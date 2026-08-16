@@ -17,7 +17,7 @@ function renderMast() {
     return;
   }
   const stratName = ((S.journal || {}).strategy || {}).name || "";
-  chip.innerHTML = `<button class="journal" data-m="journal" data-arg="{}">
+  chip.innerHTML = `<button class="journal" data-menu="journal" data-arg="{}">
     <b>${esc(journalName())}</b>${stratName ? " · " + esc(stratName) : ""} ▾</button>`;
 
   const folio = S.portfolio || {};
@@ -40,9 +40,9 @@ function renderMast() {
     <div class="v num">${av.status === "known" ? money0(av.value)
       : `<button class="absent" data-m="acct" data-arg="${escAttr({ which: "value" })}">not known</button>`}${
       av.status === "known" ? cmMark(av.cautions) : ""}</div></div>`);
-  cells.push(`<div class="cell"><div class="l"><button data-m="timeframe" data-arg="{}">${esc(tf.label)} ▾</button></div>
+  cells.push(`<div class="cell"><div class="l"><button data-menu="timeframe" data-arg="{}">${esc(tf.label)} ▾</button></div>
     <div class="v">${change && change.status === "known"
-      ? `<span class="num ${change.value >= 0 ? "pos" : "neg"}">${change.value >= 0 ? "+" : "−"}${Math.abs(change.value).toFixed(1)}%</span>${cmMark(change.cautions)}`
+      ? `<button data-m="timeframe" data-arg="{}"><span class="num ${change.value >= 0 ? "pos" : "neg"}">${change.value >= 0 ? "+" : "−"}${Math.abs(change.value).toFixed(1)}%</span>${cmMark(change.cautions)}</button>`
       : `<button class="absent" data-m="timeframe" data-arg="{}">not known</button>`}</div></div>`);
   cells.push(`<div class="cell"><div class="l"><button data-m="acct" data-arg="${escAttr({ which: "cash" })}">Cash</button></div>
     <div class="v num">${cash.status === "known" ? money0(cash.value)
@@ -67,6 +67,7 @@ const TAB_DEFS = () => [
   ["strategy", "Strategy"],
   ["measures", `Measures · ${citedInJournal().size}`],
   ["data", "Data"],
+  ["analytics", "Looking back"],
 ];
 
 function renderTabs() {
@@ -177,12 +178,15 @@ function listView() {
 }
 
 /* What the strategy said, resolved: the state name in its own colour, and a
-   sub-line carrying only host-resolved fields — the payload, or the
-   strategy's own summary. The view never composes figures beside them. */
+   sub-line carrying one line of consequence — host-resolved payload facts
+   where the payload holds figures, else the one-line consequence the state
+   itself declares (the contract caps it at one line, so this can never grow
+   a paragraph). The explaining prose renders once, in the margin the row
+   opens, not beside thirty rows at a time. */
 function sayCell(s) {
   const d = s._decision || {};
   const st = d.state || {};
-  const sub = payloadLine(d, s.ticker) || oneline((d.reason || {}).summary || "");
+  const sub = payloadLine(d, s.ticker) || oneline(st.consequence || "");
   const since = s._since_reading;
   const movedChip = since && since.status === "known" && since.changed
     ? ` <span class="moved" title="The verdict has moved since your saved reading of ${esc(since.since)}. It read ${esc((since.from || {}).name || "")} then.">moved since ${esc(since.since)}</span>` : "";
@@ -206,7 +210,13 @@ function payloadLine(d, ticker) {
       ? `${t.value}% of the account` : `${Number(t.value).toLocaleString()} shares`);
   }
   if (d.render === "close") return "exit due " + esc(p.when || "");
-  if (d.render === "blocked") return esc((p.needs || [])[0] || "");
+  if (d.render === "blocked") {
+    /* The consequence of a block is the way out of it, and the host's fix
+       table owns those words. The strategy's `needs` prose is explanation
+       and renders on the page and in the margin, never squeezed in here. */
+    const spec = (S.state_fixes || {})[((d.state || {}).fix) || ""] || null;
+    return spec ? esc(spec.label) : "";
+  }
   return "";
 }
 function sizeText(size) {
@@ -252,8 +262,14 @@ function securityRow(s) {
           : '<span class="num dim">—</span>';
       })()
     : '<span class="num dim">—</span><span class="sub">not held</span>';
+  /* On the unfiltered list, money in a name is marked beside the name — the
+     far-right column is the least-read place on the row. Filtered views ARE
+     the mark, so they carry none. */
+  const bucketMark = filter !== "everything" ? ""
+    : held ? ' <span class="chip">held</span>'
+    : closed ? ' <span class="chip">sold out</span>' : "";
   return `<tr class="sec" data-rowkey="r:${esc(s.ticker)}" data-m="row" data-arg="${escAttr({ t: s.ticker })}">
-    <td class="tk"><button data-act="open" data-t="${esc(s.ticker)}">${esc(s.ticker)}</button><small>${esc(s.name || "")}${s._backfilled ? ' <span class="chip" title="Part of this record was entered from history rather than captured at the time.">from history</span>' : ""}</small></td>
+    <td class="tk"><button data-act="open" data-t="${esc(s.ticker)}">${esc(s.ticker)}</button>${bucketMark}<small>${esc(s.name || "")}${s._backfilled ? ' <span class="chip" title="Part of this record was entered from history rather than captured at the time.">from history</span>' : ""}</small></td>
     <td>${sayCell(s)}</td>
     <td>${priceCellHtml(s)}</td>
     <td>${sinceBuy}</td>
@@ -391,13 +407,48 @@ ${st.name ? `<tr><td>Today it reads</td><td>${esc(st.name)}</td></tr>` : ""}
     </table>`;
   })() : "";
 
+  /* An unheld name has no position facts, so the margin's job is what the
+     row cannot hold instead: the unanswered questions by name, the groups
+     standing between it and a different verdict, and when the reading it
+     rests on was taken. */
+  const unheld = s.bucket !== "holdings" ? (() => {
+    const ev = ((d.reason || {}).evidence || []);
+    const owedQs = (s._judgements || []).filter((j) => j.cited && !j.mark);
+    const owed = owedQs.length
+      ? `<div class="m-h">Waiting on you</div>${owedQs.map((j) =>
+          `<p class="m-line"><button data-m="judgement" data-arg="${escAttr({ t: s.ticker, id: j.id })}">${esc(j.label || j.id)}</button> — <span class="absent">not assessed</span></p>`).join("")}` : "";
+    /* A group whose unreadable rows are all questions for the reader is
+       already listed above by name; repeating its tally under a second
+       heading would be the duplication this margin exists to end. */
+    const humanOnly = (g) => ev.filter((e2) => e2.group === g.id && e2.outcome === "unknown")
+      .every((e2) => ((e2.subject || {}).kind) === "judgement");
+    const standing = ((d.reason || {}).groups || []).filter((g) =>
+      g.outcome === "fail" || (g.outcome === "unknown" && !humanOnly(g)));
+    const grpRows = standing.length
+      ? `<div class="m-h">What stands in the way</div><table class="m-series">${standing.map((g) => {
+          const [word, cls] = OUTCOME[g.outcome === "fail" ? "fail" : "unknown"];
+          return `<tr><td><button data-m="group" data-arg="${escAttr({ t: s.ticker, gid: g.id })}">${esc(g.name)}</button></td>
+            <td><span class="${cls}">${esc(word)}</span> · <span class="num">${g.passed} of ${g.tested}</span></td></tr>`;
+        }).join("")}</table>` : "";
+    const dd = s._data;
+    const p = s._price || {};
+    const lastRead = `<div class="m-h">The last reading</div><table class="m-series">
+      <tr><td><button data-m="datastatus" data-arg="${escAttr({ t: s.ticker })}">Filings</button></td>
+        <td>${dd ? `<span class="num">${esc(String(dd.filings_held))}</span> · fetched ${esc(dd.last_fetch ? String(dd.last_fetch.at).slice(0, 10) : "never")}` : "never fetched"}</td></tr>
+      <tr><td><button data-m="price" data-arg="${escAttr({ t: s.ticker })}">Price</button></td>
+        <td>${p.value == null ? '<span class="absent">not known</span>'
+          : `<span class="num">${money(p.value)}</span> · ${p.source === "manual" ? "typed" : `close ${esc(fmtCloseDate(p.date))}`}`}</td></tr>
+    </table>`;
+    return owed + grpRows + lastRead;
+  })() : "";
+
   const rests = ((d.reason || {}).rests_on || []);
   const decided = rests.length
     ? `<div class="m-h">What decided it</div><p>${rests.map((x) => esc(x.label || x.id)).join(" · ")}</p>` : "";
   return `<p class="m-kicker">${esc(kicker)} · ${esc(s.ticker)}</p>
 <h3><span class="state ${stateClass(d)}">${esc(st.name || "")}</span></h3>
 ${summary ? `<p>${esc(summary)}</p>` : ""}
-${decided}${allocRows}${held}
+${decided}${allocRows}${held}${unheld}
 <button class="m-act" data-act="open" data-t="${esc(s.ticker)}">Open ${esc(s.ticker)}</button>
 ${d.render === "commit" ? `<button class="m-act quiet" data-m="buy" data-arg="${escAttr({ t: s.ticker })}">Record a purchase</button>` : ""}`;
 };
@@ -455,10 +506,9 @@ function cashMini() {
      <td class="num">${e.direction < 0 ? "−" : "+"}${money0(Math.abs(e.amount))}</td></tr>`).join("")}</table>`;
 }
 
-/* The timeframe picker: the header's "change over a window you choose". */
+/* The timeframe gloss: what the header figure means. Choosing the window is
+   chrome and happens in the dropdown on the header cell, not here. */
 PANES.timeframe = () => {
-  const rows = TIMEFRAMES.map((t) =>
-    `<button class="m-act ${t.id === timeframe ? "" : "quiet"}" data-act="timeframe" data-tf="${t.id}">${esc(t.label)}</button>`).join(" ");
   const acct = T && T.account;
   const ch = acct && acct.change;
   const pc = acct && acct.percent;
@@ -473,9 +523,7 @@ PANES.timeframe = () => {
   return `<p class="m-kicker">The timeframe</p>
 <h3>Change over a window you choose</h3>
 ${body}
-<div class="m-h">Choose the window</div>
-<p>${rows}</p>
-<p class="m-quiet">Every row's "${esc((T && T.label) || "timeframe")}" column reads over the same window.</p>`;
+<p class="m-quiet">The window is chosen on the header cell itself, and every row's "${esc((T && T.label) || "timeframe")}" column reads over the same one.</p>`;
 };
 
 /* Why a timeframe cell can be empty when the whole reply is missing. */

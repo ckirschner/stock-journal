@@ -19,6 +19,7 @@ let openPeriodBuy = null;     // id of the purchase that opened the holding show
 let tipOpen = null;           // open in-place explainer key, at most one
 let problemsFirst = true;     // evidence ordering toggle
 let showWholeBank = false;    // measures screen escape hatch
+let coverageOpen = false;     // the per-security measure inventory, opened on purpose
 
 /* Timeframe choices are offsets from today; "since a day you pick" goes
    through the same backend call. The label is what the header cell says. */
@@ -41,11 +42,13 @@ function openSecurity(ticker, periodBuy = null) {
   openTicker = ticker;
   openPeriodBuy = periodBuy || null;
   tipOpen = null;
+  coverageOpen = false;
 }
 function closeSecurity() {
   openTicker = null;
   openPeriodBuy = null;
   tipOpen = null;
+  coverageOpen = false;
 }
 
 /* Render type -> state colour class. Keyed on the host's render types and

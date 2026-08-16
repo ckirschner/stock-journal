@@ -678,81 +678,36 @@ ${a.kind === "value" ? '<p class="m-quiet">Read-only here by design: a threshold
     : `<button class="m-act quiet" data-m="settings" data-arg="{}">Change your answers</button>`}`;
 };
 
-/* ------------------------------------------------------- journal menu */
-PANES.journal = () => {
-  const others = (S.journals || []).filter((j) => j.id !== (S.journal || {}).id);
-  return `<p class="m-kicker">This journal</p>
-<h3>${esc(journalName())}</h3>
-<p class="m-quiet">Created ${esc(String((S.journal || {}).created || "").slice(0, 10))} · stamped with ${esc(((S.journal || {}).strategy || {}).name || "")} — one strategy per journal, chosen once.</p>
-${others.length ? `<div class="m-h">Switch to</div>${others.map((j) =>
-    `<p><button style="border-bottom:1px dotted var(--hair-dark)" data-act="openjournal" data-id="${esc(j.id)}">${esc(j.name)}</button></p>`).join("")}` : ""}
-<div class="m-h">Looking back</div>
-<p><button style="border-bottom:1px dotted var(--hair-dark)" data-act="analytics">How your decisions and your rules have done</button></p>
-<div class="m-h">Housekeeping</div>
-<p><button style="border-bottom:1px dotted var(--hair-dark)" data-m="newjournal" data-arg="{}">Start another journal</button> <span class="dim">— a second journal means a second real account</span></p>
-<p><button style="border-bottom:1px dotted var(--hair-dark)" data-m="renamejournal" data-arg="{}">Rename this journal</button></p>
-<p><button style="border-bottom:1px dotted var(--hair-dark)" data-m="deletejournal" data-arg="{}">Delete this journal</button></p>`;
-};
-
-PANES.newjournal = (a) => {
-  const offers = S.strategies || [];
-  const chosen = offers.find((o) => o.id === (a || {}).id) || null;
-  const cards = offers.map((o) => `
-    <div class="stratcard ${chosen && chosen.id === o.id ? "on" : ""}" data-m="newjournal" data-arg="${escAttr({ id: o.id })}">
-      <b>${esc(o.name)}</b><p>${esc(o.summary || "")}</p></div>`).join("");
-  const fields = chosen ? (chosen.inputs || []).filter((f) => f.answered_by !== "host")
-    .map((f) => declaredField(f, undefined, "in_")).join("") : "";
-  return `<p class="m-kicker">A new journal</p>
-<h3>A second journal is a second account</h3>
-<p>Not a second opinion. Each journal has one strategy, chosen now and never changed.</p>
-${cards}
-${chosen ? `<label>Name</label><input name="nj_name" placeholder="e.g. Retirement account">
-<div class="m-row"><div><label>Cash in it now</label><input name="nj_cash" type="number"></div>
-<div><label>As of</label><input name="nj_cash_on" type="date" value="${esc(localToday())}" max="${esc(localToday())}"></div></div>
-${fields}
-<button class="m-act" data-do="newjournal" data-id="${esc(chosen.id)}">Create it</button>` : ""}`;
-};
+/* ------------------------------------------------- journal housekeeping */
+/* The forms live in the dropdown the journal pill opens — chrome opens
+   where it was clicked, and never evicts whatever the margin holds. */
 async function doNewJournal(btn) {
-  const f = marginForm();
-  if (!(f.nj_name || "").trim()) return marginErr("A name is needed.");
+  const f = menuForm();
+  if (!(f.nj_name || "").trim()) return menuErr("A name is needed.");
   const inputs = {};
   Object.entries(f).forEach(([k, v]) => { if (k.startsWith("in_")) inputs[k.slice(3)] = v; });
   const r = await apiRaw("create_journal", f.nj_name, btn.dataset.id, inputs,
     f.nj_cash || null, f.nj_cash_on || null);
-  if (!r.ok) return marginErr(r.error);
+  if (!r.ok) return menuErr(r.error);
   if (r.cash_problem) toast("The journal is created, but the opening cash was refused: " + r.cash_problem, true);
+  menuClose();
   closeSecurity(); tab = "list";
   await refresh(); refreshTimeframe();
-  marginRest();
 }
 
-PANES.renamejournal = () => `<p class="m-kicker">Rename</p>
-<h3>${esc(journalName())}</h3>
-<p class="m-quiet">The name is a label; the record underneath does not move and no reason is owed.</p>
-<label>New name</label><input name="name" value="${esc(journalName())}">
-<button class="m-act" data-do="renamejournal">Rename</button>`;
 async function doRenameJournal() {
-  const f = marginForm();
+  const f = menuForm();
   const r = await apiRaw("rename_journal", (S.journal || {}).id, f.name);
-  if (!r.ok) return marginErr(r.error);
+  if (!r.ok) return menuErr(r.error);
+  menuClose();
   await refresh();
-  marginRest();
 }
 
-PANES.deletejournal = () => {
-  const n = (S.securities || []).length;
-  return `<p class="m-kicker">Delete this journal</p>
-<h3>Everything it holds goes with it</h3>
-<p>${n} securit${n === 1 ? "y" : "ies"}, every lot, every note, every frozen decision — none of it can be recovered. <b>Export it first</b> if there is any doubt.</p>
-<button class="m-act quiet" data-act="export">Export it first</button>
-<label>Type the journal’s name to confirm</label>
-<input name="confirm_name" placeholder="${esc(journalName())}">
-<button class="m-act warn" data-do="deletejournal">Delete it</button>`;
-};
 async function doDeleteJournal() {
-  const f = marginForm();
+  const f = menuForm();
   const r = await apiRaw("delete_journal", (S.journal || {}).id, f.confirm_name || "");
-  if (!r.ok) return marginErr(r.error);
+  if (!r.ok) return menuErr(r.error);
+  menuClose();
   closeSecurity(); tab = "list";
   await refresh();
   marginRest();
@@ -960,21 +915,9 @@ async function doEmptyJournal() {
   marginRest();
 }
 
-/* ------------------------------------------------------------ more menu */
-PANES.more = (a) => {
-  const s = find(a.t);
-  if (!s) return PANES.rest();
-  const onList = S.list && (S.list.rows || []).some((r) => r.ticker === s.ticker && !r.held && !r.passed_over);
-  return `<p class="m-kicker">More · ${esc(s.ticker)}</p>
-<h3>The rest of the toolbox</h3>
-<p><button style="border-bottom:1px dotted var(--hair-dark)" data-m="values" data-arg="${escAttr({ t: s.ticker })}">Edit values</button> <span class="dim">— typed figures, dated, beating fetched ones</span></p>
-<p><button style="border-bottom:1px dotted var(--hair-dark)" data-m="ev" data-arg="${escAttr({ t: s.ticker })}">Expected value</button> <span class="dim">— assumptions in, value solved for</span></p>
-<p><button style="border-bottom:1px dotted var(--hair-dark)" data-m="thesisedit" data-arg="${escAttr({ t: s.ticker })}">Why I own this</button></p>
-<p><button style="border-bottom:1px dotted var(--hair-dark)" data-m="backfill" data-arg="${escAttr({ t: s.ticker })}">Enter history</button> <span class="dim">— purchases and sales from your records</span></p>
-${onList ? `<p><button style="border-bottom:1px dotted var(--hair-dark)" data-m="passover" data-arg="${escAttr({ t: s.ticker, name: s.name || "" })}">Not buying this one</button></p>` : ""}
-${s._removable ? `<p><button style="border-bottom:1px dotted var(--hair-dark)" data-m="remove" data-arg="${escAttr({ t: s.ticker })}">Remove from the journal</button></p>`
-    : `<p class="dim">Remove — unavailable: this security carries recorded history, and the record does not delete.</p>`}`;
-};
+/* The "More ▾" toolbox is a dropdown now (see 15-menu.js) — a menu is
+   chrome and opens where it was clicked; each door it holds still opens
+   its pane here in the margin, where acting lives. */
 PANES.remove = (a) => `<p class="m-kicker">Remove · ${esc(a.t)}</p>
 <h3>Only what was never acted on can go</h3>
 <p>Anything typed for it goes with it; fetched public data stays cached. A security with recorded decisions cannot be removed at all — the engine refuses, not this screen.</p>

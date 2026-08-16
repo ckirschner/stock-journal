@@ -86,6 +86,7 @@ class TestEveryHostTableIsDocumented:
         exported = {name for name in dir(contract)
                     if name.isupper() and not name.startswith("_")
                     and name not in ("CONTRACT_VERSION", "MAX_STATES",
+                                     "MAX_CONSEQUENCE",
                                      "BREAKDOWN_OBSERVATIONS",
                                      "PASS", "FAIL", "UNKNOWN", "NOTED",
                                      "CLEAR", "BREACHED", "CONFIRMED",
@@ -95,9 +96,10 @@ class TestEveryHostTableIsDocumented:
             "cover. Add a generated block for it, or add it to DOCUMENTED "
             "with a comment saying where it is covered instead.")
 
-    def test_the_two_bare_numbers_are_in_the_document(self, doc):
+    def test_the_bare_numbers_are_in_the_document(self, doc):
         assert f"`{contract.CONTRACT_VERSION}`" in doc
         assert f"`{contract.MAX_STATES}`" in doc
+        assert f"`{contract.MAX_CONSEQUENCE}`" in doc
 
 
 class TestTheDocumentPointsAtThingsThatExist:

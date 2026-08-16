@@ -1,9 +1,12 @@
 /* One security's page, in the order the questions come:
 
    1. What is my status on this security?         — the verdict card
-   2. How do the required metrics fare?           — what your rules check
-   3. What about the rest of the metrics?         — everything else stored
-   4. Are there open questions for me?            — judgements, then the record
+   2. How do the required metrics fare?           — what your rules check,
+      with the questions only you can answer answered (or owed) in place
+   3. Are there open questions for me?            — answers on record that
+      nothing currently asks, then the record itself
+   4. What else is stored?                        — the full measure
+      inventory, folded: a reference opened on purpose, never an ambush
 
    Terse is the resting state: one line per fact, and every line is a handle
    into the margin. Nothing here recomputes a figure — every number is a
@@ -194,7 +197,7 @@ function actsRow(s, isOpen) {
     <button data-m="noteadd" data-arg="${escAttr({ t: s.ticker })}">Add note</button>
     <button data-m="buy" data-arg="${escAttr({ t: s.ticker })}">${isOpen ? "Buy more" : s.bucket === "previous" ? "Buy it back" : "Record a purchase"}</button>
     ${isOpen ? `<button class="warn" data-m="sell" data-arg="${escAttr({ t: s.ticker })}">Record a sale</button>` : ""}
-    <button style="color:var(--dim)" data-m="more" data-arg="${escAttr({ t: s.ticker })}">More ▾</button>
+    <button style="color:var(--dim)" data-menu="more" data-arg="${escAttr({ t: s.ticker })}">More ▾</button>
   </div>`;
 }
 
@@ -252,7 +255,11 @@ function tally(g) {
   return `${need} · ${counted}`;
 }
 
-/* One evidence line: name · value° · test — whose limit · outcome. */
+/* One evidence line: name · value° · test — whose limit · outcome. A line
+   whose subject is a question only the reader can answer carries its answer
+   verb in place — this table is the one surface that owns the questions the
+   verdict asked, and sending the reader elsewhere to answer them is how one
+   fact came to be printed three times. */
 function evidenceRow(s, item, i) {
   const subj = item.subject || {};
   const obs = item.observed || {};
@@ -275,36 +282,40 @@ function evidenceRow(s, item, i) {
   }
   const at = subj.at ? ` <span class="dim">as at ${esc(subj.at)}</span>` : "";
   const decided = item.rests_on ? '<span class="req">decided this</span>' : "";
-  return `<tr class="hot"><td class="en"><button data-m="${paneArg.m}" data-arg="${escAttr(paneArg.arg)}">${esc(subj.label || subj.id || "")}</button>${decided}${at}</td>
+  const j = subj.kind === "judgement"
+    ? (s._judgements || []).find((x) => x.id === (subj.reads || subj.id)) : null;
+  const answer = j
+    ? ` · <button data-m="judgement" data-arg="${escAttr({ t: s.ticker, id: j.id })}" data-jid="${esc(j.id)}">${j.mark ? "reassess" : "answer this"}</button>` : "";
+  return `<tr class="hot"${j ? ' data-jrow="1"' : ""}><td class="en"><button data-m="${paneArg.m}" data-arg="${escAttr(paneArg.arg)}">${esc(subj.label || subj.id || "")}</button>${decided}${at}${answer}</td>
     <td class="ev-v">${val}</td>
     <td class="ev-t">${test}</td>
     <td class="ev-o ${cls}">${esc(word)}</td></tr>`;
 }
 
 /* -------------------------------------------- 4a · questions only you can */
+/* The questions the verdict is asking live in the evidence table above,
+   answered or answerable in place — one surface owns them. What remains
+   here is the append-only leftover: answers on record that nothing
+   currently asks, kept readable because the record never deletes. A
+   security nothing was ever asked of gets no section, not an empty one. */
 const MARK_WORD = { pass: "Passed", fail: "Failed" };
 function judgementSection(s) {
-  const js = s._judgements || [];
-  if (!js.length) {
-    return `<h2 class="sect">Questions only you can answer</h2>
-      <p class="quiet">This strategy asks none of this security.</p>`;
-  }
-  const owed = js.filter((j) => j.cited && !j.mark).length;
+  const js = (s._judgements || []).filter((j) => !j.cited);
+  if (!js.length) return "";
   const rows = js.map((j) => {
     const mark = j.mark
       ? `<span class="${j.mark === "fail" ? "o-fail" : "o-pass"}">${esc(MARK_WORD[j.mark] || j.mark)}</span>`
       : '<span class="absent">not assessed</span>';
     const when = j.recorded ? ` <span class="dim">· ${esc(String(j.recorded).slice(0, 10))}</span>` : "";
     const stale = j.withdrawn ? ' <span class="chip">withdrawn</span>'
-      : (!j.cited ? ' <span class="chip" title="This strategy is not currently asking this question; your answer stays readable.">not currently asked</span>' : "");
+      : ' <span class="chip" title="This strategy is not currently asking this question; your answer stays readable.">not currently asked</span>';
     return `<div class="recline" id="j-${esc(j.id)}"><span class="rmain">
       <button data-m="measure" data-arg="${escAttr({ sid: j.id, t: s.ticker })}">${esc(j.label || j.id)}</button>
       — ${mark}${when}${stale}
       · <button data-m="judgement" data-arg="${escAttr({ t: s.ticker, id: j.id })}" data-jid="${esc(j.id)}">${j.mark ? "reassess" : "answer this"}</button></span>
       </div>`;
   }).join("");
-  return `<h2 class="sect" id="judgements">Questions only you can answer${owed
-    ? `<span class="aside">${owed} still open</span>` : ""}</h2>${rows}`;
+  return `<h2 class="sect" id="judgements">Questions only you can answer<span class="aside">answers on record · nothing above asks them today</span></h2>${rows}`;
 }
 
 /* ------------------------------------------------- 4b · your record here */
@@ -387,24 +398,33 @@ function recordSection(s) {
 const recLine = (main, when) =>
   `<div class="recline"><span class="rmain">${main}</span><time>${esc(when || "—")}</time></div>`;
 
-/* -------------------------------------- 3 · the rest of what is stored */
+/* -------------------------------------- 4c · the rest of what is stored */
+/* The full inventory — every measure the bank defines, whether or not this
+   strategy reads it — is a different question from the rest of the page.
+   "What does my strategy check" is the page; "what else does the bank know
+   about this company" is a reference someone opens on purpose. So it folds:
+   one line at rest, the inventory read from disk only when opened. The
+   cross-check lives with the rest of the data-trust story, in the margin's
+   "data behind this security" pane. */
 function coverageSection(s) {
   if (!s.cik) {
     return `<h2 class="sect">Everything stored about this security</h2>
       <p class="quiet">Nothing has been fetched for ${esc(s.ticker)}, so only what you type exists here. <button class="dim" style="border-bottom:1px dotted var(--hair-dark)" data-act="fetch" data-t="${esc(s.ticker)}">Fetch data</button> and every measure the bank defines is worked out from the filings.</p>`;
   }
+  const fold = (body) => `<details class="covfold" data-covfold${coverageOpen ? " open" : ""}>
+    <summary>Everything stored about this security<span class="aside">every measure the bank defines, whether or not this strategy reads it — a reference, opened on purpose</span></summary>
+    ${body}</details>`;
+  if (!coverageOpen) return fold("");
   if (C.coverageFor !== s.ticker || (!C.coverage && !C.loadingCoverage)) {
     loadCoverage(s.ticker);
   }
   if (!C.coverage || C.coverageFor !== s.ticker) {
-    return `<h2 class="sect">Everything stored about this security</h2>
-      <p class="quiet">Reading the stored filings…</p>`;
+    return fold(`<p class="quiet">Reading the stored filings…</p>`);
   }
   const cov = C.coverage;
   if (cov.error) {
-    return `<h2 class="sect">Everything stored about this security</h2>
-      <p class="quiet">The stored filings could not be read: ${esc(cov.error)}
-      <button class="dim" style="border-bottom:1px dotted var(--hair-dark)" data-act="coverage-retry" data-t="${esc(s.ticker)}">Try again</button></p>`;
+    return fold(`<p class="quiet">The stored filings could not be read: ${esc(cov.error)}
+      <button class="dim" style="border-bottom:1px dotted var(--hair-dark)" data-act="coverage-retry" data-t="${esc(s.ticker)}">Try again</button></p>`);
   }
   const entries = (cov.entries || []).filter((e) => (bankMeta(e.id) || {}).kind !== "qualitative");
   const computed = entries.filter((e) => e.status === "computed");
@@ -419,16 +439,13 @@ function coverageSection(s) {
       <td class="ev-t">${e.status !== "computed" ? oneline(e.reason || "") : ""}</td>
       <td class="ev-o o-noted"></td></tr>`;
   };
-  const cc = cov.crosscheck || null;
-  const ccLine = cc ? crosscheckBlock(cc) : "";
-  return `<h2 class="sect">Everything stored about this security<span class="aside">every measure the bank defines — including the ones the verdict above read</span></h2>
+  return fold(`
     ${computed.length ? `<div class="grp"><div class="gh"><span class="gn">Worked out</span><span class="gtally"><b>${computed.length}</b> of ${entries.length}</span></div>
       <table class="ev"><tbody>${computed.map(row).join("")}</tbody></table></div>` : ""}
     ${absent.length ? `<div class="grp"><div class="gh"><span class="gn">Not known</span><span class="gtally">each says why — a fetch, a filing or a typed figure may close it</span></div>
       <table class="ev"><tbody>${absent.map(row).join("")}</tbody></table></div>` : ""}
     ${inapp.length ? `<div class="grp"><div class="gh"><span class="gn">Not built to describe this kind of company</span><span class="gtally">settled from the SEC’s own classification — no amount of fetching changes it</span></div>
-      <table class="ev"><tbody>${inapp.map(row).join("")}</tbody></table></div>` : ""}
-    ${ccLine}`;
+      <table class="ev"><tbody>${inapp.map(row).join("")}</tbody></table></div>` : ""}`);
 }
 async function loadCoverage(ticker) {
   C.loadingCoverage = true;
@@ -439,28 +456,4 @@ async function loadCoverage(ticker) {
   if (C.coverageFor !== ticker) return;   /* the page moved on */
   C.coverage = r.ok ? (r.coverage || { entries: [] }) : { entries: [], error: r.error };
   if (openTicker === ticker) render();
-}
-function crosscheckBlock(cc) {
-  const checks = cc.checks || [];
-  const sum = cc.summary || {};
-  if (!checks.length) return "";
-  /* The words carry the state; colour repeats it and never stands alone. */
-  const word = { pass: ["consistent", "o-pass"], warn: ["look closer", "o-unknown"],
-    fail: ["inconsistent", "o-fail"], skipped: ["could not run", "o-noted"] };
-  const head = sum.fail
-    ? `<b class="o-fail">Inconsistent:</b> the tool’s own price × shares disagrees with a public float a filing states about itself — the signature of a wrong price basis, a split, a currency or a share-class error. The rows below say which filings.`
-    : sum.warn
-      ? `<b class="o-unknown">Look closer:</b> the price × shares comparison is off by more than rounding on ${sum.warn} filing${sum.warn === 1 ? "" : "s"} below.`
-      : `The tool’s own price × shares agrees with the public float each 10-K states about itself${sum.ran ? ` — ${sum.ran} filing${sum.ran === 1 ? "" : "s"} compared${sum.skipped ? `, ${sum.skipped} could not run` : ""}` : ""}.`;
-  const rows = checks.map((k) => {
-    const [w, cls] = word[k.status] || [k.status || "", "o-noted"];
-    return `<tr class="hot"><td class="en">${esc(k.form || "10-K")} · ${esc(k.period || "")} <span class="dim">${esc(k.accession || "")}</span></td>
-      <td class="ev-v">${k.ratio !== null && k.ratio !== undefined ? `<span class="num">${Number(k.ratio).toFixed(2)}×</span>` : ""}</td>
-      <td class="ev-t">${esc(oneline(k.note || ""))}</td>
-      <td class="ev-o ${cls}">${esc(w)}</td></tr>`;
-  }).join("");
-  return `<div class="grp"><div class="gh"><span class="gn">The cross-check</span>
-      <span class="gtally">price × shares against the public float each 10-K states about itself — an independent test the filings themselves supply</span></div>
-    <p class="quiet">${head}</p>
-    <table class="ev"><tbody>${rows}</tbody></table></div>`;
 }

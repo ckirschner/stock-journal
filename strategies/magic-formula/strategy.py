@@ -269,7 +269,7 @@ STRATEGY = {
                "from it every couple of months until the portfolio is full, "
                "and sells each after about a year. It never judges a company "
                "— the list already did that.",
-    "version": 1,
+    "version": 2,
     "contract": 8,
     "declines": DECLINES,
     "limits": LIMITS,
@@ -298,6 +298,11 @@ STRATEGY = {
     },
 
     "changelog": {
+        2: "NO LEVEL MOVED AND NO LOGIC CHANGED. \"On the list, but not "
+           "yet\" now declares its one-line consequence for the list row — "
+           "held back by your staging rule — using the contract's new "
+           "`consequence` field. The other states carry their consequence "
+           "in their names and declare none.",
         1: "First version, and the first strategy in this program with no "
            "buy criteria at all.\n\n"
            "WHAT IT BUYS ON is a list you pulled yourself and imported, and "
@@ -335,6 +340,7 @@ STRATEGY = {
 
         {"id": "not-time-yet", "render": "hold",
          "name": "On the list, but not yet",
+         "consequence": "held back by your staging rule — its moment comes later",
          "description": "It is on your current list and this is not the "
                         "moment. Either the portfolio already holds as many "
                         "names as it is meant to, or you have started enough "
