@@ -283,6 +283,14 @@ class Api:
             # journal exists, and finding out afterwards is finding out too
             # late to choose differently.
             "limits": [dict(l) for l in (record.get("limits") or [])],
+            # Who this method suits, in the strategy's own words — the one
+            # sentence the chooser was missing. Optional; None renders as
+            # nothing rather than as filler.
+            "audience": record.get("audience"),
+            # The measures this strategy declared it reads, so a chooser can
+            # say "this reads 22 measures" before any journal exists — and
+            # so the scoped reference is knowable rather than accumulated.
+            "reads": list(record.get("reads") or []) or None,
             # Whether this strategy works from a list somebody else chose,
             # and what it calls it. On the offer because it is the largest
             # single thing about how a journal will be used — one strategy
@@ -686,14 +694,52 @@ class Api:
                 roles = contract.input_roles(
                     record, effective, context.host_role_answers(journal))
             folio = context.portfolio_view(securities, roles)
+            # The declared values the host may read without knowing what
+            # they mean — here, a strategy's own minimum worth trading.
+            value_roles = contract.value_roles(
+                record, chain["values"]) if record is not None \
+                and not chain["errors"] else {}
             return allocation.view(
                 securities,
                 {s["ticker"]: s.get("_decision") for s in securities},
                 {t: self._price_known(v) for t, v in priced.items()},
-                folio)
+                folio, roles=value_roles)
         except Exception:                               # noqa: BLE001
             traceback.print_exc()
             return None
+
+    @staticmethod
+    def _portfolio_with_slots(journal, securities, record, chain):
+        """The account node the masthead reads, with how full the strategy's
+        own list is beside how many names are held.
+
+        The total comes from whichever declared value claims the
+        "position-limit" role — the strategy saying "this value is my slot
+        count" in a form the host reads without knowing what a slot is.
+        Where none does, the total is absent saying so, which is a true and
+        teachable sentence rather than a gap: a strategy that declares no
+        limit has no limit to show.
+        """
+        folio = context.account_value_on(journal, securities)
+        occupied = len(folio.get("holdings") or [])
+        if record is None or chain is None or chain["errors"]:
+            total = {"status": "absent",
+                     "reason": "no strategy is available to say how many "
+                               "positions it runs"}
+        else:
+            role = contract.value_roles(
+                record, chain["values"]).get("position-limit")
+            if role is None:
+                total = {"status": "absent",
+                         "reason": f'{record["name"]} declares no limit on '
+                                   "how many positions it holds at once — "
+                                   "a fact about the method, not a gap"}
+            else:
+                src = f' ({role["source"]})' if role.get("source") else ""
+                total = {"status": "known", "value": int(role["value"]),
+                         "provenance": [f'your "{role["label"]}"{src}']}
+        folio["slots"] = {"occupied": occupied, "total": total}
+        return folio
 
     @guarded
     @locked
@@ -848,7 +894,14 @@ class Api:
                 eid: {"status": r.get("status"), "value": r.get("value"),
                       "reason": r.get("reason"),
                       "cautions": r.get("cautions") or [],
-                      "provenance": r.get("provenance") or []}
+                      "provenance": r.get("provenance") or [],
+                      # A floor is part of the value ("at least 19"), and
+                      # the absence kind is what the triage word renders
+                      # from — stripping either serves a shape that lies.
+                      **({"bound": r["bound"],
+                          "bound_reason": r.get("bound_reason")}
+                         if r.get("bound") else {}),
+                      **({"fix": r["fix"]} if r.get("fix") else {})}
                 for eid, r in computed.items() if eid in shown}
             s["_value_sources"] = {k: v["source"] for k, v in values.items()
                                    if k in shown}
@@ -992,7 +1045,8 @@ class Api:
             # became zero there — the exact invention the engine refuses
             # everywhere else. Served, so the view renders the node and never
             # holds arithmetic of its own (principles 4 and 13).
-            portfolio=context.account_value_on(journal, securities),
+            portfolio=self._portfolio_with_slots(journal, securities,
+                                                 record, chain),
             data_dir=str(store.data_dir()),
             data_security=self._data_security(),
         )
@@ -1582,8 +1636,14 @@ class Api:
             return err("The timeframe has to start before today for there "
                        "to be a window to measure across.")
         securities = journal.get("securities", [])
-        return ok(since=day,
-                  account=context.account_change(journal, securities, day),
+        change = context.account_change(journal, securities, day)
+        # The account half may have clamped its window to the day the cash
+        # record opened; its own `since` is the day actually measured from,
+        # and the reply's top-level one follows it so a screen never labels
+        # a clamped figure with the unclamped day.
+        return ok(since=change.get("since", day),
+                  clamped=bool(change.get("clamped")),
+                  account=change,
                   rows={s["ticker"]: dataview.price_return(
                       s, s.get("cik"), s["ticker"], day)
                       for s in securities})
@@ -2355,6 +2415,35 @@ class Api:
                 self._write(journal)
         dataview.invalidate(int(cik))
 
+    def _record_fetch_outcome(self, journal_id, ticker, report):
+        """A structural refusal — a symbol the SEC no longer maps, a symbol
+        reassigned to a different company — is a fact about the security,
+        and it lands on the record the way the resolved CIK does: from the
+        fetch thread, bound to the journal that asked. Until it did, the
+        refusal lived only in a toast, and every durable surface then told
+        the reader a fetch would resolve gaps a fetch had just refused to.
+
+        One current fact, not a history: a later fetch that succeeds clears
+        it, because the fact it records has stopped being true.
+        """
+        said = (report or {}).get("conflict") \
+            or (report or {}).get("ticker_unmapped")
+        with self._doc_lock:
+            try:
+                journal, *_ = self._open(journal_id)
+                if journal is None:
+                    return
+                s = self._find(journal, ticker)
+            except (ValueError, store.StoreError):
+                return
+            if said:
+                s["fetch_refused"] = {"at": report.get("at"),
+                                      "said": str(said)}
+                self._write(journal)
+            elif s.get("fetch_refused") and report and report.get("cik"):
+                s.pop("fetch_refused", None)
+                self._write(journal)
+
     @guarded
     @locked
     def fetch_security(self, ticker):
@@ -2367,7 +2456,8 @@ class Api:
         jid = journal["id"]
         r = fetch.start_fetch(
             s["ticker"], known_cik=s.get("cik"),
-            on_resolved=lambda t, c: self._tie_cik(jid, t, c))
+            on_resolved=lambda t, c: self._tie_cik(jid, t, c),
+            on_report=lambda t, rep: self._record_fetch_outcome(jid, t, rep))
         if r.get("error"):
             return err(r["error"])
         return ok(started=True)
@@ -2411,6 +2501,29 @@ class Api:
         meta = bank.meta()
         cov = dataview.coverage(cik, self._tickers_of(s), list(meta), meta)
         return ok(coverage=cov)
+
+    @guarded
+    def get_measure_series(self, ticker, entry_id):
+        """One measure's per-filing readings for one security, whole — the
+        series a chart draws from, and the same derivation the
+        sell-confirmation machinery reads, so a chart and a confirmation can
+        never disagree about what a filing said.
+
+        Each reading recomputes the entry from only the filings on record by
+        that boundary's date, with the price pinned to the close on or
+        before it. Nothing is stored; the whole series re-derives from the
+        stores, so it cannot drift from the filings that justify it. Each
+        boundary carries its filing's accession and form as fields."""
+        journal, *_ = self._open()
+        if journal is None:
+            return err("No journal is open.")
+        s = self._find(journal, ticker)
+        cik = s.get("cik")
+        if not cik:
+            return err(f"Nothing has been fetched for {ticker}, so no "
+                       "filing history exists to read a series from.")
+        return ok(series=dataview.confirmation_history(
+            cik, self._tickers_of(s), str(entry_id)))
 
     @guarded
     def save_sec_identity(self, sec_identity):

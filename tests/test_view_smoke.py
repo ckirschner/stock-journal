@@ -363,6 +363,23 @@ def _render(state, tmp_path, mode="coverage"):
                           capture_output=True, text=True, timeout=120)
 
 
+def test_the_series_call_returns_the_filing_history_whole(strategies):
+    """One call, the whole per-filing series — what a chart draws from, and
+    the same derivation the sell-confirmation machinery reads. Each reading
+    carries its filing's accession as a field, not only inside a sentence."""
+    _state(strategies)
+    api = app_mod.Api()
+    r = api.get_measure_series("ACME", "current_ratio")
+    assert r["ok"], r.get("error")
+    series = r["series"]
+    assert series["entry"] == "current_ratio"
+    assert series["readings"], "a fetched security has readings to serve"
+    for reading in series["readings"]:
+        assert reading["accession"], reading
+        assert reading["form"], reading
+        assert reading["period_end"] and reading["filed"]
+
+
 def test_every_screen_renders(strategies, tmp_path, monkeypatch):
     state = _state(strategies, redefine=lambda: _redefine_a_measure(
         tmp_path / "bank", monkeypatch))

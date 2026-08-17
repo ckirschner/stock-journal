@@ -132,15 +132,34 @@ inputs:
       expenses).
 
   ebit:
-    label: EBIT (approximated as operating income)
+    label: EBIT (approximated)
     period: duration
     derive: operating_income
+    derive_else: pretax_plus_interest
     caution: >
       The bank's EBIT is served as OperatingIncomeLoss. That is the common
       approximation, not an identity: strictly EBIT adds back non-operating
       income/expense. Where the two differ materially (large other-income
       lines), this understates or overstates EBIT — recorded here as a
       standing mapping judgement rather than hidden in code.
+
+  # EBIT by its definitional identity — earnings before interest and taxes,
+  # read as pretax income plus the interest expense that was deducted to
+  # reach it. It exists as the fallback for filers who present no operating
+  # subtotal at all (Johnson & Johnson is the measured case), where the
+  # primary approximation above has nothing to read. It is not offered as an
+  # operating_income candidate — that input's note explains why no adjacent
+  # subtotal substitutes for the subtotal itself.
+  pretax_plus_interest:
+    label: pretax income plus interest expense
+    period: duration
+    derive_sum: [pretax_income, interest_expense]
+    caution: >
+      EBIT here is pretax income plus interest expense — the definitional
+      identity — because this filer presents no operating income subtotal.
+      It includes non-operating income and expense that an operating
+      subtotal would exclude, so it is not comparable with an EBIT served
+      from operating income.
 
   dda:
     label: Depreciation, depletion and amortization
@@ -152,9 +171,10 @@ inputs:
       - sum:
           - us-gaap:Depreciation
           - us-gaap:AmortizationOfIntangibleAssets
+        min_present: 1
         caution: Depreciation and intangible amortization summed from the cash
-          flow statement face; excludes other amortization lines a filer may
-          split out.
+          flow statement face; a filer tagging only one line contributes that
+          line, and other amortization lines a filer splits out are excluded.
 
   # The amortization of intangible assets alone, separately from the
   # depreciation it is usually reported beside.
@@ -259,6 +279,11 @@ inputs:
           Includes the portion attributable to noncontrolling interests;
           slightly overstates income attributable to shareholders where NCI
           is material.
+      - concept: us-gaap:NetIncomeLossAvailableToCommonStockholdersBasic
+        caution: >
+          Income available to common shareholders — net income less any
+          preferred dividends. Identical to net income for a filer with no
+          preferred stock; slightly understates it where preferreds exist.
 
   interest_expense:
     label: Interest expense
@@ -315,6 +340,7 @@ inputs:
     absent_means_zero: true
     candidates:
       - concept: us-gaap:PaymentsOfDividends
+      - concept: us-gaap:PaymentsOfOrdinaryDividends
       - sum:
           - us-gaap:PaymentsOfDividendsCommonStock
           - us-gaap:PaymentsOfDividendsPreferredStockAndPreferenceStock

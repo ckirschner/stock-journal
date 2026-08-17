@@ -62,7 +62,7 @@ where to look rather than here.
 There are now four of them, where there used to be two, and that is the
 first thing to know before checking any number here.
 
-Sixteen of the twenty-eight thresholds below are the expert report's, at the
+Sixteen of the twenty-nine thresholds below are the expert report's, at the
 level it states.
 
 Seven are the second expert review's. That review read the report and
@@ -79,11 +79,13 @@ is the same gap Graham had, and the answer is a genuinely different one: this
 strategy concentrates where Graham spreads, and the difference is the point
 rather than an accident of tuning.
 
-Three are nobody's but this file's author's, and they are the ones to look at
+Four are nobody's but this file's author's, and they are the ones to look at
 hardest. Two are how many of a pair of near-duplicate tests must pass, which
-no source addresses because no source grouped the tests. The third is the
+no source addresses because no source grouped the tests. One is the
 borrowing exit, which had to be given a level when the measure under it
-changed and neither source states one for the replacement.
+changed and neither source states one for the replacement. The last is the
+smallest addition worth acting on, which no source addresses because neither
+was asked about trade sizes.
 
 **One thing a reader should know about the provenance of every number here.**
 The expert report itself is not in this repository. Its levels were taken
@@ -293,6 +295,17 @@ ROIC = 0
 ROIC_DRIFT = {"measure": "roic_median_5y", "since": "first-purchase",
               "change": "proportion", "comparator": "above",
               "threshold_from": "exit-roic-fall"}
+
+# Every measure this strategy may cite, derived from the tables above so the
+# declaration cannot drift from the citations — one source, two readers. The
+# host holds the promise: a citation outside this list is refused at
+# evaluation, which is what lets a chooser and the measures reference speak
+# for this strategy before any journal exists.
+READS = tuple(sorted(
+    {row[0] for table in (REQUIRED, RETURNS, LEVERAGE, CASH, GROWTH,
+                          PRICING, ALLOCATION, BONUS, EXITS)
+     for row in table}
+    | set(QUALITATIVE) | {ROIC_DRIFT["measure"]}))
 
 
 # ---------------------------------------------------------------------------
@@ -539,11 +552,33 @@ STRATEGY = {
                "and only at a price that leaves something on the table. "
                "Sells when the business breaks — never when the price gets "
                "high, and never because time has passed.",
-    "version": 7,
+    "audience": "For someone willing to form an opinion about a business "
+                "and hold it for years. It buys a business good enough to "
+                "own for decades, and only at a price that leaves something "
+                "on the table. It never sells because the price got high "
+                "and never because time has passed — only because the "
+                "business broke. It will not conclude until you have "
+                "answered questions about the moat and about management "
+                "honestly. Suits patience and reading; punishes anyone who "
+                "wants activity.",
+    "reads": READS,
+    "version": 8,
     "contract": 8,
     "declines": DECLINES,
     "limits": LIMITS,
     "changelog": {
+    8: "NO LEVEL MOVED. This version declares what was already true and "
+       "rewords nothing the arithmetic reads.\n\n"
+       "It declares the measures it reads (`reads`, derived from its own "
+       "test tables), who it is for (`audience`), and that `portfolio-slots` "
+       "is its position limit (the `position-limit` role) — so the header "
+       "can say how full the list is. One new setting: `minimum-add`, the "
+       "smallest addition worth acting on as a percent of the position's "
+       "target, set at 25 because a concentrated method has no business "
+       "topping up by pocket change — that number is this author's, with no "
+       "source behind it. And the copy that framed a quiet holding as "
+       "something owed (\"Nothing is owed from you today\") now reports "
+       "instead: it asks nothing of you.",
     7: "NO LEVEL MOVED AND NO LOGIC CHANGED — TWO SENTENCES MISSTATED THE "
        "ARITHMETIC. A question about the business that cannot reach its bar "
        "even if every unreadable row under it passed was described as \"not "
@@ -635,7 +670,7 @@ STRATEGY = {
            "five-year median says what the existing base earns and can sit at "
            "25% for years while every new dollar goes into something earning "
            "six. The increment is what sets the rate of compounding from "
-           "here, and this strategy's whole thesis is that the compounding "
+           "here, and this strategy's whole case is that the compounding "
            "continues.\n\n"
            "The tax band moved from 10–35% to 12–28%. It was calibrated on a "
            "35% US statutory rate; after the 2017 act cut that to 21% the old "
@@ -866,15 +901,15 @@ STRATEGY = {
 
         {"id": "one-reading-past", "render": "hold",
          "name": "One reading past the line",
-         "consequence": "waiting on the next filings to confirm · nothing owed",
+         "consequence": "waiting on the next filings to confirm · asks nothing of you",
          "description": "An exit level has been crossed on the current "
                         "reading, and this strategy will not act on it until "
                         "the next filings say the same thing. One "
                         "impairment, one settlement, one heavy quarter of "
                         "investment can push a measure over a line without "
                         "anything having changed, and selling on that would "
-                        "be the panic this exists to prevent. Nothing is "
-                        "owed from you today."},
+                        "be the panic this exists to prevent. It asks "
+                        "nothing of you today."},
 
         {"id": "stopped-being-wonderful", "render": "close",
          "name": "It has stopped being wonderful",
@@ -1006,6 +1041,7 @@ STRATEGY = {
         # because forming an opinion is the entire method.
         {"id": "portfolio-slots", "label": "Names held at once",
          "type": "integer", "unit": "count", "min": 1, "max": 100,
+         "role": "position-limit",
          "source": BUFFETT_PRACTICE,
          "explain": "How many separate companies this strategy holds at one "
                     "time. Each first purchase takes an equal share of the "
@@ -1067,6 +1103,28 @@ STRATEGY = {
                     "size rules report that they could not be run.\n\n"
                     "Attributed to Buffett's practice, not to the expert "
                     "report, which does not cover sizing."},
+
+        {"id": "minimum-add", "label": "Smallest addition worth making",
+         "type": "number", "unit": "percent", "min": 0, "max": 100,
+         "role": "minimum-add",
+         "source": AUTHOR,
+         "explain": "The smallest top-up worth acting on, as a percent of "
+                    "what the whole position is meant to come to. A holding "
+                    "sitting just under the cap is eligible for pocket "
+                    "change, and the capital screen would otherwise offer "
+                    "it with a straight face.\n\n"
+                    "Twenty-five, because this is a concentrated method: an "
+                    "addition here is a re-statement of conviction, made "
+                    "rarely and at size, not a rebalancing increment. A "
+                    "quarter of the target is roughly the smallest amount "
+                    "that changes what you own rather than tidying it.\n\n"
+                    "A fraction rather than a dollar figure on purpose — "
+                    "ten dollars is noise on one account and material on "
+                    "another, so no dollar minimum could ship a default. "
+                    "Nothing is blocked by this: the screen still lists the "
+                    "position and says the amount is below your own "
+                    "minimum, and recording a smaller purchase anyway is "
+                    "recorded like any other."},
 
         # -- the three knockouts -------------------------------------------
         {"id": "min-roic", "label": "Lowest return on invested capital",
@@ -1243,7 +1301,7 @@ STRATEGY = {
                     "Fifteen, matching the floor under the existing base, "
                     "and deliberately so: a company reinvesting at less than "
                     "it already earns is a company whose returns are on "
-                    "their way down, and this strategy's whole thesis is "
+                    "their way down, and this strategy's whole case is "
                     "that the compounding continues.\n\n"
                     "Where it misfires: it is a ratio of two differences, so "
                     "it moves more than any level does. A large acquisition "
@@ -2384,7 +2442,7 @@ def _on_a_holding(ctx):
                     + ("has" if len(waiting) == 1 else "have")
                     + " not yet been crossed on enough consecutive "
                     + _waiting_unit(waiting)
-                    + " to act on. Nothing is owed from you today."),
+                    + " to act on. It asks nothing of you today."),
                 "evidence": evidence, "groups": groups,
             },
         }
@@ -2497,8 +2555,8 @@ def _more_money(ctx, values, evidence, groups, clear, judged_out):
                else f"{len(owed)} of the three questions")
             + " this strategy asks has no answer on record, so nothing more "
               "goes in. Each is listed on this page with the way to answer "
-              "it. Nothing is owed on the position you have — this is a bar "
-              "on adding to it, not a verdict on holding it.",
+              "it. The position you have is untouched — this is a bar on "
+              "adding to it, not a verdict on holding it.",
             sizing, [SIZING_GROUP])
 
     screen = _entry_screen(ctx)

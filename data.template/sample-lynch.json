@@ -1,5 +1,5 @@
 {
- "built": "2026-08-16T01:20:43+00:00",
+ "built": "2026-08-16T02:58:34+00:00",
  "as_of": "2026-08-12",
  "free_cash": 30000.0,
  "strategy": "lynch",
@@ -837,16 +837,16 @@
        "strategy": {
         "id": "lynch",
         "name": "Lynch",
-        "version": 3,
-        "values_version": 1,
+        "version": 4,
+        "values_version": 2,
         "contract": 8
        }
       },
       "strategy": {
        "id": "lynch",
        "name": "Lynch",
-       "version": 3,
-       "values_version": 1,
+       "version": 4,
+       "values_version": 2,
        "contract": 8
       },
       "metrics": {
@@ -856,7 +856,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-05-10"
-        ]
+        ],
+        "label": "Earnings at the base of the growth window, as a share of earnings now",
+        "format": "0.0%"
        },
        "net_margin_base_share_5y": {
         "value": 79.0,
@@ -864,7 +866,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-05-10"
-        ]
+        ],
+        "label": "Net margin at the base of the growth window, as a share of the margin now",
+        "format": "0.0%"
        },
        "peg_trailing": {
         "value": 0.61,
@@ -872,7 +876,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-05-10"
-        ]
+        ],
+        "label": "PEG ratio, trailing",
+        "format": "0.00"
        },
        "eps_cagr_5y": {
         "value": 24.0,
@@ -880,7 +886,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-05-10"
-        ]
+        ],
+        "label": "Diluted EPS CAGR, 5-year",
+        "format": "0.0%"
        },
        "debt_to_equity": {
         "value": 0.24,
@@ -888,7 +896,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-05-10"
-        ]
+        ],
+        "label": "Debt to equity",
+        "format": "0.00"
        },
        "eps_minus_revenue_cagr_spread_5y": {
         "value": 5.0,
@@ -896,7 +906,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-05-10"
-        ]
+        ],
+        "label": "Diluted EPS CAGR minus revenue CAGR, 5-year",
+        "format": "+0.0 pp"
        },
        "dividend_adjusted_peg": {
         "value": 0.61,
@@ -904,7 +916,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-05-10"
-        ]
+        ],
+        "label": "Dividend-adjusted PEG",
+        "format": "0.00"
        },
        "pe_to_own_5y_median_pe": {
         "value": 0.78,
@@ -912,7 +926,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-05-10"
-        ]
+        ],
+        "label": "P/E versus its own five-year median P/E",
+        "format": "0.00x"
        },
        "revenue_cagr_3y": {
         "value": 19.0,
@@ -920,7 +936,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-05-10"
-        ]
+        ],
+        "label": "Revenue CAGR, 3-year",
+        "format": "0.0%"
        },
        "inventory_minus_revenue_growth_yoy": {
         "value": 1.2,
@@ -928,7 +946,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-05-10"
-        ]
+        ],
+        "label": "Inventory growth minus revenue growth, year over year",
+        "format": "+0.0 pp"
        },
        "receivables_minus_revenue_growth_yoy": {
         "value": 2.4,
@@ -936,7 +956,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-05-10"
-        ]
+        ],
+        "label": "Receivables growth minus revenue growth, year over year",
+        "format": "+0.0 pp"
        },
        "gross_margin_change_3y": {
         "value": 0.6,
@@ -944,7 +966,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-05-10"
-        ]
+        ],
+        "label": "Gross margin change over three years",
+        "format": "+0.0 pp"
        },
        "interest_coverage": {
         "value": 17.0,
@@ -952,7 +976,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-05-10"
-        ]
+        ],
+        "label": "Interest coverage",
+        "format": "0.0x"
        },
        "fcf_ttm": {
         "value": 38000000.0,
@@ -960,7 +986,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-05-10"
-        ]
+        ],
+        "label": "Free cash flow, trailing twelve months",
+        "format": "$0,0"
        },
        "net_cash_to_market_cap": {
         "value": 0.05,
@@ -968,7 +996,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-05-10"
-        ]
+        ],
+        "label": "Net cash over market capitalization",
+        "format": "0.00"
        },
        "eps_change_yoy": {
         "value": 26.0,
@@ -976,7 +1006,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-05-10"
-        ]
+        ],
+        "label": "Diluted EPS change, year over year",
+        "format": "+0.0%"
        },
        "revenue_change_yoy": {
         "value": 20.0,
@@ -984,7 +1016,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-05-10"
-        ]
+        ],
+        "label": "Revenue change, year over year",
+        "format": "+0.0%"
        }
       },
       "price": null,
@@ -1017,7 +1051,7 @@
         "revenue_change_yoy"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2021-05-17 could be consulted; 17 hand-entered values on record by 2021-05-17; judged by Lynch v3 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; what this account held in cash on 2021-05-17 is not on record — this journal's cash record opens on 2024-01-02 and has no answer for 2021-05-17 — what the account held before it started being kept is not something the record can say, and carrying the opening balance backwards would state a figure for a day nothing was recorded about — so the account total and every share of it are absent"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2021-05-17 could be consulted; 17 hand-entered values on record by 2021-05-17; judged by Lynch v4 as it stands today (values v2) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; what this account held in cash on 2021-05-17 is not on record — this journal's cash record opens on 2024-01-02 and has no answer for 2021-05-17 — what the account held before it started being kept is not something the record can say, and carrying the opening balance backwards would state a figure for a day nothing was recorded about — so the account total and every share of it are absent"
       },
       "thesis": null,
       "valuation": null,
@@ -2142,16 +2176,16 @@
        "strategy": {
         "id": "lynch",
         "name": "Lynch",
-        "version": 3,
-        "values_version": 1,
+        "version": 4,
+        "values_version": 2,
         "contract": 8
        }
       },
       "strategy": {
        "id": "lynch",
        "name": "Lynch",
-       "version": 3,
-       "values_version": 1,
+       "version": 4,
+       "values_version": 2,
        "contract": 8
       },
       "metrics": {
@@ -2161,7 +2195,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-04-02"
-        ]
+        ],
+        "label": "Earnings at the base of the growth window, as a share of earnings now",
+        "format": "0.0%"
        },
        "net_margin_base_share_5y": {
         "value": 79.0,
@@ -2169,7 +2205,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-04-02"
-        ]
+        ],
+        "label": "Net margin at the base of the growth window, as a share of the margin now",
+        "format": "0.0%"
        },
        "peg_trailing": {
         "value": 0.71,
@@ -2177,7 +2215,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-04-02"
-        ]
+        ],
+        "label": "PEG ratio, trailing",
+        "format": "0.00"
        },
        "eps_cagr_5y": {
         "value": 18.0,
@@ -2185,7 +2225,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-04-02"
-        ]
+        ],
+        "label": "Diluted EPS CAGR, 5-year",
+        "format": "0.0%"
        },
        "debt_to_equity": {
         "value": 0.24,
@@ -2193,7 +2235,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-04-02"
-        ]
+        ],
+        "label": "Debt to equity",
+        "format": "0.00"
        },
        "eps_minus_revenue_cagr_spread_5y": {
         "value": 5.0,
@@ -2201,7 +2245,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-04-02"
-        ]
+        ],
+        "label": "Diluted EPS CAGR minus revenue CAGR, 5-year",
+        "format": "+0.0 pp"
        },
        "dividend_adjusted_peg": {
         "value": 0.7,
@@ -2209,7 +2255,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-04-02"
-        ]
+        ],
+        "label": "Dividend-adjusted PEG",
+        "format": "0.00"
        },
        "pe_to_own_5y_median_pe": {
         "value": 0.84,
@@ -2217,7 +2265,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-04-02"
-        ]
+        ],
+        "label": "P/E versus its own five-year median P/E",
+        "format": "0.00x"
        },
        "revenue_cagr_3y": {
         "value": 13.0,
@@ -2225,7 +2275,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-04-02"
-        ]
+        ],
+        "label": "Revenue CAGR, 3-year",
+        "format": "0.0%"
        },
        "inventory_minus_revenue_growth_yoy": {
         "value": 1.2,
@@ -2233,7 +2285,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-04-02"
-        ]
+        ],
+        "label": "Inventory growth minus revenue growth, year over year",
+        "format": "+0.0 pp"
        },
        "receivables_minus_revenue_growth_yoy": {
         "value": 2.4,
@@ -2241,7 +2295,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-04-02"
-        ]
+        ],
+        "label": "Receivables growth minus revenue growth, year over year",
+        "format": "+0.0 pp"
        },
        "gross_margin_change_3y": {
         "value": 0.6,
@@ -2249,7 +2305,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-04-02"
-        ]
+        ],
+        "label": "Gross margin change over three years",
+        "format": "+0.0 pp"
        },
        "interest_coverage": {
         "value": 17.0,
@@ -2257,7 +2315,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-04-02"
-        ]
+        ],
+        "label": "Interest coverage",
+        "format": "0.0x"
        },
        "fcf_ttm": {
         "value": 38000000.0,
@@ -2265,7 +2325,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-04-02"
-        ]
+        ],
+        "label": "Free cash flow, trailing twelve months",
+        "format": "$0,0"
        },
        "net_cash_to_market_cap": {
         "value": 0.05,
@@ -2273,7 +2335,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-04-02"
-        ]
+        ],
+        "label": "Net cash over market capitalization",
+        "format": "0.00"
        },
        "eps_change_yoy": {
         "value": 19.0,
@@ -2281,7 +2345,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-04-02"
-        ]
+        ],
+        "label": "Diluted EPS change, year over year",
+        "format": "+0.0%"
        },
        "revenue_change_yoy": {
         "value": 14.0,
@@ -2289,7 +2355,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-04-02"
-        ]
+        ],
+        "label": "Revenue change, year over year",
+        "format": "+0.0%"
        }
       },
       "price": null,
@@ -2322,7 +2390,7 @@
         "revenue_change_yoy"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2024-04-09 could be consulted; 17 hand-entered values on record by 2024-04-09; judged by Lynch v3 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2024-04-09 could be consulted; 17 hand-entered values on record by 2024-04-09; judged by Lynch v4 as it stands today (values v2) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": null,
       "valuation": null,
@@ -3433,16 +3501,16 @@
        "strategy": {
         "id": "lynch",
         "name": "Lynch",
-        "version": 3,
-        "values_version": 1,
+        "version": 4,
+        "values_version": 2,
         "contract": 8
        }
       },
       "strategy": {
        "id": "lynch",
        "name": "Lynch",
-       "version": 3,
-       "values_version": 1,
+       "version": 4,
+       "values_version": 2,
        "contract": 8
       },
       "metrics": {
@@ -3452,7 +3520,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-06-12"
-        ]
+        ],
+        "label": "Earnings at the base of the growth window, as a share of earnings now",
+        "format": "0.0%"
        },
        "net_margin_base_share_5y": {
         "value": 79.0,
@@ -3460,7 +3530,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-06-12"
-        ]
+        ],
+        "label": "Net margin at the base of the growth window, as a share of the margin now",
+        "format": "0.0%"
        },
        "peg_trailing": {
         "value": 0.66,
@@ -3468,7 +3540,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-06-12"
-        ]
+        ],
+        "label": "PEG ratio, trailing",
+        "format": "0.00"
        },
        "eps_cagr_5y": {
         "value": 21.0,
@@ -3476,7 +3550,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-06-12"
-        ]
+        ],
+        "label": "Diluted EPS CAGR, 5-year",
+        "format": "0.0%"
        },
        "debt_to_equity": {
         "value": 0.24,
@@ -3484,7 +3560,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-06-12"
-        ]
+        ],
+        "label": "Debt to equity",
+        "format": "0.00"
        },
        "eps_minus_revenue_cagr_spread_5y": {
         "value": 5.0,
@@ -3492,7 +3570,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-06-12"
-        ]
+        ],
+        "label": "Diluted EPS CAGR minus revenue CAGR, 5-year",
+        "format": "+0.0 pp"
        },
        "dividend_adjusted_peg": {
         "value": 0.66,
@@ -3500,7 +3580,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-06-12"
-        ]
+        ],
+        "label": "Dividend-adjusted PEG",
+        "format": "0.00"
        },
        "pe_to_own_5y_median_pe": {
         "value": 0.81,
@@ -3508,7 +3590,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-06-12"
-        ]
+        ],
+        "label": "P/E versus its own five-year median P/E",
+        "format": "0.00x"
        },
        "revenue_cagr_3y": {
         "value": 17.0,
@@ -3516,7 +3600,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-06-12"
-        ]
+        ],
+        "label": "Revenue CAGR, 3-year",
+        "format": "0.0%"
        },
        "inventory_minus_revenue_growth_yoy": {
         "value": 1.2,
@@ -3524,7 +3610,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-06-12"
-        ]
+        ],
+        "label": "Inventory growth minus revenue growth, year over year",
+        "format": "+0.0 pp"
        },
        "receivables_minus_revenue_growth_yoy": {
         "value": 2.4,
@@ -3532,7 +3620,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-06-12"
-        ]
+        ],
+        "label": "Receivables growth minus revenue growth, year over year",
+        "format": "+0.0 pp"
        },
        "gross_margin_change_3y": {
         "value": 0.6,
@@ -3540,7 +3630,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-06-12"
-        ]
+        ],
+        "label": "Gross margin change over three years",
+        "format": "+0.0 pp"
        },
        "interest_coverage": {
         "value": 17.0,
@@ -3548,7 +3640,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-06-12"
-        ]
+        ],
+        "label": "Interest coverage",
+        "format": "0.0x"
        },
        "fcf_ttm": {
         "value": 38000000.0,
@@ -3556,7 +3650,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-06-12"
-        ]
+        ],
+        "label": "Free cash flow, trailing twelve months",
+        "format": "$0,0"
        },
        "net_cash_to_market_cap": {
         "value": 0.05,
@@ -3564,7 +3660,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-06-12"
-        ]
+        ],
+        "label": "Net cash over market capitalization",
+        "format": "0.00"
        },
        "eps_change_yoy": {
         "value": 22.0,
@@ -3572,7 +3670,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-06-12"
-        ]
+        ],
+        "label": "Diluted EPS change, year over year",
+        "format": "+0.0%"
        },
        "revenue_change_yoy": {
         "value": 18.0,
@@ -3580,7 +3680,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-06-12"
-        ]
+        ],
+        "label": "Revenue change, year over year",
+        "format": "+0.0%"
        }
       },
       "price": null,
@@ -3613,7 +3715,7 @@
         "revenue_change_yoy"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2023-06-19 could be consulted; 17 hand-entered values on record by 2023-06-19; judged by Lynch v3 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; what this account held in cash on 2023-06-19 is not on record — this journal's cash record opens on 2024-01-02 and has no answer for 2023-06-19 — what the account held before it started being kept is not something the record can say, and carrying the opening balance backwards would state a figure for a day nothing was recorded about — so the account total and every share of it are absent"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2023-06-19 could be consulted; 17 hand-entered values on record by 2023-06-19; judged by Lynch v4 as it stands today (values v2) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; what this account held in cash on 2023-06-19 is not on record — this journal's cash record opens on 2024-01-02 and has no answer for 2023-06-19 — what the account held before it started being kept is not something the record can say, and carrying the opening balance backwards would state a figure for a day nothing was recorded about — so the account total and every share of it are absent"
       },
       "thesis": null,
       "valuation": null,
@@ -4748,16 +4850,16 @@
        "strategy": {
         "id": "lynch",
         "name": "Lynch",
-        "version": 3,
-        "values_version": 1,
+        "version": 4,
+        "values_version": 2,
         "contract": 8
        }
       },
       "strategy": {
        "id": "lynch",
        "name": "Lynch",
-       "version": 3,
-       "values_version": 1,
+       "version": 4,
+       "values_version": 2,
        "contract": 8
       },
       "metrics": {
@@ -4767,7 +4869,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-09-03"
-        ]
+        ],
+        "label": "Earnings at the base of the growth window, as a share of earnings now",
+        "format": "0.0%"
        },
        "net_margin_base_share_5y": {
         "value": 79.0,
@@ -4775,7 +4879,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-09-03"
-        ]
+        ],
+        "label": "Net margin at the base of the growth window, as a share of the margin now",
+        "format": "0.0%"
        },
        "peg_trailing": {
         "value": 0.79,
@@ -4783,7 +4889,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-09-03"
-        ]
+        ],
+        "label": "PEG ratio, trailing",
+        "format": "0.00"
        },
        "eps_cagr_5y": {
         "value": 16.0,
@@ -4791,7 +4899,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-09-03"
-        ]
+        ],
+        "label": "Diluted EPS CAGR, 5-year",
+        "format": "0.0%"
        },
        "debt_to_equity": {
         "value": 0.24,
@@ -4799,7 +4909,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-09-03"
-        ]
+        ],
+        "label": "Debt to equity",
+        "format": "0.00"
        },
        "eps_minus_revenue_cagr_spread_5y": {
         "value": 5.0,
@@ -4807,7 +4919,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-09-03"
-        ]
+        ],
+        "label": "Diluted EPS CAGR minus revenue CAGR, 5-year",
+        "format": "+0.0 pp"
        },
        "dividend_adjusted_peg": {
         "value": 0.78,
@@ -4815,7 +4929,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-09-03"
-        ]
+        ],
+        "label": "Dividend-adjusted PEG",
+        "format": "0.00"
        },
        "pe_to_own_5y_median_pe": {
         "value": 0.88,
@@ -4823,7 +4939,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-09-03"
-        ]
+        ],
+        "label": "P/E versus its own five-year median P/E",
+        "format": "0.00x"
        },
        "revenue_cagr_3y": {
         "value": 12.0,
@@ -4831,7 +4949,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-09-03"
-        ]
+        ],
+        "label": "Revenue CAGR, 3-year",
+        "format": "0.0%"
        },
        "inventory_minus_revenue_growth_yoy": {
         "value": 1.2,
@@ -4839,7 +4959,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-09-03"
-        ]
+        ],
+        "label": "Inventory growth minus revenue growth, year over year",
+        "format": "+0.0 pp"
        },
        "receivables_minus_revenue_growth_yoy": {
         "value": 2.4,
@@ -4847,7 +4969,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-09-03"
-        ]
+        ],
+        "label": "Receivables growth minus revenue growth, year over year",
+        "format": "+0.0 pp"
        },
        "gross_margin_change_3y": {
         "value": 0.6,
@@ -4855,7 +4979,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-09-03"
-        ]
+        ],
+        "label": "Gross margin change over three years",
+        "format": "+0.0 pp"
        },
        "interest_coverage": {
         "value": 17.0,
@@ -4863,7 +4989,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-09-03"
-        ]
+        ],
+        "label": "Interest coverage",
+        "format": "0.0x"
        },
        "fcf_ttm": {
         "value": 38000000.0,
@@ -4871,7 +4999,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-09-03"
-        ]
+        ],
+        "label": "Free cash flow, trailing twelve months",
+        "format": "$0,0"
        },
        "net_cash_to_market_cap": {
         "value": 0.05,
@@ -4879,7 +5009,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-09-03"
-        ]
+        ],
+        "label": "Net cash over market capitalization",
+        "format": "0.00"
        },
        "eps_change_yoy": {
         "value": 17.0,
@@ -4887,7 +5019,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-09-03"
-        ]
+        ],
+        "label": "Diluted EPS change, year over year",
+        "format": "+0.0%"
        },
        "revenue_change_yoy": {
         "value": 12.0,
@@ -4895,7 +5029,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-09-03"
-        ]
+        ],
+        "label": "Revenue change, year over year",
+        "format": "+0.0%"
        }
       },
       "price": null,
@@ -4928,7 +5064,7 @@
         "revenue_change_yoy"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2024-09-10 could be consulted; 17 hand-entered values on record by 2024-09-10; judged by Lynch v3 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2024-09-10 could be consulted; 17 hand-entered values on record by 2024-09-10; judged by Lynch v4 as it stands today (values v2) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": null,
       "valuation": null,
@@ -5229,8 +5365,8 @@
       "strategy": {
        "id": "lynch",
        "name": "Lynch",
-       "version": 3,
-       "values_version": 1,
+       "version": 4,
+       "values_version": 2,
        "contract": 8
       },
       "missing": [
@@ -5303,7 +5439,7 @@
         "label": "Least insider buying it likes to see"
        }
       ],
-      "note": "no company is linked to this ticker, so no stored filing or price from 2023-11-08 could be consulted; judged by Lynch v3 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; what this account held in cash on 2023-11-08 is not on record — this journal's cash record opens on 2024-01-02 and has no answer for 2023-11-08 — what the account held before it started being kept is not something the record can say, and carrying the opening balance backwards would state a figure for a day nothing was recorded about — so the account total and every share of it are absent"
+      "note": "no company is linked to this ticker, so no stored filing or price from 2023-11-08 could be consulted; judged by Lynch v4 as it stands today (values v2) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; what this account held in cash on 2023-11-08 is not on record — this journal's cash record opens on 2024-01-02 and has no answer for 2023-11-08 — what the account held before it started being kept is not something the record can say, and carrying the opening balance backwards would state a figure for a day nothing was recorded about — so the account total and every share of it are absent"
      },
      "snapshot": {
       "frozen": "2023-11-08T12:00:00-05:00",
@@ -5948,16 +6084,16 @@
        "strategy": {
         "id": "lynch",
         "name": "Lynch",
-        "version": 3,
-        "values_version": 1,
+        "version": 4,
+        "values_version": 2,
         "contract": 8
        }
       },
       "strategy": {
        "id": "lynch",
        "name": "Lynch",
-       "version": 3,
-       "values_version": 1,
+       "version": 4,
+       "values_version": 2,
        "contract": 8
       },
       "metrics": {},
@@ -5973,7 +6109,7 @@
        "priced": null,
        "manual_on_record": [],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2023-11-08 could be consulted; judged by Lynch v3 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; what this account held in cash on 2023-11-08 is not on record — this journal's cash record opens on 2024-01-02 and has no answer for 2023-11-08 — what the account held before it started being kept is not something the record can say, and carrying the opening balance backwards would state a figure for a day nothing was recorded about — so the account total and every share of it are absent"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2023-11-08 could be consulted; judged by Lynch v4 as it stands today (values v2) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; what this account held in cash on 2023-11-08 is not on record — this journal's cash record opens on 2024-01-02 and has no answer for 2023-11-08 — what the account held before it started being kept is not something the record can say, and carrying the opening balance backwards would state a figure for a day nothing was recorded about — so the account total and every share of it are absent"
       },
       "thesis": null,
       "valuation": null,

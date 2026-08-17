@@ -333,6 +333,17 @@ REVENUE_CORROBORATION = ("revenue_change_yoy", "at_least",
 # right one for a return on capital, where a third off 45% and a third off 15%
 # are different events; two growth rates ten points apart are the same event
 # wherever they started.
+# Every measure this strategy may cite, derived from the tables above so the
+# declaration cannot drift from the citations — one source, two readers. The
+# host holds the promise: a citation outside this list is refused at
+# evaluation, which is what lets a chooser and the measures reference speak
+# for this strategy before any journal exists.
+READS = tuple(sorted(
+    {row[0] for table in (WAS_THERE_A_BUSINESS, REQUIRED, PRICE, GROWING,
+                          REAL, SURVIVES, BONUS, EXITS)
+     for row in table}
+    | {"eps_cagr_5y", REVENUE_CORROBORATION[0]}))
+
 GROWTH_DRIFT = {"measure": "eps_cagr_5y", "since": "first-purchase",
                 "change": "distance"}
 
@@ -631,11 +642,30 @@ STRATEGY = {
     "summary": "Buys a company that is growing, at a price that has not paid "
                "for the growth yet. Sells when the growth stops or when the "
                "price runs past it — and never because time has passed.",
-    "version": 3,
+    "audience": "For someone who follows companies and their growth. It "
+                "buys a company that is growing at a price that has not "
+                "paid for the growth yet, and sells when the growth stops "
+                "or the price runs past it. More turnover than Buffett, "
+                "more judgement than Graham. Suits someone willing to check "
+                "in each quarter and act on what the numbers say.",
+    "reads": READS,
+    "version": 4,
     "contract": 8,
     "declines": DECLINES,
     "limits": LIMITS,
     "changelog": {
+    4: "NO LEVEL MOVED. This version declares what was already true and "
+       "rewords nothing the arithmetic reads.\n\n"
+       "It declares the measures it reads (`reads`, derived from its own "
+       "test tables), who it is for (`audience`), and that `portfolio-slots` "
+       "is its position limit (the `position-limit` role) — so the header "
+       "can say how full the list is. One new setting: `minimum-add`, the "
+       "smallest addition worth acting on as a percent of the position's "
+       "target, set at 10 — between Graham's tolerance for increments and "
+       "Buffett's insistence on size, like most of this method; that number "
+       "is this author's, with no source behind it. And the copy that "
+       "framed a quiet holding as something owed (\"Nothing is owed from "
+       "you today\") now reports instead: it asks nothing of you.",
     3: "NO LEVEL MOVED AND NO LOGIC CHANGED — TWO SENTENCES MISSTATED THE "
        "ARITHMETIC. A question about the company that cannot reach its bar "
        "even if every unreadable row under it passed was described as \"not "
@@ -865,7 +895,7 @@ STRATEGY = {
 
         {"id": "one-reading-past", "render": "hold",
          "name": "One reading past the line",
-         "consequence": "waiting on the next readings to confirm · nothing owed",
+         "consequence": "waiting on the next readings to confirm · asks nothing of you",
          "description": "An exit level has been crossed on the current "
                         "reading, and this strategy will not act on it until "
                         "the next readings say the same thing — trading days "
@@ -874,7 +904,7 @@ STRATEGY = {
                         "build ahead of a launch can push a measure over a "
                         "line without anything having changed, and selling "
                         "on that would be the panic this exists to prevent. "
-                        "Nothing is owed from you today.\n\n"
+                        "It asks nothing of you today.\n\n"
                         "Worth knowing: the wait counts *readings on "
                         "record*. On a company with nothing fetched — every "
                         "figure typed in by hand — nothing ever confirms, "
@@ -1042,6 +1072,7 @@ STRATEGY = {
         # rising rather than by being bought.
         {"id": "portfolio-slots", "label": "Names held at once",
          "type": "integer", "unit": "count", "min": 1, "max": 100,
+         "role": "position-limit",
          "source": LYNCH_PRACTICE,
          "explain": "How many separate companies this strategy holds at one "
                     "time. Each first purchase takes an equal share of the "
@@ -1107,6 +1138,28 @@ STRATEGY = {
                     "because a share of the account cannot be worked out "
                     "without knowing what the account is. Until it is, the "
                     "size rules report that they could not be run."},
+
+        {"id": "minimum-add", "label": "Smallest addition worth making",
+         "type": "number", "unit": "percent", "min": 0, "max": 100,
+         "role": "minimum-add",
+         "source": AUTHOR,
+         "explain": "The smallest top-up worth acting on, as a percent of "
+                    "what the whole position is meant to come to. A holding "
+                    "sitting just under its target is eligible for pocket "
+                    "change, and the capital screen would otherwise offer "
+                    "it with a straight face.\n\n"
+                    "Ten — between Graham's tolerance for small increments "
+                    "and Buffett's insistence on size, which is where most "
+                    "of this method lives. An add here follows a quarterly "
+                    "check-in, so it should be worth the reading that "
+                    "prompted it.\n\n"
+                    "A fraction rather than a dollar figure on purpose — "
+                    "ten dollars is noise on one account and material on "
+                    "another, so no dollar minimum could ship a default. "
+                    "Nothing is blocked by this: the screen still lists the "
+                    "position and says the amount is below your own "
+                    "minimum, and recording a smaller purchase anyway is "
+                    "recorded like any other."},
 
         # -- was there a business at the base of the window ----------------
         {"id": "min-earnings-base-share",
@@ -2317,7 +2370,7 @@ def _on_a_holding(ctx):
                     + ("has" if len(waiting) == 1 else "have")
                     + " not yet been crossed on enough consecutive "
                     + _waiting_unit(waiting)
-                    + " to act on. Nothing is owed from you today."),
+                    + " to act on. It asks nothing of you today."),
                 "evidence": evidence, "groups": groups,
             },
         }

@@ -1,6 +1,6 @@
 {
- "built": "2026-08-16T01:20:44+00:00",
- "as_of": "2026-08-13",
+ "built": "2026-08-16T02:58:33+00:00",
+ "as_of": "2026-08-15",
  "free_cash": 48000.0,
  "strategy": "magic-formula",
  "securities": [
@@ -274,7 +274,7 @@
        "strategy": {
         "id": "magic-formula",
         "name": "Magic Formula",
-        "version": 2,
+        "version": 3,
         "values_version": 1,
         "contract": 8
        }
@@ -282,7 +282,7 @@
       "strategy": {
        "id": "magic-formula",
        "name": "Magic Formula",
-       "version": 2,
+       "version": 3,
        "values_version": 1,
        "contract": 8
       },
@@ -293,7 +293,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2025-08-04"
-        ]
+        ],
+        "label": "Earnings yield",
+        "format": "0.0%"
        },
        "return_on_capital": {
         "value": 44.0,
@@ -301,7 +303,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2025-08-04"
-        ]
+        ],
+        "label": "Return on capital",
+        "format": "0.0%"
        }
       },
       "price": null,
@@ -319,7 +323,7 @@
         "return_on_capital"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2025-08-11 could be consulted; 2 hand-entered values on record by 2025-08-11; judged by Magic Formula v2 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2025-08-11 could be consulted; 2 hand-entered values on record by 2025-08-11; judged by Magic Formula v3 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": null,
       "valuation": null,
@@ -334,8 +338,8 @@
      "id": "l2",
      "seq": 2,
      "kind": "sell",
-     "date": "2026-08-12",
-     "recorded": "2026-08-12T12:00:00-04:00",
+     "date": "2026-08-14",
+     "recorded": "2026-08-14T12:00:00-04:00",
      "shares": 300.0,
      "price": 47.8,
      "against": [
@@ -350,13 +354,13 @@
      "strategy": {
       "id": "magic-formula",
       "name": "Magic Formula",
-      "version": 2,
+      "version": 3,
       "values_version": 1,
       "contract": 8
      },
      "override": null,
      "snapshot": {
-      "frozen": "2026-08-12T12:00:00-04:00",
+      "frozen": "2026-08-14T12:00:00-04:00",
       "decision": {
        "render": "close",
        "tier": "position",
@@ -525,7 +529,7 @@
        "strategy": {
         "id": "magic-formula",
         "name": "Magic Formula",
-        "version": 2,
+        "version": 3,
         "values_version": 1,
         "contract": 8
        }
@@ -533,7 +537,7 @@
       "strategy": {
        "id": "magic-formula",
        "name": "Magic Formula",
-       "version": 2,
+       "version": 3,
        "values_version": 1,
        "contract": 8
       },
@@ -544,7 +548,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2025-08-04"
-        ]
+        ],
+        "label": "Earnings yield",
+        "format": "0.0%"
        },
        "return_on_capital": {
         "value": 44.0,
@@ -552,7 +558,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2025-08-04"
-        ]
+        ],
+        "label": "Return on capital",
+        "format": "0.0%"
        }
       },
       "price": null,
@@ -561,7 +569,7 @@
       "price_ticker": null,
       "evaluation": {
        "basis": "reconstructed",
-       "as_of": "2026-08-12",
+       "as_of": "2026-08-14",
        "filings_by_then": 0,
        "newest_filed": null,
        "priced": null,
@@ -570,7 +578,7 @@
         "return_on_capital"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2026-08-12 could be consulted; 2 hand-entered values on record by 2026-08-12; judged by Magic Formula v2 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2026-08-14 could be consulted; 2 hand-entered values on record by 2026-08-14; judged by Magic Formula v3 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": null,
       "valuation": null,
@@ -618,8 +626,8 @@
      "text": "Recorded from history: 1 purchase, dated 2025-08-11. Each was judged against the data available on its own day, not against today's."
     },
     {
-     "date": "2026-08-12T12:00:00-04:00",
-     "text": "Recorded from history: 1 sale, dated 2026-08-12. Each was judged against the data available on its own day, not against today's."
+     "date": "2026-08-14T12:00:00-04:00",
+     "text": "Recorded from history: 1 sale, dated 2026-08-14. Each was judged against the data available on its own day, not against today's."
     }
    ],
    "lot_seq": 2
@@ -894,7 +902,7 @@
        "strategy": {
         "id": "magic-formula",
         "name": "Magic Formula",
-        "version": 2,
+        "version": 3,
         "values_version": 1,
         "contract": 8
        }
@@ -902,7 +910,7 @@
       "strategy": {
        "id": "magic-formula",
        "name": "Magic Formula",
-       "version": 2,
+       "version": 3,
        "values_version": 1,
        "contract": 8
       },
@@ -913,7 +921,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2025-08-04"
-        ]
+        ],
+        "label": "Earnings yield",
+        "format": "0.0%"
        },
        "return_on_capital": {
         "value": 38.5,
@@ -921,7 +931,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2025-08-04"
-        ]
+        ],
+        "label": "Return on capital",
+        "format": "0.0%"
        }
       },
       "price": null,
@@ -939,7 +951,7 @@
         "return_on_capital"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2025-08-11 could be consulted; 2 hand-entered values on record by 2025-08-11; judged by Magic Formula v2 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2025-08-11 could be consulted; 2 hand-entered values on record by 2025-08-11; judged by Magic Formula v3 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": null,
       "valuation": null,
@@ -1255,7 +1267,7 @@
        "strategy": {
         "id": "magic-formula",
         "name": "Magic Formula",
-        "version": 2,
+        "version": 3,
         "values_version": 1,
         "contract": 8
        }
@@ -1263,7 +1275,7 @@
       "strategy": {
        "id": "magic-formula",
        "name": "Magic Formula",
-       "version": 2,
+       "version": 3,
        "values_version": 1,
        "contract": 8
       },
@@ -1274,7 +1286,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2025-08-04"
-        ]
+        ],
+        "label": "Earnings yield",
+        "format": "0.0%"
        },
        "return_on_capital": {
         "value": 51.0,
@@ -1282,7 +1296,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2025-08-04"
-        ]
+        ],
+        "label": "Return on capital",
+        "format": "0.0%"
        }
       },
       "price": null,
@@ -1300,7 +1316,7 @@
         "return_on_capital"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2025-08-18 could be consulted; 2 hand-entered values on record by 2025-08-18; judged by Magic Formula v2 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2025-08-18 could be consulted; 2 hand-entered values on record by 2025-08-18; judged by Magic Formula v3 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": null,
       "valuation": null,
@@ -1356,14 +1372,14 @@
      "id": "l1",
      "seq": 1,
      "kind": "buy",
-     "date": "2026-05-11",
-     "recorded": "2026-05-11T12:00:00-04:00",
+     "date": "2026-05-13",
+     "recorded": "2026-05-13T12:00:00-04:00",
      "shares": 190.0,
      "price": 52.8,
      "override": null,
      "unreconstructed": null,
      "snapshot": {
-      "frozen": "2026-05-11T12:00:00-04:00",
+      "frozen": "2026-05-13T12:00:00-04:00",
       "decision": {
        "render": "commit",
        "tier": "position",
@@ -1616,7 +1632,7 @@
        "strategy": {
         "id": "magic-formula",
         "name": "Magic Formula",
-        "version": 2,
+        "version": 3,
         "values_version": 1,
         "contract": 8
        }
@@ -1624,7 +1640,7 @@
       "strategy": {
        "id": "magic-formula",
        "name": "Magic Formula",
-       "version": 2,
+       "version": 3,
        "values_version": 1,
        "contract": 8
       },
@@ -1635,7 +1651,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2025-08-04"
-        ]
+        ],
+        "label": "Earnings yield",
+        "format": "0.0%"
        },
        "return_on_capital": {
         "value": 29.8,
@@ -1643,7 +1661,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2025-08-04"
-        ]
+        ],
+        "label": "Return on capital",
+        "format": "0.0%"
        }
       },
       "price": null,
@@ -1652,7 +1672,7 @@
       "price_ticker": null,
       "evaluation": {
        "basis": "reconstructed",
-       "as_of": "2026-05-11",
+       "as_of": "2026-05-13",
        "filings_by_then": 0,
        "newest_filed": null,
        "priced": null,
@@ -1661,7 +1681,7 @@
         "return_on_capital"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2026-05-11 could be consulted; 2 hand-entered values on record by 2026-05-11; judged by Magic Formula v2 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2026-05-13 could be consulted; 2 hand-entered values on record by 2026-05-13; judged by Magic Formula v3 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": null,
       "valuation": null,
@@ -1701,8 +1721,8 @@
    "snapshots": [],
    "notes": [
     {
-     "date": "2026-05-11T12:00:00-04:00",
-     "text": "Recorded from history: 1 purchase, dated 2026-05-11. Each was judged against the data available on its own day, not against today's."
+     "date": "2026-05-13T12:00:00-04:00",
+     "text": "Recorded from history: 1 purchase, dated 2026-05-13. Each was judged against the data available on its own day, not against today's."
     }
    ],
    "lot_seq": 1
@@ -1717,14 +1737,14 @@
      "id": "l1",
      "seq": 1,
      "kind": "buy",
-     "date": "2026-06-15",
-     "recorded": "2026-06-15T12:00:00-04:00",
+     "date": "2026-06-17",
+     "recorded": "2026-06-17T12:00:00-04:00",
      "shares": 900.0,
      "price": 9.1,
      "override": null,
      "unreconstructed": null,
      "snapshot": {
-      "frozen": "2026-06-15T12:00:00-04:00",
+      "frozen": "2026-06-17T12:00:00-04:00",
       "decision": {
        "render": "commit",
        "tier": "position",
@@ -1977,7 +1997,7 @@
        "strategy": {
         "id": "magic-formula",
         "name": "Magic Formula",
-        "version": 2,
+        "version": 3,
         "values_version": 1,
         "contract": 8
        }
@@ -1985,7 +2005,7 @@
       "strategy": {
        "id": "magic-formula",
        "name": "Magic Formula",
-       "version": 2,
+       "version": 3,
        "values_version": 1,
        "contract": 8
       },
@@ -1996,7 +2016,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2025-08-04"
-        ]
+        ],
+        "label": "Earnings yield",
+        "format": "0.0%"
        },
        "return_on_capital": {
         "value": 33.2,
@@ -2004,7 +2026,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2025-08-04"
-        ]
+        ],
+        "label": "Return on capital",
+        "format": "0.0%"
        }
       },
       "price": null,
@@ -2013,7 +2037,7 @@
       "price_ticker": null,
       "evaluation": {
        "basis": "reconstructed",
-       "as_of": "2026-06-15",
+       "as_of": "2026-06-17",
        "filings_by_then": 0,
        "newest_filed": null,
        "priced": null,
@@ -2022,7 +2046,7 @@
         "return_on_capital"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2026-06-15 could be consulted; 2 hand-entered values on record by 2026-06-15; judged by Magic Formula v2 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2026-06-17 could be consulted; 2 hand-entered values on record by 2026-06-17; judged by Magic Formula v3 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": null,
       "valuation": null,
@@ -2062,8 +2086,8 @@
    "snapshots": [],
    "notes": [
     {
-     "date": "2026-06-15T12:00:00-04:00",
-     "text": "Recorded from history: 1 purchase, dated 2026-06-15. Each was judged against the data available on its own day, not against today's."
+     "date": "2026-06-17T12:00:00-04:00",
+     "text": "Recorded from history: 1 purchase, dated 2026-06-17. Each was judged against the data available on its own day, not against today's."
     }
    ],
    "lot_seq": 1
@@ -2078,14 +2102,14 @@
      "id": "l1",
      "seq": 1,
      "kind": "buy",
-     "date": "2026-07-06",
-     "recorded": "2026-07-06T12:00:00-04:00",
+     "date": "2026-07-08",
+     "recorded": "2026-07-08T12:00:00-04:00",
      "shares": 130.0,
      "price": 58.9,
      "override": null,
      "unreconstructed": null,
      "snapshot": {
-      "frozen": "2026-07-06T12:00:00-04:00",
+      "frozen": "2026-07-08T12:00:00-04:00",
       "decision": {
        "render": "commit",
        "tier": "position",
@@ -2338,7 +2362,7 @@
        "strategy": {
         "id": "magic-formula",
         "name": "Magic Formula",
-        "version": 2,
+        "version": 3,
         "values_version": 1,
         "contract": 8
        }
@@ -2346,7 +2370,7 @@
       "strategy": {
        "id": "magic-formula",
        "name": "Magic Formula",
-       "version": 2,
+       "version": 3,
        "values_version": 1,
        "contract": 8
       },
@@ -2357,7 +2381,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2025-08-04"
-        ]
+        ],
+        "label": "Earnings yield",
+        "format": "0.0%"
        },
        "return_on_capital": {
         "value": 41.7,
@@ -2365,7 +2391,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2025-08-04"
-        ]
+        ],
+        "label": "Return on capital",
+        "format": "0.0%"
        }
       },
       "price": null,
@@ -2374,7 +2402,7 @@
       "price_ticker": null,
       "evaluation": {
        "basis": "reconstructed",
-       "as_of": "2026-07-06",
+       "as_of": "2026-07-08",
        "filings_by_then": 0,
        "newest_filed": null,
        "priced": null,
@@ -2383,13 +2411,13 @@
         "return_on_capital"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2026-07-06 could be consulted; 2 hand-entered values on record by 2026-07-06; judged by Magic Formula v2 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2026-07-08 could be consulted; 2 hand-entered values on record by 2026-07-08; judged by Magic Formula v3 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": null,
       "valuation": null,
       "recollection": {
        "text": "Last one off the old list. It was eleven months old and I could feel the deadline; I would rather have waited three weeks and bought off the new one.",
-       "written": "2026-07-06T12:00:00-04:00"
+       "written": "2026-07-08T12:00:00-04:00"
       },
       "changes_recorded": {
        "rules": 0,
@@ -2426,8 +2454,8 @@
    "snapshots": [],
    "notes": [
     {
-     "date": "2026-07-06T12:00:00-04:00",
-     "text": "Recorded from history: 1 purchase, dated 2026-07-06. Each was judged against the data available on its own day, not against today's."
+     "date": "2026-07-08T12:00:00-04:00",
+     "text": "Recorded from history: 1 purchase, dated 2026-07-08. Each was judged against the data available on its own day, not against today's."
     }
    ],
    "lot_seq": 1
@@ -2476,22 +2504,22 @@
      "id": "l1",
      "seq": 1,
      "kind": "buy",
-     "date": "2026-07-20",
-     "recorded": "2026-07-20T12:00:00-04:00",
+     "date": "2026-07-22",
+     "recorded": "2026-07-22T12:00:00-04:00",
      "shares": 700.0,
      "price": 13.6,
      "override": {
-      "date": "2026-07-20",
+      "date": "2026-07-22",
       "kind": "against",
       "state": "Not on your list",
       "rule": "not-among-the-names-the-screen-returned",
       "summary": "The screen did not return this name, so there is nothing here to buy. It was not judged and turned down — it was ranked somewhere else, against companies this journal has never seen.",
       "basis": "reconstructed",
-      "as_of": "2026-07-20",
+      "as_of": "2026-07-22",
       "strategy": {
        "id": "magic-formula",
        "name": "Magic Formula",
-       "version": 2,
+       "version": 3,
        "values_version": 1,
        "contract": 8
       },
@@ -2506,7 +2534,7 @@
      },
      "unreconstructed": null,
      "snapshot": {
-      "frozen": "2026-07-20T12:00:00-04:00",
+      "frozen": "2026-07-22T12:00:00-04:00",
       "decision": {
        "render": "hold",
        "tier": "position",
@@ -2613,7 +2641,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2026-07-18"
+            "entered by hand on 2026-07-20"
            ]
           },
           "test": null,
@@ -2636,7 +2664,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2026-07-18"
+            "entered by hand on 2026-07-20"
            ]
           },
           "test": null,
@@ -2677,7 +2705,7 @@
        "strategy": {
         "id": "magic-formula",
         "name": "Magic Formula",
-        "version": 2,
+        "version": 3,
         "values_version": 1,
         "contract": 8
        }
@@ -2685,7 +2713,7 @@
       "strategy": {
        "id": "magic-formula",
        "name": "Magic Formula",
-       "version": 2,
+       "version": 3,
        "values_version": 1,
        "contract": 8
       },
@@ -2695,16 +2723,20 @@
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2026-07-18"
-        ]
+         "entered by hand on 2026-07-20"
+        ],
+        "label": "Earnings yield",
+        "format": "0.0%"
        },
        "return_on_capital": {
         "value": 18.4,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2026-07-18"
-        ]
+         "entered by hand on 2026-07-20"
+        ],
+        "label": "Return on capital",
+        "format": "0.0%"
        }
       },
       "price": null,
@@ -2713,7 +2745,7 @@
       "price_ticker": null,
       "evaluation": {
        "basis": "reconstructed",
-       "as_of": "2026-07-20",
+       "as_of": "2026-07-22",
        "filings_by_then": 0,
        "newest_filed": null,
        "priced": null,
@@ -2722,7 +2754,7 @@
         "return_on_capital"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2026-07-20 could be consulted; 2 hand-entered values on record by 2026-07-20; judged by Magic Formula v2 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2026-07-22 could be consulted; 2 hand-entered values on record by 2026-07-22; judged by Magic Formula v3 as it stands today (values v1) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": null,
       "valuation": null,
@@ -2744,7 +2776,7 @@
      "unit": "percent",
      "format": "0.0%",
      "plain": "What the business earns before interest and tax, as a percentage of\nwhat the whole thing would cost you — the shares plus the debts you\nwould take on with them, less the cash you would get. A 12% earnings\nyield says the operating profit is twelve cents a year on every\ndollar it costs to own the whole company.\n\nIt is a yield rather than a multiple so that it reads the way a\nsavings rate reads: higher is cheaper. Enterprise value rather than\nmarket capitalisation because buying a company with borrowings means\nbuying the borrowings, and a price tag that leaves them out flatters\nevery leveraged business.\n",
-     "recorded": "2026-07-18T12:00:00-04:00"
+     "recorded": "2026-07-20T12:00:00-04:00"
     },
     {
      "seq": 2,
@@ -2754,7 +2786,7 @@
      "unit": "percent",
      "format": "0.0%",
      "plain": "How many cents of operating profit the business earns on every dollar\nof capital it actually needs to run — the stock and receivables it\nhas to carry, less what its suppliers fund for free, plus the\nbuildings and equipment. A company earning 40 cents on the dollar is\na far better business than one earning 8, and it can grow without\nraising money to do it.\n\nThree things are deliberately left out of the bottom. Debt and equity,\nbecause how a business is financed is a different question from how\ngood it is. Cash, because money sitting in the bank is not earning the\noperating profit. And what a previous owner overpaid for an\nacquisition, because goodwill tells you about a past purchase and not\nabout the return the assets throw off.\n",
-     "recorded": "2026-07-18T12:00:00-04:00"
+     "recorded": "2026-07-20T12:00:00-04:00"
     }
    ],
    "thesis": [],
@@ -2762,12 +2794,12 @@
    "snapshots": [],
    "notes": [
     {
-     "date": "2026-07-18T12:00:00-04:00",
+     "date": "2026-07-20T12:00:00-04:00",
      "text": "A friend's tip. Not on the list, and I know that is the whole thing I am supposed to not do."
     },
     {
-     "date": "2026-07-20T12:00:00-04:00",
-     "text": "Recorded from history: 1 purchase, dated 2026-07-20. Each was judged against the data available on its own day, not against today's."
+     "date": "2026-07-22T12:00:00-04:00",
+     "text": "Recorded from history: 1 purchase, dated 2026-07-22. Each was judged against the data available on its own day, not against today's."
     }
    ],
    "lot_seq": 1
@@ -2788,7 +2820,7 @@
      "unit": "percent",
      "format": "0.0%",
      "plain": "What the business earns before interest and tax, as a percentage of\nwhat the whole thing would cost you — the shares plus the debts you\nwould take on with them, less the cash you would get. A 12% earnings\nyield says the operating profit is twelve cents a year on every\ndollar it costs to own the whole company.\n\nIt is a yield rather than a multiple so that it reads the way a\nsavings rate reads: higher is cheaper. Enterprise value rather than\nmarket capitalisation because buying a company with borrowings means\nbuying the borrowings, and a price tag that leaves them out flatters\nevery leveraged business.\n",
-     "recorded": "2026-08-03T12:00:00-04:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 2,
@@ -2798,7 +2830,7 @@
      "unit": "percent",
      "format": "0.0%",
      "plain": "How many cents of operating profit the business earns on every dollar\nof capital it actually needs to run — the stock and receivables it\nhas to carry, less what its suppliers fund for free, plus the\nbuildings and equipment. A company earning 40 cents on the dollar is\na far better business than one earning 8, and it can grow without\nraising money to do it.\n\nThree things are deliberately left out of the bottom. Debt and equity,\nbecause how a business is financed is a different question from how\ngood it is. Cash, because money sitting in the bank is not earning the\noperating profit. And what a previous owner overpaid for an\nacquisition, because goodwill tells you about a past purchase and not\nabout the return the assets throw off.\n",
-     "recorded": "2026-08-03T12:00:00-04:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     }
    ],
    "thesis": [],
@@ -2822,7 +2854,7 @@
      "unit": "percent",
      "format": "0.0%",
      "plain": "What the business earns before interest and tax, as a percentage of\nwhat the whole thing would cost you — the shares plus the debts you\nwould take on with them, less the cash you would get. A 12% earnings\nyield says the operating profit is twelve cents a year on every\ndollar it costs to own the whole company.\n\nIt is a yield rather than a multiple so that it reads the way a\nsavings rate reads: higher is cheaper. Enterprise value rather than\nmarket capitalisation because buying a company with borrowings means\nbuying the borrowings, and a price tag that leaves them out flatters\nevery leveraged business.\n",
-     "recorded": "2026-08-03T12:00:00-04:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     },
     {
      "seq": 2,
@@ -2832,7 +2864,7 @@
      "unit": "percent",
      "format": "0.0%",
      "plain": "How many cents of operating profit the business earns on every dollar\nof capital it actually needs to run — the stock and receivables it\nhas to carry, less what its suppliers fund for free, plus the\nbuildings and equipment. A company earning 40 cents on the dollar is\na far better business than one earning 8, and it can grow without\nraising money to do it.\n\nThree things are deliberately left out of the bottom. Debt and equity,\nbecause how a business is financed is a different question from how\ngood it is. Cash, because money sitting in the bank is not earning the\noperating profit. And what a previous owner overpaid for an\nacquisition, because goodwill tells you about a past purchase and not\nabout the return the assets throw off.\n",
-     "recorded": "2026-08-03T12:00:00-04:00"
+     "recorded": "2026-08-05T12:00:00-04:00"
     }
    ],
    "thesis": [],
@@ -2842,9 +2874,9 @@
    "passed_over": [
     {
      "seq": 1,
-     "list": "2026-08-03",
+     "list": "2026-08-05",
      "reason": "Second glass company I have been handed in two years and the first one went nowhere. That is not a reason, it is a feeling, and I am writing it down so I can find out which.",
-     "recorded": "2026-08-05T12:00:00-04:00"
+     "recorded": "2026-08-07T12:00:00-04:00"
     }
    ]
   }
@@ -2870,7 +2902,7 @@
   },
   {
    "seq": 2,
-   "pulled_on": "2026-08-03",
+   "pulled_on": "2026-08-05",
    "floor": 1000000000.0,
    "tickers": [
     "FENWCK",
@@ -2885,7 +2917,7 @@
     "MELVRL",
     "STANDH"
    ],
-   "recorded": "2026-08-03T12:00:00-04:00"
+   "recorded": "2026-08-05T12:00:00-04:00"
   }
  ]
 }

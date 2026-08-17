@@ -40,7 +40,7 @@
 # Bump `version` whenever any number here moves. That is what makes the
 # change appear on the rule-change record of every journal running this
 # strategy, with a before and an after.
-version: 1
+version: 2
 
 values:
 
@@ -62,6 +62,12 @@ values:
   # are things the business or the price does.
   portfolio-slots: 8
   position-weight-cap: 25
+
+  # The smallest top-up worth acting on, as a percent of the position's
+  # target value. This author's number, with no source behind it — Lynch
+  # does not address a minimum trade size. Between Graham's tolerance for
+  # increments and Buffett's insistence on size, like most of this method.
+  minimum-add: 10
 
   # Was there a business at the base of the growth window? Reported, and
   # acted on only when BOTH fail — either alone fires on companies that grew

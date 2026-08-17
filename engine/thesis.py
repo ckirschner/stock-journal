@@ -53,16 +53,19 @@ _BELONGS_TO_AN_EARLIER_HOLDING = (
     "earlier holding that closed on {closed} — it was written about that "
     "decision, not the one you hold now")
 
+# The interface's words, not the record's field names: a reader is never
+# shown "thesis" — the record calls it "Why I own this", and a sentence the
+# engine serves is a sentence the reader gets verbatim.
 _NOTHING_TO_RECORD = (
     "Write down what you believe about this business, or what would prove "
-    "you wrong, or both. An empty thesis is the same as no thesis, and "
-    "recording one says you have written something when you have not.")
+    "you wrong, or both. Recording an empty entry would say you have "
+    "written something when you have not.")
 
 _AMENDMENT_NEEDS_A_REASON = (
-    "Say why it changed. There is already a thesis on record and this "
-    "replaces it as the standing one — both stay readable, and months from "
-    "now the useful question is not what you now believe but what made you "
-    "stop believing the other thing. A first thesis needs no reason; an "
+    "Say why it changed. A version is already on record and this replaces "
+    "it as the standing one — both stay readable, and months from now the "
+    "useful question is not what you now believe but what made you stop "
+    "believing the other thing. A first version needs no reason; an "
     "amendment is a decision, and this journal records the reason for a "
     "decision.")
 
@@ -102,11 +105,11 @@ def standing(security: dict, as_of: str | None = None,
         earliest = dated.first(security, KEY)
         if earliest is not None:
             return {"status": "absent",
-                    "reason": f"you first wrote a thesis on "
+                    "reason": f"you first wrote why you own this on "
                               f"{dated.day_of(earliest)}, after {as_of} — "
                               "nothing was on record then"}
         return {"status": "absent",
-                "reason": "no thesis is written for this security yet"}
+                "reason": "nothing is written for this security yet"}
 
     when = dated.day_of(version)
     cautions = []

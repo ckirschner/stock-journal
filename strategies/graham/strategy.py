@@ -266,6 +266,19 @@ DRIFT = (
     ("consecutive_annual_loss_years", "at_most", "drift-loss-years"),
 )
 
+# Every measure this strategy may cite, derived from the tables above so the
+# declaration cannot drift from the citations — one source, two readers. The
+# price test is built at run time but always reads `pe_3y_avg_eps`, so it is
+# named here explicitly. The host holds the promise: a citation outside this
+# list is refused at evaluation, which is what lets a chooser and the
+# measures reference speak for this strategy before any journal exists.
+READS = tuple(sorted(
+    {row[0] for table in (REQUIRED, SAFETY, RECORD, CAPITAL_RETURNED,
+                          ASSET_BACKING, EARNINGS_QUALITY, BONUS,
+                          EXITS_SAFETY, EXITS_DISCOUNT, DRIFT)
+     for row in table}
+    | {"pe_3y_avg_eps"}))
+
 # ---------------------------------------------------------------------------
 # The headings the evidence is gathered under, and what each demands.
 #
@@ -516,11 +529,33 @@ STRATEGY = {
                "what its assets and its typical earnings justify, and sells "
                "when that gap closes, when the balance sheet stops being "
                "safe, or when two years are up — whichever comes first.",
-    "version": 10,
+    "audience": "For someone who wants a rule that tells them when to get "
+                "out. It buys ordinary businesses at a statistical discount "
+                "to what they own and typically earn, and sells when the "
+                "discount closes, the balance sheet breaks, or two years "
+                "pass — whichever comes first. It asks you to form no "
+                "opinion about whether the business is any good. It will "
+                "not evaluate banks, lenders, insurers or property "
+                "companies. Suits someone who does not want to have views "
+                "about companies and does want a hard exit.",
+    "reads": READS,
+    "version": 11,
     "contract": 8,
     "declines": DECLINES,
     "limits": LIMITS,
     "changelog": {
+    11: "NO LEVEL MOVED. This version declares what was already true and "
+        "rewords nothing the arithmetic reads.\n\n"
+        "It declares the measures it reads (`reads`, derived from its own "
+        "test tables), who it is for (`audience`), and that "
+        "`portfolio-slots` is its position limit (the `position-limit` "
+        "role) — so the header can say how full the twenty-slot list is. "
+        "One new setting: `minimum-add`, the smallest addition worth acting "
+        "on as a percent of the position's target, set at 5 because a "
+        "mechanical equal-slot method tolerates small increments — that "
+        "number is this author's, with no source behind it. And the copy "
+        "that framed a quiet holding as something owed (\"Nothing is owed "
+        "from you today\") now reports instead: it asks nothing of you.",
     10: "NO LEVEL MOVED AND NO LOGIC CHANGED — TWO SENTENCES MISSTATED THE "
         "ARITHMETIC. A question about the company that cannot reach its bar "
         "even if every unreadable row under it passed was described as \"not "
@@ -854,8 +889,8 @@ STRATEGY = {
                         "further since your first purchase than it will put "
                         "more money behind — not on any one filing, which is "
                         "the point, but in total.\n\n"
-                        "Nothing is being sold and nothing is owed on the "
-                        "position you have: every exit test came back clear "
+                        "Nothing is being sold, and the position you have "
+                        "is untouched: every exit test came back clear "
                         "and this is a bar on adding, not a verdict on "
                         "holding. What it is asking is that a fresh decision "
                         "be made deliberately rather than arrived at one "
@@ -878,7 +913,7 @@ STRATEGY = {
 
         {"id": "one-reading-past", "render": "hold",
          "name": "One reading past the line",
-         "consequence": "waiting on the next readings to confirm · nothing owed",
+         "consequence": "waiting on the next readings to confirm · asks nothing of you",
          "description": "An exit level has been crossed on the current "
                         "reading, and this strategy will not act on it "
                         "until the next readings say the same thing — "
@@ -886,8 +921,8 @@ STRATEGY = {
                         "the safety ones. One impairment or one settlement "
                         "can push a measure over a line without anything "
                         "having changed, and selling on that would be the "
-                        "panic this is here to prevent. Nothing is owed "
-                        "from you today."},
+                        "panic this is here to prevent. It asks nothing "
+                        "of you today."},
 
         {"id": "too-big", "render": "reduce",
          "name": "Too big a share of the account",
@@ -1036,6 +1071,7 @@ STRATEGY = {
         # to Graham's own documented practice instead, and say so.
         {"id": "portfolio-slots", "label": "Names held at once",
          "type": "integer", "unit": "count", "min": 1, "max": 100,
+         "role": "position-limit",
          "source": GRAHAM_PRACTICE,
          "explain": "How many separate companies this strategy holds at "
                     "one time. Each buy takes an equal share of the "
@@ -1082,6 +1118,29 @@ STRATEGY = {
                     "this test reports that it could not be run.\n\n"
                     "Attributed to Graham's practice, not to the expert "
                     "report, which does not cover sizing."},
+
+        {"id": "minimum-add", "label": "Smallest addition worth making",
+         "type": "number", "unit": "percent", "min": 0, "max": 100,
+         "role": "minimum-add",
+         "source": AUTHOR,
+         "explain": "The smallest top-up worth acting on, as a percent of "
+                    "what the whole position is meant to come to. A holding "
+                    "sitting just under its equal share is eligible for "
+                    "pocket change, and the capital screen would otherwise "
+                    "offer it with a straight face.\n\n"
+                    "Five, because this is a mechanical equal-slot method: "
+                    "positions drift toward their share in small steps, and "
+                    "a five-percent-of-target increment — a quarter of a "
+                    "percent of the whole account on a twenty-slot list — "
+                    "is about where a real broker order stops being worth "
+                    "its own friction.\n\n"
+                    "A fraction rather than a dollar figure on purpose — "
+                    "ten dollars is noise on one account and material on "
+                    "another, so no dollar minimum could ship a default. "
+                    "Nothing is blocked by this: the screen still lists the "
+                    "position and says the amount is below your own "
+                    "minimum, and recording a smaller purchase anyway is "
+                    "recorded like any other."},
 
         # -- how far a business may move before more money goes in ---------
         #
@@ -1697,7 +1756,7 @@ STRATEGY = {
                     "business was worth anything in particular — only that "
                     "it was mispriced. When the mispricing is gone, so is "
                     "the reason to own it, and holding on means you have "
-                    "quietly switched to a thesis you never tested.\n\n"
+                    "quietly switched to a case you never tested.\n\n"
                     "Neither position is a compromise and there is no "
                     "number in between that either side would sign. That is "
                     "why they are separate strategies and separate "
@@ -1744,7 +1803,7 @@ STRATEGY = {
          "label": "Exit level for the current ratio",
          "type": "number", "unit": "ratio", "min": 0,
          "source": REPORT_LEVEL_ONLY,
-         "explain": "The cushion the whole thesis rests on has gone. You "
+         "explain": "The cushion the whole case rests on has gone. You "
                     "required two dollars of short-term assets per dollar "
                     "of short-term bills when you bought; at 1.2 the liquid "
                     "position is no longer carrying risk the operations "
@@ -2478,12 +2537,12 @@ def _on_a_holding(ctx):
                     f"{len(waiting)} exit level has been crossed on the "
                     "current reading and has not yet been crossed on "
                     f"enough consecutive {_waiting_unit(waiting)} to act "
-                    "on. Nothing is owed from you today."
+                    "on. It asks nothing of you today."
                     if len(waiting) == 1 else
                     f"{len(waiting)} exit levels have been crossed on the "
                     "current reading and have not yet been crossed on "
                     f"enough consecutive {_waiting_unit(waiting)} to act "
-                    "on. Nothing is owed from you today."),
+                    "on. It asks nothing of you today."),
                 "evidence": evidence, "groups": groups, "note": note,
             },
         }

@@ -42,13 +42,19 @@ function renderMast() {
       av.status === "known" ? cmMark(av.cautions) : ""}</div></div>`);
   cells.push(`<div class="cell"><div class="l"><button data-menu="timeframe" data-arg="{}">${esc(tf.label)} ▾</button></div>
     <div class="v">${change && change.status === "known"
-      ? `<button data-m="timeframe" data-arg="{}"><span class="num ${change.value >= 0 ? "pos" : "neg"}">${change.value >= 0 ? "+" : "−"}${Math.abs(change.value).toFixed(1)}%</span>${cmMark(change.cautions)}</button>`
+      ? `<button data-m="timeframe" data-arg="{}"><span class="num ${change.value >= 0 ? "pos" : "neg"}">${change.value >= 0 ? "+" : "−"}${Math.abs(change.value).toFixed(1)}%</span>${cmMark(change.cautions)}${
+          T && T.clamped ? ` <small>since ${esc(fmtCloseDate(T.since))}</small>` : ""}</button>`
       : `<button class="absent" data-m="timeframe" data-arg="{}">not known</button>`}</div></div>`);
   cells.push(`<div class="cell"><div class="l"><button data-m="acct" data-arg="${escAttr({ which: "cash" })}">Cash</button></div>
     <div class="v num">${cash.status === "known" ? money0(cash.value)
       : `<button class="absent" data-m="acct" data-arg="${escAttr({ which: "cash" })}">not known</button>`}</div></div>`);
+  /* "6 of 20" where the strategy declared its slot count — the one place a
+     portfolio-level limit reads in the header, and the count alone where it
+     declares none. The total is the strategy's own value, host-resolved. */
+  const slotTotal = ((folio.slots || {}).total) || {};
   cells.push(`<div class="cell"><div class="l"><button data-m="acct" data-arg="${escAttr({ which: "positions" })}">Positions</button></div>
-    <div class="v num">${holdings.length}</div></div>`);
+    <div class="v num">${holdings.length}${slotTotal.status === "known"
+      ? ` <small>of ${esc(String(slotTotal.value))}</small>` : ""}</div></div>`);
   cells.push(`<div class="cell"><div class="l"><button data-m="acct" data-arg="${escAttr({ which: "saying" })}">Something to say</button></div>
     <div class="v">${holdings.length ? `about <b class="num">${saying}</b> <small>of your ${holdings.length}</small>` : '<small>nothing is held</small>'}</div></div>`);
   if (blind) {
@@ -65,7 +71,7 @@ function renderMast() {
 const TAB_DEFS = () => [
   ["list", "The list"],
   ["strategy", "Strategy"],
-  ["measures", `Measures · ${citedInJournal().size}`],
+  ["measures", `Measures · ${journalReads().size}`],
   ["data", "Data"],
   ["analytics", "Looking back"],
 ];
@@ -201,7 +207,7 @@ function payloadLine(d, ticker) {
     const alloc = ((S.allocation || {}).ready || []).concat((S.allocation || {}).waiting || [])
       .find((e) => e.ticker === ticker);
     const amt = alloc && alloc.amount && alloc.amount.status === "known"
-      ? money0(alloc.amount.value) + " may go in — " : "";
+      ? money100(alloc.amount.value) + " may go in — " : "";
     return esc(amt) + esc(sizeText(p.size)) + (p.condition ? " — once " + esc(p.condition.summary) : "");
   }
   if (d.render === "reduce") {
@@ -221,7 +227,7 @@ function payloadLine(d, ticker) {
 }
 function sizeText(size) {
   const z = size || {};
-  return z.unit === "weight" ? `${z.value}% of the account`
+  return z.unit === "weight" ? `${Number(z.value).toFixed(1)}% of the account`
     : z.unit === "usd" ? "$" + Number(z.value).toLocaleString()
     : `${Number(z.value).toLocaleString()} shares`;
 }
@@ -352,13 +358,23 @@ function yourListSection() {
   const c = L.current;
   const history = (L.history || []).length > 1
     ? `<p class="listnote">${L.history.length - 1} earlier list${L.history.length === 2 ? "" : "s"} on record, kept whole and never rewritten.</p>` : "";
-  return `<div class="panel"><h3>${esc((L.declared || {}).label || "Your list")}</h3>
-    <p>${esc((L.declared || {}).explain || "")}</p>
+  /* The framing prose is a gloss, not a greeting — it reads once, behind
+     the heading, like every other explanation in this program. */
+  return `<div class="panel"><h3><button data-m="listabout" data-arg="{}">${esc((L.declared || {}).label || "Your list")}</button></h3>
     <div class="kv"><span class="k">Pulled</span><span class="v num">${esc(c.pulled_on || "")}</span></div>
     ${c.floor ? `<div class="kv"><span class="k">Smallest asked for</span><span class="v num">${money0(c.floor)}</span></div>` : ""}
-    <p class="panelnote">The order below is yours to ignore — the list carries no ranking here. ${esc(sourceName((L.declared || {}).source))}</p></div>
+    <p class="panelnote">The order below is yours to ignore — the list carries no ranking here.</p></div>
   <table class="list"><thead><tr><th>Name</th><th>Standing</th><th></th></tr></thead><tbody>${rows}</tbody></table>${history}`;
 }
+
+/* What the list is and where it comes from, read on request. */
+PANES.listabout = () => {
+  const declared = (S.list || {}).declared || {};
+  return `<p class="m-kicker">The list this journal works from</p>
+<h3>${esc(declared.label || "Your list")}</h3>
+${prose(declared.explain || "")}
+<p class="m-quiet">${esc(sourceName(declared.source))}</p>`;
+};
 
 /* ------------------------------------------------------- margin: previews */
 /* Clicking a row previews its whole verdict in the margin — the walk-fifty-
@@ -389,12 +405,17 @@ ${st.name ? `<tr><td>Today it reads</td><td>${esc(st.name)}</td></tr>` : ""}
 
   const alloc = ((S.allocation || {}).ready || []).concat((S.allocation || {}).waiting || [])
     .find((e) => e.ticker === s.ticker);
+  const tooSmall = alloc && alloc.below_minimum
+    && alloc.below_minimum.status === "known" && alloc.below_minimum.value;
   const allocRows = alloc && d.render === "commit" ? `<table class="m-series">
-    ${alloc.amount ? `<tr><td>May go in now</td><td>${mNode(alloc.amount, money0)}</td></tr>` : ""}
+    ${alloc.amount ? `<tr><td>May go in now</td><td>${mNode(alloc.amount, money100)}${
+      alloc.shares_approx && alloc.shares_approx.status === "known"
+        ? ` <span class="dim">· about ${Number(alloc.shares_approx.value).toLocaleString()} sh</span>` : ""}</td></tr>` : ""}
     ${alloc.amount && alloc.amount.status !== "known" ? `<tr><td colspan="2" class="dim">${esc(alloc.amount.reason || "")}</td></tr>` : ""}
     ${(S.portfolio || {}).cash && S.portfolio.cash.status === "known" ? `<tr><td>Free cash</td><td class="num">${money0(S.portfolio.cash.value)}</td></tr>` : ""}
     ${alloc.condition ? `<tr><td>Waiting on</td><td>${esc(alloc.condition.summary || "")}</td></tr>` : ""}
-  </table>` : "";
+  </table>${tooSmall
+    ? `<p class="m-quiet">Below your strategy's smallest addition worth making — ${esc((alloc.below_minimum.provenance || [])[0] || "")}. Nothing stops a smaller purchase; this is the strategy's own view of what is worth the trade.</p>` : ""}` : "";
 
   const held = s.bucket === "holdings" ? (() => {
     const h = ((S.portfolio || {}).holdings || []).find((x) => x.ticker === s.ticker);
@@ -434,7 +455,7 @@ ${st.name ? `<tr><td>Today it reads</td><td>${esc(st.name)}</td></tr>` : ""}
     const p = s._price || {};
     const lastRead = `<div class="m-h">The last reading</div><table class="m-series">
       <tr><td><button data-m="datastatus" data-arg="${escAttr({ t: s.ticker })}">Filings</button></td>
-        <td>${dd ? `<span class="num">${esc(String(dd.filings_held))}</span> · fetched ${esc(dd.last_fetch ? String(dd.last_fetch.at).slice(0, 10) : "never")}` : "never fetched"}</td></tr>
+        <td>${s.fetch_refused && !(dd && dd.filings_held) ? '<span class="absent">fetch refused</span>' : dd ? `<span class="num">${esc(String(dd.filings_held))}</span> · fetched ${esc(dd.last_fetch ? String(dd.last_fetch.at).slice(0, 10) : "never")}` : "never fetched"}</td></tr>
       <tr><td><button data-m="price" data-arg="${escAttr({ t: s.ticker })}">Price</button></td>
         <td>${p.value == null ? '<span class="absent">not known</span>'
           : `<span class="num">${money(p.value)}</span> · ${p.source === "manual" ? "typed" : `close ${esc(fmtCloseDate(p.date))}`}`}</td></tr>
@@ -490,12 +511,16 @@ ${cashMini()}`;
 <p class="m-quiet">Fetching data, or typing the figures you have, is the way back for each.</p>`;
   }
   const limits = ((S.strategy || {}).limits || []);
+  const slots = (S.portfolio || {}).slots || {};
+  const total = slots.total || {};
+  const slotLine = total.status === "known"
+    ? `<p>${slots.occupied} of the <b class="num">${esc(String(total.value))}</b> places this strategy runs are taken. The limit is the strategy's own — reading it here every visit is how a portfolio-level risk rule stays visible without a screen of its own.</p>${mProv(total.provenance)}`
+    : `<p>How many names the account holds now.</p><p class="m-quiet">${esc(total.reason || "This strategy declares no limit of its own here — that is a true fact about the method, not a gap in the screen.")}</p>`;
   return `<p class="m-kicker">The account</p>
 <h3>Positions</h3>
-<p>How many names the account holds now.</p>
+${slotLine}
 ${limits.length ? `<div class="m-h">What this method does not promise</div>${limits.map((l) =>
-    `<p><b>${esc(l.title || "")}</b></p>${prose(l.body || "")}`).join("")}`
-    : `<p class="m-quiet">This strategy declares no limit of its own here — that is a true fact about the method, not a gap in the screen.</p>`}`;
+    `<p><b>${esc(l.title || "")}</b></p>${prose(l.body || "")}`).join("")}` : ""}`;
 };
 
 function cashMini() {
@@ -517,6 +542,7 @@ PANES.timeframe = () => {
     : ch && ch.status === "known"
       ? `<p>The account moved <b class="num">${money0(ch.value)}</b>${pc && pc.status === "known"
           ? ` (<b class="num">${pc.value >= 0 ? "+" : "−"}${Math.abs(pc.value).toFixed(1)}%</b>)` : ""} since ${esc(T.since || "")}.</p>
+        ${T.clamped ? `<p class="m-quiet">The window you chose starts before this journal's cash record opened, so the figure runs from ${esc(T.since || "")} — the day the record began. What the account held before it started being kept is not something the record can say.</p>` : ""}
         ${mProv(ch.provenance)}${mCautions(ch.cautions)}
         <p class="m-quiet">Money you paid in or took out is netted out, so adding cash never reads as a gain. Dividends are not netted — a holding paying cash out is the account earning.</p>`
       : `<p><span class="absent">not known</span> — ${esc((ch || {}).reason || "the window could not be read")}</p>`;

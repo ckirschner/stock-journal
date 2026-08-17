@@ -211,6 +211,14 @@ def _load_bundle(bundle_dir: Path) -> dict:
     # journal shows an import screen and whether the host serves the `list.*`
     # facts, and both of those are settled before any verdict exists.
     record["list"] = decl.get("list")
+    # The measures this strategy may cite, and who it is for. Both are what
+    # the chooser and the reference screens speak from before any journal
+    # exists — and `reads` is a promise: evaluation refuses a citation
+    # outside it, so a record that dropped it here would silently drop the
+    # enforcement with it.
+    if "reads" in decl:
+        record["reads"] = tuple(decl["reads"])
+    record["audience"] = decl.get("audience")
     record["reference"] = MappingProxyType(reference)
     record["defaults"] = dict((values_doc or {}).get("values") or {})
     record["values_version"] = (values_doc or {}).get("version")

@@ -1,5 +1,5 @@
 {
- "built": "2026-08-16T01:20:41+00:00",
+ "built": "2026-08-16T02:58:31+00:00",
  "as_of": "2026-08-09",
  "free_cash": 40000.0,
  "strategy": "buffett",
@@ -992,16 +992,16 @@
        "strategy": {
         "id": "buffett",
         "name": "Buffett",
-        "version": 7,
-        "values_version": 3,
+        "version": 8,
+        "values_version": 4,
         "contract": 8
        }
       },
       "strategy": {
        "id": "buffett",
        "name": "Buffett",
-       "version": 7,
-       "values_version": 3,
+       "version": 8,
+       "values_version": 4,
        "contract": 8
       },
       "metrics": {
@@ -1011,7 +1011,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-03-08"
-        ]
+        ],
+        "label": "Return on invested capital, 5-year median",
+        "format": "0.0%"
        },
        "total_debt_to_avg_fcf_5y": {
         "value": 1.6,
@@ -1019,7 +1021,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-03-08"
-        ]
+        ],
+        "label": "Total debt to average free cash flow, 5-year",
+        "format": "0.0x"
        },
        "owner_earnings_yield_on_ev": {
         "value": 6.8,
@@ -1027,7 +1031,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-03-08"
-        ]
+        ],
+        "label": "Owner earnings yield on enterprise value",
+        "format": "0.0%"
        },
        "incremental_roic_5y": {
         "value": 22.0,
@@ -1035,7 +1041,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-03-08"
-        ]
+        ],
+        "label": "Incremental return on invested capital, 5-year",
+        "format": "0.0%"
        },
        "interest_coverage": {
         "value": 15.0,
@@ -1043,7 +1051,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-03-08"
-        ]
+        ],
+        "label": "Interest coverage",
+        "format": "0.0x"
        },
        "roe_minus_roic_gap_5y": {
         "value": 4.0,
@@ -1051,7 +1061,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-03-08"
-        ]
+        ],
+        "label": "Return on equity above return on invested capital, 5-year",
+        "format": "+0.0 pp"
        },
        "fcf_margin_median_5y": {
         "value": 18.0,
@@ -1059,7 +1071,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-03-08"
-        ]
+        ],
+        "label": "Free cash flow margin, 5-year median",
+        "format": "0.0%"
        },
        "cash_conversion_median_5y": {
         "value": 1.02,
@@ -1067,7 +1081,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-03-08"
-        ]
+        ],
+        "label": "Cash conversion, 5-year median",
+        "format": "0.00"
        },
        "revenue_cagr_5y": {
         "value": 6.5,
@@ -1075,7 +1091,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-03-08"
-        ]
+        ],
+        "label": "Revenue CAGR, 5-year",
+        "format": "0.0%"
        },
        "ni_minus_revenue_cagr_spread_5y": {
         "value": 1.5,
@@ -1083,7 +1101,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-03-08"
-        ]
+        ],
+        "label": "Net income CAGR minus revenue CAGR, 5-year",
+        "format": "+0.0 pp"
        },
        "gross_margin_range_relative_5y": {
         "value": 5.2,
@@ -1091,7 +1111,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-03-08"
-        ]
+        ],
+        "label": "Gross margin range as a share of the margin, 5-year",
+        "format": "0.0%"
        },
        "diluted_share_count_change_5y": {
         "value": -5.0,
@@ -1099,7 +1121,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-03-08"
-        ]
+        ],
+        "label": "Diluted share count change, 5-year",
+        "format": "+0.0%"
        },
        "goodwill_impairment_to_equity_5y": {
         "value": 0.0,
@@ -1107,7 +1131,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-03-08"
-        ]
+        ],
+        "label": "Goodwill written off over five years, against opening equity",
+        "format": "0.0%"
        },
        "total_debt_to_ebitda": {
         "value": 1.2,
@@ -1115,7 +1141,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-03-08"
-        ]
+        ],
+        "label": "Total debt to EBITDA",
+        "format": "0.0x"
        },
        "effective_tax_rate_median_5y": {
         "value": 22.0,
@@ -1123,7 +1151,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-03-08"
-        ]
+        ],
+        "label": "Effective tax rate, 5-year median",
+        "format": "0.0%"
        },
        "current_ratio": {
         "value": 1.1,
@@ -1131,7 +1161,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-03-08"
-        ]
+        ],
+        "label": "Current ratio",
+        "format": "0.00"
        },
        "payout_to_fcf_median_5y": {
         "value": 58.0,
@@ -1139,7 +1171,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-03-08"
-        ]
+        ],
+        "label": "Total payout over free cash flow, 5-year median",
+        "format": "0.0%"
        },
        "fcf_margin_ttm": {
         "value": 17.0,
@@ -1147,7 +1181,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-03-08"
-        ]
+        ],
+        "label": "Free cash flow margin, trailing twelve months",
+        "format": "0.0%"
        },
        "diluted_share_count_change_3y": {
         "value": -3.0,
@@ -1155,7 +1191,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-03-08"
-        ]
+        ],
+        "label": "Diluted share count change, 3-year",
+        "format": "+0.0%"
        },
        "moat_durability": {
         "value": true,
@@ -1164,7 +1202,9 @@
         "provenance": [
          "your assessment of 2021-03-10",
          "Kiln capacity in this grade of technical ceramic takes four years and a licence to build. The two firms that could have added it chose not to, twice."
-        ]
+        ],
+        "label": "Moat durability",
+        "format": null
        },
        "management_integrity": {
         "value": true,
@@ -1173,7 +1213,9 @@
         "provenance": [
          "your assessment of 2021-03-10",
          "The 2019 letter opened with the recall and what it cost. Nobody buries a number they lead with."
-        ]
+        ],
+        "label": "Management integrity",
+        "format": null
        },
        "capital_allocation": {
         "value": true,
@@ -1182,7 +1224,9 @@
         "provenance": [
          "your assessment of 2021-03-11",
          "Sixteen years of buying back stock below what the business is plainly worth, and no acquisition larger than a bolt-on."
-        ]
+        ],
+        "label": "Capital allocation",
+        "format": null
        }
       },
       "price": null,
@@ -1217,7 +1261,7 @@
         "total_debt_to_ebitda"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2021-03-15 could be consulted; 19 hand-entered values on record by 2021-03-15; judged by Buffett v7 as it stands today (values v3) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; what this account held in cash on 2021-03-15 is not on record — this journal's cash record opens on 2024-01-02 and has no answer for 2021-03-15 — what the account held before it started being kept is not something the record can say, and carrying the opening balance backwards would state a figure for a day nothing was recorded about — so the account total and every share of it are absent"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2021-03-15 could be consulted; 19 hand-entered values on record by 2021-03-15; judged by Buffett v8 as it stands today (values v4) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; what this account held in cash on 2021-03-15 is not on record — this journal's cash record opens on 2024-01-02 and has no answer for 2021-03-15 — what the account held before it started being kept is not something the record can say, and carrying the opening balance backwards would state a figure for a day nothing was recorded about — so the account total and every share of it are absent"
       },
       "thesis": null,
       "valuation": null,
@@ -2560,16 +2604,16 @@
        "strategy": {
         "id": "buffett",
         "name": "Buffett",
-        "version": 7,
-        "values_version": 3,
+        "version": 8,
+        "values_version": 4,
         "contract": 8
        }
       },
       "strategy": {
        "id": "buffett",
        "name": "Buffett",
-       "version": 7,
-       "values_version": 3,
+       "version": 8,
+       "values_version": 4,
        "contract": 8
       },
       "metrics": {
@@ -2579,7 +2623,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-09-05"
-        ]
+        ],
+        "label": "Return on invested capital, 5-year median",
+        "format": "0.0%"
        },
        "total_debt_to_avg_fcf_5y": {
         "value": 1.6,
@@ -2587,7 +2633,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-09-05"
-        ]
+        ],
+        "label": "Total debt to average free cash flow, 5-year",
+        "format": "0.0x"
        },
        "owner_earnings_yield_on_ev": {
         "value": 7.2,
@@ -2595,7 +2643,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-09-05"
-        ]
+        ],
+        "label": "Owner earnings yield on enterprise value",
+        "format": "0.0%"
        },
        "incremental_roic_5y": {
         "value": 22.0,
@@ -2603,7 +2653,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-09-05"
-        ]
+        ],
+        "label": "Incremental return on invested capital, 5-year",
+        "format": "0.0%"
        },
        "interest_coverage": {
         "value": 15.0,
@@ -2611,7 +2663,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-09-05"
-        ]
+        ],
+        "label": "Interest coverage",
+        "format": "0.0x"
        },
        "roe_minus_roic_gap_5y": {
         "value": 4.6,
@@ -2619,7 +2673,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-09-05"
-        ]
+        ],
+        "label": "Return on equity above return on invested capital, 5-year",
+        "format": "+0.0 pp"
        },
        "fcf_margin_median_5y": {
         "value": 18.0,
@@ -2627,7 +2683,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-09-05"
-        ]
+        ],
+        "label": "Free cash flow margin, 5-year median",
+        "format": "0.0%"
        },
        "cash_conversion_median_5y": {
         "value": 1.02,
@@ -2635,7 +2693,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-09-05"
-        ]
+        ],
+        "label": "Cash conversion, 5-year median",
+        "format": "0.00"
        },
        "revenue_cagr_5y": {
         "value": 6.5,
@@ -2643,7 +2703,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-09-05"
-        ]
+        ],
+        "label": "Revenue CAGR, 5-year",
+        "format": "0.0%"
        },
        "ni_minus_revenue_cagr_spread_5y": {
         "value": 1.5,
@@ -2651,7 +2713,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-09-05"
-        ]
+        ],
+        "label": "Net income CAGR minus revenue CAGR, 5-year",
+        "format": "+0.0 pp"
        },
        "gross_margin_range_relative_5y": {
         "value": 5.2,
@@ -2659,7 +2723,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-09-05"
-        ]
+        ],
+        "label": "Gross margin range as a share of the margin, 5-year",
+        "format": "0.0%"
        },
        "diluted_share_count_change_5y": {
         "value": -5.0,
@@ -2667,7 +2733,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-09-05"
-        ]
+        ],
+        "label": "Diluted share count change, 5-year",
+        "format": "+0.0%"
        },
        "goodwill_impairment_to_equity_5y": {
         "value": 0.0,
@@ -2675,7 +2743,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-09-05"
-        ]
+        ],
+        "label": "Goodwill written off over five years, against opening equity",
+        "format": "0.0%"
        },
        "total_debt_to_ebitda": {
         "value": 1.2,
@@ -2683,7 +2753,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-09-05"
-        ]
+        ],
+        "label": "Total debt to EBITDA",
+        "format": "0.0x"
        },
        "effective_tax_rate_median_5y": {
         "value": 22.0,
@@ -2691,7 +2763,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-09-05"
-        ]
+        ],
+        "label": "Effective tax rate, 5-year median",
+        "format": "0.0%"
        },
        "current_ratio": {
         "value": 1.1,
@@ -2699,7 +2773,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-09-05"
-        ]
+        ],
+        "label": "Current ratio",
+        "format": "0.00"
        },
        "payout_to_fcf_median_5y": {
         "value": 58.0,
@@ -2707,7 +2783,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-09-05"
-        ]
+        ],
+        "label": "Total payout over free cash flow, 5-year median",
+        "format": "0.0%"
        },
        "fcf_margin_ttm": {
         "value": 17.0,
@@ -2715,7 +2793,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-09-05"
-        ]
+        ],
+        "label": "Free cash flow margin, trailing twelve months",
+        "format": "0.0%"
        },
        "diluted_share_count_change_3y": {
         "value": -3.0,
@@ -2723,7 +2803,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2023-09-05"
-        ]
+        ],
+        "label": "Diluted share count change, 3-year",
+        "format": "+0.0%"
        },
        "moat_durability": {
         "value": true,
@@ -2732,7 +2814,9 @@
         "provenance": [
          "your assessment of 2023-09-06",
          "Bonded abrasives are specified into customers' own process documents. Changing supplier means requalifying the process, which nobody does to save four percent."
-        ]
+        ],
+        "label": "Moat durability",
+        "format": null
        },
        "management_integrity": {
         "value": true,
@@ -2741,7 +2825,9 @@
         "provenance": [
          "your assessment of 2023-09-06",
          "Guidance missed twice in eleven years and both times the shortfall was explained before anyone asked."
-        ]
+        ],
+        "label": "Management integrity",
+        "format": null
        },
        "capital_allocation": {
         "value": true,
@@ -2750,7 +2836,9 @@
         "provenance": [
          "your assessment of 2023-09-07",
          "Spare cash has gone into capacity at the plants earning the most, and into the dividend. No empire building."
-        ]
+        ],
+        "label": "Capital allocation",
+        "format": null
        }
       },
       "price": null,
@@ -2785,7 +2873,7 @@
         "total_debt_to_ebitda"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2023-09-12 could be consulted; 19 hand-entered values on record by 2023-09-12; judged by Buffett v7 as it stands today (values v3) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; what this account held in cash on 2023-09-12 is not on record — this journal's cash record opens on 2024-01-02 and has no answer for 2023-09-12 — what the account held before it started being kept is not something the record can say, and carrying the opening balance backwards would state a figure for a day nothing was recorded about — so the account total and every share of it are absent"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2023-09-12 could be consulted; 19 hand-entered values on record by 2023-09-12; judged by Buffett v8 as it stands today (values v4) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; what this account held in cash on 2023-09-12 is not on record — this journal's cash record opens on 2024-01-02 and has no answer for 2023-09-12 — what the account held before it started being kept is not something the record can say, and carrying the opening balance backwards would state a figure for a day nothing was recorded about — so the account total and every share of it are absent"
       },
       "thesis": null,
       "valuation": null,
@@ -4094,16 +4182,16 @@
        "strategy": {
         "id": "buffett",
         "name": "Buffett",
-        "version": 7,
-        "values_version": 3,
+        "version": 8,
+        "values_version": 4,
         "contract": 8
        }
       },
       "strategy": {
        "id": "buffett",
        "name": "Buffett",
-       "version": 7,
-       "values_version": 3,
+       "version": 8,
+       "values_version": 4,
        "contract": 8
       },
       "metrics": {
@@ -4113,7 +4201,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-06-14"
-        ]
+        ],
+        "label": "Return on invested capital, 5-year median",
+        "format": "0.0%"
        },
        "total_debt_to_avg_fcf_5y": {
         "value": 1.6,
@@ -4121,7 +4211,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-06-14"
-        ]
+        ],
+        "label": "Total debt to average free cash flow, 5-year",
+        "format": "0.0x"
        },
        "owner_earnings_yield_on_ev": {
         "value": 6.6,
@@ -4129,7 +4221,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-06-14"
-        ]
+        ],
+        "label": "Owner earnings yield on enterprise value",
+        "format": "0.0%"
        },
        "incremental_roic_5y": {
         "value": 22.0,
@@ -4137,7 +4231,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-06-14"
-        ]
+        ],
+        "label": "Incremental return on invested capital, 5-year",
+        "format": "0.0%"
        },
        "interest_coverage": {
         "value": 15.0,
@@ -4145,7 +4241,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-06-14"
-        ]
+        ],
+        "label": "Interest coverage",
+        "format": "0.0x"
        },
        "roe_minus_roic_gap_5y": {
         "value": 4.6,
@@ -4153,7 +4251,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-06-14"
-        ]
+        ],
+        "label": "Return on equity above return on invested capital, 5-year",
+        "format": "+0.0 pp"
        },
        "fcf_margin_median_5y": {
         "value": 18.0,
@@ -4161,7 +4261,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-06-14"
-        ]
+        ],
+        "label": "Free cash flow margin, 5-year median",
+        "format": "0.0%"
        },
        "cash_conversion_median_5y": {
         "value": 1.02,
@@ -4169,7 +4271,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-06-14"
-        ]
+        ],
+        "label": "Cash conversion, 5-year median",
+        "format": "0.00"
        },
        "revenue_cagr_5y": {
         "value": 6.5,
@@ -4177,7 +4281,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-06-14"
-        ]
+        ],
+        "label": "Revenue CAGR, 5-year",
+        "format": "0.0%"
        },
        "ni_minus_revenue_cagr_spread_5y": {
         "value": 1.5,
@@ -4185,7 +4291,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-06-14"
-        ]
+        ],
+        "label": "Net income CAGR minus revenue CAGR, 5-year",
+        "format": "+0.0 pp"
        },
        "gross_margin_range_relative_5y": {
         "value": 5.2,
@@ -4193,7 +4301,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-06-14"
-        ]
+        ],
+        "label": "Gross margin range as a share of the margin, 5-year",
+        "format": "0.0%"
        },
        "diluted_share_count_change_5y": {
         "value": -5.0,
@@ -4201,7 +4311,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-06-14"
-        ]
+        ],
+        "label": "Diluted share count change, 5-year",
+        "format": "+0.0%"
        },
        "goodwill_impairment_to_equity_5y": {
         "value": 0.0,
@@ -4209,7 +4321,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-06-14"
-        ]
+        ],
+        "label": "Goodwill written off over five years, against opening equity",
+        "format": "0.0%"
        },
        "total_debt_to_ebitda": {
         "value": 1.2,
@@ -4217,7 +4331,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-06-14"
-        ]
+        ],
+        "label": "Total debt to EBITDA",
+        "format": "0.0x"
        },
        "effective_tax_rate_median_5y": {
         "value": 22.0,
@@ -4225,7 +4341,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-06-14"
-        ]
+        ],
+        "label": "Effective tax rate, 5-year median",
+        "format": "0.0%"
        },
        "current_ratio": {
         "value": 1.1,
@@ -4233,7 +4351,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-06-14"
-        ]
+        ],
+        "label": "Current ratio",
+        "format": "0.00"
        },
        "payout_to_fcf_median_5y": {
         "value": 58.0,
@@ -4241,7 +4361,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-06-14"
-        ]
+        ],
+        "label": "Total payout over free cash flow, 5-year median",
+        "format": "0.0%"
        },
        "fcf_margin_ttm": {
         "value": 17.0,
@@ -4249,7 +4371,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-06-14"
-        ]
+        ],
+        "label": "Free cash flow margin, trailing twelve months",
+        "format": "0.0%"
        },
        "diluted_share_count_change_3y": {
         "value": -3.0,
@@ -4257,7 +4381,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2021-06-14"
-        ]
+        ],
+        "label": "Diluted share count change, 3-year",
+        "format": "+0.0%"
        },
        "moat_durability": {
         "value": true,
@@ -4266,7 +4392,9 @@
         "provenance": [
          "your assessment of 2021-06-15",
          "Calibration records live in their software. Ripping it out means revalidating a decade of instrument history."
-        ]
+        ],
+        "label": "Moat durability",
+        "format": null
        },
        "management_integrity": {
         "value": true,
@@ -4275,7 +4403,9 @@
         "provenance": [
          "your assessment of 2021-06-15",
          "Straight about the 2020 shutdown and what it did to the order book."
-        ]
+        ],
+        "label": "Management integrity",
+        "format": null
        },
        "capital_allocation": {
         "value": true,
@@ -4284,7 +4414,9 @@
         "provenance": [
          "your assessment of 2021-06-16",
          "Cash has gone back to owners or into the calibration software, which is the moat."
-        ]
+        ],
+        "label": "Capital allocation",
+        "format": null
        }
       },
       "price": null,
@@ -4319,7 +4451,7 @@
         "total_debt_to_ebitda"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2021-06-21 could be consulted; 19 hand-entered values on record by 2021-06-21; judged by Buffett v7 as it stands today (values v3) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; what this account held in cash on 2021-06-21 is not on record — this journal's cash record opens on 2024-01-02 and has no answer for 2021-06-21 — what the account held before it started being kept is not something the record can say, and carrying the opening balance backwards would state a figure for a day nothing was recorded about — so the account total and every share of it are absent"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2021-06-21 could be consulted; 19 hand-entered values on record by 2021-06-21; judged by Buffett v8 as it stands today (values v4) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; what this account held in cash on 2021-06-21 is not on record — this journal's cash record opens on 2024-01-02 and has no answer for 2021-06-21 — what the account held before it started being kept is not something the record can say, and carrying the opening balance backwards would state a figure for a day nothing was recorded about — so the account total and every share of it are absent"
       },
       "thesis": null,
       "valuation": null,
@@ -5652,16 +5784,16 @@
        "strategy": {
         "id": "buffett",
         "name": "Buffett",
-        "version": 7,
-        "values_version": 3,
+        "version": 8,
+        "values_version": 4,
         "contract": 8
        }
       },
       "strategy": {
        "id": "buffett",
        "name": "Buffett",
-       "version": 7,
-       "values_version": 3,
+       "version": 8,
+       "values_version": 4,
        "contract": 8
       },
       "metrics": {
@@ -5671,7 +5803,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2022-10-03"
-        ]
+        ],
+        "label": "Return on invested capital, 5-year median",
+        "format": "0.0%"
        },
        "total_debt_to_avg_fcf_5y": {
         "value": 1.9,
@@ -5679,7 +5813,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2022-10-03"
-        ]
+        ],
+        "label": "Total debt to average free cash flow, 5-year",
+        "format": "0.0x"
        },
        "owner_earnings_yield_on_ev": {
         "value": 6.9,
@@ -5687,7 +5823,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2022-10-03"
-        ]
+        ],
+        "label": "Owner earnings yield on enterprise value",
+        "format": "0.0%"
        },
        "incremental_roic_5y": {
         "value": 22.0,
@@ -5695,7 +5833,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2022-10-03"
-        ]
+        ],
+        "label": "Incremental return on invested capital, 5-year",
+        "format": "0.0%"
        },
        "interest_coverage": {
         "value": 15.0,
@@ -5703,7 +5843,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2022-10-03"
-        ]
+        ],
+        "label": "Interest coverage",
+        "format": "0.0x"
        },
        "roe_minus_roic_gap_5y": {
         "value": 4.6,
@@ -5711,7 +5853,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2022-10-03"
-        ]
+        ],
+        "label": "Return on equity above return on invested capital, 5-year",
+        "format": "+0.0 pp"
        },
        "fcf_margin_median_5y": {
         "value": 18.0,
@@ -5719,7 +5863,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2022-10-03"
-        ]
+        ],
+        "label": "Free cash flow margin, 5-year median",
+        "format": "0.0%"
        },
        "cash_conversion_median_5y": {
         "value": 1.02,
@@ -5727,7 +5873,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2022-10-03"
-        ]
+        ],
+        "label": "Cash conversion, 5-year median",
+        "format": "0.00"
        },
        "revenue_cagr_5y": {
         "value": 6.5,
@@ -5735,7 +5883,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2022-10-03"
-        ]
+        ],
+        "label": "Revenue CAGR, 5-year",
+        "format": "0.0%"
        },
        "ni_minus_revenue_cagr_spread_5y": {
         "value": 1.5,
@@ -5743,7 +5893,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2022-10-03"
-        ]
+        ],
+        "label": "Net income CAGR minus revenue CAGR, 5-year",
+        "format": "+0.0 pp"
        },
        "gross_margin_range_relative_5y": {
         "value": 5.2,
@@ -5751,7 +5903,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2022-10-03"
-        ]
+        ],
+        "label": "Gross margin range as a share of the margin, 5-year",
+        "format": "0.0%"
        },
        "diluted_share_count_change_5y": {
         "value": -5.0,
@@ -5759,7 +5913,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2022-10-03"
-        ]
+        ],
+        "label": "Diluted share count change, 5-year",
+        "format": "+0.0%"
        },
        "goodwill_impairment_to_equity_5y": {
         "value": 0.0,
@@ -5767,7 +5923,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2022-10-03"
-        ]
+        ],
+        "label": "Goodwill written off over five years, against opening equity",
+        "format": "0.0%"
        },
        "total_debt_to_ebitda": {
         "value": 1.2,
@@ -5775,7 +5933,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2022-10-03"
-        ]
+        ],
+        "label": "Total debt to EBITDA",
+        "format": "0.0x"
        },
        "effective_tax_rate_median_5y": {
         "value": 22.0,
@@ -5783,7 +5943,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2022-10-03"
-        ]
+        ],
+        "label": "Effective tax rate, 5-year median",
+        "format": "0.0%"
        },
        "current_ratio": {
         "value": 1.1,
@@ -5791,7 +5953,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2022-10-03"
-        ]
+        ],
+        "label": "Current ratio",
+        "format": "0.00"
        },
        "payout_to_fcf_median_5y": {
         "value": 58.0,
@@ -5799,7 +5963,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2022-10-03"
-        ]
+        ],
+        "label": "Total payout over free cash flow, 5-year median",
+        "format": "0.0%"
        },
        "fcf_margin_ttm": {
         "value": 17.0,
@@ -5807,7 +5973,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2022-10-03"
-        ]
+        ],
+        "label": "Free cash flow margin, trailing twelve months",
+        "format": "0.0%"
        },
        "diluted_share_count_change_3y": {
         "value": -3.0,
@@ -5815,7 +5983,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2022-10-03"
-        ]
+        ],
+        "label": "Diluted share count change, 3-year",
+        "format": "+0.0%"
        },
        "moat_durability": {
         "value": true,
@@ -5824,7 +5994,9 @@
         "provenance": [
          "your assessment of 2022-10-04",
          "Two brands people ask for by name in a category nobody enters for the margins."
-        ]
+        ],
+        "label": "Moat durability",
+        "format": null
        },
        "management_integrity": {
         "value": true,
@@ -5833,7 +6005,9 @@
         "provenance": [
          "your assessment of 2022-10-04",
          "Long record of saying what the input costs were doing before it showed up in the numbers."
-        ]
+        ],
+        "label": "Management integrity",
+        "format": null
        },
        "capital_allocation": {
         "value": true,
@@ -5842,7 +6016,9 @@
         "provenance": [
          "your assessment of 2022-10-05",
          "Paid down the 2016 borrowings early rather than buying something."
-        ]
+        ],
+        "label": "Capital allocation",
+        "format": null
        }
       },
       "price": null,
@@ -5877,7 +6053,7 @@
         "total_debt_to_ebitda"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2022-10-11 could be consulted; 19 hand-entered values on record by 2022-10-11; judged by Buffett v7 as it stands today (values v3) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; what this account held in cash on 2022-10-11 is not on record — this journal's cash record opens on 2024-01-02 and has no answer for 2022-10-11 — what the account held before it started being kept is not something the record can say, and carrying the opening balance backwards would state a figure for a day nothing was recorded about — so the account total and every share of it are absent"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2022-10-11 could be consulted; 19 hand-entered values on record by 2022-10-11; judged by Buffett v8 as it stands today (values v4) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; what this account held in cash on 2022-10-11 is not on record — this journal's cash record opens on 2024-01-02 and has no answer for 2022-10-11 — what the account held before it started being kept is not something the record can say, and carrying the opening balance backwards would state a figure for a day nothing was recorded about — so the account total and every share of it are absent"
       },
       "thesis": null,
       "valuation": null,
@@ -6255,8 +6431,8 @@
       "strategy": {
        "id": "buffett",
        "name": "Buffett",
-       "version": 7,
-       "values_version": 3,
+       "version": 8,
+       "values_version": 4,
        "contract": 8
       },
       "missing": [
@@ -6333,7 +6509,7 @@
         "label": "Most of free cash flow that may be paid out"
        }
       ],
-      "note": "no company is linked to this ticker, so no stored filing or price from 2023-02-14 could be consulted; judged by Buffett v7 as it stands today (values v3) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; what this account held in cash on 2023-02-14 is not on record — this journal's cash record opens on 2024-01-02 and has no answer for 2023-02-14 — what the account held before it started being kept is not something the record can say, and carrying the opening balance backwards would state a figure for a day nothing was recorded about — so the account total and every share of it are absent"
+      "note": "no company is linked to this ticker, so no stored filing or price from 2023-02-14 could be consulted; judged by Buffett v8 as it stands today (values v4) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; what this account held in cash on 2023-02-14 is not on record — this journal's cash record opens on 2024-01-02 and has no answer for 2023-02-14 — what the account held before it started being kept is not something the record can say, and carrying the opening balance backwards would state a figure for a day nothing was recorded about — so the account total and every share of it are absent"
      },
      "snapshot": {
       "frozen": "2023-02-14T12:00:00-05:00",
@@ -7020,16 +7196,16 @@
        "strategy": {
         "id": "buffett",
         "name": "Buffett",
-        "version": 7,
-        "values_version": 3,
+        "version": 8,
+        "values_version": 4,
         "contract": 8
        }
       },
       "strategy": {
        "id": "buffett",
        "name": "Buffett",
-       "version": 7,
-       "values_version": 3,
+       "version": 8,
+       "values_version": 4,
        "contract": 8
       },
       "metrics": {},
@@ -7045,7 +7221,7 @@
        "priced": null,
        "manual_on_record": [],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2023-02-14 could be consulted; judged by Buffett v7 as it stands today (values v3) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; what this account held in cash on 2023-02-14 is not on record — this journal's cash record opens on 2024-01-02 and has no answer for 2023-02-14 — what the account held before it started being kept is not something the record can say, and carrying the opening balance backwards would state a figure for a day nothing was recorded about — so the account total and every share of it are absent"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2023-02-14 could be consulted; judged by Buffett v8 as it stands today (values v4) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day; what this account held in cash on 2023-02-14 is not on record — this journal's cash record opens on 2024-01-02 and has no answer for 2023-02-14 — what the account held before it started being kept is not something the record can say, and carrying the opening balance backwards would state a figure for a day nothing was recorded about — so the account total and every share of it are absent"
       },
       "thesis": null,
       "valuation": null,

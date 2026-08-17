@@ -200,12 +200,16 @@ for (const s of state.securities) {
 
 // ----------------------------------------------------------- the menus
 // Chrome opens where it was clicked: the journal pill, the window picker
-// and the per-security toolbox are dropdowns, not margin panes.
+// and the per-security toolbox are dropdowns, not margin panes. Starting
+// another journal is a SCREEN — a permanent decision plus a form needs
+// room a dropdown does not have.
 await check("menu:journal", "MENUS.journal({})");
-await check("menu:newjournal", "MENUS.newjournal({})");
+await check("newjournal", "newJournalView()");
 if ((state.strategies || []).length) {
-  await check("menu:newjournal:chosen",
-    `MENUS.newjournal({ id: ${JSON.stringify(state.strategies[0].id)} })`);
+  await check("newjournal:chosen", `(() => {
+    const was = chosenStrategy;
+    chosenStrategy = ${JSON.stringify(state.strategies[0].id)};
+    const h = newJournalView(); chosenStrategy = was; return h; })()`);
 }
 await check("menu:renamejournal", "MENUS.renamejournal({})");
 await check("menu:deletejournal", "MENUS.deletejournal({})");
@@ -304,6 +308,20 @@ if (compared) {
     + "is unexercised");
 }
 
+// A frozen reading renders in the words and format in force when it was
+// frozen — today's bank covers only records that predate the fields.
+// (Asserted with the other musts below.)
+await check("compare:frozen-words", `comparisonHtml("SYN", {
+  columns: [{ day: "2026-01-01" }, { day: "2026-02-01" }],
+  verdict: [], price: [{ status: "absent", reason: "none kept" },
+                       { status: "absent", reason: "none kept" }],
+  measures: { synthetic_scan_id: { readings: [
+    { status: "known", value: 6, label: "The words in force then",
+      format: "0.0%", cautions: [] },
+    { status: "known", value: 7, label: "The words in force then",
+      format: "0.0%", cautions: [] }], moved: { status: "known", value: 1,
+      cautions: [] } } } })`);
+
 // A change row — its own subject kind, its own unit and sign rule: a
 // distance between two readings always shows its sign, in every unit.
 await check("evidence:change", `(() => {
@@ -323,6 +341,22 @@ await check("evidence:change", `(() => {
           row("gross_margin_ttm", "percentage_points", 2),
           row("current_ratio", "ratio", 0.2),
           row("current_ratio", "ratio", -1.1)].join("");
+})()`);
+
+// A bounded observation reads as a floor everywhere the number appears —
+// the bound is part of the value, never a caution.
+await check("evidence:bounded", `(() => {
+  const s = S.securities[0];
+  return evidenceRow(s, {
+    group: null,
+    subject: {kind: "measure", id: "synthetic_streak", unit: "years",
+              label: "A streak the record cannot see past"},
+    observed: {status: "known", value: 13, bound: "at_least",
+               bound_reason: "the record of filings reaches only so far",
+               cautions: [], provenance: []},
+    test: {phrase: "at least", threshold: 20, threshold_from: null,
+           absent: null},
+    outcome: "unknown"}, 0);
 })()`);
 
 // The gate arithmetic, exercised directly — the stub DOM's querySelectorAll
@@ -415,6 +449,24 @@ const must = [
   ["evidence:change", "change since you first bought",
    "the row says which purchase it measures from"],
 ];
+// The header says how full the strategy's list is, where the strategy
+// declared its slot count — the one portfolio-level risk limit in the mast.
+const slotTotal = ((state.portfolio || {}).slots || {}).total || {};
+if (slotTotal.status === "known") {
+  must.push(["mast", `of ${slotTotal.value}`,
+    "the positions cell reads as a share of the strategy's own limit"]);
+}
+must.push(["evidence:bounded", "at least ",
+  "a floor reads as one, in words, beside the number"]);
+must.push(["evidence:bounded", "can’t say",
+  "a threshold past the floor is unknown, never a fail"]);
+must.push(["compare:frozen-words", "The words in force then",
+  "a frozen reading is headed by its own frozen label"]);
+must.push(["compare:frozen-words", "6.0%",
+  "and rendered through its own frozen format"]);
+mustNot.push(["compare:frozen-words", "synthetic_scan_id",
+  "the raw id never stands in where frozen words exist"]);
+
 mustNot.push(
   ["data", "Load sample", "the sample-journals button left the interface (§6.30)"],
   [`m:snapshot:${state.securities[0].ticker}`, 'type="date"',
@@ -467,8 +519,13 @@ if (declines.length) {
   must.push(
     ["strategy", "What it will not evaluate",
      "the boundary exists on the strategy page before a verdict shows it"],
-    ["strategy", declines[0].label, "and names the kind of company"],
-    ["strategy", declines[0].because, "in the strategy's own words"]);
+    ["strategy", declines[0].label, "and names the kind of company"]);
+  // The reasoning is prose, so it reads behind the click like every other
+  // paragraph — in the margin gloss, in the strategy's own words.
+  await check("m:declprose:decline",
+    'PANES.declprose({ what: "decline", i: 0 })');
+  must.push(["m:declprose:decline", declines[0].because,
+    "the decline's reasoning is one click away, in the strategy's own words"]);
 }
 Object.values(state.render_types || {}).filter((t) => t.host_only)
   .forEach((t) => mustNot.push(["strategy", t.meaning,
@@ -735,8 +792,24 @@ for (const s of state.securities) {
   const escd = (v) => v.replace(/[&<>"']/g, (c) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
   }[c]));
+  // A numeric payload scalar may reach the card rounded — sizing figures
+  // are decision aids, rounded by decision (§6.16) — but it must reach it
+  // in SOME recognisable form; a key read by the wrong name still prints
+  // nothing at all and still fails here.
+  const formsOf = (v) => {
+    const out = [v];
+    const n = Number(v);
+    if (Number.isFinite(n)) {
+      out.push(n.toFixed(1), Math.round(n).toLocaleString(),
+               (Math.abs(n) >= 1000 ? Math.round(n / 100) * 100
+                                    : Math.round(n)).toLocaleString());
+    }
+    return out;
+  };
   for (const value of wanted) {
-    if (!html.includes(value) && !html.includes(escd(value))) {
+    const seen = formsOf(value).some((f) =>
+      html.includes(String(f)) || html.includes(escd(String(f))));
+    if (!seen) {
       problems.push(`detail:${s.ticker}: the ${decision.render} payload `
         + `carries ${JSON.stringify(value)} and the verdict card does not `
         + "say it");

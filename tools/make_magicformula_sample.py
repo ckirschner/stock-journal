@@ -77,12 +77,23 @@ The stories worth reading
   a month, and one month later the same purchase would have been refused.
 """
 
+from datetime import date, timedelta
+
 from sample_kit import (buy, import_list, journal, pass_over, sell, security,
                         write)
 
 # The day the stories are written against. Fixed rather than relative, so the
 # sample reads the same on the day it is built and a year later.
-TODAY = "2026-08-13"
+# Build-relative where a story would rot with the calendar: the current
+# list must stay fresh, the four still-running holdings must keep their
+# year clocks unexpired, and both dates move with every rebuild. Openings
+# whose year is MEANT to have run out stay absolute. The canary in
+# tests/test_sample.py evaluates every story six months ahead.
+TODAY = date.today().isoformat()
+
+
+def days_ago(n: int) -> str:
+    return (date.today() - timedelta(days=n)).isoformat()
 
 FREE_CASH = 48_000.0
 
@@ -99,7 +110,7 @@ FIRST_PULL = "2025-08-04"
 FIRST_LIST = ["MARLBK", "BRAMLY", "FENWCK", "TARRNT", "WOOLSN",
               "KINVER", "CRANWL", "ALDERT", "GRIMSB", "NETHRB"]
 
-SECOND_PULL = "2026-08-03"
+SECOND_PULL = days_ago(10)
 SECOND_LIST = ["FENWCK", "ODDGLY", "SUTTBY", "ALDERT", "PENKRG",
                "WHARRM", "BEAUDR", "COLNEY", "TREGRN", "MELVRL",
                "STANDH"]
@@ -168,25 +179,25 @@ def build():
     # it. A sample whose only exit is a calendar has a shelf life; what can be
     # controlled is that every name in it turns over at roughly the same
     # distance rather than one of them going first and quietly.
-    buy("TARRNT", 190, 52.80, "2026-05-11")
+    buy("TARRNT", 190, 52.80, days_ago(94))
 
     # ------------------------------------------------- still buying, a year on
     # Both off the FIRST list, which was still inside the freshness limit —
     # ten months old, then eleven. A month later either purchase would have
     # been refused and the journal would have asked for a fresh pull.
-    buy("WOOLSN", 900, 9.10, "2026-06-15")
-    buy("KINVER", 130, 58.90, "2026-07-06",
+    buy("WOOLSN", 900, 9.10, days_ago(59))
+    buy("KINVER", 130, 58.90, days_ago(38),
         recollection="Last one off the old list. It was eleven months old "
                      "and I could feel the deadline; I would rather have "
                      "waited three weeks and bought off the new one.")
 
     # A name on neither list, bought anyway. The journal said so.
     security("HALSTD", "Halstead Marine", 14.05,
-             figures(9.2, 18.4), "2026-07-18",
-             notes=[("2026-07-18",
+             figures(9.2, 18.4), days_ago(26),
+             notes=[(days_ago(26),
                      "A friend's tip. Not on the list, and I know that is "
                      "the whole thing I am supposed to not do.")])
-    buy("HALSTD", 700, 13.60, "2026-07-20",
+    buy("HALSTD", 700, 13.60, days_ago(24),
         override_reason="Not on either list. I bought it because somebody I "
                         "trust likes it, which is exactly the judgement this "
                         "method exists to keep me from making. Writing it "
@@ -203,7 +214,7 @@ def build():
 
     # The loop closes: bought off the first list, held its year, sold the day
     # after it fell due, with the strategy's own verdict behind the sale.
-    sell("MARLBK", "Hit valuation", 47.80, "2026-08-12")
+    sell("MARLBK", "Hit valuation", 47.80, days_ago(1))
 
     # A name the list gave and the reader declined. The verdict does not
     # change — that is principle 2 — and the reason is on the record.
@@ -211,7 +222,7 @@ def build():
               "Second glass company I have been handed in two years and the "
               "first one went nowhere. That is not a reason, it is a "
               "feeling, and I am writing it down so I can find out which.",
-              "2026-08-05")
+              days_ago(8))
 
     write("sample-magic-formula.json", "magic-formula", FREE_CASH, TODAY,
           STORIES)

@@ -19,6 +19,12 @@ function render() {
     $("foot").innerHTML = footText();
     return;
   }
+  if (creatingJournal) {
+    v.innerHTML = newJournalView();
+    applyGates(v);
+    $("foot").innerHTML = footText();
+    return;
+  }
   if (openTicker) {
     const s = find(openTicker);
     if (!s) { closeSecurity(); return render(); }
@@ -69,7 +75,9 @@ async function createJournalFromWelcome() {
     get("w_cash") || null, get("w_cash_on") || null);
   if (!r.ok) return err(r.error);
   if (r.cash_problem) toast("The journal is created, but the opening cash was refused: " + r.cash_problem, true);
+  creatingJournal = false;
   tab = "list";
+  filter = "everything";
   await refresh();
   refreshTimeframe();
 }
@@ -154,7 +162,7 @@ document.addEventListener("click", async (ev) => {
       note: () => doNote(btn), snapshot: () => doSnapshot(btn),
       discardsnap: () => doDiscardSnap(btn), compare: () => doCompare(btn),
       cash: () => doCash(), settings: () => doSettings(),
-      newjournal: () => doNewJournal(btn), renamejournal: () => doRenameJournal(),
+      renamejournal: () => doRenameJournal(),
       deletejournal: () => doDeleteJournal(),
       add: () => doAdd(), addbulk: () => doAddBulk(),
       importlist: () => doImportList(), passover: () => doPassOver(btn),
@@ -171,11 +179,23 @@ document.addEventListener("click", async (ev) => {
   const act = btn.dataset.act;
   if (!act) return;
   ev.stopPropagation();
-  if (act === "tab") { closeSecurity(); tab = btn.dataset.tab; render(); }
+  /* Moving to another page closes the margin. A gloss is about the page it
+     was opened from; one that outlives it puts one security's filing
+     citations beside another security's name, silently. */
+  if (act === "tab") { closeSecurity(); tab = btn.dataset.tab; marginRest(); render(); }
   else if (act === "filter") { closeSecurity(); tab = "list"; filter = btn.dataset.filter; render(); }
   else if (act === "sort") { sortBy = sortBy === "asks" ? "amount" : "asks"; render(); }
-  else if (act === "open") { openSecurity(btn.dataset.t, btn.dataset.p || null); C.coverageFor = null; render(); window.scrollTo(0, 0); }
-  else if (act === "back") { closeSecurity(); render(); }
+  else if (act === "open") { openSecurity(btn.dataset.t, btn.dataset.p || null); C.coverageFor = null; marginRest(); render(); { const pl = document.querySelector(".plane"); if (pl) pl.scrollTo(0, 0); } }
+  else if (act === "back") { creatingJournal = false; closeSecurity(); marginRest(); render(); }
+  else if (act === "newjournal") {
+    menuClose();
+    creatingJournal = true;
+    chosenStrategy = null;
+    closeSecurity();
+    marginRest();
+    render();
+    { const pl = document.querySelector(".plane"); if (pl) pl.scrollTo(0, 0); }
+  }
   else if (act === "problemsfirst") { problemsFirst = !problemsFirst; render(); }
   else if (act === "coverage-retry") { C.coverage = null; C.coverageFor = null; render(); }
   else if (act === "fetchall") {

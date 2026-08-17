@@ -575,9 +575,26 @@ These were settled in the interview. Each has its reason. Follow them.
 
 7. **Prose is opt-in everywhere. Terse is the resting state.** Nothing renders a
    paragraph by default. The always-visible layer is: the value, what it is
-   called, its unit, and — if absent — one line saying why. Every explanation,
-   every caution, every derivation is behind a click. Hover to show temporarily,
-   click to pin until dismissed.
+   called, its unit, and — if absent — **a triage phrase, not the reason**.
+   Every explanation, every caution, every derivation is behind a click. Hover
+   to show temporarily, click to pin until dismissed.
+
+   *(Amended 2026-08-16: this decision originally promised "one line saying
+   why" beside every absence, which at real density — four absences among
+   twenty rows — collides with the no-paragraphs rule in the same breath. The
+   row now says whether the absence is fixable, in about three words, and the
+   full sentence stays one click deep. Triage before explanation.)*
+
+   *(Amended 2026-08-17: the triage kinds are five, not four, and the word
+   renders from a machine-readable kind the engine serves on the observation
+   — never classified from prose or guessed from journal state, which is how
+   "fetch resolves this" came to sit beside a fetch that had just been
+   structurally refused. The five: "fetch resolves this" (never fetched),
+   "fetch was refused" (attempted and structurally impossible — no such
+   symbol, reassigned, successor identity; the refusal is recorded durably
+   on the security, not only toasted), "not in the filings" (fetched, and
+   the store's filings do not carry it), "not applicable here" (a permanent
+   boundary of the measure), and the answer-this verb on a question.)*
 8. **There is no unprompted teaching, ever.** Not on first run, not the first
    time a measure blocks a purchase. Explanation is always one click away and
    never in the way.
@@ -611,6 +628,13 @@ These were settled in the interview. Each has its reason. Follow them.
     fact reported beside the amount.
 16. **Sizing headlines in dollars**, with the share count derived beside it and
     the percentage smallest. *"x% of the account is always a dollar amount."*
+
+    *(Amended 2026-08-16: sizing figures are rounded — dollars to the nearest
+    hundred once past a thousand, weights to one decimal. "$45,947 may go in —
+    28.42% of the account" is computed from a typed, undated price and reads
+    as measured to the dollar and the basis point; a sizing figure is a
+    decision aid, not a measurement, and full precision claims a certainty
+    the inputs never had.)*
 
 ### The record
 

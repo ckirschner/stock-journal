@@ -1323,6 +1323,22 @@ against the SEC's published list in
 | `cash` | `number` in `usd` | the journal — worked out from this journal's cash record — the opening balance, and every deposit, withdrawal and dividend since | free cash in the account this journal covers — money that is not in any position | `portfolio.cash`, `portfolio.account_value`, `position.weight` |
 <!-- end: input-roles -->
 
+### Value roles
+
+A declared value may claim one of these, which is a strategy saying *this
+value is my position limit* (or *my minimum add*) in a form the host reads
+without knowing what a position limit is. The host reports the figure where
+the table says; it never interprets it. One value per role, and the type and
+unit must match the role's — the host would otherwise report one number as
+another.
+
+<!-- generated: value-roles -->
+| `role` | declared as | means | the host reports it at |
+|---|---|---|---|
+| `position-limit` | `integer` in `count` | how many separate positions this strategy holds at once — the slot count its sizing works from | `portfolio.slots.total` |
+| `minimum-add` | `number` in `percent` | the smallest addition worth acting on, as a percent of the position's own target value — an add below it is reported as too small to be worth the trade | `allocation.below_minimum` |
+<!-- end: value-roles -->
+
 ### The rest of the vocabulary
 
 <!-- generated: vocabulary -->

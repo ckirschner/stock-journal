@@ -361,28 +361,29 @@ def _series_for(filings, prices, symbols, today, ind=None):
     exists for: without it, one measure would read inapplicable across a
     history in which it meant something.
 
-    **On the cost of this, and what not to do about it.** Building one
-    security's series is measured at around 60ms. The entry-level duplication
-    is already gone — the `contexts` list below is built once per boundary and
-    every entry on that cadence reads it — and what is left is that each
-    boundary's `Ctx` assembles its own SeriesBuilder over its own prefix of
-    the filings. Sharing one builder across boundaries would take the marginal
-    cost of a day to roughly 2ms.
+    **On the cost of this, and what has been done about it.** The 60ms this
+    note used to claim was measured on a fixture; a real company with
+    seventy filings measures at just over a second, and a refresh runs after
+    every action. Two things carry that cost now, and both keep the prefix
+    discipline intact:
 
-    It is not worth doing and is written down so that it stays not done
-    deliberately. 60ms is under a render, and the refactor touches the one
-    piece of machinery whose whole job is that a point read at a boundary sees
-    exactly the filings that existed then. A shared builder is a builder that
-    has to be told what to forget, and forgetting is the failure this pinning
-    exists to prevent — a restatement leaking backwards into a reading taken
-    before it was filed would be invisible and would look like history.
+    - `_measures` memoises the finished series on the dataview bundle,
+      keyed by the evaluation day. The bundle is itself keyed by a
+      fingerprint of the stores, so the memo's full key is "which filings
+      and prices were visible, and which day" — exactly the key the warning
+      below demands. A fetch invalidates the bundle and the memo with it.
+    - `periods.SeriesBuilder` shares one read-only FilingIndex per stored
+      filing object (`periods._index_of`) instead of re-indexing the same
+      filing once per boundary prefix. A boundary excludes a filing by not
+      listing it, never by holding a different copy, so sharing the
+      per-filing view leaks nothing backwards.
 
-    The reason to write it here rather than leave it unsaid: the next person
-    who notices 60ms will reach for a cache, and a cache over these readings
-    is the same bug with a shorter name. If this ever does need to be faster,
-    the honest move is the sharing refactor with the prefix still enforced —
-    never a memo of results keyed on something that does not include which
-    filings were visible."""
+    What remains deliberately NOT done: sharing a builder across boundaries.
+    A shared builder is a builder that has to be told what to forget, and
+    forgetting is the failure this pinning exists to prevent — a restatement
+    leaking backwards into a reading taken before it was filed would be
+    invisible and would look like history. Never add a memo of results keyed
+    on anything that does not include which filings were visible."""
     dated = [f for f in filings
              if str(f.get("filed") or "")[:10]
              and str(f.get("filed") or "")[:10] <= today]
@@ -483,10 +484,26 @@ def _measures(security, cik, tickers, as_of, today, snap=None) -> dict:
         # preferred series first listed in 2024 shares the CIK would be a
         # sentence about the wrong year. See engine/instruments.py.
         b = snap if snap is not None else dataview.snapshot(cik, tickers)
-        series = _series_for(b["filings"], b["prices"], b["symbols"],
-                             today, b["industry"])
+        # Memoised on the bundle, per evaluation day. The bundle is already
+        # keyed by a fingerprint of the stores, so this key includes exactly
+        # what the series depends on: which filings and prices were visible,
+        # and the day the boundaries run to. That is the honest cache the
+        # note on _series_for demands — a fetch changes the fingerprint and
+        # the whole bundle (memo included) falls away; a new day is a new
+        # key. Without it, every state read rebuilt every boundary context
+        # from scratch (measured: ~1.1s per fetched security, paid on every
+        # action's refresh).
+        memo = b.setdefault("series_memo", {})
+        if today not in memo:
+            if len(memo) > 8:
+                memo.clear()
+            memo[today] = _series_for(b["filings"], b["prices"],
+                                      b["symbols"], today, b["industry"])
+        series = memo[today]
+        has_data = bool(b["filings"])
     else:
         series = {}
+        has_data = False
 
     out = {}
     for eid, entry in entries:
@@ -506,6 +523,20 @@ def _measures(security, cik, tickers, as_of, today, snap=None) -> dict:
             cur = current.get(eid) or _absent(
                 "no filing data is stored for this security — fetch data "
                 "first")
+            if cur.get("status") == "absent" and not cur.get("fix"):
+                # The absence's kind, decided from what the store actually
+                # holds. With filings on record, a residual absence means
+                # the figure is not in them; with nothing on record it
+                # closes with a fetch — unless a fetch was already tried
+                # and structurally refused, which is the one case where
+                # saying "fetch resolves this" was a measured lie. The
+                # refusal record on the security is the durable fact that
+                # tells those apart.
+                cur = {**cur,
+                       "fix": ("filings" if has_data
+                               else "refused"
+                               if (security or {}).get("fetch_refused")
+                               else "refetch")}
             ser = series.get(eid) or _no_series(
                 "no filing data is stored for this security — fetch data "
                 "first" if not cik else
@@ -1235,12 +1266,26 @@ def account_change(journal: dict, securities: list, since: str) -> dict:
     what was divided by what so the reader can redo it.
     """
     since = str(since)[:10]
+    # A window that starts before the record does is measured from the day
+    # the record opened, and says so. The alternative was the header's most
+    # prominent cell reading "not known" for every journal's first month —
+    # honest, but the honest figure the record CAN give is the change since
+    # it began, clearly labelled. Nothing is invented: the endpoints are the
+    # same derivations, just over the answerable part of the window. A
+    # record opened today still has no window at all, and stays absent.
+    clamped = False
+    opened = str((cash_mod.opening(journal or {}) or {}).get("date")
+                 or "")[:10]
+    today_s = date.today().isoformat()
+    if opened and since < opened and opened < today_s:
+        since = opened
+        clamped = True
     then = account_value_on(journal, securities, since)
     now = account_value_on(journal, securities)
     day_after = (date.fromisoformat(since) + timedelta(days=1)).isoformat()
     flows = cash_mod.movement(journal or {}, since=day_after)
     net = flows["net_external"]
-    out = {"since": since, "date": now["date"],
+    out = {"since": since, "clamped": clamped, "date": now["date"],
            "then": then["account_value"], "now": now["account_value"],
            "net_external": net}
     for side, label in ((then["account_value"],
@@ -1323,6 +1368,7 @@ def build_context(security: dict, journal_securities: list | None,
         snap = dataview.snapshot(cik, tickers)
 
     effective, roles = dict(inputs or {}), {}
+    input_reasons = {}
     if record is not None:
         effective, _ = contract.check_inputs(
             record, contract.user_answers(record, inputs), values or {})
@@ -1332,6 +1378,11 @@ def build_context(security: dict, journal_securities: list | None,
         # than two. A strategy may cite either; both are the contract's, and
         # the day they disagree neither is visibly the wrong one.
         effective = contract.apply_host_answers(effective, roles)
+        # And where a role could not answer, WHY travels beside the pool —
+        # an unopened cash record is not "this setting has no value yet",
+        # and a citation's absence must name the real fix (the record), not
+        # a field nobody can set. Read by contract._setting_observation.
+        input_reasons = contract.input_absences(roles)
 
     # The portfolio comes first: a position's weight is measured against an
     # account that includes the position, so the total has to exist before
@@ -1386,6 +1437,7 @@ def build_context(security: dict, journal_securities: list | None,
         "list": _list(journal, today, as_of),
         "values": values or {},
         "inputs": effective,
+        "input_reasons": input_reasons,
     }
     # One deep copy at the boundary: the strategy's dict shares nothing with
     # the journal or the dataview caches, so mutating it can corrupt nothing.

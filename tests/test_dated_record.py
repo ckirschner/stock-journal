@@ -198,7 +198,7 @@ class TestTheThesisIsAmendedNeverRewritten:
     def test_an_empty_thesis_is_not_a_thesis(self, api):
         idea(api)
         r = api.amend_thesis("SYN", "   ", "")
-        assert r["ok"] is False and "empty thesis" in r["error"]
+        assert r["ok"] is False and "empty entry" in r["error"]
         assert security().get("thesis") == []
 
     def test_a_purchase_freezes_the_version_standing_on_its_own_day(

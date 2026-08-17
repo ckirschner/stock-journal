@@ -20,6 +20,7 @@ let tipOpen = null;           // open in-place explainer key, at most one
 let problemsFirst = true;     // evidence ordering toggle
 let showWholeBank = false;    // measures screen escape hatch
 let coverageOpen = false;     // the per-security measure inventory, opened on purpose
+let creatingJournal = false;  // the new-journal screen, reached from the menu
 
 /* Timeframe choices are offsets from today; "since a day you pick" goes
    through the same backend call. The label is what the header cell says. */
@@ -74,6 +75,9 @@ const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g,
    "+0,0 sh", "0 yrs", "0.00", "0". Parsed generically — no measure named. */
 function fmtBank(v, format) {
   if (v === null || v === undefined || v === "") return "—";
+  /* A yes/no answer is an answer, never a count — a judgement frozen as
+     true must not surface as "1" in a table of quantities. */
+  if (typeof v === "boolean") return v ? "Yes" : "No";
   const n = Number(v);
   if (!Number.isFinite(n)) return esc(String(v));
   const m = /^(\+)?(\$)?0(,0)?(?:\.(0+))?(%|x)?(?:\s(.+))?$/.exec(format || "");
@@ -149,6 +153,16 @@ const fmtMetric = (id, v) => {
 };
 
 const money = (n) => (n === null || n === undefined) ? "—" : "$" + Number(n).toFixed(2);
+/* A sizing figure is a decision aid, not a measurement — "$45,947" off a
+   typed, undated price reads as measured to the dollar. Nearest hundred
+   once it is big enough for that to be honest; small amounts keep their
+   dollars rather than rounding to a figure that was never there. */
+const money100 = (n) => {
+  if (n === null || n === undefined) return "—";
+  const v = Number(n);
+  return "$" + (Math.abs(v) >= 1000
+    ? Math.round(v / 100) * 100 : Math.round(v)).toLocaleString();
+};
 const money0 = (n) => (n === null || n === undefined) ? "—"
   : (n < 0 ? "−$" : "$") + Math.abs(Number(n)).toLocaleString(undefined,
       { maximumFractionDigits: 0 });
@@ -300,8 +314,10 @@ const cap = (s) => String(s).charAt(0).toUpperCase() + String(s).slice(1);
 
 /* What the strategy read for the journal, for the scoped measures screen:
    the union of everything any current decision cited plus anything with a
-   typed history. A strategy declares no static list of what it may read —
-   so this is honest about being what it HAS read here, not what it might. */
+   typed history. Where the strategy DECLARES what it may read, that list is
+   the scope — knowable before a single security exists, and enforced by
+   the host — and the accumulated one remains the fallback for a strategy
+   that declares none. */
 function citedInJournal() {
   const ids = new Set();
   (S.securities || []).forEach((s) => {
@@ -311,6 +327,17 @@ function citedInJournal() {
   });
   return ids;
 }
+function journalReads() {
+  const declared = (S.strategy || {}).reads;
+  return declared && declared.length ? new Set(declared) : citedInJournal();
+}
+
+/* A value that is a floor rather than a point reads as one, everywhere the
+   number appears — the bound is part of the value, not a caution. */
+const boundWord = (node) =>
+  node && node.bound === "at_least" ? "at least " : "";
+const boundNote = (node) => node && node.bound && node.bound_reason
+  ? `<p class="m-quiet">A floor, not a point — ${esc(node.bound_reason)}.</p>` : "";
 
 const storageWords = (st) => !st ? ""
   : typeof st === "string" ? st

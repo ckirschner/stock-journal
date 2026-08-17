@@ -61,6 +61,7 @@ class TestEveryHostTableIsDocumented:
 
     DOCUMENTED = {
         "RENDER_TYPES", "STATE_FIXES", "HOST_STATES", "COMPARATORS",
+        "VALUE_ROLES",
         "HOST_FACTS", "BASELINE_ANCHORS", "CHANGE_FORMS", "INPUT_ROLES",
         "INDUSTRY_CLASSES", "ESTIMATORS", "ROBUSTNESS", "CLOCKS",
         # Bank vocabulary rather than strategy vocabulary: a strategy never

@@ -39,15 +39,29 @@ losses, because two consecutive losing years are already two consecutive
 annual filings. BRENT demonstrates it.
 """
 
+from datetime import date, timedelta
+
 from sample_kit import (buy, expect, journal, securities,
                         security, sell, state_of, write)
 
 from engine import portfolio
 
-# The day the stories were written against. Dates below are fixed rather
-# than relative, so the sample reads the same on the day it is built and a
-# year later: the two-year clock on MERIDN has run out and stays run out.
-TODAY = "2026-08-09"
+# The day the stories are written against is the day the sample is BUILT.
+#
+# Two kinds of date below, and the split is the fix for a suite that rots
+# overnight. A story that stays true as the calendar moves keeps absolute
+# dates — MERIDN's two-year clock has run out and stays run out, BRENT's
+# safety break outranks its clock, LOWFD is closed. A story that a moving
+# calendar would silently overturn — a holding whose two-year clock must NOT
+# have run out yet — is dated relative to the build day, with enough slack
+# that a rebuilt sample holds its stories for at least a year. The canary in
+# tests/test_sample.py evaluates every story six months ahead, so the suite
+# says "rebuild the samples" long before any story actually turns.
+TODAY = date.today().isoformat()
+
+
+def days_ago(n: int) -> str:
+    return (date.today() - timedelta(days=n)).isoformat()
 
 FREE_CASH = 62_000.0
 
@@ -76,7 +90,7 @@ security(
          price_to_net_tangible_assets=1.15, accruals_ratio=0.02,
          revenue_ttm=1_210_000_000, ncav_to_market_cap=0.71,
          consecutive_annual_loss_years=0),
-    on="2025-11-01",
+    on=days_ago(120),
     thesis=("A regional paper mill trading below its own book value with "
             "twenty-two straight years of dividends behind it. I am not "
             "claiming this is a wonderful business. I am claiming the price "
@@ -84,11 +98,11 @@ security(
             "Two consecutive years of losses, or the current ratio falling "
             "under 1.2. Either one means the balance sheet has stopped "
             "carrying the risk the business cannot."),
-    notes=[("2025-11-01",
+    notes=[(days_ago(120),
             "Bought because it is dull and cheap, which is the whole idea. "
             "Nothing about the industry is getting better and nothing needs "
             "to.")])
-buy("HARW", 180, 30.85, "2025-11-04")
+buy("HARW", 180, 30.85, days_ago(117))
 
 
 # -- a line crossed once, and the rule declining to panic --------------------
@@ -103,8 +117,8 @@ security(
          price_to_net_tangible_assets=2.9, accruals_ratio=0.05,
          revenue_ttm=940_000_000, ncav_to_market_cap=0.34,
          consecutive_annual_loss_years=0),
-    on="2026-08-02",
-    earlier=("2025-06-08",
+    on=days_ago(7),
+    earlier=(days_ago(304),
              dict(pe_3y_avg_eps=8.8, price_to_book=1.02,
                   graham_combined_multiple=8.98, current_ratio=2.3,
                   ltd_to_working_capital=0.51, profitable_years_10y=10,
@@ -119,7 +133,7 @@ security(
             "Book value falling for two straight years, which would mean the "
             "plant is worth less than I thought rather than the market being "
             "wrong about it."),
-    notes=[("2025-06-12",
+    notes=[(days_ago(300),
             "Bought this under the size floor. $278M against a floor of "
             "$300M is not far under it, and the strategy still said no — a "
             "floor that bends for a near miss is not a floor. What I am "
@@ -128,14 +142,14 @@ security(
             "different risk from the one every other test here measures. "
             "Written down so that if it turns out to matter, it is on the "
             "record that I knew."),
-           ("2026-08-02",
+           (days_ago(7),
             "The price has run and both valuation lines are crossed on this "
             "reading. The strategy will not act until a second filing says "
             "the same thing, which is the rule doing its job — and because "
             "every figure here is typed by hand there are no filings to "
             "confirm it with. That is the honest limit of running this "
             "without a data connection.")])
-buy("CALDR", 260, 12.40, "2025-06-12",
+buy("CALDR", 260, 12.40, days_ago(300),
     override_reason="Under the $300M size floor, at $278M. I am taking that "
                     "on deliberately: the discount is on the plant and the "
                     "tubes, which do not care what the market capitalisation "
@@ -238,8 +252,8 @@ security(
          price_to_net_tangible_assets=3.1, accruals_ratio=0.02,
          revenue_ttm=1_980_000_000, ncav_to_market_cap=0.21,
          consecutive_annual_loss_years=0),
-    on="2026-08-02",
-    earlier=("2024-11-15",
+    on=days_ago(7),
+    earlier=(days_ago(304),
              dict(pe_3y_avg_eps=14.1, price_to_book=1.94,
                   graham_combined_multiple=27.35, current_ratio=2.1,
                   ltd_to_working_capital=0.34, profitable_years_10y=10,
@@ -251,18 +265,18 @@ security(
             "value is understated because the yard was bought in 1974 and "
             "sits at cost.",
             "Debt to equity above 1.0, or the dividend run breaking."),
-    notes=[("2024-11-19",
+    notes=[(days_ago(300),
             "The strategy said no: 1.94 times book against a limit of 1.5, "
             "and the combined multiple over the line too. I bought it "
             "anyway because I think the land is carried at nothing. Writing "
             "that down is the point — if I keep being right about this the "
             "limit is wrong, and if I keep being wrong I am."),
-           ("2026-08-02",
+           (days_ago(7),
             "Up 105% and now 12% of the account against a cap of 10%. "
             "Nothing about the company has changed; the position has just "
             "got out of proportion to everything else, which is the risk a "
             "basket of twenty is supposed to avoid.")])
-buy("OKELL", 300, 20.10, "2024-11-19",
+buy("OKELL", 300, 20.10, days_ago(300),
     override_reason="The yard is carried at 1974 cost and the book value "
                     "the test is measuring against is therefore wrong. I "
                     "accept this is exactly what someone talking themselves "
@@ -272,18 +286,18 @@ buy("OKELL", 300, 20.10, "2024-11-19",
 # -- a holding the strategy cannot say anything about -----------------------
 
 security(
-    "THRAP", "Thrapston Rail Components", 16.30, {}, on="2025-08-18",
+    "THRAP", "Thrapston Rail Components", 16.30, {}, on=days_ago(202),
     thesis=("Bought on a conversation, not on numbers. I have not entered a "
             "single figure for it.",
             "There is nothing here to falsify yet, which is itself the "
             "problem."),
-    notes=[("2025-08-20",
+    notes=[(days_ago(200),
             "Recorded with no verdict at all — not a verdict I overrode, a "
             "verdict that did not exist. The journal keeps those two apart "
             "on purpose, because counting a gap in the data as defiance "
             "would put a decision I never made into the one figure that is "
             "supposed to measure my judgement.")])
-buy("THRAP", 190, 15.10, "2025-08-20",
+buy("THRAP", 190, 15.10, days_ago(200),
     recollection="No figures on record for this company, so there was "
                  "nothing to check it against. Buying first and filling the "
                  "numbers in later is how I have always done it, which is "

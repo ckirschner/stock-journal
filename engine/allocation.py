@@ -221,13 +221,21 @@ def _order(entries) -> list:
     return ordered + unordered
 
 
-def view(securities, decisions, prices, folio) -> dict:
+def view(securities, decisions, prices, folio, roles=None) -> dict:
     """The allocation screen, whole.
 
     `decisions` and `prices` are keyed by ticker: the verdict already
     computed for each security and the price already read for it. `folio` is
     the host's own portfolio node — the same free cash, account value and
     per-holding market values every strategy in this journal was handed.
+
+    `roles` is contract.value_roles for this journal's strategy — the
+    declared values the host may read without knowing what they mean. The
+    one consumed here is "minimum-add": a strategy's own view of the
+    smallest addition worth acting on, as a percent of the position's
+    target. Applied as reporting, never as a gate — the entry stays listed
+    with its amount, and `below_minimum` says the strategy's own declaration
+    calls it too small to be worth the trade.
 
     Nothing is evaluated again and nothing is priced again. A second
     computation is a second chance for two screens to disagree about the same
@@ -270,6 +278,15 @@ def view(securities, decisions, prices, folio) -> dict:
         entry["target"] = _target(
             committed, entry["amount"],
             (entry["plan"] or {}).get("held_back") if entry["plan"] else None)
+        # The share count a dollar amount comes to, as a reading aid — the
+        # brief headlines sizing in dollars with the count derived beside
+        # it. Derived here, from the same amount and the same price the rest
+        # of this entry reads, so the view never does arithmetic on the one
+        # number a sizing decision consumes. Floored: it is what the money
+        # covers, not an order size.
+        entry["shares_approx"] = _shares_approx(entry["amount"], price)
+        entry["below_minimum"] = _below_minimum(
+            entry["amount"], entry["target"], (roles or {}).get("minimum-add"))
         # A condition is the strategy holding this back. The host never
         # decides whether it has been met — it is prose, and the strategy
         # re-reads it on its own next evaluation — so the two lists are "the
@@ -286,6 +303,58 @@ def view(securities, decisions, prices, folio) -> dict:
         "excluded": sorted(excluded, key=lambda e: str(e["ticker"] or "")),
         "standing": _standing(securities, ready, waiting, excluded, cash),
     }
+
+
+def _shares_approx(amount, price) -> dict:
+    """Roughly how many shares the amount covers, or absent with the missing
+    ingredient's own reason. Never served where it would round to nothing —
+    "0 shares" beside a dollar figure reads as a contradiction, and the
+    honest sentence is the amount itself."""
+    if amount.get("status") != "known":
+        return _absent(amount.get("reason", "the amount is not known"))
+    if price.get("status") != "known":
+        return _absent(price.get("reason", "no price is on record"))
+    each = float(price["value"])
+    if each <= 0:
+        return _absent("the price on record is not a positive number")
+    n = int(float(amount["value"]) // each)
+    if n < 1:
+        return _absent(f"{_usd(float(amount['value']))} does not cover one "
+                       f"share at {_each(each)}")
+    return _known(n, [f"{_usd(float(amount['value']))} at {_each(each)} a "
+                      "share, rounded down — a reading aid, not an order "
+                      "size"])
+
+
+def _below_minimum(amount, target, minimum_role) -> dict | None:
+    """Whether this add falls under the strategy's own declared minimum —
+    the "minimum-add" value role, a percent of the position's target value.
+
+    None where the strategy declares no minimum: an absent declaration is
+    the strategy having no view, and a node saying "not below a minimum
+    nobody set" would put words in its mouth. Absent-with-reason where the
+    arithmetic cannot be reached. Reporting, never a gate: the entry stays
+    on the list with its amount either way.
+    """
+    if not minimum_role:
+        return None
+    pct = float(minimum_role["value"])
+    label = minimum_role.get("label") or "minimum addition"
+    if amount.get("status") != "known":
+        return _absent("whether this is worth the trade cannot be judged — "
+                       + amount.get("reason", "the amount is not known"))
+    if target.get("status") != "known":
+        return _absent(f'your "{label}" is measured against the whole '
+                       "position this strategy describes, and "
+                       + target.get("reason", "that target is not known"))
+    floor = float(target["value"]) * pct / 100.0
+    below = float(amount["value"]) < floor
+    src = f" ({minimum_role['source']})" if minimum_role.get("source") else ""
+    return {"status": "known", "value": below,
+            "minimum": floor,
+            "provenance": [
+                f'your "{label}"{src} — {pct:g}% of a position worth '
+                f"{_usd(float(target['value']))} is {_usd(floor)}"]}
 
 
 def _affordable(ready, cash) -> dict:

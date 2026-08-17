@@ -109,6 +109,8 @@ class FilingIndex:
         self._class_symbols = []  # dimensioned per-class trading symbols
         self._cover_rows = {}     # member -> the 12(b) row for that security
         self._cf_periods = set()  # durations with a cash-flow-statement face
+        cf_typed = set()          # durations any CF-typed fact mentions
+        cf_anchored = set()       # durations the statement's own total covers
         self._bs_dates = set()    # dates with a genuine balance-sheet face
         for f in filing.get("facts") or []:
             c = f.get("concept") or ""
@@ -142,7 +144,9 @@ class FilingIndex:
                     self._dur[key] = f
                 self._dur_periods.setdefault(c, set()).add((f["start"], f["end"]))
                 if "CashFlow" in (f.get("statement_type") or ""):
-                    self._cf_periods.add((f["start"], f["end"]))
+                    cf_typed.add((f["start"], f["end"]))
+                if c in _CF_ANCHORS:
+                    cf_anchored.add((f["start"], f["end"]))
             elif f.get("instant"):
                 key = (c, f["instant"])
                 held = self._inst.get(key)
@@ -160,6 +164,14 @@ class FilingIndex:
                     if c in ("us-gaap:Assets",
                              "us-gaap:LiabilitiesAndStockholdersEquity"):
                         self._bs_dates.add(f["instant"])
+        # A period only counts as a cash-flow face when the statement's own
+        # operating total covers it — the same discipline `_bs_dates` applies
+        # to balance sheets, for the same reason. A 10-Q routinely carries a
+        # stray prior-year annual comparative typed CashFlowStatement (one
+        # acquisitions line was enough in a measured case), and treating that
+        # as a complete face asserted nil dividends for a year the filing
+        # never accounted for — a confident wrong zero on a knockout test.
+        self._cf_periods = cf_typed & cf_anchored
 
     # lookups ---------------------------------------------------------------
     def duration_fact(self, concept, start, end):
@@ -295,6 +307,16 @@ def _no_candidate(input_id, fi, where: str) -> dict:
                   f"tagged for {where} in {fi.form} {fi.accession}")
 
 
+# The cash-flow statement's own section total. A duration is only "the
+# statement's period" — the thing `absent_means_zero` is allowed to reason
+# from — if the statement demonstrably accounts for it, and the operating
+# total is the line every real cash-flow face carries.
+_CF_ANCHORS = (
+    "us-gaap:NetCashProvidedByUsedInOperatingActivities",
+    "us-gaap:NetCashProvidedByUsedInOperatingActivitiesContinuingOperations",
+)
+
+
 def resolve_duration(fi: FilingIndex, input_id: str, start: str, end: str):
     """One input over one duration in one filing, or an absence saying why.
 
@@ -308,6 +330,15 @@ def resolve_duration(fi: FilingIndex, input_id: str, start: str, end: str):
     where = f"{start} to {end}"
     if spec.get("derive"):
         base = resolve_duration(fi, spec["derive"], start, end)
+        if is_absent(base) and spec.get("derive_else"):
+            # The declared fallback, tried only when the primary has nothing
+            # to read. Its own caution travels with it (the derive_sum path
+            # attaches it), so a value served this way always says so — the
+            # spec-level caution below belongs to the primary derivation and
+            # is deliberately not added on this path.
+            alt = resolve_duration(fi, spec["derive_else"], start, end)
+            if not is_absent(alt):
+                return {**alt, "input": input_id}
         if is_absent(base):
             return base if base is not None else _no_candidate(
                 input_id, fi, where)

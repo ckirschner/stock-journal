@@ -117,7 +117,14 @@ class Ctx:
                 "instruments.company_symbols(filings, tickers) so the common "
                 "stock is identified before anything is multiplied by a "
                 "price.")
-        self.sb = SeriesBuilder(filings)
+        # The common stock's split events ride into the series machinery so
+        # per-share windows can tell a unit change from a restatement. Only
+        # an identified common carries them — an unresolved identity gives
+        # the window nothing, and it refuses as it always did.
+        splits = (price_store.splits_between(
+                      prices_doc, symbols.common, "0000-01-01", "9999-12-31")
+                  if prices_doc and symbols.common else None)
+        self.sb = SeriesBuilder(filings, splits=splits)
         self.prices = prices_doc or {"series": {}}
         self.symbols = symbols
         self.tickers = list(symbols.all)
@@ -251,10 +258,12 @@ class Ctx:
         if node.get("unclassifiable"):
             nouns = sorted({industry_mod.noun_of(c)
                             for classes, _ in rules for c in classes})
-            return _absent_result(absent(
+            a = absent(
                 "this measure does not describe " + _or_list(nouns)
                 + ", and what kind of company this filer is cannot be "
-                  "settled: " + str(node.get("reason") or "")))
+                  "settled: " + str(node.get("reason") or ""))
+            a["fix"] = "boundary"
+            return _absent_result(a)
         # No code at all. Silence is not an accusation — see the class
         # docstring.
         return None
@@ -266,7 +275,8 @@ def _prov_point(p: dict) -> str:
     return f"{what} for {when} from {p.get('form') or 'filing'} {p.get('accession')}"
 
 
-def computed(value, provenance=None, cautions=None, leave_one_out=None) -> dict:
+def computed(value, provenance=None, cautions=None, leave_one_out=None,
+             bound=None, bound_reason=None) -> dict:
     """One entry's answer.
 
     `leave_one_out` is the same figure worked out again with each single
@@ -281,19 +291,50 @@ def computed(value, provenance=None, cautions=None, leave_one_out=None) -> dict:
     Absent where the estimator reads no window. Never a copy of the
     full-window value — a robustness check that silently falls back to the
     number it was checking is not a check, so nothing at all is safer.
+
+    `provenance` entries may be sentences, or the point dicts the sentences
+    are made from. A point becomes its sentence exactly as before AND lands
+    in `sources` as data — form, accession, period — so a screen that wants
+    to link a value to its filing reads a field rather than parsing prose.
+    One entrance for both, so the sentence and the source cannot disagree.
+
+    `bound` marks a value that is a floor rather than a point ("at_least"),
+    with `bound_reason` saying why the record could not see further. It is
+    part of the value, never a caution — the comparison arithmetic consumes
+    it (see contract._bounded_outcome).
     """
+    sentences, sources = [], []
+    for p in (provenance or []):
+        if isinstance(p, dict):
+            sentences.append(_prov_point(p))
+            src = {"accession": p.get("accession"), "form": p.get("form"),
+                   "period": p.get("end") or p.get("instant")}
+            if src["accession"] and src not in sources:
+                sources.append(src)
+        else:
+            sentences.append(p)
     out = {"status": "computed", "value": float(value),
-           "provenance": provenance or [], "cautions": cautions or []}
+           "provenance": sentences, "cautions": cautions or []}
+    if sources:
+        out["sources"] = sources
     if leave_one_out:
         out["leave_one_out"] = [{"dropped": str(o["dropped"]),
                                  "value": float(o["value"])}
                                 for o in leave_one_out]
+    if bound is not None:
+        out["bound"] = bound
+        out["bound_reason"] = bound_reason
     return out
 
 
 def _absent_result(a) -> dict:
-    return {"status": "absent", "reason": a["reason"] if isinstance(a, dict)
-            else str(a)}
+    out = {"status": "absent", "reason": a["reason"] if isinstance(a, dict)
+           else str(a)}
+    # The machine-readable kind of an absence rides along where one was set —
+    # the triage word a reader sees renders from it, never from the prose.
+    if isinstance(a, dict) and a.get("fix"):
+        out["fix"] = a["fix"]
+    return out
 
 
 def inapplicable(reason: str, **extra) -> dict:
@@ -389,8 +430,14 @@ def _not_meaningful_absence(entry_id: str, condition: str,
                else "— it declares none.")
             + " A refusal a reader cannot look up teaches them the tool is "
               "broken. Declare the condition under `not_meaningful_when`.")
-    return absent(NOT_MEANINGFUL + condition + CITES_THE_BANK
-                  + (f" — {detail}" if detail else ""))
+    a = absent(NOT_MEANINGFUL + condition + CITES_THE_BANK
+               + (f" — {detail}" if detail else ""))
+    # The machine-readable kind of this absence: a permanent boundary of the
+    # measure, not a gap in the data. The triage word a reader sees renders
+    # from this field — classifying it from the sentence's prose is the
+    # "declaration nothing reads" failure, one layer up.
+    a["fix"] = "boundary"
+    return a
 
 
 def not_meaningful(entry_id: str, condition: str, detail: str = "") -> dict:
@@ -585,7 +632,7 @@ def _total_debt_with_leases(ctx):
             return absent("finance lease obligations could not be resolved: "
                           + leases["reason"])
     value = debt["value"] + (leases["value"] if leases else 0.0)
-    prov = [_prov_point(debt)] + ([_prov_point(leases)] if leases else [])
+    prov = [debt] + ([leases] if leases else [])
     return {"value": value, "provenance": prov,
             "cautions": _cautions_of(debt, leases)}
 
@@ -751,7 +798,7 @@ def ttm_flow_result(ctx, input_id):
     r = _ttm(ctx, input_id)
     if is_absent(r):
         return _absent_result(r)
-    out = computed(r["value"], [_prov_point(r)], _cautions_of(r))
+    out = computed(r["value"], [r], _cautions_of(r))
     if r.get("end"):
         out["asof"] = str(r["end"])[:10]
     return out
@@ -1146,7 +1193,7 @@ def total_debt_to_ebitda(ctx):
             "EBITDA for the trailing twelve months is zero or negative; "
             "years-to-repay has no meaning against negative earnings"))
     return computed(debt["value"] / ebitda["value"],
-                    debt["provenance"] + [_prov_point(ebitda)],
+                    debt["provenance"] + [ebitda],
                     _cautions_of(debt, ebitda))
 
 
@@ -1164,8 +1211,8 @@ def net_debt_to_ebitda(ctx):
         return _absent_result(absent(
             "EBITDA for the trailing twelve months is zero or negative"))
     return computed((debt["value"] - cash["value"]) / ebitda["value"],
-                    [_prov_point(debt), _prov_point(cash),
-                     _prov_point(ebitda)],
+                    [debt, cash,
+                     ebitda],
                     _cautions_of(debt, cash, ebitda))
 
 
@@ -1182,7 +1229,7 @@ def debt_to_equity(ctx):
             "total shareholders' equity is zero or negative",
             f"equity is {eq['value']:,.0f}")
     return computed(debt["value"] / eq["value"],
-                    [_prov_point(debt), _prov_point(eq)],
+                    [debt, eq],
                     _cautions_of(debt, eq))
 
 
@@ -1201,7 +1248,7 @@ def interest_coverage(ctx):
             "interest_coverage", "interest expense is zero or negative",
             f"interest expense is {interest['value']:,.0f}")
     return computed(ebit["value"] / interest["value"],
-                    [_prov_point(ebit), _prov_point(interest)],
+                    [ebit, interest],
                     _cautions_of(ebit, interest))
 
 
@@ -1223,7 +1270,7 @@ def ltd_to_working_capital(ctx):
             "or negative",
             f"working capital is {wc:,.0f}")
     return computed(ltd["value"] / wc,
-                    [_prov_point(ltd), _prov_point(ca), _prov_point(cl)],
+                    [ltd, ca, cl],
                     _cautions_of(ltd, ca, cl))
 
 
@@ -1237,7 +1284,7 @@ def current_ratio(ctx):
     if cl["value"] == 0:
         return _absent_result(absent("total current liabilities is zero"))
     return computed(ca["value"] / cl["value"],
-                    [_prov_point(ca), _prov_point(cl)],
+                    [ca, cl],
                     _cautions_of(ca, cl))
 
 
@@ -1269,8 +1316,8 @@ def altman_z_score(ctx):
          + 3.3 * ebit["value"] / ta
          + 0.6 * mc["value"] / tl
          + 1.0 * rev["value"] / ta)
-    prov = ([_prov_point(parts[i]) for i in parts]
-            + [_prov_point(ebit), _prov_point(rev),
+    prov = ([parts[i] for i in parts]
+            + [ebit, rev,
                "market cap from the market_cap entry"])
     # No caution about financial companies. There was one, asking the reader
     # to decide whether this filer was a bank — and the host now decides it,
@@ -1359,7 +1406,7 @@ def fcf_ttm(ctx):
     # carries it onto an exit. The concept map declares that line's sign and
     # now enforces it, so a wrong-signed capex never arrives here at all.
     return computed(cfo["value"] - capex["value"],
-                    [_prov_point(cfo), _prov_point(capex)],
+                    [cfo, capex],
                     _cautions_of(cfo, capex))
 
 
@@ -1381,7 +1428,7 @@ def fcf_margin_ttm(ctx):
             "is not a quantity a share of can be expressed as — a margin "
             "over it inverts, so a loss reads as a high margin"))
     return computed(f["value"] / rev["value"] * 100.0,
-                    f["provenance"] + [_prov_point(rev)],
+                    f["provenance"] + [rev],
                     sorted(set(f["cautions"] + _cautions_of(rev))))
 
 
@@ -1533,7 +1580,7 @@ def accruals_ratio(ctx):
     if ta["value"] == 0:
         return _absent_result(absent("total assets is zero"))
     return computed((ni["value"] - cfo["value"]) / ta["value"],
-                    [_prov_point(ni), _prov_point(cfo), _prov_point(ta)],
+                    [ni, cfo, ta],
                     _cautions_of(ni, cfo, ta))
 
 
@@ -1597,7 +1644,7 @@ def operating_income_ttm(ctx):
     oi = _ttm(ctx, "operating_income")
     if is_absent(oi):
         return _absent_result(oi)
-    return computed(oi["value"], [_prov_point(oi),
+    return computed(oi["value"], [oi,
                                   oi.get("ttm_basis") or ""],
                     _cautions_of(oi))
 
@@ -1628,7 +1675,7 @@ def enterprise_value(ctx):
     cautions.append("mixes a live price against a balance sheet up to a "
                     "quarter old")
     return computed(mc["value"] + debt["value"] - cash["value"],
-                    mc["provenance"] + [_prov_point(debt), _prov_point(cash)],
+                    mc["provenance"] + [debt, cash],
                     cautions)
 
 
@@ -1692,7 +1739,7 @@ def pe_ttm(ctx):
             "pe_ttm", "diluted earnings per share (TTM) is zero or negative",
             f"diluted EPS is {eps['value']:,.2f}")
     return computed(p["value"] / eps["value"],
-                    p["provenance"] + [_prov_point(eps)],
+                    p["provenance"] + [eps],
                     sorted(set(p["cautions"] + _cautions_of(eps))))
 
 
@@ -1729,7 +1776,7 @@ def price_to_book(ctx):
             "total shareholders' equity is zero or negative",
             f"equity is {eq['value']:,.0f}")
     return computed(mc["value"] / eq["value"],
-                    mc["provenance"] + [_prov_point(eq)],
+                    mc["provenance"] + [eq],
                     sorted(set(mc["cautions"] + _cautions_of(eq))))
 
 
@@ -1754,8 +1801,8 @@ def price_to_net_tangible_assets(ctx):
             "or negative",
             f"net tangible assets are {nta:,.0f}")
     return computed(mc["value"] / nta,
-                    mc["provenance"] + [_prov_point(eq), _prov_point(gw),
-                                        _prov_point(intang)],
+                    mc["provenance"] + [eq, gw,
+                                        intang],
                     sorted(set(mc["cautions"] + _cautions_of(eq, gw, intang))))
 
 
@@ -1798,7 +1845,7 @@ def owner_earnings_yield(ctx):
         return _absent_result(absent("market capitalization is zero"))
     maint = min(capex["value"], dda["value"])
     return computed((cfo["value"] - maint) / mc["value"] * 100.0,
-                    [_prov_point(cfo),
+                    [cfo,
                      f"maintenance capex proxied as min(capex, D&A) = "
                      f"{maint:,.0f}"],
                     sorted(set(_cautions_of(cfo, capex, dda) + mc["cautions"])))
@@ -1826,7 +1873,7 @@ def ev_to_ebit(ctx):
             "ev_to_ebit", "EBIT (TTM) is zero or negative",
             f"EBIT is {ebit['value']:,.0f}")
     return computed(ev["value"] / ebit["value"],
-                    ev["provenance"] + [_prov_point(ebit)],
+                    ev["provenance"] + [ebit],
                     sorted(set(ev["cautions"] + _cautions_of(ebit))))
 
 
@@ -1854,7 +1901,7 @@ def earnings_yield(ctx):
     if is_absent(ebit):
         return _absent_result(ebit)
     return computed(100.0 * ebit["value"] / ev["value"],
-                    ev["provenance"] + [_prov_point(ebit)],
+                    ev["provenance"] + [ebit],
                     sorted(set(ev["cautions"] + _cautions_of(ebit))))
 
 
@@ -1902,7 +1949,7 @@ def return_on_capital(ctx):
             f"working capital and net fixed assets come to {capital:,.0f}")
     return computed(
         100.0 * ebit["value"] / capital,
-        [_prov_point(ebit)] + [_prov_point(p) for p in parts.values()],
+        [ebit] + [p for p in parts.values()],
         _cautions_of(ebit, *parts.values()))
 
 
@@ -2101,7 +2148,7 @@ def dividend_yield(ctx):
     if mc["value"] == 0:
         return _absent_result(absent("market capitalization is zero"))
     return computed(div["value"] / mc["value"] * 100.0,
-                    [_prov_point(div), "market cap from the market_cap entry"],
+                    [div, "market cap from the market_cap entry"],
                     sorted(set(_cautions_of(div) + mc["cautions"])))
 
 
@@ -2118,7 +2165,7 @@ def ncav_to_market_cap(ctx):
     if mc["value"] == 0:
         return _absent_result(absent("market capitalization is zero"))
     return computed((ca["value"] - tl["value"]) / mc["value"],
-                    [_prov_point(ca), _prov_point(tl)],
+                    [ca, tl],
                     sorted(set(_cautions_of(ca, tl) + mc["cautions"])))
 
 
@@ -2138,7 +2185,7 @@ def net_cash_to_market_cap(ctx):
     if mc["value"] == 0:
         return _absent_result(absent("market capitalization is zero"))
     return computed((cash["value"] + sti["value"] - debt["value"]) / mc["value"],
-                    [_prov_point(cash), _prov_point(sti), _prov_point(debt)],
+                    [cash, sti, debt],
                     sorted(set(_cautions_of(cash, sti, debt) + mc["cautions"])))
 
 
@@ -2889,10 +2936,22 @@ def _streak_backward_by_year(ctx, input_id, holds):
                 f"restated by filing {ev['restating_accession']} and the "
                 "streak would span years never re-reported on that basis")
     if ran_out and streak > 0:
+        # The record ran out before the streak did, so the count is a floor,
+        # not a point — "at least thirteen" settles a test asking for ten
+        # and cannot settle one asking for twenty. Carried as part of the
+        # value rather than as a caution, because a caution qualifies what a
+        # reader sees and this must qualify what the arithmetic consumes:
+        # served as a plain thirteen, a fifty-seven-year payer FAILS a
+        # twenty-year requirement, and a false fail on a knockout vetoes the
+        # company. See contract._bounded_outcome for what a floor settles.
         return {"value": streak,
-                "cautions": [f"the streak reaches the edge of recorded "
-                             f"filings ({ends[-1]} is the oldest year "
-                             "held); the true streak may be longer"]}
+                "bound": "at_least",
+                "bound_reason": (
+                    f"the streak reaches the edge of the recorded filings — "
+                    f"{ends[-1]} is the oldest fiscal year held, and "
+                    "machine-readable filings only go back so far — so the "
+                    "true run may be longer than the record can show"),
+                "cautions": []}
     return {"value": streak, "cautions": []}
 
 
@@ -2901,7 +2960,8 @@ def consecutive_annual_loss_years(ctx):
     if is_absent(r):
         return _absent_result(r)
     return computed(r["value"], ["consecutive fiscal years of negative net "
-                                 "income, newest backward"], r["cautions"])
+                                 "income, newest backward"], r["cautions"],
+                    bound=r.get("bound"), bound_reason=r.get("bound_reason"))
 
 
 def consecutive_dividend_years(ctx):
@@ -2909,7 +2969,8 @@ def consecutive_dividend_years(ctx):
     if is_absent(r):
         return _absent_result(r)
     return computed(r["value"], ["consecutive fiscal years with dividends "
-                                 "paid, newest backward"], r["cautions"])
+                                 "paid, newest backward"], r["cautions"],
+                    bound=r.get("bound"), bound_reason=r.get("bound_reason"))
 
 
 def _share_change(ctx, span):
@@ -3026,7 +3087,7 @@ def goodwill_intangibles_to_assets(ctx):
     if ta["value"] == 0:
         return _absent_result(absent("total assets is zero"))
     return computed((gw["value"] + intang["value"]) / ta["value"] * 100.0,
-                    [_prov_point(gw), _prov_point(intang), _prov_point(ta)],
+                    [gw, intang, ta],
                     _cautions_of(gw, intang, ta))
 
 
@@ -3341,7 +3402,7 @@ def owner_earnings_yield_on_ev(ctx):
             "a negative depreciation charge"))
     maint = min(capex["value"], depreciation)
     return computed((cfo["value"] - maint) / ev["value"] * 100.0,
-                    [_prov_point(cfo),
+                    [cfo,
                      f"maintenance capex proxied as min(capex, D&A less "
                      f"intangible amortization) = {maint:,.0f}"]
                     + ev["provenance"],
@@ -3407,7 +3468,8 @@ def consecutive_capital_return_years(ctx):
     return computed(r["value"],
                     ["consecutive fiscal years with dividends paid or net "
                      "shares repurchased, newest backward"],
-                    r["cautions"])
+                    r["cautions"],
+                    bound=r.get("bound"), bound_reason=r.get("bound_reason"))
 
 
 def altman_z_double_prime(ctx):
