@@ -155,6 +155,16 @@ def load_filing(cik: int, accession: str) -> dict | None:
     return _read(filing_path(cik, accession))
 
 
+def count_filings(cik: int) -> int:
+    """How many filings are stored, without parsing one. The staleness
+    answer needs the count on every state read; loading seventy documents
+    to take len() of them was most of that read's disk time."""
+    d = cik_dir(cik)
+    if not d.exists():
+        return 0
+    return sum(1 for p in d.glob("*.json") if p.name != "company.json")
+
+
 def load_all_filings(cik: int) -> list[dict]:
     """Every extracted filing for a CIK, oldest filed first."""
     d = cik_dir(cik)

@@ -142,9 +142,35 @@ class TestASnapshotRefusesABareNumber:
     each holding a plain float; the shape that made that possible is gone,
     and the write refuses the old one."""
 
-    def test_a_qualified_value_has_exactly_the_four_parts(self):
+    def test_merged_values_stamp_the_banks_words_in_force(self):
+        """What a purchase or a snapshot freezes carries the label and
+        format the bank held THAT day, so a measure renamed afterwards
+        cannot silently relabel history — the comparison screens read the
+        frozen words first and consult today's bank only for records that
+        predate the fields."""
+        from engine import bank
+        node = {"status": "computed", "value": 2.5,
+                "provenance": ["a test sentence"], "cautions": []}
+        got = dataview.merged_values({"ticker": "SYN"},
+                                     {"current_ratio": node})
+        meta = bank.meta()["current_ratio"]
+        assert got["current_ratio"]["label"] == meta["label"]
+        assert got["current_ratio"]["format"] == meta["format"]
+
+    def test_a_qualified_value_has_exactly_the_six_parts(self):
+        """Four qualifiers, plus the bank's words in force when the value
+        was composed — the label and format keys are always present (None
+        where the bank did not speak), so a frozen record can never be
+        relabelled by today's bank without it being visible that the words
+        were simply never stamped."""
         v = dataview.qualified(1.0, "computed", ["a caution"], ["a source"])
-        assert set(v) == {"value", "source", "cautions", "provenance"}
+        assert set(v) == {"value", "source", "cautions", "provenance",
+                          "label", "format"}
+        assert v["label"] is None and v["format"] is None
+        stamped = dataview.qualified(1.0, "computed", label="Market cap",
+                                     format="$0,0")
+        assert stamped["label"] == "Market cap"
+        assert stamped["format"] == "$0,0"
 
     def test_the_snapshot_refuses_a_number_on_its_own(self):
         from engine import portfolio

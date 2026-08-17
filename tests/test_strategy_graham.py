@@ -821,8 +821,8 @@ class TestABuyCannotContradictItsOwnEvidence:
 
 
 class TestEveryValueSaysWhereItCameFrom:
-    def test_all_thirty_four_carry_a_source(self, graham):
-        assert len(graham["values"]) == 34
+    def test_all_thirty_five_carry_a_source(self, graham):
+        assert len(graham["values"]) == 35
         for spec in graham["values"]:
             assert spec["source"]["name"], spec["id"]
             assert isinstance(spec["source"]["reasoning"], bool), spec["id"]

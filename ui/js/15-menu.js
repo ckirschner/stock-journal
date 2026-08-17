@@ -53,7 +53,10 @@ function menuClose() {
 }
 
 /* Swap what the open menu shows without moving it — a form inside the menu
-   (rename, delete, a fresh journal) replaces the list that offered it. */
+   (rename, delete) replaces the list that offered it. The height bound is
+   recomputed, because the replacement can be taller than what it replaced
+   and a fixed panel that outgrows the window with no bound cannot scroll —
+   whatever fell below the fold would be unreachable. */
 function menuSwap(id, arg, keepTyped) {
   const el = $("menu");
   if (!el || el.hidden) return;
@@ -64,6 +67,10 @@ function menuSwap(id, arg, keepTyped) {
     if (kept[f.name] !== undefined && f.type !== "checkbox") f.value = kept[f.name];
   });
   applyGates(el);
+  const top = parseFloat(el.style.top) || 0;
+  const over = top + el.offsetHeight - window.innerHeight;
+  el.style.maxHeight = over > 0
+    ? `${Math.max(160, el.offsetHeight - over - 12)}px` : "";
 }
 
 /* Read every [name] field in the menu, as strings. */
@@ -99,7 +106,7 @@ MENUS.journal = () => {
 ${others.length ? `<div class="mn-h">Switch to</div>${others.map((j) =>
     `<button class="mn-item" data-act="openjournal" data-id="${esc(j.id)}">${esc(j.name)}</button>`).join("")}` : ""}
 <div class="mn-h">Housekeeping</div>
-<button class="mn-item" data-menu="newjournal" data-arg="{}">Start another journal <span class="dim">— a second journal means a second real account</span></button>
+<button class="mn-item" data-act="newjournal">Start another journal <span class="dim">— a second journal means a second real account</span></button>
 <button class="mn-item" data-menu="renamejournal" data-arg="{}">Rename this journal</button>
 <button class="mn-item" data-menu="deletejournal" data-arg="{}">Delete this journal</button>`;
 };
@@ -120,24 +127,9 @@ MENUS.deletejournal = () => {
 <button class="m-act warn" data-do="deletejournal">Delete it</button>`;
 };
 
-MENUS.newjournal = (a) => {
-  const offers = S.strategies || [];
-  const chosen = offers.find((o) => o.id === (a || {}).id) || null;
-  const cards = offers.map((o) => `
-    <div class="stratcard ${chosen && chosen.id === o.id ? "on" : ""}" data-menu="newjournal" data-arg="${escAttr({ id: o.id })}">
-      <b>${esc(o.name)}</b><p>${esc(o.summary || "")}</p></div>`).join("");
-  const fields = chosen ? (chosen.inputs || []).filter((f) => f.answered_by !== "host")
-    .map((f) => declaredField(f, undefined, "in_")).join("") : "";
-  return `<p class="mn-kicker">A new journal</p>
-<p class="mn-line"><b>A second journal is a second account</b></p>
-<p class="mn-quiet">Not a second opinion. Each journal has one strategy, chosen now and never changed.</p>
-${cards}
-${chosen ? `<label>Name</label><input name="nj_name" placeholder="e.g. Retirement account">
-<div class="m-row"><div><label>Cash in it now</label><input name="nj_cash" type="number"></div>
-<div><label>As of</label><input name="nj_cash_on" type="date" value="${esc(localToday())}" max="${esc(localToday())}"></div></div>
-${fields}
-<button class="m-act" data-do="newjournal" data-id="${esc(chosen.id)}">Create it</button>` : ""}`;
-};
+/* Starting another journal is a screen, not a menu — a permanent decision
+   plus a form needs room to breathe and to scroll, and a dropdown offers
+   neither. The menu item above opens it (see newJournalView). */
 
 /* The header's window picker. Picking is chrome and happens here; what the
    figure means stays a margin gloss on the figure itself. */

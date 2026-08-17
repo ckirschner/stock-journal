@@ -167,6 +167,39 @@ class TestEachStillTellsItsStories:
             assert got[ticker]["render"] == render, ticker
             assert got[ticker]["produced_by"] == "strategy", ticker
 
+    def test_and_still_tells_it_six_months_from_now(self, loaded,
+                                                    strategy_id, monkeypatch):
+        """The canary against calendar rot. Several stories sit on clocks —
+        a two-year holding period that must NOT have run out, a list that
+        must still be fresh — and a suite that only checks today goes red
+        overnight the morning one expires, which trains people to wave a
+        red suite through. This evaluates every story with the engine's
+        clocks pushed six months ahead: when it fires, the fix is to rebuild
+        the samples (`python tools/make_<strategy>_sample.py` and
+        `tools/make_sample.py`), whose clock-sensitive dates are relative to
+        the build day for exactly this reason."""
+        import datetime as _dt
+
+        from engine import compute, context
+
+        ahead = _dt.date.today() + _dt.timedelta(days=180)
+
+        class Ahead(_dt.date):
+            @classmethod
+            def today(cls):
+                return ahead
+
+        monkeypatch.setattr(context, "date", Ahead)
+        monkeypatch.setattr(compute, "date", Ahead)
+        api, _ = loaded
+        got = decisions(api, strategy_id)
+        for ticker, (state, render) in STORIES[strategy_id].items():
+            assert got[ticker]["state"]["id"] == state, (
+                f"{ticker}'s story turns within six months "
+                f"({got[ticker]['reason']['summary']}) — rebuild the "
+                "samples before it does")
+            assert got[ticker]["render"] == render, ticker
+
     def test_the_verdicts_carry_their_figures(self, loaded, strategy_id):
         api, _ = loaded
         for ticker, decision in decisions(api, strategy_id).items():
@@ -227,14 +260,19 @@ class TestTheGrahamSample:
 
     def test_the_frozen_snapshot_is_the_verdict_of_its_own_day(self, loaded):
         """OKELL was bought against a real verdict and has since more than
-        doubled. What is frozen on that lot has to be what was on screen in
-        November 2024, not what the strategy says about it now."""
+        doubled. What is frozen on that lot has to be what was on screen the
+        day it was bought — ten months before the sample was built, a date
+        the builder derives so the story cannot rot — not what the strategy
+        says about it now."""
         api, _ = loaded
         okell = securities_of(api, "graham")["OKELL"]
         [lot] = [l for l in okell["lots"] if l["kind"] == "buy"]
         assert lot["snapshot"]["decision"]["state"]["id"] == \
             "not-cheap-enough"
-        assert lot["date"] == "2024-11-19"
+        # The purchase predates the build by design; the exact day moves
+        # with each rebuild.
+        from datetime import date as _date
+        assert lot["date"] < _date.today().isoformat()
         # And today's verdict about the same security is a different one.
         assert decisions(api, "graham")["OKELL"]["state"]["id"] == "too-big"
 
@@ -340,3 +378,34 @@ class TestTheBuffettSample:
             "not-wonderful-enough"
         assert decisions(api, "graham")["VANTR"]["state"]["id"] == \
             "not-cheap-enough"
+
+
+class TestTheServedAccountKnowsItsSlots:
+    """The one place a portfolio-level risk limit reads in the header:
+    "6 of 20" teaches the limit exists every time it is read, and the total
+    is the strategy's own declared value reaching the host through the
+    position-limit role — never a number the host invented."""
+
+    def test_the_graham_header_says_how_full_the_list_is(self, loaded):
+        api, _ = loaded
+        open_by_strategy(api, "graham")
+        state = api.get_state()
+        slots = state["portfolio"]["slots"]
+        assert slots["total"]["status"] == "known"
+        assert slots["total"]["value"] == 20
+        assert "Names held at once" in slots["total"]["provenance"][0]
+        held = [s for s in state["securities"]
+                if any(l for l in s.get("lots", [])
+                       if l.get("kind") != "sell")]
+        assert slots["occupied"] == len(state["portfolio"]["holdings"])
+        assert slots["occupied"] <= len(held)
+
+    def test_a_series_needs_filings_and_says_so(self, loaded):
+        """The sample journals are hand-kept — no CIK, no filing history —
+        and the series call refuses with the way back rather than serving
+        an empty chart."""
+        api, _ = loaded
+        open_by_strategy(api, "graham")
+        r = api.get_measure_series("HARW", "current_ratio")
+        assert r["ok"] is False
+        assert "Nothing has been fetched" in r["error"]

@@ -259,7 +259,8 @@ class TestTheThresholdsAreTheirSources:
 
     # Nobody's but the bundle author's.
     AUTHOR = {"price-tests-required": 1, "quality-tests-required": 2,
-              "min-revenue-growth": 5, "position-weight-cap": 25}
+              "min-revenue-growth": 5, "position-weight-cap": 25,
+              "minimum-add": 10}
 
     # Lynch's own documented advice.
     LYNCH = {"portfolio-slots": 8}

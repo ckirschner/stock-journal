@@ -89,14 +89,20 @@ function commitLine(s, p) {
     .find((e) => e.ticker === s.ticker);
   const amt = alloc && alloc.amount;
   if (amt && amt.status === "known") {
-    /* Served figures only: the dollar amount is the host's, and a share
-       count appears only where the strategy itself sized in shares. A count
-       derived here from amount ÷ price would be view arithmetic on the one
-       number a sizing decision reads (principles 5 and 13). */
+    /* Served figures only: the dollar amount is the host's, the exact count
+       is shown where the strategy itself sized in shares, and the
+       approximate one beside a dollar or weight sizing is the host's
+       arithmetic too (allocation serves it) — never worked out here. */
+    const approx = alloc.shares_approx;
     const sh = (p.size || {}).unit === "shares"
-      ? ` — ${Number(p.size.value).toLocaleString()} sh` : "";
-    const pct = (p.size || {}).unit === "weight" ? ` (${p.size.value}% of the account)` : "";
-    return `${money0(amt.value)} may go in${sh}${pct}`;
+      ? ` — ${Number(p.size.value).toLocaleString()} sh`
+      : approx && approx.status === "known"
+        ? ` — about ${Number(approx.value).toLocaleString()} sh` : "";
+    const pct = (p.size || {}).unit === "weight" ? ` (${Number(p.size.value).toFixed(1)}% of the account)` : "";
+    const small = alloc.below_minimum && alloc.below_minimum.status === "known"
+      && alloc.below_minimum.value
+      ? " — below your strategy's smallest addition worth making" : "";
+    return `${money100(amt.value)} may go in${sh}${pct}${small}`;
   }
   return `Sized by the strategy: ${sizeText(p.size)}${amt && amt.status === "absent" ? ` — in dollars, ${amt.reason}` : ""}`;
 }
@@ -163,6 +169,8 @@ function factsStrip(s, period, isOpen, isClosed) {
       cautions: (tfNode && tfNode.cautions) || [],
       provenance: (tfNode && tfNode.provenance) || [] })));
   const dstat = s._fetch && s._fetch.running ? "fetching…"
+    : s.fetch_refused && !(s._data && s._data.filings_held)
+      ? `<span class="absent">fetch refused</span> <small>${esc(String(s.fetch_refused.at || "").slice(0, 10))}</small>`
     : s._data ? `<span class="num">${esc(String(s._data.filings_held))}</span> <small>fetched ${esc(s._data.last_fetch ? String(s._data.last_fetch.at).slice(0, 10) : "never")}</small>`
     : "never fetched";
   cells.push(cell("Filings", `<button data-m="datastatus" data-arg="${escAttr({ t: s.ticker })}">${dstat}</button>`));
@@ -269,13 +277,29 @@ function evidenceRow(s, item, i) {
     ? { m: "measure", arg: { sid: subj.reads || subj.id, t: s.ticker, ev: item,
         kicker: item.outcome === "noted" ? "Measure · read, never blocking" : "Measure · read by this strategy" } }
     : { m: "subject", arg: { t: s.ticker, ev: item } };
+  /* Triage before explanation: the row says whether an absence is fixable,
+     in three words; the full sentence stays one click deep in the gloss.
+     The word renders from the kind the ENGINE served on the observation —
+     never from journal state guessed at here, which is how "fetch resolves
+     this" came to sit beside gaps a fetch had just structurally refused to
+     close. No kind served means no word: an honest blank over a guess.
+     Questions carry their own verb elsewhere in this row. */
+  const TRIAGE = { refetch: "fetch resolves this",
+                   refused: "fetch was refused",
+                   filings: "not in the filings",
+                   boundary: "not applicable here" };
+  const tword = TRIAGE[obs.fix];
+  const triage = obs.status === "absent" && isBank
+      && subj.kind !== "judgement" && tword
+    ? ` <span class="dim">· ${tword}</span>` : "";
   const val = obs.status === "known"
-    ? `<span class="num">${esc(fmtSubject(subj, obs.value))}</span>${cmMark(obs.cautions)}`
-    : `<span class="absent">${obs.status === "inapplicable" ? "not applicable" : "not known"}</span>`;
+    ? `${boundWord(obs)}<span class="num">${esc(fmtSubject(subj, obs.value))}</span>${cmMark(obs.cautions)}`
+    : `<span class="absent">${obs.status === "inapplicable" ? "not applicable" : "not known"}</span>${triage}`;
   let test = "";
   if (item.test) {
     const t = item.test;
     test = t.absent ? '<span class="absent">no limit set</span>'
+      : subj.kind === "judgement" ? "needs a yes from you"
       : `${esc(t.phrase || "")} ${esc(t.threshold_from && t.threshold_from.unit
           ? fmtUnit(t.threshold, t.threshold_from.unit)
           : fmtSubject(subj, t.threshold))}${t.threshold_from ? ` — your ${esc(t.threshold_from.label)}` : ""}`;
@@ -432,7 +456,7 @@ function coverageSection(s) {
   const inapp = entries.filter((e) => e.status === "inapplicable");
   const row = (e) => {
     const val = e.status === "computed"
-      ? `<span class="num">${esc(fmtBank(e.value, e.format))}</span>${cmMark(e.cautions)}`
+      ? `${boundWord(e)}<span class="num">${esc(fmtBank(e.value, e.format))}</span>${cmMark(e.cautions)}`
       : `<span class="absent">${e.status === "inapplicable" ? "not applicable" : "not known"}</span>`;
     return `<tr class="hot"><td class="en"><button data-m="measure" data-arg="${escAttr({ sid: e.id, t: s.ticker, kicker: "Measure · in the bank" })}">${esc(e.label || e.id)}</button></td>
       <td class="ev-v">${val}</td>

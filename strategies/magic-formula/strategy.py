@@ -148,6 +148,12 @@ CLOCK = {"fact": "position.months_held", "comparator": "below",
 WHY_ROWS = ({"measure": "earnings_yield", "group": WHY_GROUP["id"]},
             {"measure": "return_on_capital", "group": WHY_GROUP["id"]})
 
+# Every measure this strategy may cite — exactly the two above, reported and
+# never tested, because the list already did the judging. Declared so the
+# chooser can say so, and held to by the host: a citation outside it is
+# refused at evaluation.
+READS = tuple(sorted(row["measure"] for row in WHY_ROWS))
+
 # Two observations with no group of their own, because they are cited under
 # different headings on the two paths: when you last saw this name on a list
 # reads as part of the list on the way in and as part of the clock once it is
@@ -269,7 +275,16 @@ STRATEGY = {
                "from it every couple of months until the portfolio is full, "
                "and sells each after about a year. It never judges a company "
                "— the list already did that.",
-    "version": 2,
+    "audience": "For someone who wants to exercise as little judgement as "
+                "possible. You pull a ranked list from Greenblatt's screen "
+                "yourself, buy a few names from it every couple of months "
+                "until the portfolio is full, and sell each after about a "
+                "year. It never judges a company — the list already did. "
+                "Suits someone who does not want to evaluate businesses at "
+                "all, and who can live with owning names they would never "
+                "have picked.",
+    "reads": READS,
+    "version": 3,
     "contract": 8,
     "declines": DECLINES,
     "limits": LIMITS,
@@ -298,6 +313,14 @@ STRATEGY = {
     },
 
     "changelog": {
+        3: "NO LEVEL MOVED. This version declares what was already true: "
+           "the measures it reads (`reads` — exactly the two the list is "
+           "built from, reported and never tested), who it is for "
+           "(`audience`), and that `portfolio-slots` is its position limit "
+           "(the `position-limit` role), so the header can say how full "
+           "the list is. No minimum addition is declared, because this "
+           "strategy buys whole slots off a list and never tops a position "
+           "up — a minimum here would be a setting nothing reads.",
         2: "NO LEVEL MOVED AND NO LOGIC CHANGED. \"On the list, but not "
            "yet\" now declares its one-line consequence for the list row — "
            "held back by your staging rule — using the contract's new "
@@ -458,6 +481,7 @@ STRATEGY = {
         {"id": "portfolio-slots",
          "label": "How many names to hold at once",
          "type": "integer", "unit": "count", "min": 5, "max": 100,
+         "role": "position-limit",
          "source": {"name": "Greenblatt, The Little Book That Still Beats "
                             "the Market, and the FAQ at "
                             "magicformulainvesting.com — twenty to thirty "

@@ -152,8 +152,8 @@ PANES.state = (a) => {
   const st = d.state || {};
   const r = d.reason || {};
   const host = d.produced_by === "host";
-  return `<p class="m-kicker">${host ? "A state the journal itself produced"
-      : "A state this strategy declares"}</p>
+  return `<p class="m-kicker">${esc((host ? "A state the journal itself produced"
+      : "A state this strategy declares") + (a.t ? ` · ${a.t}` : ""))}</p>
 <h3>${esc(st.name || "")}</h3>
 ${prose(st.description)}
 <div class="m-h">Where it sits</div>
@@ -182,7 +182,7 @@ PANES.group = (a) => {
         : `At least ${esc(String((g.test || {}).threshold))} of its lines must hold`
           + ((g.test || {}).threshold_from ? ` — your ${esc(g.test.threshold_from.label)}.` : "."))
       : "It is reported on every reading and never blocks anything.";
-  return `<p class="m-kicker">A group of tests</p>
+  return `<p class="m-kicker">A group of tests${a.t ? esc(` · ${a.t}`) : ""}</p>
 <h3>${esc(g.name)}</h3>
 <p>${need}</p>
 <div class="m-h">How the tally reads</div>
@@ -209,15 +209,18 @@ PANES.measure = (a) => {
     const obs = ev.observed || {};
     const t = ev.test || null;
     const val = obs.status === "known"
-      ? `<b class="num">${esc(fmtSubject(ev.subject || {}, obs.value))}</b>`
+      ? `${boundWord(obs)}<b class="num">${esc(fmtSubject(ev.subject || {}, obs.value))}</b>`
       : `<span class="absent">${obs.status === "inapplicable" ? "not applicable" : "not known"}</span>`;
     const against = t && !t.absent
-      ? ` against ${esc(t.phrase || "")} <b class="num">${esc(t.threshold_from && t.threshold_from.unit
-          ? fmtUnit(t.threshold, t.threshold_from.unit)
-          : fmtSubject(ev.subject || {}, t.threshold))}</b>${t.threshold_from ? ` — your ${esc(t.threshold_from.label)}` : ""}`
+      ? ((ev.subject || {}).kind === "judgement"
+        ? " — it needs a yes from you"
+        : ` against ${esc(t.phrase || "")} <b class="num">${esc(t.threshold_from && t.threshold_from.unit
+            ? fmtUnit(t.threshold, t.threshold_from.unit)
+            : fmtSubject(ev.subject || {}, t.threshold))}</b>${t.threshold_from ? ` — your ${esc(t.threshold_from.label)}` : ""}`)
       : t && t.absent ? ` — <span class="absent">no limit is set</span>` : "";
     const [word] = OUTCOME[ev.outcome] || [ev.outcome];
     headline = `<p>${val}${against}${t ? ` — ${esc(word)}.` : ""}</p>`
+      + boundNote(obs)
       + (obs.status !== "known" ? `<div class="m-h">Why there is no number</div><p>${esc(obs.reason || "")}</p>` : "")
       + (t && t.absent ? `<div class="m-h">Why the test never ran</div><p>${esc(t.absent)}</p>` : "")
       + mCautions(obs.cautions) + mProv(obs.provenance);
@@ -228,8 +231,8 @@ PANES.measure = (a) => {
       || null;
     if (c) {
       headline = c.status === "computed" || c.status === "known"
-        ? `<p><b class="num">${esc(fmtMetric(a.sid, c.value))}</b> on the current reading.</p>`
-          + mCautions(c.cautions) + mProv(c.provenance)
+        ? `<p>${boundWord(c)}<b class="num">${esc(fmtMetric(a.sid, c.value))}</b> on the current reading.</p>`
+          + boundNote(c) + mCautions(c.cautions) + mProv(c.provenance)
         : c.status === "inapplicable"
           ? `<p><span class="absent">not applicable</span> — ${esc(c.reason || "")}</p>`
           : `<p><span class="absent">not known</span> — ${esc(c.reason || "")}</p>`;
@@ -256,8 +259,10 @@ PANES.measure = (a) => {
     ? `<div class="m-h">Whose idea</div>${prose(full.explanation.attribution)}` : "";
   const asks = full && full.question
     ? `<div class="m-h">The question you answer</div>${prose(full.question)}` : "";
-  const kicker = meta.kind === "qualitative" ? "A question only you can answer"
-    : a.kicker || "Measure";
+  /* The subject is named on the panel itself, not inferred from the page —
+     a gloss citing a specific filing must say whose filing it is. */
+  const kicker = (meta.kind === "qualitative" ? "A question only you can answer"
+    : a.kicker || "Measure") + (a.t ? ` · ${a.t}` : "");
   /* A measure the bank has dropped keeps its row for as long as something
      was typed; its gloss keeps the words it was entered under. */
   const droppedWords = !meta.label && entered ? entered : null;
@@ -296,14 +301,15 @@ PANES.subject = (a) => {
     judgement: "Your own assessment, not a figure the journal worked out.",
   };
   const t = a.ev.test || null;
-  return `<p class="m-kicker">${esc(subj.kind === "fact" ? "A fact the journal reports" : "Cited by this verdict")}</p>
+  return `<p class="m-kicker">${esc((subj.kind === "fact" ? "A fact the journal reports" : "Cited by this verdict") + (a.t ? ` · ${a.t}` : ""))}</p>
 <h3>${esc(subj.label || subj.id || "")}</h3>
 <p>${obs.status === "known"
-    ? `<b class="num">${esc(fmtSubject(subj, obs.value))}</b>`
+    ? `${boundWord(obs)}<b class="num">${esc(fmtSubject(subj, obs.value))}</b>`
     : `<span class="absent">${obs.status === "inapplicable" ? "not applicable" : "not known"}</span> — ${esc(obs.reason || "")}`}${
     t && !t.absent ? ` against ${esc(t.phrase || "")} <b class="num">${esc(t.threshold_from && t.threshold_from.unit
       ? fmtUnit(t.threshold, t.threshold_from.unit) : fmtSubject(subj, t.threshold))}</b>${
       t.threshold_from ? ` — your ${esc(t.threshold_from.label)}` : ""}` : ""}</p>
+${boundNote(obs)}
 ${t && t.absent ? `<div class="m-h">Why the test never ran</div><p>${esc(t.absent)}</p>` : ""}
 ${subj.explain ? prose(subj.explain) : ""}
 ${subj.asks ? `<div class="m-h">What you are asked</div>${prose(subj.asks)}` : ""}
@@ -346,6 +352,13 @@ PANES.datastatus = async (a) => {
   const s = find(a.t);
   if (!s) return PANES.rest();
   const d = s._data;
+  if (s.fetch_refused && !(d && d.filings_held)) {
+    return `<p class="m-kicker">The data behind this security</p>
+<h3>The fetch was refused</h3>
+<p>${esc(s.fetch_refused.said || "The symbol could not be resolved.")}</p>
+<p class="m-quiet">Recorded ${esc(String(s.fetch_refused.at || "").slice(0, 10))}. Fetching again will not resolve this until the symbol itself is corrected — remove the security and re-add it under the symbol EDGAR lists.</p>
+<button class="m-act" data-act="fetch" data-t="${esc(s.ticker)}">Try the fetch anyway</button>`;
+  }
   if (!d) {
     return `<p class="m-kicker">The data behind this security</p>
 <h3>Nothing has been fetched</h3>
@@ -469,7 +482,7 @@ PANES.lot = (a) => {
        distinction is what makes the override record mean anything.</p>`
     : d
       ? `<p>The verdict that day read <b>${esc((d.state || {}).name || "")}</b>${
-          (d.reason || {}).summary ? ` — ${esc(d.reason.summary)}` : ""}.
+          (d.reason || {}).summary ? ` — ${esc(String(d.reason.summary).replace(/\.\s*$/, ""))}` : ""}.
          Frozen with it: every figure, in the words and thresholds in force then.
          It is never recomputed — today's page and this record may disagree, and that difference is the story.</p>`
       : "<p>No verdict is on this entry: nothing was recorded about what your rules said.</p>";
@@ -499,7 +512,7 @@ function frozenEvidence(d) {
     const obs = ev.observed || {};
     const [word] = OUTCOME[ev.outcome] || [ev.outcome];
     const val = obs.status === "known"
-      ? `<span class="num">${esc(fmtSubject(subj, obs.value))}</span>${cmMark(obs.cautions)}`
+      ? `${boundWord(obs)}<span class="num">${esc(fmtSubject(subj, obs.value))}</span>${cmMark(obs.cautions)}`
       : `<span class="absent">${obs.status === "inapplicable" ? "not applicable" : "not known"}</span>`;
     return `<tr><td>${esc(subj.label || subj.id || "")}</td><td>${val} · ${esc(word)}</td></tr>`;
   }).join("");

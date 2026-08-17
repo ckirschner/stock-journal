@@ -55,8 +55,13 @@ from types import MappingProxyType
 
 from engine import contract, dated, lists
 
+# The words are the interface's ("thesis" never reaches a reader — the
+# record calls it "Why I own this"). A sale recorded under the old wording
+# keeps it: reasons are recorded verbatim and grouped verbatim, so renaming
+# an offer forks the scorecard's grouping at the rename and nothing rewrites
+# what was already said.
 EXIT_REASONS = [
-    "Thesis broke",
+    "My reason for owning it broke",
     "Hit valuation",
     "Better opportunity",
     "Risk limit",
@@ -705,7 +710,12 @@ def _next_id(security: dict) -> tuple[str, int]:
 # producer that renames one of them fails at the write with this message
 # rather than quietly freezing a shape nothing can read back.
 # dataview.qualified() builds them.
-_VALUE_KEYS = ("value", "source", "cautions", "provenance")
+# `label` and `format` are the bank's words IN FORCE when the value was
+# composed — required at the freeze (None where the bank no longer speaks
+# for the id), because a frozen figure relabelled by today's bank is history
+# quietly rewritten. dataview.merged_values stamps them; a caller composing
+# values any other way is refused below rather than trusted.
+_VALUE_KEYS = ("value", "source", "cautions", "provenance", "label", "format")
 
 
 def _qualified_values(values) -> dict:

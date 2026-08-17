@@ -35,7 +35,7 @@
 # Bump `version` whenever any number here moves. That is what makes the
 # change appear on the rule-change record of every journal running this
 # strategy, with a before and an after.
-version: 3
+version: 4
 
 values:
 
@@ -53,6 +53,12 @@ values:
   # How much, and how many — Buffett's practice, not the report
   portfolio-slots: 10
   position-weight-cap: 40
+
+  # The smallest top-up worth acting on, as a percent of the position's
+  # target value. This author's number, with no source behind it — neither
+  # Buffett nor the report addresses a minimum trade size. High, because a
+  # concentrated method adds at size or not at all.
+  minimum-add: 25
 
   # There is no holding period here and that is deliberate: nothing in this
   # strategy closes a position for having been owned a long time.

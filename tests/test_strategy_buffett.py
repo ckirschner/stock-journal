@@ -314,7 +314,7 @@ class TestTheThresholdsAreTheReports:
 
     # Nobody's but this file's, and the ones to argue with hardest.
     AUTHOR = {"cash-tests-required": 1, "growth-tests-required": 1,
-              "exit-debt-to-fcf": 5.0}
+              "exit-debt-to-fcf": 5.0, "minimum-add": 25}
 
     def test_every_level_is_what_the_source_says(self, buffett):
         shipped = values_for(buffett)

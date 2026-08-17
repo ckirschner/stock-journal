@@ -12,32 +12,40 @@ function strategyView() {
       <p>The journal is stamped with it — created ${esc(String((S.journal || {}).created || "").slice(0, 10))}, ${esc(stamp.name || "")} v${esc(stamp.version)} — and no verdict can be produced until a strategy with that id is back in the strategies folder. Nothing recorded is affected.</p></div>`
       + changeHistories();
   }
+  /* Terse is the resting state, on this tab most of all — it is the first
+     tab a curious new user opens, and it used to greet them with twenty
+     paragraphs. Every line here is one line; every paragraph is behind the
+     click that every other paragraph in this program is behind. */
   const declines = (st.declines || []).length ? `
     <div class="panel"><h3>What it will not evaluate</h3>
-      ${st.declines.map((x) => `<p><b>${esc(x.label || x.class)}</b> — ${esc(x.because || "")}${x.means ? ` <span class="dim">${esc(x.means)}</span>` : ""}</p>`).join("")}
+      ${st.declines.map((x, i) => `<div class="kv"><span class="k"><button data-m="declprose" data-arg="${escAttr({ what: "decline", i })}">${esc(x.label || x.class)}</button></span>
+        <span class="v"><small>${esc(x.means || "why is a click away")}</small></span></div>`).join("")}
       <p class="panelnote">Settled from the SEC’s own industry code inside a company’s filings, on the first fetch. A declined company is not a failed one — nothing was tested.</p></div>` : "";
   const limits = (st.limits || []).length ? `
     <div class="panel"><h3>What this method does not promise</h3>
-      ${st.limits.map((l) => `<p><b>${esc(l.title || "")}</b></p>${prose(l.body || "")}`).join("")}</div>` : "";
+      ${st.limits.map((l, i) => `<div class="kv"><span class="k"><button data-m="declprose" data-arg="${escAttr({ what: "limit", i })}">${esc(l.title || "")}</button></span>
+        <span class="v"><small>read it</small></span></div>`).join("")}</div>` : "";
   const states = `
-    <div class="panel"><h3>What it can say</h3>
+    <div class="panel"><h3>What it can say<span class="dim" style="font-weight:400;font-size:.76rem"> — each explained on click</span></h3>
       ${(st.states || []).map((x) => {
         const spec = (S.render_types || {})[x.render] || {};
-        return `<div class="kv"><span class="k"><span class="state ${RENDER_CLASS[x.render] || "s-unknown"}">${esc(x.name)}</span></span>
-          <span class="v">${esc(spec.meaning || x.render)}<small>${esc(x.description || "")}</small></span></div>`;
+        return `<div class="kv"><span class="k"><button data-m="declprose" data-arg="${escAttr({ what: "state", id: x.id })}"><span class="state ${RENDER_CLASS[x.render] || "s-unknown"}">${esc(x.name)}</span></button></span>
+          <span class="v">${esc(spec.meaning || x.render)}</span></div>`;
       }).join("")}
       ${neverSays(st)}</div>`;
   const inputs = `
     <div class="panel"><h3>What it asked you</h3>
       ${(st.inputs || []).map((f) => {
+        const shown = (v2) => f.unit && Number.isFinite(Number(v2))
+          ? fmtUnit(v2, f.unit) : String(v2);
         const val = f.answered_by === "host"
           ? (f.value !== null && f.value !== undefined
-            ? `<b class="num">${esc(String(f.value))}</b><small>${esc(f.answered_how || "worked out by the journal")}</small>`
+            ? `<b class="num">${esc(shown(f.value))}</b><small>${esc(f.answered_how || "worked out by the journal")}</small>`
             : `<span class="absent">not worked out</span><small>${esc(f.unavailable || "")}</small>`)
           : f.inactive
             ? `<span class="dim">not asked</span><small>${esc(f.inactive)}</small>`
             : (f.value !== null && f.value !== undefined && f.value !== ""
-              ? `<b>${esc(String(f.value))}</b>`
+              ? `<b>${esc(shown(f.value))}</b>`
               : '<span class="absent">not answered</span>');
         return `<div class="kv"><span class="k"><button data-m="declared" data-arg="${escAttr({ kind: "input", id: f.id })}">${esc(f.label)}</button></span>
           <span class="v">${val}</span></div>`;
@@ -63,10 +71,42 @@ function strategyView() {
   return banners() + `
     <div class="panel"><h3>${esc(st.name)} <span class="dim">v${esc(st.version)} · settings v${esc(st.values_version)} · contract ${esc(st.contract)}</span></h3>
       <p>${esc(st.summary || "")}</p>
+      ${st.audience ? `<p class="panelnote"><b>Who it is for</b> — ${esc(st.audience)}</p>` : ""}
       <p class="panelnote">Stamped onto this journal at creation${(S.journal || {}).created ? ` on ${esc(String(S.journal.created).slice(0, 10))}` : ""} — a journal has one strategy and it does not change.</p></div>
     ${limits}${declines}${states}${list}${inputs}${values}
     ${changeHistories()}${refused}`;
 }
+/* The Strategy tab's prose, read one piece at a time in the margin: a
+   state's description, a limit's body, a decline's reasoning. */
+PANES.declprose = (a) => {
+  const st = S.strategy || {};
+  if (a.what === "state") {
+    const x = (st.states || []).find((s) => s.id === a.id);
+    if (!x) return PANES.rest();
+    const spec = (S.render_types || {})[x.render] || {};
+    return `<p class="m-kicker">A state this strategy declares</p>
+<h3><span class="state ${RENDER_CLASS[x.render] || "s-unknown"}">${esc(x.name)}</span></h3>
+<p>${esc(spec.meaning || x.render)}${spec.attention ? " — it is one of the states that asks something of you." : " — it asks nothing of you."}</p>
+${prose(x.description)}`;
+  }
+  if (a.what === "limit") {
+    const l = (st.limits || [])[a.i];
+    if (!l) return PANES.rest();
+    return `<p class="m-kicker">What this method does not promise</p>
+<h3>${esc(l.title || "")}</h3>${prose(l.body || "")}`;
+  }
+  if (a.what === "decline") {
+    const x = (st.declines || [])[a.i];
+    if (!x) return PANES.rest();
+    return `<p class="m-kicker">What it will not evaluate</p>
+<h3>${esc(x.label || x.class)}</h3>
+${prose(x.because || "")}
+${x.means ? `<p class="m-quiet">${esc(x.means)}</p>` : ""}
+<p class="m-quiet">Settled from the SEC’s own industry code, on the first fetch. A declined company is not a failed one — nothing was tested.</p>`;
+  }
+  return PANES.rest();
+};
+
 function neverSays(st) {
   const declared = new Set((st.states || []).map((x) => x.render));
   const never = Object.entries(S.render_types || {})
@@ -99,9 +139,15 @@ function changeHistories() {
       ${list.length ? list.map((c) => `<div class="kv"><span class="k num">${esc(String(c.seen || "").slice(0, 10))}</span>
         <span class="v" style="text-align:left">${lineFn(c)}${explainBtn(record, c)}</span></div>`).join("")
       : '<p class="panelnote">Nothing has moved yet. The moment something does — through this app or by an edit to the files — it lands here, with what it was before.</p>'}</div>`;
+  /* The from→to lines are terse facts and stay visible; the release's own
+     prose account can run to paragraphs, so it folds — a quiet record
+     should read quietly. */
+  const foldedLog = (lines) => !lines.length ? ""
+    : `<details class="bfold"><summary>what the release says changed</summary>${
+        lines.map((line) => `<div class="bline dim">${esc(line)}</div>`).join("")}</details>`;
   return section(`How the rules have moved`, "rules", rules, (c) => [
     ...(c.moved || []).map((m) => `<div class="bline">${esc(m.label || m.id)}: ${esc(fmtDefined(m.from))} → ${esc(fmtDefined(m.to))}</div>`),
-    ...(c.changelog || []).map((line) => `<div class="bline dim">${esc(line)}</div>`),
+    foldedLog(c.changelog || []),
     ...(c.notes || []).map((n) => `<div class="bline dim">${esc(n)}</div>`),
   ].join("") || `<div class="bline dim">${esc(c.kind || "recorded")}</div>`, true)
   + section(`How the measure definitions have moved`, "measures", meas, (c) => [
@@ -109,7 +155,7 @@ function changeHistories() {
     ...(c.removed || []).map((m) => `<div class="bline">${esc(m.name || m.id)} — removed</div>`),
     ...(c.moved || []).map((m) => `<div class="bline">${esc(m.name || m.id)} · ${esc(m.field)}: ${esc(fmtDefined(m.from))} → ${esc(fmtDefined(m.to))}</div>`),
     ...(c.restated || []).map((m) => `<div class="bline">${esc(m.name || m.id)} · ${esc(m.field)} changed — not something this program can read back</div>`),
-    ...(c.changelog || []).map((line) => `<div class="bline dim">${esc(line)}</div>`),
+    foldedLog(c.changelog || []),
   ].join("") || `<div class="bline dim">first seen</div>`, true)
   + section(`How your answers have moved`, "inputs", ins, (c) => (c.moved || []).map((m) =>
     `<div class="bline">${esc(m.label || m.id)}: ${esc(fmtDefined(m.from))} → ${esc(fmtDefined(m.to))}</div>`).join(""));
@@ -119,7 +165,7 @@ function changeHistories() {
 let measureSearch = "";
 function measuresView() {
   loadBankThen(() => { if (tab === "measures" && !openTicker) render(); });
-  const cited = citedInJournal();
+  const cited = journalReads();
   const scoped = !showWholeBank;
   const all = C.bank || [];
   let entries = scoped ? all.filter((e) => cited.has(e.id)) : all;
@@ -137,7 +183,7 @@ function measuresView() {
       : `<p class="quiet">${scoped ? "Nothing your strategy has read matches that." : "Nothing in the bank matches that."}</p>`;
   return banners() + `
     <div class="filters" style="padding-bottom:.2rem">
-      <button class="${scoped ? "on" : ""}" data-act="bankscope" data-scope="cited">What this journal reads<span class="n">${cited.size}</span></button>
+      <button class="${scoped ? "on" : ""}" data-act="bankscope" data-scope="cited">What this strategy reads<span class="n">${cited.size}</span></button>
       <button class="${scoped ? "" : "on"}" data-act="bankscope" data-scope="all">The whole bank<span class="n">${all.length || (Object.keys(S.bank_meta || {}).length)}</span></button>
     </div>
     <p class="quiet">Definitions only — no thresholds live here. A limit belongs to your strategy and is read on its page.</p>
@@ -256,48 +302,79 @@ function analyticsView() {
 
 /* -------------------------------------------------------------- welcome */
 let chosenStrategy = null;
-function welcomeView() {
+
+/* The chooser: the one screen where a stranger makes the one permanent
+   decision. So it carries exactly the sentence that decides it — who each
+   method suits — and nothing else. What each demands, declines and promises
+   is real content with a real home: the Strategy tab, readable the moment
+   the journal opens and forever after. A reader who wants it before
+   choosing opens it from the card; it never arrives uninvited. */
+function strategyCards() {
+  const offers = S.strategies || [];
+  return offers.map((o) => `
+    <div class="stratcard ${chosenStrategy === o.id ? "on" : ""}" data-act="choosestrategy" data-id="${esc(o.id)}">
+      <b>${esc(o.name)}</b>
+      ${o.audience ? `<p class="sc-aud">${esc(o.audience)}</p>` : `<p class="sc-aud">${esc(o.summary || "")}</p>`}
+    </div>`).join("");
+}
+
+/* One creation surface, whether it is the first journal or the fifth — a
+   plane screen, because a permanent decision plus a form needs room to
+   breathe and to scroll, and a dropdown offers neither. */
+function createView(fresh) {
   const offers = S.strategies || [];
   const sec = S.data_security || {};
-  const journals = (S.journals || []).length ? `
-    <div class="panel"><h3>Your journals</h3>
-      ${S.journals.map((j) => `<div class="kv"><span class="k">${esc(j.name)}</span>
-        <span class="v"><button class="m-act quiet" data-act="openjournal" data-id="${esc(j.id)}">Open</button></span></div>`).join("")}</div>` : "";
-  const cards = offers.map((o) => `
-    <div class="stratcard ${chosenStrategy === o.id ? "on" : ""}" data-act="choosestrategy" data-id="${esc(o.id)}">
-      <b>${esc(o.name)}</b> <span class="dim">v${esc(o.version)}</span>
-      <p>${esc(o.summary || "")}</p>
-      ${(o.limits || []).length ? `<p class="sc-meta">${o.limits.map((l) => esc(l.title)).join(" · ")}</p>` : ""}
-      ${(o.declines || []).length ? `<p class="sc-meta">Will not evaluate: ${o.declines.map((d2) => esc(d2.label || d2.class)).join(", ")}</p>` : ""}
-      ${o.list ? `<p class="sc-meta">Works from a list you import — ${esc(sourceName(o.list.source))}</p>` : ""}
-    </div>`).join("");
+  /* The cold-start wall always shows data access — a fresh install needs
+     it and the honest sentence about what fetching requires belongs there.
+     A second journal shows it only where something is genuinely missing. */
+  const needsAccess = fresh || !sec.sec_identity || !sec.key_configured;
   const chosen = offers.find((o) => o.id === chosenStrategy) || null;
   const inputFields = chosen ? (chosen.inputs || []).filter((f) => f.answered_by !== "host").map((f) =>
     declaredField(f, undefined, "in_")).join("") : "";
-  return banners() + `<div class="steps">
-    <h1>Ledger</h1>
-    <p>An investment journal that holds you to a strategy you commit to while calm. It reads public filings and prices, tells you what your own rules say about a security today, and records every decision — including the ones made against them. It never trades and it never advises.</p>
-    ${journals}
-    <div class="step"><div class="sn">Step 1</div><h3>Pick a strategy</h3>
-      <p>A journal has exactly one strategy, chosen now and never changed — that is the discipline, not a limitation. Trading two strategies means two journals, the way it would mean two accounts.</p>
-      ${cards || '<p class="quiet">No strategy would load. The strategies folder is empty or every bundle was refused.</p>'}
-      ${(S.refused || []).length ? `<p class="panelnote">Would not load: ${S.refused.map((r) => esc(r.name || r.bundle)).join(", ")}</p>` : ""}</div>
-    <div class="step"><div class="sn">Step 2</div><h3>Name it, and say what is in the account</h3>
-      <div class="field"><label>Journal name</label><input name="w_name" placeholder="e.g. Long-term account"></div>
-      <div class="m-row"><div><label>Cash in the account now</label><input name="w_cash" type="number" placeholder="e.g. 25000"></div>
-      <div><label>As of</label><input name="w_cash_on" type="date" value="${esc(localToday())}" max="${esc(localToday())}"></div></div>
-      ${inputFields}
-      <p class="panelnote" style="margin-top:.6rem">Anything you already own is entered after the journal opens — add each security and enter its history from your records. Those holdings are then evaluated for <b>exit</b>, not entry: the buy decision is behind them, and the verdicts you will see are about whether to stay.</p></div>
+  const access = needsAccess ? `
     <div class="step"><div class="sn">Step 3</div><h3>Data access</h3>
       <p>Both are required — without them the tool cannot fetch and provides nothing.</p>
       <div class="m-row"><div><label>Your name and email <small>(the User-Agent the SEC asks for)</small></label>
         <input name="w_sec" placeholder="Jane Doe jane@example.com" value="${esc(sec.sec_identity || "")}"></div></div>
       <div class="m-row"><div><label>Tiingo API key <small>(free at tiingo.com — the tool only ever reads prices with it)</small></label>
         <input name="w_key" type="password" placeholder="${sec.key_configured ? "already configured" : "paste the key"}"></div></div>
-      <p class="panelnote">${sec.key_configured ? "A key is already stored" : "Stored in the OS credential store"} — never shown, never exported, never logged.</p></div>
+      <p class="panelnote">${sec.key_configured ? "A key is already stored" : "Stored in the OS credential store"} — never shown, never exported, never logged.</p></div>` : "";
+  return `<div class="steps">
+    <div class="step"><div class="sn">Step 1 · the permanent one</div><h3>Pick the strategy that fits you</h3>
+      <p>A journal has exactly one strategy, chosen now and never changed. Everything each one demands — its rules, its limits, every measure it reads — is on the Strategy tab from the moment the journal opens.</p>
+      ${strategyCards() || '<p class="quiet">No strategy would load. The strategies folder is empty or every bundle was refused.</p>'}
+      ${(S.refused || []).length ? `<p class="panelnote">Would not load: ${S.refused.map((r) => esc(r.name || r.bundle)).join(", ")}</p>` : ""}</div>
+    <div class="step"><div class="sn">Step 2</div><h3>Name it, and say what is in the account</h3>
+      <div class="field"><label>Journal name</label><input name="w_name" placeholder="${esc(fresh ? "e.g. Long-term account" : "e.g. Retirement account")}"></div>
+      <div class="m-row"><div><label>Cash in the account now</label><input name="w_cash" type="number" placeholder="e.g. 25000"></div>
+      <div><label>As of</label><input name="w_cash_on" type="date" value="${esc(localToday())}" max="${esc(localToday())}"></div></div>
+      ${inputFields}
+      <p class="panelnote" style="margin-top:.6rem">Anything you already own is entered after the journal opens, and is then evaluated for <b>exit</b>, not entry — the buy decision is behind it.</p></div>
+    ${access}
     <button class="m-act" data-act="createjournal" style="margin-top:1.1rem">Start the journal</button>
     <div class="m-err" id="w_err" style="display:none"></div>
   </div>`;
+}
+
+function welcomeView() {
+  const journals = (S.journals || []).length ? `
+    <div class="panel"><h3>Your journals</h3>
+      ${S.journals.map((j) => `<div class="kv"><span class="k">${esc(j.name)}</span>
+        <span class="v"><button class="m-act quiet" data-act="openjournal" data-id="${esc(j.id)}">Open</button></span></div>`).join("")}</div>` : "";
+  return banners() + `<div class="steps">
+    <h1>Ledger</h1>
+    <p>An investment journal that holds you to a strategy you commit to while calm. It reads public filings and prices, tells you what your own rules say about a security today, and records every decision — including the ones made against them. It never trades and it never advises.</p>
+    ${journals}</div>${createView(true)}`;
+}
+
+/* Starting another journal: the same screen, reached from the journal menu,
+   with a way back to the one that is open. */
+function newJournalView() {
+  return banners() + `
+    <div class="crumb"><button data-act="back">← ${esc(journalName())}</button></div>
+    <div class="steps"><h1>A new journal</h1>
+    <p>A second journal is a second real account, not a second opinion.</p>
+    </div>${createView(false)}`;
 }
 
 /* A declared field, built from the strategy's own declaration. */

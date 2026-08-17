@@ -334,7 +334,7 @@ PANES.values = (a) => {
   const rows = (s._inputs || []).map((r) => {
     const c = (s._computed || {})[r.id] || {};
     const computedLine = c.status === "computed" || c.status === "known"
-      ? `<small>computed: ${esc(fmtMetric(r.id, c.value))}</small>`
+      ? `<small>computed: ${boundWord(c)}${esc(fmtMetric(r.id, c.value))}</small>`
       : c.status === "inapplicable" ? `<small>not applicable — ${esc(oneline(c.reason || ""))}</small>`
       : c.reason ? `<small>not computed — ${esc(oneline(c.reason))}</small>` : "";
     const entered = r.entered || {};
@@ -549,19 +549,32 @@ async function doCompare(btn) {
   if (seqs.length < 2) return marginErr("Tick at least two kept days to compare.");
   margin("readings", { t: btn.dataset.t, seqs });
 }
+/* A frozen figure renders in the words and format IN FORCE when it was
+   frozen — a measure renamed after a snapshot must not rename the snapshot.
+   The bank standing today is consulted only for a record predating the
+   frozen fields, the same rule a frozen citation follows. */
+const frozenLabel = (id, held) =>
+  held && held.label != null ? held.label : labelOf(id);
+const fmtFrozen = (id, held, v) =>
+  held && held.format !== undefined && held.format !== null
+    ? fmtBank(v, held.format) : fmtMetric(id, v);
+
 function snapshotVsToday(s, entry) {
   const snap = entry.snapshot || {};
   const frozen = snap.decision || {};
   const today = s._decision || {};
   const day = String(entry.recorded || "").slice(0, 10);
   const metrics = snap.metrics || {};
-  const rows = Object.keys(metrics).sort((a, b) => labelOf(a).localeCompare(labelOf(b))).map((id) => {
+  const name = (id) => frozenLabel(id, metrics[id]);
+  const rows = Object.keys(metrics).sort((a, b) => name(a).localeCompare(name(b))).map((id) => {
     const then = metrics[id];
     const now = (s._computed || {})[id];
     const nowTxt = now && (now.status === "computed" || now.status === "known")
-      ? fmtMetric(id, now.value)
+      ? boundWord(now) + fmtMetric(id, now.value)
       : now && now.status === "inapplicable" ? "not applicable" : "not known now";
-    return `<tr><td>${esc(labelOf(id))}</td><td class="num">${esc(fmtMetric(id, then.value))}${cmMark(then.cautions)}</td><td class="num">${esc(nowTxt)}${now && (now.status === "computed" || now.status === "known") ? cmMark(now.cautions) : ""}</td></tr>`;
+    const renamed = then && then.label != null && then.label !== labelOf(id)
+      ? ` <span class="dim">(now called ${esc(labelOf(id))})</span>` : "";
+    return `<tr><td>${esc(name(id))}${renamed}</td><td class="num">${boundWord(then)}${esc(fmtFrozen(id, then, then.value))}${cmMark(then.cautions)}</td><td class="num">${esc(nowTxt)}${now && (now.status === "computed" || now.status === "known") ? cmMark(now.cautions) : ""}</td></tr>`;
   }).join("");
   return `<p class="m-kicker">Saved reading · ${esc(day)}</p>
 <h3>Compared with today</h3>
@@ -582,17 +595,28 @@ function comparisonHtml(t, cmp) {
         ? ' <span class="typed" title="Entered by hand — it carried no date when it was frozen.">typed°</span>'
         : p.date ? ` <span class="dim">${esc(fmtCloseDate(p.date))}</span>` : "")
       : `<span class="absent" title="${esc(p.reason || "")}">—</span>`}</td>`).join("")}<td></td></tr>`;
-  const ids = Object.keys(cmp.measures || {}).sort((a, b) => labelOf(a).localeCompare(labelOf(b)));
+  /* Each column's figure renders in its own frozen words; the row is headed
+     by the newest frozen label, with today's bank only covering records
+     that predate the field. Two days frozen under different labels head the
+     row with the newer and say so — relabelling either would rewrite it. */
+  const rowLabel = (m, id) => {
+    const withWords = (m.readings || []).filter((r) => r.status === "known"
+      && r.label != null);
+    return withWords.length ? withWords[withWords.length - 1].label
+      : labelOf(id);
+  };
+  const ids = Object.keys(cmp.measures || {}).sort((a, b) =>
+    rowLabel(cmp.measures[a], a).localeCompare(rowLabel(cmp.measures[b], b)));
   const rows = ids.map((id) => {
     const m = cmp.measures[id];
     const cells = (m.readings || []).map((r) =>
       `<td class="num">${r.status === "known"
-        ? esc(fmtMetric(id, r.value)) + cmMark(r.cautions)
+        ? boundWord(r) + esc(fmtFrozen(id, r, r.value)) + cmMark(r.cautions)
         : '<span class="absent" title="' + esc(r.reason || "") + '">—</span>'}</td>`).join("");
     const moved = m.moved && m.moved.status === "known"
       ? `<td class="num">${esc(fmtMetric(id, m.moved.value))}</td>`
-      : `<td><button class="absent" data-m="absent" data-arg="${escAttr({ label: labelOf(id) + " — the move between these days", reason: (m.moved || {}).reason || "" })}">—</button></td>`;
-    return `<tr><td>${esc(labelOf(id))}</td>${cells}${moved}</tr>`;
+      : `<td><button class="absent" data-m="absent" data-arg="${escAttr({ label: rowLabel(m, id) + " — the move between these days", reason: (m.moved || {}).reason || "" })}">—</button></td>`;
+    return `<tr><td>${esc(rowLabel(m, id))}</td>${cells}${moved}</tr>`;
   }).join("");
   return `<p class="m-kicker">Saved readings · ${esc(t)}</p>
 <h3>${cols.length} days, side by side</h3>
@@ -679,22 +703,10 @@ ${a.kind === "value" ? '<p class="m-quiet">Read-only here by design: a threshold
 };
 
 /* ------------------------------------------------- journal housekeeping */
-/* The forms live in the dropdown the journal pill opens — chrome opens
-   where it was clicked, and never evicts whatever the margin holds. */
-async function doNewJournal(btn) {
-  const f = menuForm();
-  if (!(f.nj_name || "").trim()) return menuErr("A name is needed.");
-  const inputs = {};
-  Object.entries(f).forEach(([k, v]) => { if (k.startsWith("in_")) inputs[k.slice(3)] = v; });
-  const r = await apiRaw("create_journal", f.nj_name, btn.dataset.id, inputs,
-    f.nj_cash || null, f.nj_cash_on || null);
-  if (!r.ok) return menuErr(r.error);
-  if (r.cash_problem) toast("The journal is created, but the opening cash was refused: " + r.cash_problem, true);
-  menuClose();
-  closeSecurity(); tab = "list";
-  await refresh(); refreshTimeframe();
-}
-
+/* Rename and delete live in the dropdown the journal pill opens — chrome
+   opens where it was clicked, and never evicts whatever the margin holds.
+   Starting another journal is a screen (newJournalView): a permanent
+   decision plus a form needs room a dropdown does not have. */
 async function doRenameJournal() {
   const f = menuForm();
   const r = await apiRaw("rename_journal", (S.journal || {}).id, f.name);
@@ -955,8 +967,8 @@ function startFetchPoll(ticker) {
       if (errs.length) {
         bits.push(`${errs.length} problem${errs.length === 1 ? "" : "s"} — the first: ${errs[0]}`);
       }
-      toast(`${ticker}: fetch finished${bits.length ? " — " + bits.join(" · ") : ""}.`,
-        !!(said || errs.length));
+      toast(`${ticker}: fetch finished${bits.length ? " — " + bits.join(" · ") : ""}.`
+        .replace(/\.\.$/, "."), !!(said || errs.length));
     } else {
       toast(`${ticker}: fetch finished.`);
     }

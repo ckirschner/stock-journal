@@ -1029,3 +1029,42 @@ class TestTheBankCannotDeclareTheWrongClock:
                  if n.startswith("price_") and callable(
                      getattr(compute.Ctx, n))}
         assert doors - {"price_dates_served"} == set(compute._PRICE_DOORS)
+
+
+class TestAStreakThatRunsOffTheRecord:
+    """A streak that reaches the edge of the recorded filings without
+    breaking is a floor, not a point. Served as a point it fails any test
+    asking for more years than the record holds — a fifty-seven-year payer
+    with thirteen machine-readable years FAILS a twenty-year requirement,
+    which is a false fail on a knockout. The bound is part of the value and
+    the comparison consumes it (contract._bounded_outcome); a caution would
+    only have been read by a person and ignored by the arithmetic."""
+
+    def _paying(self, first, last):
+        return years({y: 1_000_000 for y in range(first, last + 1)},
+                     concept="us-gaap:PaymentsOfDividends")
+
+    def test_the_run_off_the_edge_is_bounded_not_asserted(self):
+        r = one(self._paying(2018, 2025), "consecutive_dividend_years")
+        assert r["status"] == "computed"
+        assert r["value"] == 8
+        assert r["bound"] == "at_least"
+        assert "oldest fiscal year held" in r["bound_reason"]
+
+    def test_a_streak_the_record_ends_is_a_plain_point(self):
+        filings = years(
+            {**{y: 1_000_000 for y in range(2020, 2026)}, 2019: 0},
+            concept="us-gaap:PaymentsOfDividends")
+        r = one(filings, "consecutive_dividend_years")
+        assert r["status"] == "computed"
+        assert r["value"] == 6
+        assert "bound" not in r
+
+    def test_the_bound_survives_to_the_strategy_context(self):
+        from engine import dataview
+        r = one(self._paying(2018, 2025), "consecutive_dividend_years")
+        node = dataview.resolve({"ticker": "SYN"},
+                                {"consecutive_dividend_years": r})
+        got = node["consecutive_dividend_years"]
+        assert got["bound"] == "at_least"
+        assert got["bound_reason"] == r["bound_reason"]

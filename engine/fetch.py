@@ -76,7 +76,7 @@ def identity() -> str:
 
 
 def start_fetch(ticker: str, known_cik=None,
-                on_resolved=None) -> dict:
+                on_resolved=None, on_report=None) -> dict:
     """Kick off a background fetch. Returns immediately with either
     {"started": True} or {"error": ...} for preconditions that fail fast.
 
@@ -97,13 +97,13 @@ def start_fetch(ticker: str, known_cik=None,
         _status[t] = {"running": True, "stage": "starting", "errors": [],
                       "started": _stamp(), "done": 0, "total": 0}
     thread = threading.Thread(
-        target=_run_fetch, args=(t, known_cik, on_resolved),
+        target=_run_fetch, args=(t, known_cik, on_resolved, on_report),
         daemon=True)
     thread.start()
     return {"started": True}
 
 
-def _run_fetch(ticker: str, known_cik, on_resolved=None):
+def _run_fetch(ticker: str, known_cik, on_resolved=None, on_report=None):
     try:
         got_gate = _fetch_gate.acquire(blocking=False)
         if not got_gate:
@@ -115,6 +115,12 @@ def _run_fetch(ticker: str, known_cik, on_resolved=None):
                                   on_resolved=on_resolved)
         finally:
             _fetch_gate.release()
+        if on_report:
+            # From the fetch thread, like on_resolved, and for the same
+            # reason: a structural refusal is a fact about the security and
+            # must not depend on a UI poll surviving to completion to get
+            # recorded.
+            on_report(ticker, report)
         _set_status(ticker, running=False, finished=_stamp(), report=report,
                     stage="done")
     except Exception as e:                              # noqa: BLE001

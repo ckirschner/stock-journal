@@ -77,16 +77,70 @@ def is_absent(x) -> bool:
     return x is None or (isinstance(x, dict) and x.get("absent"))
 
 
+def _index_of(filing: dict) -> "cm.FilingIndex":
+    """One FilingIndex per stored filing object, built once and shared.
+
+    A reconstruction builds one SeriesBuilder per boundary, each over its own
+    prefix of the same filing list — which meant indexing the same filing
+    dozens of times per read (measured: ~2,100 index builds for one company's
+    series, most of a second). The index is a read-only view of ONE filing,
+    so sharing it across prefixes leaks nothing between boundaries: a
+    boundary excludes a filing by not listing it, never by holding a
+    different copy of it.
+
+    Keyed on the filing dict itself (stashed on it), not on the accession:
+    two readings of the stores may hold two dicts for one accession, and an
+    index must never outlive the object it describes — the honest key
+    includes which reading of the filing was visible, which is the same rule
+    the dataview bundle's fingerprint enforces one level up.
+    """
+    idx = filing.get("_index")
+    if idx is None or idx._filing_ref is not filing:
+        idx = cm.FilingIndex(filing)
+        idx._filing_ref = filing
+        filing["_index"] = idx
+        # The stash must never reach the index's own fact walk or a
+        # serializer; FilingIndex reads `facts` and header fields only, and
+        # the stores never write a loaded filing back.
+    return idx
+
+
+def _split_explains(ev: dict, factor: float) -> bool:
+    """Whether a restatement event is exactly a stock split's unit change:
+    the first-reported value equals the restated value times the cumulative
+    split factor between the two vintages, within EPS rounding."""
+    if factor == 1.0 or not ev.get("newer_value"):
+        return False
+    try:
+        return abs(ev["older_value"] / (ev["newer_value"] * factor) - 1) <= 0.02
+    except (TypeError, ZeroDivisionError):
+        return False
+
+
 class SeriesBuilder:
     """Assembles series for one company from its stored filings."""
 
-    def __init__(self, filings: list[dict]):
+    def __init__(self, filings: list[dict], splits: list | None = None):
         docs = sorted(filings, key=lambda f: (f.get("filed") or "",
                                               f.get("accession") or ""))
-        self.indices = [cm.FilingIndex(f) for f in docs]
+        self.indices = [_index_of(f) for f in docs]
         self.annual_fis = [fi for fi in self.indices if fi.form in ANNUAL_FORMS]
         self.quarter_fis = [fi for fi in self.indices if fi.form in QUARTER_FORMS]
         self._annual_cache: dict = {}
+        # The company's split events, [[date, factor], ...], from the price
+        # store. Read by `annual_window` for per-share inputs only: a filing
+        # filed before a split states per-share figures in the old unit, and
+        # the events are what let a window say so instead of refusing.
+        self._splits = [(str(d)[:10], float(f)) for d, f in (splits or [])]
+
+    def _split_product(self, after: str, upto: str) -> float:
+        """The cumulative split factor strictly after one filed date and on
+        or before another — the unit change between two filing vintages."""
+        prod = 1.0
+        for d, f in self._splits:
+            if str(after)[:10] < d <= str(upto)[:10]:
+                prod *= f
+        return prod
 
     # -- filing picks -------------------------------------------------------
     # "Newest" is always by reporting period first, then filed date within
@@ -120,7 +174,14 @@ class SeriesBuilder:
     def _candidate_concepts(self, input_id: str) -> list[str]:
         spec = cm.input_spec(input_id)
         if spec.get("derive"):
-            return self._candidate_concepts(spec["derive"])
+            out = self._candidate_concepts(spec["derive"])
+            if spec.get("derive_else"):
+                # The fallback derivation's concepts propose periods too —
+                # otherwise a filer the fallback exists for (no operating
+                # subtotal at all) proposes no periods and the fallback can
+                # never fire.
+                out = out + self._candidate_concepts(spec["derive_else"])
+            return out
         if spec.get("derive_sum"):
             out = []
             for sub in spec["derive_sum"]:
@@ -221,12 +282,23 @@ class SeriesBuilder:
                     "or a missing year sits in between, and a window spanning "
                     "it would compare different-length periods")
 
-        # basis: no restatement event may split the window's source vintages
+        # basis: no restatement event may split the window's source vintages.
+        # One exception, for per-share inputs only: an event the company's
+        # own split events explain is a unit change, not a restatement —
+        # the same earnings divided across a known factor more shares. The
+        # window computes, with every pre-split point brought onto the
+        # current unit below; anything the factor does not explain refuses
+        # exactly as before.
+        per_share = cm.input_spec(input_id).get("unit") == "usd_per_share"
         events = self._restatement_events(by_end)
         vintages = [p["filed"] for p in points]
         lo, hi = min(vintages), max(vintages)
         for ev in events:
             if lo < ev["restating_filed"] <= hi:
+                if per_share and _split_explains(
+                        ev, self._split_product(ev["older_filed"],
+                                                ev["restating_filed"])):
+                    continue
                 stale = [p["end"] for p in points
                          if p["filed"] < ev["restating_filed"]]
                 return absent(
@@ -236,6 +308,19 @@ class SeriesBuilder:
                     f"{ev['newer_value']:,.2f} after), and the year(s) ending "
                     f"{', '.join(stale)} were never re-reported on the new "
                     "basis — this window would mix two accounting bases")
+        if per_share:
+            adjusted = []
+            for p in points:
+                f = self._split_product(p["filed"], hi)
+                if f != 1.0:
+                    p = {**p, "value": p["value"] / f,
+                         "cautions": list(p.get("cautions") or []) + [
+                             f"Split-adjusted: divided by {f:g} for the "
+                             "stock split(s) after this figure was filed. A "
+                             "split changes the unit a per-share figure is "
+                             "stated in, not what was earned."]}
+                adjusted.append(p)
+            points = adjusted
 
         # families: never splice pre-ASC-606 revenue onto post
         fams = {p.get("family") for p in points} - {None, "either"}

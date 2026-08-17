@@ -40,7 +40,13 @@ code{font-family:var(--mono);font-size:.82em;color:var(--faint)}
 .typed{font-style:normal;font-size:.74rem;color:var(--faint);border-bottom:1px dotted var(--hair-dark);cursor:help}
 
 /* ---- frame ---- */
-.frame{max-width:76rem;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}
+/* The window itself never scrolls. The masthead and tabs are reference and
+   stay put by construction; the plane and the margin are two surfaces
+   answering different questions, and each scrolls alone — reaching the end
+   of one must not move the other. */
+html,body{height:100%}
+body{overflow:hidden}
+.frame{max-width:76rem;margin:0 auto;height:100vh;display:flex;flex-direction:column}
 header.mast{padding:1.5rem 2.2rem .2rem}
 .mast-top{display:flex;justify-content:space-between;align-items:center}
 .brand{font-weight:700;font-size:1.18rem;letter-spacing:-.01em}
@@ -59,10 +65,10 @@ nav.tabs button{color:var(--faint);padding:.55rem 0;border-bottom:2px solid tran
   transition:color .14s,border-color .14s}
 nav.tabs button:hover{color:var(--ink)}
 nav.tabs button.on{color:var(--ink);border-bottom-color:var(--ink);font-weight:600}
-.body{flex:1;display:flex;align-items:stretch}
-main.plane{flex:1;min-width:0;padding:0 2.2rem 4rem}
+.body{flex:1;display:flex;align-items:stretch;min-height:0}
+main.plane{flex:1;min-width:0;padding:0 2.2rem 4rem;overflow-y:auto}
 aside.margin{width:24rem;flex-shrink:0;border-left:1px solid var(--hair);background:var(--margin-bg);
-  padding:1.5rem 1.7rem 3rem;position:sticky;top:0;align-self:flex-start;height:100vh;overflow-y:auto}
+  padding:1.5rem 1.7rem 3rem;overflow-y:auto}
 /* Narrow window: the margin overlays the plane rather than crushing it.
    It opens when something is in it and slides away when closed. */
 @media (max-width:64rem){
@@ -266,6 +272,7 @@ tr.sel td{background:var(--wash)}
 .stratcard b{font-size:.95rem}
 .stratcard p{font-size:.82rem;color:var(--prose);margin:.3rem 0 0}
 .stratcard .sc-meta{font-size:.68rem;color:var(--dim);margin-top:.3rem}
+.stratcard .sc-aud{font-style:italic;color:var(--faint);font-size:.82rem;margin:.3rem 0 0}
 
 /* ---- menu: chrome opens where it was clicked ---- */
 .menu{position:fixed;z-index:50;width:21rem;max-width:calc(100vw - 1rem);overflow-y:auto;
@@ -296,6 +303,12 @@ tr.sel td{background:var(--wash)}
 .menu .m-row>div{flex:1}
 .menu .stratcard{padding:.6rem .75rem;margin:.45rem 0}
 .menu .field .panelnote{font-size:.72rem}
+
+.banner details.bfold, .panel details.bfold{margin:.25rem 0}
+details.bfold>summary{list-style:none;cursor:pointer;font-size:.72rem;color:var(--dim);
+  border-bottom:1px dotted var(--hair-dark);display:inline}
+details.bfold>summary::-webkit-details-marker{display:none}
+details.bfold>summary:hover{color:var(--faint)}
 
 /* ---- the folded measure inventory ---- */
 details.covfold{margin-top:1.9rem;border-bottom:1px solid var(--hair)}

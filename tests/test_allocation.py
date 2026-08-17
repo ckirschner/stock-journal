@@ -854,3 +854,86 @@ class TestWhatUnfundedActuallyMeans:
         line = allocation._affordable(out["ready"],
                                       known(50))["provenance"][0]
         assert "$400" in line and "$9,000" not in line
+
+
+class TestTheSmallestAdditionWorthMaking:
+    """A holding a hair under its target is eligible for pocket change, and
+    the screen used to offer it with a straight face. The strategy's own
+    view of the smallest add worth acting on arrives as the "minimum-add"
+    value role — a percent of the position's target — and the host applies
+    it as reporting, never as a gate: the entry stays listed with its
+    amount, and `below_minimum` says whose declaration calls it too small."""
+
+    ROLE = {"minimum-add": {"id": "minimum-add",
+                            "label": "Smallest addition worth making",
+                            "value": 10.0, "source": "a test source"}}
+
+    def _entry(self, amount_usd, committed=None, roles="declared"):
+        out = allocation.view(
+            [security("DELVE", shares=100 if committed else 0)],
+            {"DELVE": commit("usd", amount_usd)},
+            {"DELVE": known(25.0)},
+            folio(holdings=[holding("DELVE", committed)] if committed else ()),
+            roles=self.ROLE if roles == "declared" else None)
+        return (out["ready"] + out["waiting"])[0]
+
+    def test_a_sliver_of_the_target_is_named_too_small(self):
+        e = self._entry(50, committed=known(9_950))
+        assert e["below_minimum"]["status"] == "known"
+        assert e["below_minimum"]["value"] is True
+        # $50 against 10% of a $10,000 target
+        assert e["below_minimum"]["minimum"] == pytest.approx(1_000.0)
+        assert "Smallest addition worth making" in \
+            e["below_minimum"]["provenance"][0]
+        assert "a test source" in e["below_minimum"]["provenance"][0]
+        # reporting, never a gate: the entry is still on the list
+        assert e["amount"]["value"] == 50.0
+
+    def test_a_real_addition_is_not(self):
+        e = self._entry(5_000, committed=known(9_950))
+        assert e["below_minimum"]["value"] is False
+
+    def test_no_declaration_means_no_node_not_a_default(self):
+        """An absent declaration is the strategy having no view; a node
+        saying "not below a minimum nobody set" would put words in its
+        mouth."""
+        e = self._entry(50, committed=known(9_950), roles=None)
+        assert e["below_minimum"] is None
+
+    def test_an_unpriced_target_says_why_it_cannot_judge(self):
+        e = self._entry(50, committed=absent("no price for DELVE"))
+        assert e["below_minimum"]["status"] == "absent"
+        assert "could not be worked out" in e["below_minimum"]["reason"]
+
+
+class TestTheShareCountBesideTheDollars:
+    """Sizing headlines in dollars with the share count derived beside it —
+    derived by the host from the same amount and price the entry reads, so
+    the view never does arithmetic on the one number a sizing decision
+    consumes."""
+
+    def test_the_count_is_floored_and_says_it_is_an_aid(self):
+        out = allocation.view([security("DELVE")],
+                              {"DELVE": commit("usd", 510)},
+                              {"DELVE": known(25.0)}, folio())
+        e = out["ready"][0]
+        assert e["shares_approx"]["status"] == "known"
+        assert e["shares_approx"]["value"] == 20
+        assert "not an order size" in e["shares_approx"]["provenance"][0]
+
+    def test_less_than_one_share_is_absent_not_zero(self):
+        out = allocation.view([security("DELVE")],
+                              {"DELVE": commit("usd", 10)},
+                              {"DELVE": known(25.0)}, folio())
+        e = out["ready"][0]
+        assert e["shares_approx"]["status"] == "absent"
+        assert "does not cover one share" in e["shares_approx"]["reason"]
+
+    def test_no_price_carries_the_prices_own_reason(self):
+        out = allocation.view([security("DELVE")],
+                              {"DELVE": commit("usd", 510)},
+                              {"DELVE": absent("no price on record")},
+                              folio())
+        e = out["ready"][0]
+        assert e["shares_approx"]["status"] == "absent"
+        assert e["shares_approx"]["reason"] == "no price on record"

@@ -169,6 +169,14 @@ def _input_roles() -> str:
          for k, v in contract.INPUT_ROLES.items()])
 
 
+def _value_roles() -> str:
+    return _table(
+        ["`role`", "declared as", "means", "the host reports it at"],
+        [(f"`{k}`", f'`{v["type"]}` in `{v["unit"]}`',
+          v["means"], _code(v["reports"]))
+         for k, v in contract.VALUE_ROLES.items()])
+
+
 def _vocabulary() -> str:
     return "\n".join([
         f"- **Contract version** — `{contract.CONTRACT_VERSION}`. A "
@@ -217,6 +225,7 @@ BLOCKS = {
     "robustness": _robustness,
     "industry-classes": _industry_classes,
     "input-roles": _input_roles,
+    "value-roles": _value_roles,
     "vocabulary": _vocabulary,
 }
 

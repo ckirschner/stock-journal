@@ -30,7 +30,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from . import compute, concept_map, crosscheck, facts_store
+from . import bank, compute, concept_map, crosscheck, facts_store
 from . import hand_entered, industry, instruments, judgements, price_store
 
 _cache: dict = {}
@@ -337,7 +337,7 @@ def confirmation_history(cik: int, tickers: list[str],
 # filter you can read.
 
 def known(value, source, cautions=None, provenance=None,
-          leave_one_out=None) -> dict:
+          leave_one_out=None, bound=None, bound_reason=None) -> dict:
     """One measure as a strategy reads it.
 
     `leave_one_out` travels beside the value because it is part of the same
@@ -347,10 +347,20 @@ def known(value, source, cautions=None, provenance=None,
     the same years. Present only where the estimator reads a window; absent,
     never a copy of the value, so a check that cannot be made comes back
     unmade rather than passing itself.
+
+    `bound` travels for the same reason: a value that is a floor rather
+    than a point ("at least thirteen years") is a different answer from
+    thirteen, and the difference is consumed by the comparison arithmetic,
+    not merely read by a person. Dropping it here would turn a bounded
+    answer back into a confident one at exactly the seam that exists to
+    stop figures losing their qualifiers.
     """
     out = {"status": "known", "value": value, "source": source,
            "cautions": list(cautions or []),
            "provenance": list(provenance or [])}
+    if bound is not None:
+        out["bound"] = bound
+        out["bound_reason"] = bound_reason
     if leave_one_out:
         out["leave_one_out"] = [dict(o) for o in leave_one_out]
     return out
@@ -413,7 +423,9 @@ def resolve(security: dict, computed: dict,
     for eid, r in (computed or {}).items():
         if r.get("status") == "computed":
             out[eid] = known(r["value"], "computed", r.get("cautions"),
-                             r.get("provenance"), r.get("leave_one_out"))
+                             r.get("provenance"), r.get("leave_one_out"),
+                             bound=r.get("bound"),
+                             bound_reason=r.get("bound_reason"))
         elif r.get("status") == "inapplicable":
             out[eid] = inapplicable(r["reason"], r.get("industry"))
         else:
@@ -431,7 +443,8 @@ def resolve(security: dict, computed: dict,
     return out
 
 
-def qualified(value, source, cautions=None, provenance=None) -> dict:
+def qualified(value, source, cautions=None, provenance=None,
+              label=None, format=None) -> dict:
     """A value and everything that qualifies it, as one object.
 
     One object rather than a number beside some notes, because the number
@@ -441,10 +454,18 @@ def qualified(value, source, cautions=None, provenance=None) -> dict:
     as more certain than it was, which in an append-only journal can never
     be corrected afterwards. Nothing here hands out a bare float, so no
     caller can hold one without its cautions.
+
+    `label` and `format` are the bank's words for the figure IN FORCE when
+    it was composed. The keys are always present — None means the bank did
+    not speak for this id — because a frozen record relabelled by today's
+    bank is history quietly rewritten, and the freeze refuses a value that
+    cannot even say whether words were stamped. `merged_values` stamps them
+    for everything the app freezes.
     """
     return {"value": value, "source": source,
             "cautions": list(cautions or []),
-            "provenance": list(provenance or [])}
+            "provenance": list(provenance or []),
+            "label": label, "format": format}
 
 
 def merged_values(security: dict, computed: dict,
@@ -497,9 +518,28 @@ def merged_values(security: dict, computed: dict,
                                           today=today).items():
         if a["status"] == "known":
             nodes[eid] = a
-    return {eid: qualified(n["value"], n["source"], n.get("cautions"),
-                           n.get("provenance"))
-            for eid, n in nodes.items() if n["status"] == "known"}
+    # Each value carries the bank's words IN FORCE when it was composed —
+    # its label and its display format — because this dict is what a
+    # purchase or a snapshot freezes, and a frozen figure relabelled by
+    # today's bank is history quietly rewritten. A measure renamed after a
+    # snapshot must not rename the snapshot; the citation path was fixed for
+    # exactly this, and the general record inherits it here. The keys are
+    # always present (None where the bank no longer speaks for the id), so
+    # the freeze can demand them and a future caller cannot leave them off.
+    meta = bank.meta()
+    out = {}
+    for eid, n in nodes.items():
+        if n["status"] != "known":
+            continue
+        m = meta.get(eid) or {}
+        q = qualified(n["value"], n["source"], n.get("cautions"),
+                      n.get("provenance"),
+                      label=m.get("label"), format=m.get("format"))
+        if n.get("bound") is not None:
+            q["bound"] = n["bound"]
+            q["bound_reason"] = n.get("bound_reason")
+        out[eid] = q
+    return out
 
 
 # Said in one place, because it is said in several: on the price itself, and
@@ -695,7 +735,7 @@ def data_status(cik: int | None) -> dict | None:
         return None
     doc = facts_store.load_company(cik)
     last = facts_store.last_fetch(doc)
-    held = len(facts_store.load_all_filings(cik))
+    held = facts_store.count_filings(cik)
     prices = price_store.load(cik)
     price_through = None
     terminal = []

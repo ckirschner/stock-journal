@@ -1,6 +1,6 @@
 {
- "built": "2026-08-16T01:20:42+00:00",
- "as_of": "2026-08-09",
+ "built": "2026-08-16T02:58:32+00:00",
+ "as_of": "2026-08-15",
  "free_cash": 62000.0,
  "strategy": "graham",
  "securities": [
@@ -14,14 +14,14 @@
      "id": "l1",
      "seq": 1,
      "kind": "buy",
-     "date": "2025-11-04",
-     "recorded": "2025-11-04T12:00:00-05:00",
+     "date": "2026-04-20",
+     "recorded": "2026-04-20T12:00:00-04:00",
      "shares": 180.0,
      "price": 30.85,
      "override": null,
      "unreconstructed": null,
      "snapshot": {
-      "frozen": "2025-11-04T12:00:00-05:00",
+      "frozen": "2026-04-20T12:00:00-04:00",
       "decision": {
        "render": "commit",
        "tier": "position",
@@ -59,7 +59,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2025-11-01"
+            "entered by hand on 2026-04-17"
            ]
           },
           "test": {
@@ -148,7 +148,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2025-11-01"
+            "entered by hand on 2026-04-17"
            ]
           },
           "test": {
@@ -182,7 +182,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2025-11-01"
+            "entered by hand on 2026-04-17"
            ]
           },
           "test": {
@@ -216,7 +216,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2025-11-01"
+            "entered by hand on 2026-04-17"
            ]
           },
           "test": {
@@ -250,7 +250,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2025-11-01"
+            "entered by hand on 2026-04-17"
            ]
           },
           "test": {
@@ -284,7 +284,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2025-11-01"
+            "entered by hand on 2026-04-17"
            ]
           },
           "test": {
@@ -318,7 +318,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2025-11-01"
+            "entered by hand on 2026-04-17"
            ]
           },
           "test": {
@@ -352,7 +352,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2025-11-01"
+            "entered by hand on 2026-04-17"
            ]
           },
           "test": {
@@ -386,7 +386,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2025-11-01"
+            "entered by hand on 2026-04-17"
            ]
           },
           "test": {
@@ -420,7 +420,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2025-11-01"
+            "entered by hand on 2026-04-17"
            ]
           },
           "test": {
@@ -454,7 +454,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2025-11-01"
+            "entered by hand on 2026-04-17"
            ]
           },
           "test": {
@@ -488,7 +488,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2025-11-01"
+            "entered by hand on 2026-04-17"
            ]
           },
           "test": {
@@ -522,7 +522,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2025-11-01"
+            "entered by hand on 2026-04-17"
            ]
           },
           "test": {
@@ -556,7 +556,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2025-11-01"
+            "entered by hand on 2026-04-17"
            ]
           },
           "test": {
@@ -793,16 +793,16 @@
        "strategy": {
         "id": "graham",
         "name": "Graham",
-        "version": 10,
-        "values_version": 5,
+        "version": 11,
+        "values_version": 6,
         "contract": 8
        }
       },
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 10,
-       "values_version": 5,
+       "version": 11,
+       "values_version": 6,
        "contract": 8
       },
       "metrics": {
@@ -811,120 +811,150 @@
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2025-11-01"
-        ]
+         "entered by hand on 2026-04-17"
+        ],
+        "label": "Price to earnings on three-year average EPS",
+        "format": "0.0x"
        },
        "price_to_book": {
         "value": 0.96,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2025-11-01"
-        ]
+         "entered by hand on 2026-04-17"
+        ],
+        "label": "Price to book",
+        "format": "0.00x"
        },
        "graham_combined_multiple": {
         "value": 8.06,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2025-11-01"
-        ]
+         "entered by hand on 2026-04-17"
+        ],
+        "label": "Graham combined multiple",
+        "format": "0.0"
        },
        "current_ratio": {
         "value": 2.6,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2025-11-01"
-        ]
+         "entered by hand on 2026-04-17"
+        ],
+        "label": "Current ratio",
+        "format": "0.00"
        },
        "ltd_to_working_capital": {
         "value": 0.35,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2025-11-01"
-        ]
+         "entered by hand on 2026-04-17"
+        ],
+        "label": "Long-term debt to working capital",
+        "format": "0.00"
        },
        "profitable_years_10y": {
         "value": 10.0,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2025-11-01"
-        ]
+         "entered by hand on 2026-04-17"
+        ],
+        "label": "Years of positive net income out of the last ten",
+        "format": "0 of 10"
        },
        "altman_z_double_prime": {
         "value": 3.4,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2025-11-01"
-        ]
+         "entered by hand on 2026-04-17"
+        ],
+        "label": "Altman Z″-score, for companies that do not manufacture",
+        "format": "0.00"
        },
        "eps_growth_10y": {
         "value": 41.0,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2025-11-01"
-        ]
+         "entered by hand on 2026-04-17"
+        ],
+        "label": "Ten-year EPS growth, three-year averages at both ends",
+        "format": "0.0%"
        },
        "consecutive_capital_return_years": {
         "value": 22.0,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2025-11-01"
-        ]
+         "entered by hand on 2026-04-17"
+        ],
+        "label": "Consecutive years returning capital, by either route",
+        "format": "0 yrs"
        },
        "debt_to_equity": {
         "value": 0.48,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2025-11-01"
-        ]
+         "entered by hand on 2026-04-17"
+        ],
+        "label": "Debt to equity",
+        "format": "0.00"
        },
        "price_to_net_tangible_assets": {
         "value": 1.15,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2025-11-01"
-        ]
+         "entered by hand on 2026-04-17"
+        ],
+        "label": "Price to net tangible assets",
+        "format": "0.00x"
        },
        "accruals_ratio": {
         "value": 0.02,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2025-11-01"
-        ]
+         "entered by hand on 2026-04-17"
+        ],
+        "label": "Accruals ratio",
+        "format": "0.00"
        },
        "revenue_ttm": {
         "value": 1210000000.0,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2025-11-01"
-        ]
+         "entered by hand on 2026-04-17"
+        ],
+        "label": "Revenue, trailing twelve months",
+        "format": "$0,0"
        },
        "ncav_to_market_cap": {
         "value": 0.71,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2025-11-01"
-        ]
+         "entered by hand on 2026-04-17"
+        ],
+        "label": "Net current asset value over market capitalization",
+        "format": "0.00"
        },
        "consecutive_annual_loss_years": {
         "value": 0.0,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2025-11-01"
-        ]
+         "entered by hand on 2026-04-17"
+        ],
+        "label": "Consecutive annual losses, most recent backward",
+        "format": "0"
        }
       },
       "price": null,
@@ -933,7 +963,7 @@
       "price_ticker": null,
       "evaluation": {
        "basis": "reconstructed",
-       "as_of": "2025-11-04",
+       "as_of": "2026-04-20",
        "filings_by_then": 0,
        "newest_filed": null,
        "priced": null,
@@ -955,14 +985,14 @@
         "revenue_ttm"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2025-11-04 could be consulted; 15 hand-entered values on record by 2025-11-04; judged by Graham v10 as it stands today (values v5) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2026-04-20 could be consulted; 15 hand-entered values on record by 2026-04-20; judged by Graham v11 as it stands today (values v6) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": {
        "seq": 1,
        "thesis": "A regional paper mill trading below its own book value with twenty-two straight years of dividends behind it. I am not claiming this is a wonderful business. I am claiming the price is wrong for what the balance sheet holds.",
        "falsifier": "Two consecutive years of losses, or the current ratio falling under 1.2. Either one means the balance sheet has stopped carrying the risk the business cannot.",
        "reason": "",
-       "recorded": "2025-11-01T12:00:00-04:00"
+       "recorded": "2026-04-17T12:00:00-04:00"
       },
       "valuation": null,
       "recollection": null,
@@ -983,7 +1013,7 @@
      "unit": "times",
      "format": "0.0x",
      "plain": "What you're paying for a dollar of typical earnings. Averaging three\nyears is the point: it stops you paying a low multiple on a fluke good\nyear.\n\nThe price per share is read the same way as for the trailing measure —\nmarket capitalization over the share count, so both are paying for the\nsame thing. See [pe_ttm].\n",
-     "recorded": "2025-11-01T12:00:00-04:00"
+     "recorded": "2026-04-17T12:00:00-04:00"
     },
     {
      "seq": 2,
@@ -993,7 +1023,7 @@
      "unit": "times",
      "format": "0.00x",
      "plain": "What you pay for a dollar of the company's accounting net worth — the\nassets it reports, less what it owes.\n",
-     "recorded": "2025-11-01T12:00:00-04:00"
+     "recorded": "2026-04-17T12:00:00-04:00"
     },
     {
      "seq": 3,
@@ -1003,7 +1033,7 @@
      "unit": "ratio",
      "format": "0.0",
      "plain": "A single test that lets one number be high if the other is low. A stock\nat 18x earnings and 1.2x book scores 21.6; one at 18x and 2.0x scores\n36.\n",
-     "recorded": "2025-11-01T12:00:00-04:00"
+     "recorded": "2026-04-17T12:00:00-04:00"
     },
     {
      "seq": 4,
@@ -1013,7 +1043,7 @@
      "unit": "ratio",
      "format": "0.00",
      "plain": "Whether the company holds enough short-term assets — cash, receivables,\ninventory — to cover the bills coming due within a year.\n",
-     "recorded": "2025-11-01T12:00:00-04:00"
+     "recorded": "2026-04-17T12:00:00-04:00"
     },
     {
      "seq": 5,
@@ -1023,7 +1053,7 @@
      "unit": "ratio",
      "format": "0.00",
      "plain": "Whether the company's long-term borrowings could be covered by the\nliquid cushion it already has. It ignores fixed assets entirely, which\nis deliberate: in liquidation, the factory sells for a fraction of book.\n",
-     "recorded": "2025-11-01T12:00:00-04:00"
+     "recorded": "2026-04-17T12:00:00-04:00"
     },
     {
      "seq": 6,
@@ -1033,7 +1063,7 @@
      "unit": "count",
      "format": "0 of 10",
      "plain": "How many of the last ten years the company made money. Ten out of ten\nmeans it has never lost money in a decade — not \"usually profitable\",\nnever lost money.\n",
-     "recorded": "2025-11-01T12:00:00-04:00"
+     "recorded": "2026-04-17T12:00:00-04:00"
     },
     {
      "seq": 7,
@@ -1043,7 +1073,7 @@
      "unit": "score",
      "format": "0.00",
      "plain": "The same bankruptcy score as above, in the version its author built\nfor companies that do not make things. Two differences, and both\nmatter more than the changed weights.\n\nThe sales-to-assets term is gone. It was fitted on public\nmanufacturers, where a factory turning over its assets slowly is a\nwarning; a consultancy or a software company turns over very few\nassets at all and is not thereby in distress.\n\nAnd the equity term uses what the books say the equity is worth\nrather than what the market says. The score therefore does not move\nwhen the share price does — which is what a solvency test inside a\nvaluation rule set needs, because otherwise a share falling for being\ncheap reads as a share falling for being in trouble, and the one\nmeasure meant to tell those apart moves with the wrong one.\n",
-     "recorded": "2025-11-01T12:00:00-04:00"
+     "recorded": "2026-04-17T12:00:00-04:00"
     },
     {
      "seq": 8,
@@ -1053,7 +1083,7 @@
      "unit": "percent",
      "format": "0.0%",
      "plain": "How much more the company earns per share than it did a decade ago,\nstated as a total rather than an annual rate. A third more over ten\nyears is under 3% a year.\n",
-     "recorded": "2025-11-01T12:00:00-04:00"
+     "recorded": "2026-04-17T12:00:00-04:00"
     },
     {
      "seq": 9,
@@ -1063,7 +1093,7 @@
      "unit": "years",
      "format": "0 yrs",
      "plain": "How many years in an unbroken run the company has handed cash back to\nits owners — by paying a dividend, by buying its own shares back, or\nby both.\n\nA long run says two things at once, and they are separable. It says\nthe company generates more cash than it needs, consistently. And it\nsays the company was still there: a run of twenty years reaches back\nthrough whatever the last two decades contained, which no shorter\nwindow can evidence at all.\n\nBuybacks count NET of shares issued. A company handing out more stock\nthan it repurchases is not returning capital, it is mopping up after\nits own issuance, and counting the repurchase line gross would let\nthat read as a capital return in the year it is least true.\n",
-     "recorded": "2025-11-01T12:00:00-04:00"
+     "recorded": "2026-04-17T12:00:00-04:00"
     },
     {
      "seq": 10,
@@ -1073,7 +1103,7 @@
      "unit": "ratio",
      "format": "0.00",
      "plain": "How much of the company is financed by lenders versus by its owners.\nAt 1.0 there is a dollar of debt for every dollar of shareholder money.\n",
-     "recorded": "2025-11-01T12:00:00-04:00"
+     "recorded": "2026-04-17T12:00:00-04:00"
     },
     {
      "seq": 11,
@@ -1083,7 +1113,7 @@
      "unit": "times",
      "format": "0.00x",
      "plain": "Price to book with the imaginary parts removed. What you're paying per\ndollar of things that could actually be sold.\n",
-     "recorded": "2025-11-01T12:00:00-04:00"
+     "recorded": "2026-04-17T12:00:00-04:00"
     },
     {
      "seq": 12,
@@ -1093,7 +1123,7 @@
      "unit": "ratio",
      "format": "0.00",
      "plain": "How much of the reported profit is bookkeeping rather than cash. High\naccruals predict poor subsequent returns with unusual reliability.\n",
-     "recorded": "2025-11-01T12:00:00-04:00"
+     "recorded": "2026-04-17T12:00:00-04:00"
     },
     {
      "seq": 13,
@@ -1103,7 +1133,7 @@
      "unit": "usd",
      "format": "$0,0",
      "plain": "What the company sold in the last year, in money.\n\nIt is here as a measure of how big a company is that does not depend\non what the market thinks it is worth. Market capitalization is the\nother one, and the difference is not academic: a rule set that hunts\nfor companies the market has priced too cheaply, and then requires a\nlarge market capitalization, is partly rejecting companies for being\ncheap. Sales do not move when the share price does.\n",
-     "recorded": "2025-11-01T12:00:00-04:00"
+     "recorded": "2026-04-17T12:00:00-04:00"
     },
     {
      "seq": 14,
@@ -1113,7 +1143,7 @@
      "unit": "ratio",
      "format": "0.00",
      "plain": "How much of the purchase price is covered by liquid assets net of all\ndebts. At 1.5 you'd be buying the company for two-thirds of its net\ncurrent assets and getting the business itself free. That's Graham's\nnet-net, and it barely exists in modern markets outside of Japan and\nmicro-caps.\n",
-     "recorded": "2025-11-01T12:00:00-04:00"
+     "recorded": "2026-04-17T12:00:00-04:00"
     },
     {
      "seq": 15,
@@ -1123,7 +1153,7 @@
      "unit": "count",
      "format": "0",
      "plain": "How many years in a row the company has lost money right now. One loss\nyear can be an impairment or a settlement; a run of them is the business.\n",
-     "recorded": "2025-11-01T12:00:00-04:00"
+     "recorded": "2026-04-17T12:00:00-04:00"
     }
    ],
    "thesis": [
@@ -1132,19 +1162,19 @@
      "thesis": "A regional paper mill trading below its own book value with twenty-two straight years of dividends behind it. I am not claiming this is a wonderful business. I am claiming the price is wrong for what the balance sheet holds.",
      "falsifier": "Two consecutive years of losses, or the current ratio falling under 1.2. Either one means the balance sheet has stopped carrying the risk the business cannot.",
      "reason": "",
-     "recorded": "2025-11-01T12:00:00-04:00"
+     "recorded": "2026-04-17T12:00:00-04:00"
     }
    ],
    "valuations": [],
    "snapshots": [],
    "notes": [
     {
-     "date": "2025-11-01T12:00:00-04:00",
+     "date": "2026-04-17T12:00:00-04:00",
      "text": "Bought because it is dull and cheap, which is the whole idea. Nothing about the industry is getting better and nothing needs to."
     },
     {
-     "date": "2025-11-04T12:00:00-05:00",
-     "text": "Recorded from history: 1 purchase, dated 2025-11-04. Each was judged against the data available on its own day, not against today's."
+     "date": "2026-04-20T12:00:00-04:00",
+     "text": "Recorded from history: 1 purchase, dated 2026-04-20. Each was judged against the data available on its own day, not against today's."
     }
    ],
    "lot_seq": 1
@@ -1159,14 +1189,14 @@
      "id": "l1",
      "seq": 1,
      "kind": "buy",
-     "date": "2025-06-12",
-     "recorded": "2025-06-12T12:00:00-04:00",
+     "date": "2025-10-19",
+     "recorded": "2025-10-19T12:00:00-04:00",
      "shares": 260.0,
      "price": 12.4,
      "override": null,
      "unreconstructed": null,
      "snapshot": {
-      "frozen": "2025-06-12T12:00:00-04:00",
+      "frozen": "2025-10-19T12:00:00-04:00",
       "decision": {
        "render": "commit",
        "tier": "position",
@@ -1204,7 +1234,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2025-06-08"
+            "entered by hand on 2025-10-15"
            ]
           },
           "test": {
@@ -1293,7 +1323,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2025-06-08"
+            "entered by hand on 2025-10-15"
            ]
           },
           "test": {
@@ -1327,7 +1357,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2025-06-08"
+            "entered by hand on 2025-10-15"
            ]
           },
           "test": {
@@ -1361,7 +1391,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2025-06-08"
+            "entered by hand on 2025-10-15"
            ]
           },
           "test": {
@@ -1395,7 +1425,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2025-06-08"
+            "entered by hand on 2025-10-15"
            ]
           },
           "test": {
@@ -1429,7 +1459,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2025-06-08"
+            "entered by hand on 2025-10-15"
            ]
           },
           "test": {
@@ -1463,7 +1493,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2025-06-08"
+            "entered by hand on 2025-10-15"
            ]
           },
           "test": {
@@ -1497,7 +1527,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2025-06-08"
+            "entered by hand on 2025-10-15"
            ]
           },
           "test": {
@@ -1531,7 +1561,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2025-06-08"
+            "entered by hand on 2025-10-15"
            ]
           },
           "test": {
@@ -1565,7 +1595,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2025-06-08"
+            "entered by hand on 2025-10-15"
            ]
           },
           "test": {
@@ -1599,7 +1629,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2025-06-08"
+            "entered by hand on 2025-10-15"
            ]
           },
           "test": {
@@ -1633,7 +1663,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2025-06-08"
+            "entered by hand on 2025-10-15"
            ]
           },
           "test": {
@@ -1667,7 +1697,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2025-06-08"
+            "entered by hand on 2025-10-15"
            ]
           },
           "test": {
@@ -1701,7 +1731,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2025-06-08"
+            "entered by hand on 2025-10-15"
            ]
           },
           "test": {
@@ -1938,16 +1968,16 @@
        "strategy": {
         "id": "graham",
         "name": "Graham",
-        "version": 10,
-        "values_version": 5,
+        "version": 11,
+        "values_version": 6,
         "contract": 8
        }
       },
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 10,
-       "values_version": 5,
+       "version": 11,
+       "values_version": 6,
        "contract": 8
       },
       "metrics": {
@@ -1956,120 +1986,150 @@
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2025-06-08"
-        ]
+         "entered by hand on 2025-10-15"
+        ],
+        "label": "Price to earnings on three-year average EPS",
+        "format": "0.0x"
        },
        "price_to_book": {
         "value": 1.02,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2025-06-08"
-        ]
+         "entered by hand on 2025-10-15"
+        ],
+        "label": "Price to book",
+        "format": "0.00x"
        },
        "graham_combined_multiple": {
         "value": 8.98,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2025-06-08"
-        ]
+         "entered by hand on 2025-10-15"
+        ],
+        "label": "Graham combined multiple",
+        "format": "0.0"
        },
        "current_ratio": {
         "value": 2.3,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2025-06-08"
-        ]
+         "entered by hand on 2025-10-15"
+        ],
+        "label": "Current ratio",
+        "format": "0.00"
        },
        "ltd_to_working_capital": {
         "value": 0.51,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2025-06-08"
-        ]
+         "entered by hand on 2025-10-15"
+        ],
+        "label": "Long-term debt to working capital",
+        "format": "0.00"
        },
        "profitable_years_10y": {
         "value": 10.0,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2025-06-08"
-        ]
+         "entered by hand on 2025-10-15"
+        ],
+        "label": "Years of positive net income out of the last ten",
+        "format": "0 of 10"
        },
        "altman_z_double_prime": {
         "value": 3.1,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2025-06-08"
-        ]
+         "entered by hand on 2025-10-15"
+        ],
+        "label": "Altman Z″-score, for companies that do not manufacture",
+        "format": "0.00"
        },
        "eps_growth_10y": {
         "value": 58.0,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2025-06-08"
-        ]
+         "entered by hand on 2025-10-15"
+        ],
+        "label": "Ten-year EPS growth, three-year averages at both ends",
+        "format": "0.0%"
        },
        "consecutive_capital_return_years": {
         "value": 20.0,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2025-06-08"
-        ]
+         "entered by hand on 2025-10-15"
+        ],
+        "label": "Consecutive years returning capital, by either route",
+        "format": "0 yrs"
        },
        "debt_to_equity": {
         "value": 0.38,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2025-06-08"
-        ]
+         "entered by hand on 2025-10-15"
+        ],
+        "label": "Debt to equity",
+        "format": "0.00"
        },
        "price_to_net_tangible_assets": {
         "value": 1.5,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2025-06-08"
-        ]
+         "entered by hand on 2025-10-15"
+        ],
+        "label": "Price to net tangible assets",
+        "format": "0.00x"
        },
        "accruals_ratio": {
         "value": 0.04,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2025-06-08"
-        ]
+         "entered by hand on 2025-10-15"
+        ],
+        "label": "Accruals ratio",
+        "format": "0.00"
        },
        "revenue_ttm": {
         "value": 880000000.0,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2025-06-08"
-        ]
+         "entered by hand on 2025-10-15"
+        ],
+        "label": "Revenue, trailing twelve months",
+        "format": "$0,0"
        },
        "ncav_to_market_cap": {
         "value": 0.61,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2025-06-08"
-        ]
+         "entered by hand on 2025-10-15"
+        ],
+        "label": "Net current asset value over market capitalization",
+        "format": "0.00"
        },
        "consecutive_annual_loss_years": {
         "value": 0.0,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2025-06-08"
-        ]
+         "entered by hand on 2025-10-15"
+        ],
+        "label": "Consecutive annual losses, most recent backward",
+        "format": "0"
        }
       },
       "price": null,
@@ -2078,7 +2138,7 @@
       "price_ticker": null,
       "evaluation": {
        "basis": "reconstructed",
-       "as_of": "2025-06-12",
+       "as_of": "2025-10-19",
        "filings_by_then": 0,
        "newest_filed": null,
        "priced": null,
@@ -2100,7 +2160,7 @@
         "revenue_ttm"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2025-06-12 could be consulted; 15 hand-entered values on record by 2025-06-12; judged by Graham v10 as it stands today (values v5) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2025-10-19 could be consulted; 15 hand-entered values on record by 2025-10-19; judged by Graham v11 as it stands today (values v6) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": null,
       "valuation": null,
@@ -2122,7 +2182,7 @@
      "unit": "times",
      "format": "0.0x",
      "plain": "What you're paying for a dollar of typical earnings. Averaging three\nyears is the point: it stops you paying a low multiple on a fluke good\nyear.\n\nThe price per share is read the same way as for the trailing measure —\nmarket capitalization over the share count, so both are paying for the\nsame thing. See [pe_ttm].\n",
-     "recorded": "2025-06-08T12:00:00-04:00"
+     "recorded": "2025-10-15T12:00:00-04:00"
     },
     {
      "seq": 2,
@@ -2132,7 +2192,7 @@
      "unit": "times",
      "format": "0.00x",
      "plain": "What you pay for a dollar of the company's accounting net worth — the\nassets it reports, less what it owes.\n",
-     "recorded": "2025-06-08T12:00:00-04:00"
+     "recorded": "2025-10-15T12:00:00-04:00"
     },
     {
      "seq": 3,
@@ -2142,7 +2202,7 @@
      "unit": "ratio",
      "format": "0.0",
      "plain": "A single test that lets one number be high if the other is low. A stock\nat 18x earnings and 1.2x book scores 21.6; one at 18x and 2.0x scores\n36.\n",
-     "recorded": "2025-06-08T12:00:00-04:00"
+     "recorded": "2025-10-15T12:00:00-04:00"
     },
     {
      "seq": 4,
@@ -2152,7 +2212,7 @@
      "unit": "ratio",
      "format": "0.00",
      "plain": "Whether the company holds enough short-term assets — cash, receivables,\ninventory — to cover the bills coming due within a year.\n",
-     "recorded": "2025-06-08T12:00:00-04:00"
+     "recorded": "2025-10-15T12:00:00-04:00"
     },
     {
      "seq": 5,
@@ -2162,7 +2222,7 @@
      "unit": "ratio",
      "format": "0.00",
      "plain": "Whether the company's long-term borrowings could be covered by the\nliquid cushion it already has. It ignores fixed assets entirely, which\nis deliberate: in liquidation, the factory sells for a fraction of book.\n",
-     "recorded": "2025-06-08T12:00:00-04:00"
+     "recorded": "2025-10-15T12:00:00-04:00"
     },
     {
      "seq": 6,
@@ -2172,7 +2232,7 @@
      "unit": "count",
      "format": "0 of 10",
      "plain": "How many of the last ten years the company made money. Ten out of ten\nmeans it has never lost money in a decade — not \"usually profitable\",\nnever lost money.\n",
-     "recorded": "2025-06-08T12:00:00-04:00"
+     "recorded": "2025-10-15T12:00:00-04:00"
     },
     {
      "seq": 7,
@@ -2182,7 +2242,7 @@
      "unit": "score",
      "format": "0.00",
      "plain": "The same bankruptcy score as above, in the version its author built\nfor companies that do not make things. Two differences, and both\nmatter more than the changed weights.\n\nThe sales-to-assets term is gone. It was fitted on public\nmanufacturers, where a factory turning over its assets slowly is a\nwarning; a consultancy or a software company turns over very few\nassets at all and is not thereby in distress.\n\nAnd the equity term uses what the books say the equity is worth\nrather than what the market says. The score therefore does not move\nwhen the share price does — which is what a solvency test inside a\nvaluation rule set needs, because otherwise a share falling for being\ncheap reads as a share falling for being in trouble, and the one\nmeasure meant to tell those apart moves with the wrong one.\n",
-     "recorded": "2025-06-08T12:00:00-04:00"
+     "recorded": "2025-10-15T12:00:00-04:00"
     },
     {
      "seq": 8,
@@ -2192,7 +2252,7 @@
      "unit": "percent",
      "format": "0.0%",
      "plain": "How much more the company earns per share than it did a decade ago,\nstated as a total rather than an annual rate. A third more over ten\nyears is under 3% a year.\n",
-     "recorded": "2025-06-08T12:00:00-04:00"
+     "recorded": "2025-10-15T12:00:00-04:00"
     },
     {
      "seq": 9,
@@ -2202,7 +2262,7 @@
      "unit": "years",
      "format": "0 yrs",
      "plain": "How many years in an unbroken run the company has handed cash back to\nits owners — by paying a dividend, by buying its own shares back, or\nby both.\n\nA long run says two things at once, and they are separable. It says\nthe company generates more cash than it needs, consistently. And it\nsays the company was still there: a run of twenty years reaches back\nthrough whatever the last two decades contained, which no shorter\nwindow can evidence at all.\n\nBuybacks count NET of shares issued. A company handing out more stock\nthan it repurchases is not returning capital, it is mopping up after\nits own issuance, and counting the repurchase line gross would let\nthat read as a capital return in the year it is least true.\n",
-     "recorded": "2025-06-08T12:00:00-04:00"
+     "recorded": "2025-10-15T12:00:00-04:00"
     },
     {
      "seq": 10,
@@ -2212,7 +2272,7 @@
      "unit": "ratio",
      "format": "0.00",
      "plain": "How much of the company is financed by lenders versus by its owners.\nAt 1.0 there is a dollar of debt for every dollar of shareholder money.\n",
-     "recorded": "2025-06-08T12:00:00-04:00"
+     "recorded": "2025-10-15T12:00:00-04:00"
     },
     {
      "seq": 11,
@@ -2222,7 +2282,7 @@
      "unit": "times",
      "format": "0.00x",
      "plain": "Price to book with the imaginary parts removed. What you're paying per\ndollar of things that could actually be sold.\n",
-     "recorded": "2025-06-08T12:00:00-04:00"
+     "recorded": "2025-10-15T12:00:00-04:00"
     },
     {
      "seq": 12,
@@ -2232,7 +2292,7 @@
      "unit": "ratio",
      "format": "0.00",
      "plain": "How much of the reported profit is bookkeeping rather than cash. High\naccruals predict poor subsequent returns with unusual reliability.\n",
-     "recorded": "2025-06-08T12:00:00-04:00"
+     "recorded": "2025-10-15T12:00:00-04:00"
     },
     {
      "seq": 13,
@@ -2242,7 +2302,7 @@
      "unit": "usd",
      "format": "$0,0",
      "plain": "What the company sold in the last year, in money.\n\nIt is here as a measure of how big a company is that does not depend\non what the market thinks it is worth. Market capitalization is the\nother one, and the difference is not academic: a rule set that hunts\nfor companies the market has priced too cheaply, and then requires a\nlarge market capitalization, is partly rejecting companies for being\ncheap. Sales do not move when the share price does.\n",
-     "recorded": "2025-06-08T12:00:00-04:00"
+     "recorded": "2025-10-15T12:00:00-04:00"
     },
     {
      "seq": 14,
@@ -2252,7 +2312,7 @@
      "unit": "ratio",
      "format": "0.00",
      "plain": "How much of the purchase price is covered by liquid assets net of all\ndebts. At 1.5 you'd be buying the company for two-thirds of its net\ncurrent assets and getting the business itself free. That's Graham's\nnet-net, and it barely exists in modern markets outside of Japan and\nmicro-caps.\n",
-     "recorded": "2025-06-08T12:00:00-04:00"
+     "recorded": "2025-10-15T12:00:00-04:00"
     },
     {
      "seq": 15,
@@ -2262,7 +2322,7 @@
      "unit": "count",
      "format": "0",
      "plain": "How many years in a row the company has lost money right now. One loss\nyear can be an impairment or a settlement; a run of them is the business.\n",
-     "recorded": "2025-06-08T12:00:00-04:00"
+     "recorded": "2025-10-15T12:00:00-04:00"
     },
     {
      "seq": 16,
@@ -2272,7 +2332,7 @@
      "unit": "times",
      "format": "0.0x",
      "plain": "What you're paying for a dollar of typical earnings. Averaging three\nyears is the point: it stops you paying a low multiple on a fluke good\nyear.\n\nThe price per share is read the same way as for the trailing measure —\nmarket capitalization over the share count, so both are paying for the\nsame thing. See [pe_ttm].\n",
-     "recorded": "2026-08-02T12:00:00-04:00"
+     "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 17,
@@ -2282,7 +2342,7 @@
      "unit": "times",
      "format": "0.00x",
      "plain": "What you pay for a dollar of the company's accounting net worth — the\nassets it reports, less what it owes.\n",
-     "recorded": "2026-08-02T12:00:00-04:00"
+     "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 18,
@@ -2292,7 +2352,7 @@
      "unit": "ratio",
      "format": "0.0",
      "plain": "A single test that lets one number be high if the other is low. A stock\nat 18x earnings and 1.2x book scores 21.6; one at 18x and 2.0x scores\n36.\n",
-     "recorded": "2026-08-02T12:00:00-04:00"
+     "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 19,
@@ -2302,7 +2362,7 @@
      "unit": "ratio",
      "format": "0.00",
      "plain": "Whether the company holds enough short-term assets — cash, receivables,\ninventory — to cover the bills coming due within a year.\n",
-     "recorded": "2026-08-02T12:00:00-04:00"
+     "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 20,
@@ -2312,7 +2372,7 @@
      "unit": "ratio",
      "format": "0.00",
      "plain": "Whether the company's long-term borrowings could be covered by the\nliquid cushion it already has. It ignores fixed assets entirely, which\nis deliberate: in liquidation, the factory sells for a fraction of book.\n",
-     "recorded": "2026-08-02T12:00:00-04:00"
+     "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 21,
@@ -2322,7 +2382,7 @@
      "unit": "score",
      "format": "0.00",
      "plain": "The same bankruptcy score as above, in the version its author built\nfor companies that do not make things. Two differences, and both\nmatter more than the changed weights.\n\nThe sales-to-assets term is gone. It was fitted on public\nmanufacturers, where a factory turning over its assets slowly is a\nwarning; a consultancy or a software company turns over very few\nassets at all and is not thereby in distress.\n\nAnd the equity term uses what the books say the equity is worth\nrather than what the market says. The score therefore does not move\nwhen the share price does — which is what a solvency test inside a\nvaluation rule set needs, because otherwise a share falling for being\ncheap reads as a share falling for being in trouble, and the one\nmeasure meant to tell those apart moves with the wrong one.\n",
-     "recorded": "2026-08-02T12:00:00-04:00"
+     "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 22,
@@ -2332,7 +2392,7 @@
      "unit": "percent",
      "format": "0.0%",
      "plain": "How much more the company earns per share than it did a decade ago,\nstated as a total rather than an annual rate. A third more over ten\nyears is under 3% a year.\n",
-     "recorded": "2026-08-02T12:00:00-04:00"
+     "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 23,
@@ -2342,7 +2402,7 @@
      "unit": "years",
      "format": "0 yrs",
      "plain": "How many years in an unbroken run the company has handed cash back to\nits owners — by paying a dividend, by buying its own shares back, or\nby both.\n\nA long run says two things at once, and they are separable. It says\nthe company generates more cash than it needs, consistently. And it\nsays the company was still there: a run of twenty years reaches back\nthrough whatever the last two decades contained, which no shorter\nwindow can evidence at all.\n\nBuybacks count NET of shares issued. A company handing out more stock\nthan it repurchases is not returning capital, it is mopping up after\nits own issuance, and counting the repurchase line gross would let\nthat read as a capital return in the year it is least true.\n",
-     "recorded": "2026-08-02T12:00:00-04:00"
+     "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 24,
@@ -2352,7 +2412,7 @@
      "unit": "ratio",
      "format": "0.00",
      "plain": "How much of the company is financed by lenders versus by its owners.\nAt 1.0 there is a dollar of debt for every dollar of shareholder money.\n",
-     "recorded": "2026-08-02T12:00:00-04:00"
+     "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 25,
@@ -2362,7 +2422,7 @@
      "unit": "times",
      "format": "0.00x",
      "plain": "Price to book with the imaginary parts removed. What you're paying per\ndollar of things that could actually be sold.\n",
-     "recorded": "2026-08-02T12:00:00-04:00"
+     "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 26,
@@ -2372,7 +2432,7 @@
      "unit": "ratio",
      "format": "0.00",
      "plain": "How much of the reported profit is bookkeeping rather than cash. High\naccruals predict poor subsequent returns with unusual reliability.\n",
-     "recorded": "2026-08-02T12:00:00-04:00"
+     "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 27,
@@ -2382,7 +2442,7 @@
      "unit": "usd",
      "format": "$0,0",
      "plain": "What the company sold in the last year, in money.\n\nIt is here as a measure of how big a company is that does not depend\non what the market thinks it is worth. Market capitalization is the\nother one, and the difference is not academic: a rule set that hunts\nfor companies the market has priced too cheaply, and then requires a\nlarge market capitalization, is partly rejecting companies for being\ncheap. Sales do not move when the share price does.\n",
-     "recorded": "2026-08-02T12:00:00-04:00"
+     "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 28,
@@ -2392,7 +2452,7 @@
      "unit": "ratio",
      "format": "0.00",
      "plain": "How much of the purchase price is covered by liquid assets net of all\ndebts. At 1.5 you'd be buying the company for two-thirds of its net\ncurrent assets and getting the business itself free. That's Graham's\nnet-net, and it barely exists in modern markets outside of Japan and\nmicro-caps.\n",
-     "recorded": "2026-08-02T12:00:00-04:00"
+     "recorded": "2026-08-08T12:00:00-04:00"
     }
    ],
    "thesis": [
@@ -2401,27 +2461,27 @@
      "thesis": "Bought at a third of what the tubes and the plant are worth on the books, after a customer cancelled a contract that was 8% of revenue. The cancellation is real and it is not the business.",
      "falsifier": "Book value falling for two straight years, which would mean the plant is worth less than I thought rather than the market being wrong about it.",
      "reason": "",
-     "recorded": "2026-08-02T12:00:00-04:00"
+     "recorded": "2026-08-08T12:00:00-04:00"
     }
    ],
    "valuations": [],
    "snapshots": [],
    "notes": [
     {
-     "date": "2025-06-12T12:00:00-04:00",
+     "date": "2025-10-19T12:00:00-04:00",
      "text": "Bought this under the size floor. $278M against a floor of $300M is not far under it, and the strategy still said no — a floor that bends for a near miss is not a floor. What I am actually taking on is a company small enough that getting out of a position this size may not be quick, and that is a different risk from the one every other test here measures. Written down so that if it turns out to matter, it is on the record that I knew."
     },
     {
-     "date": "2026-08-02T12:00:00-04:00",
+     "date": "2026-08-08T12:00:00-04:00",
      "text": "The price has run and both valuation lines are crossed on this reading. The strategy will not act until a second filing says the same thing, which is the rule doing its job — and because every figure here is typed by hand there are no filings to confirm it with. That is the honest limit of running this without a data connection."
     },
     {
-     "date": "2025-06-12T12:00:00-04:00",
+     "date": "2025-10-19T12:00:00-04:00",
      "text": "Recorded with the signal. The reason written while the verdict still read otherwise: Under the $300M size floor, at $278M. I am taking that on deliberately: the discount is on the plant and the tubes, which do not care what the market capitalisation is, and I am buying a size I could still get out of. If I am wrong it will be because I could not sell it, not because the plant was worth less than I thought."
     },
     {
-     "date": "2025-06-12T12:00:00-04:00",
-     "text": "Recorded from history: 1 purchase, dated 2025-06-12. Each was judged against the data available on its own day, not against today's."
+     "date": "2025-10-19T12:00:00-04:00",
+     "text": "Recorded from history: 1 purchase, dated 2025-10-19. Each was judged against the data available on its own day, not against today's."
     }
    ],
    "lot_seq": 1
@@ -3215,16 +3275,16 @@
        "strategy": {
         "id": "graham",
         "name": "Graham",
-        "version": 10,
-        "values_version": 5,
+        "version": 11,
+        "values_version": 6,
         "contract": 8
        }
       },
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 10,
-       "values_version": 5,
+       "version": 11,
+       "values_version": 6,
        "contract": 8
       },
       "metrics": {
@@ -3234,7 +3294,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2025-02-05"
-        ]
+        ],
+        "label": "Price to earnings on three-year average EPS",
+        "format": "0.0x"
        },
        "price_to_book": {
         "value": 0.71,
@@ -3242,7 +3304,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2025-02-05"
-        ]
+        ],
+        "label": "Price to book",
+        "format": "0.00x"
        },
        "graham_combined_multiple": {
         "value": 5.61,
@@ -3250,7 +3314,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2025-02-05"
-        ]
+        ],
+        "label": "Graham combined multiple",
+        "format": "0.0"
        },
        "current_ratio": {
         "value": 2.4,
@@ -3258,7 +3324,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2025-02-05"
-        ]
+        ],
+        "label": "Current ratio",
+        "format": "0.00"
        },
        "ltd_to_working_capital": {
         "value": 0.7,
@@ -3266,7 +3334,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2025-02-05"
-        ]
+        ],
+        "label": "Long-term debt to working capital",
+        "format": "0.00"
        },
        "profitable_years_10y": {
         "value": 10.0,
@@ -3274,7 +3344,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2025-02-05"
-        ]
+        ],
+        "label": "Years of positive net income out of the last ten",
+        "format": "0 of 10"
        },
        "altman_z_double_prime": {
         "value": 2.9,
@@ -3282,7 +3354,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2025-02-05"
-        ]
+        ],
+        "label": "Altman Z″-score, for companies that do not manufacture",
+        "format": "0.00"
        },
        "eps_growth_10y": {
         "value": 36.0,
@@ -3290,7 +3364,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2025-02-05"
-        ]
+        ],
+        "label": "Ten-year EPS growth, three-year averages at both ends",
+        "format": "0.0%"
        },
        "consecutive_capital_return_years": {
         "value": 23.0,
@@ -3298,7 +3374,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2025-02-05"
-        ]
+        ],
+        "label": "Consecutive years returning capital, by either route",
+        "format": "0 yrs"
        },
        "debt_to_equity": {
         "value": 0.8,
@@ -3306,7 +3384,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2025-02-05"
-        ]
+        ],
+        "label": "Debt to equity",
+        "format": "0.00"
        },
        "price_to_net_tangible_assets": {
         "value": 1.1,
@@ -3314,7 +3394,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2025-02-05"
-        ]
+        ],
+        "label": "Price to net tangible assets",
+        "format": "0.00x"
        },
        "accruals_ratio": {
         "value": 0.06,
@@ -3322,7 +3404,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2025-02-05"
-        ]
+        ],
+        "label": "Accruals ratio",
+        "format": "0.00"
        },
        "revenue_ttm": {
         "value": 1060000000.0,
@@ -3330,7 +3414,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2025-02-05"
-        ]
+        ],
+        "label": "Revenue, trailing twelve months",
+        "format": "$0,0"
        },
        "ncav_to_market_cap": {
         "value": 0.66,
@@ -3338,7 +3424,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2025-02-05"
-        ]
+        ],
+        "label": "Net current asset value over market capitalization",
+        "format": "0.00"
        },
        "consecutive_annual_loss_years": {
         "value": 0.0,
@@ -3346,7 +3434,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2025-02-05"
-        ]
+        ],
+        "label": "Consecutive annual losses, most recent backward",
+        "format": "0"
        }
       },
       "price": null,
@@ -3377,7 +3467,7 @@
         "revenue_ttm"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2025-02-10 could be consulted; 15 hand-entered values on record by 2025-02-10; judged by Graham v10 as it stands today (values v5) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2025-02-10 could be consulted; 15 hand-entered values on record by 2025-02-10; judged by Graham v11 as it stands today (values v6) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": null,
       "valuation": null,
@@ -4508,16 +4598,16 @@
        "strategy": {
         "id": "graham",
         "name": "Graham",
-        "version": 10,
-        "values_version": 5,
+        "version": 11,
+        "values_version": 6,
         "contract": 8
        }
       },
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 10,
-       "values_version": 5,
+       "version": 11,
+       "values_version": 6,
        "contract": 8
       },
       "metrics": {
@@ -4527,7 +4617,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-03-04"
-        ]
+        ],
+        "label": "Price to earnings on three-year average EPS",
+        "format": "0.0x"
        },
        "price_to_book": {
         "value": 1.28,
@@ -4535,7 +4627,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-03-04"
-        ]
+        ],
+        "label": "Price to book",
+        "format": "0.00x"
        },
        "graham_combined_multiple": {
         "value": 11.65,
@@ -4543,7 +4637,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-03-04"
-        ]
+        ],
+        "label": "Graham combined multiple",
+        "format": "0.0"
        },
        "current_ratio": {
         "value": 2.35,
@@ -4551,7 +4647,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-03-04"
-        ]
+        ],
+        "label": "Current ratio",
+        "format": "0.00"
        },
        "ltd_to_working_capital": {
         "value": 0.6,
@@ -4559,7 +4657,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-03-04"
-        ]
+        ],
+        "label": "Long-term debt to working capital",
+        "format": "0.00"
        },
        "profitable_years_10y": {
         "value": 10.0,
@@ -4567,7 +4667,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-03-04"
-        ]
+        ],
+        "label": "Years of positive net income out of the last ten",
+        "format": "0 of 10"
        },
        "altman_z_double_prime": {
         "value": 2.9,
@@ -4575,7 +4677,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-03-04"
-        ]
+        ],
+        "label": "Altman Z″-score, for companies that do not manufacture",
+        "format": "0.00"
        },
        "eps_growth_10y": {
         "value": 39.0,
@@ -4583,7 +4687,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-03-04"
-        ]
+        ],
+        "label": "Ten-year EPS growth, three-year averages at both ends",
+        "format": "0.0%"
        },
        "consecutive_capital_return_years": {
         "value": 27.0,
@@ -4591,7 +4697,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-03-04"
-        ]
+        ],
+        "label": "Consecutive years returning capital, by either route",
+        "format": "0 yrs"
        },
        "debt_to_equity": {
         "value": 0.7,
@@ -4599,7 +4707,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-03-04"
-        ]
+        ],
+        "label": "Debt to equity",
+        "format": "0.00"
        },
        "price_to_net_tangible_assets": {
         "value": 1.6,
@@ -4607,7 +4717,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-03-04"
-        ]
+        ],
+        "label": "Price to net tangible assets",
+        "format": "0.00x"
        },
        "accruals_ratio": {
         "value": 0.03,
@@ -4615,7 +4727,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-03-04"
-        ]
+        ],
+        "label": "Accruals ratio",
+        "format": "0.00"
        },
        "revenue_ttm": {
         "value": 1072000000.0,
@@ -4623,7 +4737,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-03-04"
-        ]
+        ],
+        "label": "Revenue, trailing twelve months",
+        "format": "$0,0"
        },
        "ncav_to_market_cap": {
         "value": 0.55,
@@ -4631,7 +4747,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-03-04"
-        ]
+        ],
+        "label": "Net current asset value over market capitalization",
+        "format": "0.00"
        },
        "consecutive_annual_loss_years": {
         "value": 0.0,
@@ -4639,7 +4757,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-03-04"
-        ]
+        ],
+        "label": "Consecutive annual losses, most recent backward",
+        "format": "0"
        }
       },
       "price": null,
@@ -4670,7 +4790,7 @@
         "revenue_ttm"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2024-03-08 could be consulted; 15 hand-entered values on record by 2024-03-08; judged by Graham v10 as it stands today (values v5) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2024-03-08 could be consulted; 15 hand-entered values on record by 2024-03-08; judged by Graham v11 as it stands today (values v6) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": {
        "seq": 1,
@@ -4878,23 +4998,23 @@
      "id": "l1",
      "seq": 1,
      "kind": "buy",
-     "date": "2024-11-19",
-     "recorded": "2024-11-19T12:00:00-05:00",
+     "date": "2025-10-19",
+     "recorded": "2025-10-19T12:00:00-04:00",
      "shares": 300.0,
      "price": 20.1,
      "override": {
-      "date": "2024-11-19",
+      "date": "2025-10-19",
       "kind": "against",
       "state": "Not cheap enough",
       "rule": "knockout-failed",
       "summary": "2 of the 4 tests this strategy will not bend came back against it, and one is enough.",
       "basis": "reconstructed",
-      "as_of": "2024-11-19",
+      "as_of": "2025-10-19",
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 10,
-       "values_version": 5,
+       "version": 11,
+       "values_version": 6,
        "contract": 8
       },
       "failed": [
@@ -4924,7 +5044,7 @@
      },
      "unreconstructed": null,
      "snapshot": {
-      "frozen": "2024-11-19T12:00:00-05:00",
+      "frozen": "2025-10-19T12:00:00-04:00",
       "decision": {
        "render": "hold",
        "tier": "position",
@@ -4956,7 +5076,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2024-11-15"
+            "entered by hand on 2025-10-15"
            ]
           },
           "test": {
@@ -5045,7 +5165,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2024-11-15"
+            "entered by hand on 2025-10-15"
            ]
           },
           "test": {
@@ -5079,7 +5199,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2024-11-15"
+            "entered by hand on 2025-10-15"
            ]
           },
           "test": {
@@ -5113,7 +5233,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2024-11-15"
+            "entered by hand on 2025-10-15"
            ]
           },
           "test": {
@@ -5147,7 +5267,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2024-11-15"
+            "entered by hand on 2025-10-15"
            ]
           },
           "test": {
@@ -5181,7 +5301,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2024-11-15"
+            "entered by hand on 2025-10-15"
            ]
           },
           "test": {
@@ -5215,7 +5335,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2024-11-15"
+            "entered by hand on 2025-10-15"
            ]
           },
           "test": {
@@ -5249,7 +5369,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2024-11-15"
+            "entered by hand on 2025-10-15"
            ]
           },
           "test": {
@@ -5283,7 +5403,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2024-11-15"
+            "entered by hand on 2025-10-15"
            ]
           },
           "test": {
@@ -5317,7 +5437,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2024-11-15"
+            "entered by hand on 2025-10-15"
            ]
           },
           "test": {
@@ -5351,7 +5471,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2024-11-15"
+            "entered by hand on 2025-10-15"
            ]
           },
           "test": {
@@ -5385,7 +5505,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2024-11-15"
+            "entered by hand on 2025-10-15"
            ]
           },
           "test": {
@@ -5419,7 +5539,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2024-11-15"
+            "entered by hand on 2025-10-15"
            ]
           },
           "test": {
@@ -5453,7 +5573,7 @@
            "source": "measure",
            "cautions": [],
            "provenance": [
-            "entered by hand on 2024-11-15"
+            "entered by hand on 2025-10-15"
            ]
           },
           "test": {
@@ -5587,16 +5707,16 @@
        "strategy": {
         "id": "graham",
         "name": "Graham",
-        "version": 10,
-        "values_version": 5,
+        "version": 11,
+        "values_version": 6,
         "contract": 8
        }
       },
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 10,
-       "values_version": 5,
+       "version": 11,
+       "values_version": 6,
        "contract": 8
       },
       "metrics": {
@@ -5605,112 +5725,140 @@
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2024-11-15"
-        ]
+         "entered by hand on 2025-10-15"
+        ],
+        "label": "Price to earnings on three-year average EPS",
+        "format": "0.0x"
        },
        "price_to_book": {
         "value": 1.94,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2024-11-15"
-        ]
+         "entered by hand on 2025-10-15"
+        ],
+        "label": "Price to book",
+        "format": "0.00x"
        },
        "graham_combined_multiple": {
         "value": 27.35,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2024-11-15"
-        ]
+         "entered by hand on 2025-10-15"
+        ],
+        "label": "Graham combined multiple",
+        "format": "0.0"
        },
        "current_ratio": {
         "value": 2.1,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2024-11-15"
-        ]
+         "entered by hand on 2025-10-15"
+        ],
+        "label": "Current ratio",
+        "format": "0.00"
        },
        "ltd_to_working_capital": {
         "value": 0.34,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2024-11-15"
-        ]
+         "entered by hand on 2025-10-15"
+        ],
+        "label": "Long-term debt to working capital",
+        "format": "0.00"
        },
        "profitable_years_10y": {
         "value": 10.0,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2024-11-15"
-        ]
+         "entered by hand on 2025-10-15"
+        ],
+        "label": "Years of positive net income out of the last ten",
+        "format": "0 of 10"
        },
        "altman_z_double_prime": {
         "value": 3.6,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2024-11-15"
-        ]
+         "entered by hand on 2025-10-15"
+        ],
+        "label": "Altman Z″-score, for companies that do not manufacture",
+        "format": "0.00"
        },
        "eps_growth_10y": {
         "value": 64.0,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2024-11-15"
-        ]
+         "entered by hand on 2025-10-15"
+        ],
+        "label": "Ten-year EPS growth, three-year averages at both ends",
+        "format": "0.0%"
        },
        "consecutive_capital_return_years": {
         "value": 20.0,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2024-11-15"
-        ]
+         "entered by hand on 2025-10-15"
+        ],
+        "label": "Consecutive years returning capital, by either route",
+        "format": "0 yrs"
        },
        "debt_to_equity": {
         "value": 0.45,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2024-11-15"
-        ]
+         "entered by hand on 2025-10-15"
+        ],
+        "label": "Debt to equity",
+        "format": "0.00"
        },
        "price_to_net_tangible_assets": {
         "value": 2.4,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2024-11-15"
-        ]
+         "entered by hand on 2025-10-15"
+        ],
+        "label": "Price to net tangible assets",
+        "format": "0.00x"
        },
        "accruals_ratio": {
         "value": 0.03,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2024-11-15"
-        ]
+         "entered by hand on 2025-10-15"
+        ],
+        "label": "Accruals ratio",
+        "format": "0.00"
        },
        "revenue_ttm": {
         "value": 1478000000.0,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2024-11-15"
-        ]
+         "entered by hand on 2025-10-15"
+        ],
+        "label": "Revenue, trailing twelve months",
+        "format": "$0,0"
        },
        "ncav_to_market_cap": {
         "value": 0.4,
         "source": "manual",
         "cautions": [],
         "provenance": [
-         "entered by hand on 2024-11-15"
-        ]
+         "entered by hand on 2025-10-15"
+        ],
+        "label": "Net current asset value over market capitalization",
+        "format": "0.00"
        }
       },
       "price": null,
@@ -5719,7 +5867,7 @@
       "price_ticker": null,
       "evaluation": {
        "basis": "reconstructed",
-       "as_of": "2024-11-19",
+       "as_of": "2025-10-19",
        "filings_by_then": 0,
        "newest_filed": null,
        "priced": null,
@@ -5742,7 +5890,7 @@
        "manual_withheld": [
         "consecutive_annual_loss_years"
        ],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2024-11-19 could be consulted; 14 hand-entered values on record by 2024-11-19; 1 hand-entered value not on record by 2024-11-19, so it took no part in this; judged by Graham v10 as it stands today (values v5) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2025-10-19 could be consulted; 14 hand-entered values on record by 2025-10-19; 1 hand-entered value not on record by 2025-10-19, so it took no part in this; judged by Graham v11 as it stands today (values v6) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": null,
       "valuation": null,
@@ -5764,7 +5912,7 @@
      "unit": "times",
      "format": "0.0x",
      "plain": "What you're paying for a dollar of typical earnings. Averaging three\nyears is the point: it stops you paying a low multiple on a fluke good\nyear.\n\nThe price per share is read the same way as for the trailing measure —\nmarket capitalization over the share count, so both are paying for the\nsame thing. See [pe_ttm].\n",
-     "recorded": "2024-11-15T12:00:00-05:00"
+     "recorded": "2025-10-15T12:00:00-04:00"
     },
     {
      "seq": 2,
@@ -5774,7 +5922,7 @@
      "unit": "times",
      "format": "0.00x",
      "plain": "What you pay for a dollar of the company's accounting net worth — the\nassets it reports, less what it owes.\n",
-     "recorded": "2024-11-15T12:00:00-05:00"
+     "recorded": "2025-10-15T12:00:00-04:00"
     },
     {
      "seq": 3,
@@ -5784,7 +5932,7 @@
      "unit": "ratio",
      "format": "0.0",
      "plain": "A single test that lets one number be high if the other is low. A stock\nat 18x earnings and 1.2x book scores 21.6; one at 18x and 2.0x scores\n36.\n",
-     "recorded": "2024-11-15T12:00:00-05:00"
+     "recorded": "2025-10-15T12:00:00-04:00"
     },
     {
      "seq": 4,
@@ -5794,7 +5942,7 @@
      "unit": "ratio",
      "format": "0.00",
      "plain": "Whether the company holds enough short-term assets — cash, receivables,\ninventory — to cover the bills coming due within a year.\n",
-     "recorded": "2024-11-15T12:00:00-05:00"
+     "recorded": "2025-10-15T12:00:00-04:00"
     },
     {
      "seq": 5,
@@ -5804,7 +5952,7 @@
      "unit": "ratio",
      "format": "0.00",
      "plain": "Whether the company's long-term borrowings could be covered by the\nliquid cushion it already has. It ignores fixed assets entirely, which\nis deliberate: in liquidation, the factory sells for a fraction of book.\n",
-     "recorded": "2024-11-15T12:00:00-05:00"
+     "recorded": "2025-10-15T12:00:00-04:00"
     },
     {
      "seq": 6,
@@ -5814,7 +5962,7 @@
      "unit": "count",
      "format": "0 of 10",
      "plain": "How many of the last ten years the company made money. Ten out of ten\nmeans it has never lost money in a decade — not \"usually profitable\",\nnever lost money.\n",
-     "recorded": "2024-11-15T12:00:00-05:00"
+     "recorded": "2025-10-15T12:00:00-04:00"
     },
     {
      "seq": 7,
@@ -5824,7 +5972,7 @@
      "unit": "score",
      "format": "0.00",
      "plain": "The same bankruptcy score as above, in the version its author built\nfor companies that do not make things. Two differences, and both\nmatter more than the changed weights.\n\nThe sales-to-assets term is gone. It was fitted on public\nmanufacturers, where a factory turning over its assets slowly is a\nwarning; a consultancy or a software company turns over very few\nassets at all and is not thereby in distress.\n\nAnd the equity term uses what the books say the equity is worth\nrather than what the market says. The score therefore does not move\nwhen the share price does — which is what a solvency test inside a\nvaluation rule set needs, because otherwise a share falling for being\ncheap reads as a share falling for being in trouble, and the one\nmeasure meant to tell those apart moves with the wrong one.\n",
-     "recorded": "2024-11-15T12:00:00-05:00"
+     "recorded": "2025-10-15T12:00:00-04:00"
     },
     {
      "seq": 8,
@@ -5834,7 +5982,7 @@
      "unit": "percent",
      "format": "0.0%",
      "plain": "How much more the company earns per share than it did a decade ago,\nstated as a total rather than an annual rate. A third more over ten\nyears is under 3% a year.\n",
-     "recorded": "2024-11-15T12:00:00-05:00"
+     "recorded": "2025-10-15T12:00:00-04:00"
     },
     {
      "seq": 9,
@@ -5844,7 +5992,7 @@
      "unit": "years",
      "format": "0 yrs",
      "plain": "How many years in an unbroken run the company has handed cash back to\nits owners — by paying a dividend, by buying its own shares back, or\nby both.\n\nA long run says two things at once, and they are separable. It says\nthe company generates more cash than it needs, consistently. And it\nsays the company was still there: a run of twenty years reaches back\nthrough whatever the last two decades contained, which no shorter\nwindow can evidence at all.\n\nBuybacks count NET of shares issued. A company handing out more stock\nthan it repurchases is not returning capital, it is mopping up after\nits own issuance, and counting the repurchase line gross would let\nthat read as a capital return in the year it is least true.\n",
-     "recorded": "2024-11-15T12:00:00-05:00"
+     "recorded": "2025-10-15T12:00:00-04:00"
     },
     {
      "seq": 10,
@@ -5854,7 +6002,7 @@
      "unit": "ratio",
      "format": "0.00",
      "plain": "How much of the company is financed by lenders versus by its owners.\nAt 1.0 there is a dollar of debt for every dollar of shareholder money.\n",
-     "recorded": "2024-11-15T12:00:00-05:00"
+     "recorded": "2025-10-15T12:00:00-04:00"
     },
     {
      "seq": 11,
@@ -5864,7 +6012,7 @@
      "unit": "times",
      "format": "0.00x",
      "plain": "Price to book with the imaginary parts removed. What you're paying per\ndollar of things that could actually be sold.\n",
-     "recorded": "2024-11-15T12:00:00-05:00"
+     "recorded": "2025-10-15T12:00:00-04:00"
     },
     {
      "seq": 12,
@@ -5874,7 +6022,7 @@
      "unit": "ratio",
      "format": "0.00",
      "plain": "How much of the reported profit is bookkeeping rather than cash. High\naccruals predict poor subsequent returns with unusual reliability.\n",
-     "recorded": "2024-11-15T12:00:00-05:00"
+     "recorded": "2025-10-15T12:00:00-04:00"
     },
     {
      "seq": 13,
@@ -5884,7 +6032,7 @@
      "unit": "usd",
      "format": "$0,0",
      "plain": "What the company sold in the last year, in money.\n\nIt is here as a measure of how big a company is that does not depend\non what the market thinks it is worth. Market capitalization is the\nother one, and the difference is not academic: a rule set that hunts\nfor companies the market has priced too cheaply, and then requires a\nlarge market capitalization, is partly rejecting companies for being\ncheap. Sales do not move when the share price does.\n",
-     "recorded": "2024-11-15T12:00:00-05:00"
+     "recorded": "2025-10-15T12:00:00-04:00"
     },
     {
      "seq": 14,
@@ -5894,7 +6042,7 @@
      "unit": "ratio",
      "format": "0.00",
      "plain": "How much of the purchase price is covered by liquid assets net of all\ndebts. At 1.5 you'd be buying the company for two-thirds of its net\ncurrent assets and getting the business itself free. That's Graham's\nnet-net, and it barely exists in modern markets outside of Japan and\nmicro-caps.\n",
-     "recorded": "2024-11-15T12:00:00-05:00"
+     "recorded": "2025-10-15T12:00:00-04:00"
     },
     {
      "seq": 15,
@@ -5904,7 +6052,7 @@
      "unit": "times",
      "format": "0.0x",
      "plain": "What you're paying for a dollar of typical earnings. Averaging three\nyears is the point: it stops you paying a low multiple on a fluke good\nyear.\n\nThe price per share is read the same way as for the trailing measure —\nmarket capitalization over the share count, so both are paying for the\nsame thing. See [pe_ttm].\n",
-     "recorded": "2026-08-02T12:00:00-04:00"
+     "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 16,
@@ -5914,7 +6062,7 @@
      "unit": "times",
      "format": "0.00x",
      "plain": "What you pay for a dollar of the company's accounting net worth — the\nassets it reports, less what it owes.\n",
-     "recorded": "2026-08-02T12:00:00-04:00"
+     "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 17,
@@ -5924,7 +6072,7 @@
      "unit": "ratio",
      "format": "0.0",
      "plain": "A single test that lets one number be high if the other is low. A stock\nat 18x earnings and 1.2x book scores 21.6; one at 18x and 2.0x scores\n36.\n",
-     "recorded": "2026-08-02T12:00:00-04:00"
+     "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 18,
@@ -5934,7 +6082,7 @@
      "unit": "ratio",
      "format": "0.00",
      "plain": "Whether the company holds enough short-term assets — cash, receivables,\ninventory — to cover the bills coming due within a year.\n",
-     "recorded": "2026-08-02T12:00:00-04:00"
+     "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 19,
@@ -5944,7 +6092,7 @@
      "unit": "ratio",
      "format": "0.00",
      "plain": "Whether the company's long-term borrowings could be covered by the\nliquid cushion it already has. It ignores fixed assets entirely, which\nis deliberate: in liquidation, the factory sells for a fraction of book.\n",
-     "recorded": "2026-08-02T12:00:00-04:00"
+     "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 20,
@@ -5954,7 +6102,7 @@
      "unit": "score",
      "format": "0.00",
      "plain": "The same bankruptcy score as above, in the version its author built\nfor companies that do not make things. Two differences, and both\nmatter more than the changed weights.\n\nThe sales-to-assets term is gone. It was fitted on public\nmanufacturers, where a factory turning over its assets slowly is a\nwarning; a consultancy or a software company turns over very few\nassets at all and is not thereby in distress.\n\nAnd the equity term uses what the books say the equity is worth\nrather than what the market says. The score therefore does not move\nwhen the share price does — which is what a solvency test inside a\nvaluation rule set needs, because otherwise a share falling for being\ncheap reads as a share falling for being in trouble, and the one\nmeasure meant to tell those apart moves with the wrong one.\n",
-     "recorded": "2026-08-02T12:00:00-04:00"
+     "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 21,
@@ -5964,7 +6112,7 @@
      "unit": "percent",
      "format": "0.0%",
      "plain": "How much more the company earns per share than it did a decade ago,\nstated as a total rather than an annual rate. A third more over ten\nyears is under 3% a year.\n",
-     "recorded": "2026-08-02T12:00:00-04:00"
+     "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 22,
@@ -5974,7 +6122,7 @@
      "unit": "years",
      "format": "0 yrs",
      "plain": "How many years in an unbroken run the company has handed cash back to\nits owners — by paying a dividend, by buying its own shares back, or\nby both.\n\nA long run says two things at once, and they are separable. It says\nthe company generates more cash than it needs, consistently. And it\nsays the company was still there: a run of twenty years reaches back\nthrough whatever the last two decades contained, which no shorter\nwindow can evidence at all.\n\nBuybacks count NET of shares issued. A company handing out more stock\nthan it repurchases is not returning capital, it is mopping up after\nits own issuance, and counting the repurchase line gross would let\nthat read as a capital return in the year it is least true.\n",
-     "recorded": "2026-08-02T12:00:00-04:00"
+     "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 23,
@@ -5984,7 +6132,7 @@
      "unit": "ratio",
      "format": "0.00",
      "plain": "How much of the company is financed by lenders versus by its owners.\nAt 1.0 there is a dollar of debt for every dollar of shareholder money.\n",
-     "recorded": "2026-08-02T12:00:00-04:00"
+     "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 24,
@@ -5994,7 +6142,7 @@
      "unit": "times",
      "format": "0.00x",
      "plain": "Price to book with the imaginary parts removed. What you're paying per\ndollar of things that could actually be sold.\n",
-     "recorded": "2026-08-02T12:00:00-04:00"
+     "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 25,
@@ -6004,7 +6152,7 @@
      "unit": "ratio",
      "format": "0.00",
      "plain": "How much of the reported profit is bookkeeping rather than cash. High\naccruals predict poor subsequent returns with unusual reliability.\n",
-     "recorded": "2026-08-02T12:00:00-04:00"
+     "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 26,
@@ -6014,7 +6162,7 @@
      "unit": "usd",
      "format": "$0,0",
      "plain": "What the company sold in the last year, in money.\n\nIt is here as a measure of how big a company is that does not depend\non what the market thinks it is worth. Market capitalization is the\nother one, and the difference is not academic: a rule set that hunts\nfor companies the market has priced too cheaply, and then requires a\nlarge market capitalization, is partly rejecting companies for being\ncheap. Sales do not move when the share price does.\n",
-     "recorded": "2026-08-02T12:00:00-04:00"
+     "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 27,
@@ -6024,7 +6172,7 @@
      "unit": "ratio",
      "format": "0.00",
      "plain": "How much of the purchase price is covered by liquid assets net of all\ndebts. At 1.5 you'd be buying the company for two-thirds of its net\ncurrent assets and getting the business itself free. That's Graham's\nnet-net, and it barely exists in modern markets outside of Japan and\nmicro-caps.\n",
-     "recorded": "2026-08-02T12:00:00-04:00"
+     "recorded": "2026-08-08T12:00:00-04:00"
     },
     {
      "seq": 28,
@@ -6034,7 +6182,7 @@
      "unit": "count",
      "format": "0",
      "plain": "How many years in a row the company has lost money right now. One loss\nyear can be an impairment or a settlement; a run of them is the business.\n",
-     "recorded": "2026-08-02T12:00:00-04:00"
+     "recorded": "2026-08-08T12:00:00-04:00"
     }
    ],
    "thesis": [
@@ -6043,23 +6191,23 @@
      "thesis": "Marine fittings, family controlled, no debt to speak of. Book value is understated because the yard was bought in 1974 and sits at cost.",
      "falsifier": "Debt to equity above 1.0, or the dividend run breaking.",
      "reason": "",
-     "recorded": "2026-08-02T12:00:00-04:00"
+     "recorded": "2026-08-08T12:00:00-04:00"
     }
    ],
    "valuations": [],
    "snapshots": [],
    "notes": [
     {
-     "date": "2024-11-19T12:00:00-05:00",
+     "date": "2025-10-19T12:00:00-04:00",
      "text": "The strategy said no: 1.94 times book against a limit of 1.5, and the combined multiple over the line too. I bought it anyway because I think the land is carried at nothing. Writing that down is the point — if I keep being right about this the limit is wrong, and if I keep being wrong I am."
     },
     {
-     "date": "2026-08-02T12:00:00-04:00",
+     "date": "2026-08-08T12:00:00-04:00",
      "text": "Up 105% and now 12% of the account against a cap of 10%. Nothing about the company has changed; the position has just got out of proportion to everything else, which is the risk a basket of twenty is supposed to avoid."
     },
     {
-     "date": "2024-11-19T12:00:00-05:00",
-     "text": "Recorded from history: 1 purchase, dated 2024-11-19. Each was judged against the data available on its own day, not against today's."
+     "date": "2025-10-19T12:00:00-04:00",
+     "text": "Recorded from history: 1 purchase, dated 2025-10-19. Each was judged against the data available on its own day, not against today's."
     }
    ],
    "lot_seq": 1
@@ -6074,21 +6222,21 @@
      "id": "l1",
      "seq": 1,
      "kind": "buy",
-     "date": "2025-08-20",
-     "recorded": "2025-08-20T12:00:00-04:00",
+     "date": "2026-01-27",
+     "recorded": "2026-01-27T12:00:00-05:00",
      "shares": 190.0,
      "price": 15.1,
      "override": null,
      "unreconstructed": {
-      "date": "2025-08-20",
-      "as_of": "2025-08-20",
+      "date": "2026-01-27",
+      "as_of": "2026-01-27",
       "state": "Not enough to go on",
       "why": "12 of the tests that decide this could not be worked out from the data on record, and the ones that could do not settle it either way.",
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 10,
-       "values_version": 5,
+       "version": 11,
+       "values_version": 6,
        "contract": 8
       },
       "missing": [
@@ -6149,10 +6297,10 @@
         "label": "Lowest liquid assets against the price"
        }
       ],
-      "note": "no company is linked to this ticker, so no stored filing or price from 2025-08-20 could be consulted; judged by Graham v10 as it stands today (values v5) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+      "note": "no company is linked to this ticker, so no stored filing or price from 2026-01-27 could be consulted; judged by Graham v11 as it stands today (values v6) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
      },
      "snapshot": {
-      "frozen": "2025-08-20T12:00:00-04:00",
+      "frozen": "2026-01-27T12:00:00-05:00",
       "decision": {
        "render": "unknown",
        "tier": "evaluation",
@@ -6759,16 +6907,16 @@
        "strategy": {
         "id": "graham",
         "name": "Graham",
-        "version": 10,
-        "values_version": 5,
+        "version": 11,
+        "values_version": 6,
         "contract": 8
        }
       },
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 10,
-       "values_version": 5,
+       "version": 11,
+       "values_version": 6,
        "contract": 8
       },
       "metrics": {},
@@ -6778,25 +6926,25 @@
       "price_ticker": null,
       "evaluation": {
        "basis": "reconstructed",
-       "as_of": "2025-08-20",
+       "as_of": "2026-01-27",
        "filings_by_then": 0,
        "newest_filed": null,
        "priced": null,
        "manual_on_record": [],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2025-08-20 could be consulted; judged by Graham v10 as it stands today (values v5) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2026-01-27 could be consulted; judged by Graham v11 as it stands today (values v6) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": {
        "seq": 1,
        "thesis": "Bought on a conversation, not on numbers. I have not entered a single figure for it.",
        "falsifier": "There is nothing here to falsify yet, which is itself the problem.",
        "reason": "",
-       "recorded": "2025-08-18T12:00:00-04:00"
+       "recorded": "2026-01-25T12:00:00-05:00"
       },
       "valuation": null,
       "recollection": {
        "text": "No figures on record for this company, so there was nothing to check it against. Buying first and filling the numbers in later is how I have always done it, which is what I am trying to stop.",
-       "written": "2025-08-20T12:00:00-04:00"
+       "written": "2026-01-27T12:00:00-05:00"
       },
       "changes_recorded": {
        "rules": 0,
@@ -6813,19 +6961,19 @@
      "thesis": "Bought on a conversation, not on numbers. I have not entered a single figure for it.",
      "falsifier": "There is nothing here to falsify yet, which is itself the problem.",
      "reason": "",
-     "recorded": "2025-08-18T12:00:00-04:00"
+     "recorded": "2026-01-25T12:00:00-05:00"
     }
    ],
    "valuations": [],
    "snapshots": [],
    "notes": [
     {
-     "date": "2025-08-20T12:00:00-04:00",
+     "date": "2026-01-27T12:00:00-05:00",
      "text": "Recorded with no verdict at all — not a verdict I overrode, a verdict that did not exist. The journal keeps those two apart on purpose, because counting a gap in the data as defiance would put a decision I never made into the one figure that is supposed to measure my judgement."
     },
     {
-     "date": "2025-08-20T12:00:00-04:00",
-     "text": "Recorded from history: 1 purchase, dated 2025-08-20. Each was judged against the data available on its own day, not against today's. 1 of these could not have a verdict reconstructed, so none is recorded against it."
+     "date": "2026-01-27T12:00:00-05:00",
+     "text": "Recorded from history: 1 purchase, dated 2026-01-27. Each was judged against the data available on its own day, not against today's. 1 of these could not have a verdict reconstructed, so none is recorded against it."
     }
    ],
    "lot_seq": 1
@@ -7322,8 +7470,8 @@
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 10,
-       "values_version": 5,
+       "version": 11,
+       "values_version": 6,
        "contract": 8
       },
       "failed": [
@@ -8024,16 +8172,16 @@
        "strategy": {
         "id": "graham",
         "name": "Graham",
-        "version": 10,
-        "values_version": 5,
+        "version": 11,
+        "values_version": 6,
         "contract": 8
        }
       },
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 10,
-       "values_version": 5,
+       "version": 11,
+       "values_version": 6,
        "contract": 8
       },
       "metrics": {
@@ -8043,7 +8191,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-06-01"
-        ]
+        ],
+        "label": "Price to earnings on three-year average EPS",
+        "format": "0.0x"
        },
        "price_to_book": {
         "value": 3.15,
@@ -8051,7 +8201,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-06-01"
-        ]
+        ],
+        "label": "Price to book",
+        "format": "0.00x"
        },
        "graham_combined_multiple": {
         "value": 83.16,
@@ -8059,7 +8211,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-06-01"
-        ]
+        ],
+        "label": "Graham combined multiple",
+        "format": "0.0"
        },
        "current_ratio": {
         "value": 2.2,
@@ -8067,7 +8221,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-06-01"
-        ]
+        ],
+        "label": "Current ratio",
+        "format": "0.00"
        },
        "ltd_to_working_capital": {
         "value": 0.4,
@@ -8075,7 +8231,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-06-01"
-        ]
+        ],
+        "label": "Long-term debt to working capital",
+        "format": "0.00"
        },
        "profitable_years_10y": {
         "value": 10.0,
@@ -8083,7 +8241,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-06-01"
-        ]
+        ],
+        "label": "Years of positive net income out of the last ten",
+        "format": "0 of 10"
        },
        "altman_z_double_prime": {
         "value": 4.0,
@@ -8091,7 +8251,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-06-01"
-        ]
+        ],
+        "label": "Altman Z″-score, for companies that do not manufacture",
+        "format": "0.00"
        },
        "eps_growth_10y": {
         "value": 44.0,
@@ -8099,7 +8261,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-06-01"
-        ]
+        ],
+        "label": "Ten-year EPS growth, three-year averages at both ends",
+        "format": "0.0%"
        },
        "consecutive_capital_return_years": {
         "value": 14.0,
@@ -8107,7 +8271,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-06-01"
-        ]
+        ],
+        "label": "Consecutive years returning capital, by either route",
+        "format": "0 yrs"
        },
        "debt_to_equity": {
         "value": 0.5,
@@ -8115,7 +8281,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-06-01"
-        ]
+        ],
+        "label": "Debt to equity",
+        "format": "0.00"
        },
        "price_to_net_tangible_assets": {
         "value": 3.6,
@@ -8123,7 +8291,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-06-01"
-        ]
+        ],
+        "label": "Price to net tangible assets",
+        "format": "0.00x"
        },
        "accruals_ratio": {
         "value": 0.03,
@@ -8131,7 +8301,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-06-01"
-        ]
+        ],
+        "label": "Accruals ratio",
+        "format": "0.00"
        },
        "revenue_ttm": {
         "value": 690000000.0,
@@ -8139,7 +8311,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-06-01"
-        ]
+        ],
+        "label": "Revenue, trailing twelve months",
+        "format": "$0,0"
        },
        "ncav_to_market_cap": {
         "value": 0.18,
@@ -8147,7 +8321,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-06-01"
-        ]
+        ],
+        "label": "Net current asset value over market capitalization",
+        "format": "0.00"
        },
        "consecutive_annual_loss_years": {
         "value": 0.0,
@@ -8155,7 +8331,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-06-01"
-        ]
+        ],
+        "label": "Consecutive annual losses, most recent backward",
+        "format": "0"
        }
       },
       "price": null,
@@ -8186,7 +8364,7 @@
         "revenue_ttm"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2024-06-04 could be consulted; 15 hand-entered values on record by 2024-06-04; judged by Graham v10 as it stands today (values v5) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2024-06-04 could be consulted; 15 hand-entered values on record by 2024-06-04; judged by Graham v11 as it stands today (values v6) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": {
        "seq": 1,
@@ -8223,8 +8401,8 @@
      "strategy": {
       "id": "graham",
       "name": "Graham",
-      "version": 10,
-      "values_version": 5,
+      "version": 11,
+      "values_version": 6,
       "contract": 8
      },
      "override": {
@@ -8232,14 +8410,14 @@
       "kind": "against",
       "state": "One reading past the line",
       "rule": "breach-awaiting-confirmation",
-      "summary": "3 exit levels have been crossed on the current reading and have not yet been crossed on enough consecutive trading days to act on. Nothing is owed from you today.",
+      "summary": "3 exit levels have been crossed on the current reading and have not yet been crossed on enough consecutive trading days to act on. It asks nothing of you today.",
       "basis": "reconstructed",
       "as_of": "2025-10-15",
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 10,
-       "values_version": 5,
+       "version": 11,
+       "values_version": 6,
        "contract": 8
       },
       "reason": "No reason given.",
@@ -8253,14 +8431,14 @@
        "state": {
         "id": "one-reading-past",
         "name": "One reading past the line",
-        "description": "An exit level has been crossed on the current reading, and this strategy will not act on it until the next readings say the same thing — trading days for the discount exits, filings for the safety ones. One impairment or one settlement can push a measure over a line without anything having changed, and selling on that would be the panic this is here to prevent. Nothing is owed from you today.",
+        "description": "An exit level has been crossed on the current reading, and this strategy will not act on it until the next readings say the same thing — trading days for the discount exits, filings for the safety ones. One impairment or one settlement can push a measure over a line without anything having changed, and selling on that would be the panic this is here to prevent. It asks nothing of you today.",
         "fix": null,
-        "consequence": "waiting on the next readings to confirm · nothing owed"
+        "consequence": "waiting on the next readings to confirm · asks nothing of you"
        },
        "payload": {},
        "reason": {
         "rule": "breach-awaiting-confirmation",
-        "summary": "3 exit levels have been crossed on the current reading and have not yet been crossed on enough consecutive trading days to act on. Nothing is owed from you today.",
+        "summary": "3 exit levels have been crossed on the current reading and have not yet been crossed on enough consecutive trading days to act on. It asks nothing of you today.",
         "evidence": [
          {
           "subject": {
@@ -8672,16 +8850,16 @@
        "strategy": {
         "id": "graham",
         "name": "Graham",
-        "version": 10,
-        "values_version": 5,
+        "version": 11,
+        "values_version": 6,
         "contract": 8
        }
       },
       "strategy": {
        "id": "graham",
        "name": "Graham",
-       "version": 10,
-       "values_version": 5,
+       "version": 11,
+       "values_version": 6,
        "contract": 8
       },
       "metrics": {
@@ -8691,7 +8869,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-06-01"
-        ]
+        ],
+        "label": "Price to earnings on three-year average EPS",
+        "format": "0.0x"
        },
        "price_to_book": {
         "value": 3.15,
@@ -8699,7 +8879,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-06-01"
-        ]
+        ],
+        "label": "Price to book",
+        "format": "0.00x"
        },
        "graham_combined_multiple": {
         "value": 83.16,
@@ -8707,7 +8889,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-06-01"
-        ]
+        ],
+        "label": "Graham combined multiple",
+        "format": "0.0"
        },
        "current_ratio": {
         "value": 2.2,
@@ -8715,7 +8899,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-06-01"
-        ]
+        ],
+        "label": "Current ratio",
+        "format": "0.00"
        },
        "ltd_to_working_capital": {
         "value": 0.4,
@@ -8723,7 +8909,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-06-01"
-        ]
+        ],
+        "label": "Long-term debt to working capital",
+        "format": "0.00"
        },
        "profitable_years_10y": {
         "value": 10.0,
@@ -8731,7 +8919,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-06-01"
-        ]
+        ],
+        "label": "Years of positive net income out of the last ten",
+        "format": "0 of 10"
        },
        "altman_z_double_prime": {
         "value": 4.0,
@@ -8739,7 +8929,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-06-01"
-        ]
+        ],
+        "label": "Altman Z″-score, for companies that do not manufacture",
+        "format": "0.00"
        },
        "eps_growth_10y": {
         "value": 44.0,
@@ -8747,7 +8939,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-06-01"
-        ]
+        ],
+        "label": "Ten-year EPS growth, three-year averages at both ends",
+        "format": "0.0%"
        },
        "consecutive_capital_return_years": {
         "value": 14.0,
@@ -8755,7 +8949,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-06-01"
-        ]
+        ],
+        "label": "Consecutive years returning capital, by either route",
+        "format": "0 yrs"
        },
        "debt_to_equity": {
         "value": 0.5,
@@ -8763,7 +8959,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-06-01"
-        ]
+        ],
+        "label": "Debt to equity",
+        "format": "0.00"
        },
        "price_to_net_tangible_assets": {
         "value": 3.6,
@@ -8771,7 +8969,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-06-01"
-        ]
+        ],
+        "label": "Price to net tangible assets",
+        "format": "0.00x"
        },
        "accruals_ratio": {
         "value": 0.03,
@@ -8779,7 +8979,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-06-01"
-        ]
+        ],
+        "label": "Accruals ratio",
+        "format": "0.00"
        },
        "revenue_ttm": {
         "value": 690000000.0,
@@ -8787,7 +8989,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-06-01"
-        ]
+        ],
+        "label": "Revenue, trailing twelve months",
+        "format": "$0,0"
        },
        "ncav_to_market_cap": {
         "value": 0.18,
@@ -8795,7 +8999,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-06-01"
-        ]
+        ],
+        "label": "Net current asset value over market capitalization",
+        "format": "0.00"
        },
        "consecutive_annual_loss_years": {
         "value": 0.0,
@@ -8803,7 +9009,9 @@
         "cautions": [],
         "provenance": [
          "entered by hand on 2024-06-01"
-        ]
+        ],
+        "label": "Consecutive annual losses, most recent backward",
+        "format": "0"
        }
       },
       "price": null,
@@ -8834,7 +9042,7 @@
         "revenue_ttm"
        ],
        "manual_withheld": [],
-       "note": "no company is linked to this ticker, so no stored filing or price from 2025-10-15 could be consulted; 15 hand-entered values on record by 2025-10-15; judged by Graham v10 as it stands today (values v5) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
+       "note": "no company is linked to this ticker, so no stored filing or price from 2025-10-15 could be consulted; 15 hand-entered values on record by 2025-10-15; judged by Graham v11 as it stands today (values v6) — the version in force then is not recoverable, so the rules are the present ones and only the data is of the day"
       },
       "thesis": {
        "seq": 1,

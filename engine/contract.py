@@ -1326,6 +1326,39 @@ INPUT_ROLES = MappingProxyType({
 })
 
 
+# The same channel, for a declared VALUE the host must be able to read
+# without knowing what it means. A strategy's slot count is a threshold like
+# any other until the account header wants to say "6 of 20" — at which point
+# the host needs to know WHICH value is the position limit, and the strategy
+# needs a way to say so that is not a comment. A value claims a role; the
+# host reads the role; nothing host-side ever names a strategy's value id.
+#
+# The mirror of INPUT_ROLES rather than an extension of it, because the two
+# halves of the split answer differently: an input role says who supplies a
+# figure, a value role says what a shipped default IS — and a value never
+# has an `answered_by`, because every value is the strategy's own.
+VALUE_ROLES = MappingProxyType({
+    "position-limit": MappingProxyType({
+        "means": "how many separate positions this strategy holds at once — "
+                 "the slot count its sizing works from",
+        "type": "integer",
+        "unit": "count",
+        # Where the host reports it: beside the occupied count it already
+        # serves, so a header can say how full the list is without knowing
+        # what a position limit is.
+        "reports": ("portfolio.slots.total",),
+    }),
+    "minimum-add": MappingProxyType({
+        "means": "the smallest addition worth acting on, as a percent of "
+                 "the position's own target value — an add below it is "
+                 "reported as too small to be worth the trade",
+        "type": "number",
+        "unit": "percent",
+        "reports": ("allocation.below_minimum",),
+    }),
+})
+
+
 # A role the host answers has to be able to say so, in one sentence, wherever
 # a screen explains why a field takes no answer. Checked here, at import,
 # rather than at the call that needs it: the alternative is a KeyError raised
@@ -1617,7 +1650,7 @@ def check_typed_value(spec: dict, value) -> str | None:
 
 _DECL_KEYS = {"id", "name", "summary", "version", "contract", "changelog",
               "states", "inputs", "values", "reference", "declines",
-              "limits", "list"}
+              "limits", "list", "reads", "audience"}
 _DECLINE_KEYS = {"class", "because"}
 _LIMIT_KEYS = {"title", "body"}
 _LIST_KEYS = {"label", "explain", "source"}
@@ -1635,10 +1668,12 @@ _FIELD_KEYS = {"id", "label", "type", "unit", "required", "min", "max",
                "explain", "options", "role", "when", "min_from", "max_from",
                "source"}
 # Keys only an input may carry. A value ships a default and is always in
-# force, so none of them can mean anything on one: a role is a fact about
-# the user, and a value that only sometimes applies is a value the strategy
-# can simply ignore.
-_INPUT_ONLY_KEYS = ("required", "role", "when", "min_from", "max_from")
+# force, so none of them can mean anything on one: a value that only
+# sometimes applies is a value the strategy can simply ignore. `role` is on
+# both sides now, resolved against a different table for each — INPUT_ROLES
+# for a figure about the user's account, VALUE_ROLES for a shipped default
+# the host must be able to read without knowing what it means.
+_INPUT_ONLY_KEYS = ("required", "when", "min_from", "max_from")
 # And the reverse. An input has no number of its own — the user supplies it
 # — so there is nothing about it to attribute.
 _VALUE_ONLY_KEYS = ("source",)
@@ -1828,6 +1863,8 @@ def _check_fields(kind: str, fields, errors: list) -> None:
             _check_options(where, f, errors)
         if "role" in f and kind == "input":
             _check_role(where, f, errors)
+        if "role" in f and kind == "value":
+            _check_value_role(where, f, errors)
         if "when" in f and kind == "input" and \
                 not (isinstance(f["when"], dict)
                      and set(f["when"]) == _WHEN_KEYS):
@@ -1893,6 +1930,68 @@ def _check_role(where: str, f: dict, errors: list) -> None:
             "figure is absent and says so.")
 
 
+def _check_value_role(where: str, f: dict, errors: list) -> None:
+    """A declared value claiming one of the host's value roles — the type
+    and unit must match the role's, for the same reason an input role's
+    must: the host reads the figure without knowing what it means, so a
+    mismatch would report one number as another."""
+    role = f["role"]
+    spec = VALUE_ROLES.get(role) if isinstance(role, str) else None
+    if spec is None:
+        errors.append(
+            f"{where}: `role` on a value must be one of "
+            f"{', '.join(VALUE_ROLES)} — the declared figures the host can "
+            "read without knowing what they mean. A strategy never invents "
+            "one; anything missing is a request against the host.")
+        return
+    if f.get("type") != spec["type"]:
+        errors.append(f'{where}: the "{role}" role is {spec["means"]}, so it '
+                      f'must be declared as `type: {spec["type"]}`.')
+    if f.get("unit") != spec["unit"]:
+        errors.append(f'{where}: the "{role}" role must be declared as '
+                      f'`unit: {spec["unit"]}` — the host reports it in that '
+                      "unit and would otherwise report one number as "
+                      "another.")
+
+
+def value_roles(record: dict, values: dict | None) -> dict:
+    """{role: {"id", "label", "value", "source"}} for every value role this
+    strategy claims, resolved against the values actually in force.
+
+    This is how a header can say how full a twenty-slot list is, and how the
+    allocation can apply a strategy's own minimum, without either knowing a
+    single value id. The label and the source come across so a screen can
+    attribute the figure — "your Names held at once" — the same way a
+    threshold on an evidence row is attributed.
+
+    A claimed role whose value did not resolve is simply absent from the
+    result: the consumers all render from what is present, and an absent
+    role reads as "this strategy declares none", which is the true sentence.
+    """
+    out = {}
+    for f in record.get("values", []) or []:
+        if not isinstance(f, dict):
+            continue
+        role = f.get("role")
+        if not isinstance(role, str) or role not in VALUE_ROLES \
+                or role in out:
+            continue
+        v = (values or {}).get(f.get("id"))
+        if v is None:
+            continue
+        out[role] = {"id": f.get("id"), "label": f.get("label"),
+                     "value": v,
+                     "source": _source_name(f.get("source"))}
+    return out
+
+
+def _source_name(src) -> str | None:
+    if isinstance(src, dict):
+        name = src.get("name")
+        return str(name) if name else None
+    return str(src) if isinstance(src, str) and src.strip() else None
+
+
 def _check_field_graph(decl: dict, errors: list) -> None:
     """Everything that needs the whole declaration at once: fields naming
     other fields, and roles that may only be claimed once."""
@@ -1916,6 +2015,18 @@ def _check_field_graph(decl: dict, errors: list) -> None:
                 f'"{role}" role. The host would have no way to know which '
                 "figure to report, so both are refused.")
         claimed[role] = f["id"]
+
+    value_claimed: dict[str, str] = {}
+    for f in values:
+        role = f.get("role")
+        if not isinstance(role, str) or role not in VALUE_ROLES:
+            continue
+        if role in value_claimed:
+            errors.append(
+                f'values "{value_claimed[role]}" and "{f["id"]}" both claim '
+                f'the "{role}" role. The host would have no way to know '
+                "which figure to read, so both are refused.")
+        value_claimed[role] = f["id"]
 
     for f in inputs:
         where = f'input "{f["id"]}"'
@@ -2321,6 +2432,32 @@ def validate_declaration(decl) -> list[str]:
         errors.append("`summary` must say, in plain language, what this "
                       "strategy is.")
 
+    # Optional, and enforced where declared. `reads` is the measures this
+    # strategy may cite; declaring it is what lets a chooser say "this reads
+    # 22 measures" before any journal exists, and it is a promise the host
+    # holds the strategy to — a citation outside the list is refused at
+    # evaluation, exactly the way everything else here is guaranteed.
+    if "reads" in decl:
+        reads = decl["reads"]
+        if not isinstance(reads, (list, tuple)) or not reads \
+                or not all(isinstance(m, str) and m.strip() for m in reads):
+            errors.append("`reads` must be a non-empty list of metric-bank "
+                          "entry ids — the measures this strategy may cite. "
+                          "Leave it out entirely rather than declaring an "
+                          "empty promise.")
+        elif len(set(reads)) != len(list(reads)):
+            errors.append("`reads` names the same measure twice. A list "
+                          "with duplicates reads as two claims about one "
+                          "thing.")
+
+    # Optional prose for the chooser: who this method suits, in the
+    # strategy's own words. One paragraph, no layout.
+    if "audience" in decl and not _is_text(decl.get("audience")):
+        errors.append("`audience` must be plain text saying who this "
+                      "strategy is for — it renders on the chooser beside "
+                      "the summary. Leave it out rather than declaring an "
+                      "empty one.")
+
     version = decl.get("version")
     if not (isinstance(version, int) and not isinstance(version, bool)
             and version >= 1):
@@ -2688,6 +2825,25 @@ def apply_host_answers(effective: dict, roles: dict) -> dict:
             out[entry["id"]] = entry["value"]
         else:
             out.pop(entry["id"], None)
+    return out
+
+
+def input_absences(roles: dict) -> dict:
+    """{input id: why it has no value}, for every role input that resolved
+    to a reason instead of a figure.
+
+    This is what stops an unopened cash record reading as "this setting has
+    no value yet" — a sentence pointing at a field nobody can set, when the
+    fix is opening the record. `input_roles` already composed the honest
+    sentence from the role's own declaration; this carries it to the one
+    place a citation's absence is worded, so the declaration and the reason
+    the reader gets cannot be two different claims.
+    """
+    out = {}
+    for entry in (roles or {}).values():
+        if isinstance(entry, dict) and "value" not in entry \
+                and entry.get("reason") and entry.get("id"):
+            out[entry["id"]] = entry["reason"]
     return out
 
 
@@ -3071,6 +3227,22 @@ def _check_evidence_item(record, item, where, errors) -> None:
         return
     subject = named[0]
 
+    # A strategy that declared what it reads is held to it. The declaration
+    # is what lets a chooser and the measures reference speak for this
+    # strategy before any journal exists, and a promise nothing checks is a
+    # comment — so a citation outside the list is refused here, the same
+    # way an invented state is.
+    reads = record.get("reads")
+    if subject == "measure" and reads is not None \
+            and isinstance(item.get("measure"), str) \
+            and item["measure"] not in reads:
+        errors.append(
+            f'{where} cites "{item["measure"]}", which is not in the '
+            f"measures this strategy declared it reads ({len(reads)} "
+            "declared). Add it to `reads` — the declaration is what the "
+            "reference screens and the chooser speak from, and a citation "
+            "outside it would make them wrong.")
+
     if subject == "label":
         if not _is_text(item.get("label")):
             errors.append(f"{where}: `label` must say what this figure is.")
@@ -3276,13 +3448,28 @@ def validate_decision(record: dict, decision) -> list[str]:
 # resolving evidence — the host answers what the strategy asked
 # ---------------------------------------------------------------------------
 
-def _observed(value, source, cautions=None, provenance=None) -> dict:
-    return {"status": "known", "value": value, "source": source,
-            "cautions": list(cautions or []),
-            "provenance": list(provenance or [])}
+def _observed(value, source, cautions=None, provenance=None,
+              bound=None, bound_reason=None) -> dict:
+    """A citation answered with a figure.
+
+    `bound` is the one word for a value that is conclusive in only one
+    direction: a streak that reaches the edge of the recorded filings is "at
+    least thirteen", which settles a test asking for ten and cannot settle
+    one asking for twenty. It is part of the value, not a caution — a
+    caution qualifies what a reader sees, and this must qualify what the
+    arithmetic consumes (see `_outcome`). `bound_reason` says why the record
+    could not see further, in the sentence the unknown outcome will carry.
+    """
+    out = {"status": "known", "value": value, "source": source,
+           "cautions": list(cautions or []),
+           "provenance": list(provenance or [])}
+    if bound is not None:
+        out["bound"] = bound
+        out["bound_reason"] = bound_reason
+    return out
 
 
-def _unobserved(reason, source, status="absent") -> dict:
+def _unobserved(reason, source, status="absent", fix=None) -> dict:
     """A citation the host could not answer with a figure.
 
     `status` carries the *kind* of absence across this boundary, and it is
@@ -3299,7 +3486,15 @@ def _unobserved(reason, source, status="absent") -> dict:
     as an absent one does — never a pass, and never a fifth word a strategy
     written before this existed would fall straight through.
     """
-    return {"status": status, "reason": reason, "source": source}
+    out = {"status": status, "reason": reason, "source": source}
+    # `fix` is the absence's machine-readable kind (refetch / refused /
+    # filings / boundary), set where the absence was made. The triage word
+    # beside an absent value renders from it; where none arrived, no word
+    # renders — a guess assembled here from prose or journal state is how
+    # the word came to lie about a refused fetch.
+    if fix:
+        out["fix"] = fix
+    return out
 
 
 def _leave_one_out(ctx, entry, item):
@@ -3364,8 +3559,11 @@ def _measure_observation(ctx, item):
         cur = entry["current"]
         if cur["status"] == "known":
             return _observed(cur["value"], "measure", cur.get("cautions"),
-                             cur.get("provenance")), None
-        return _unobserved(cur["reason"], "measure", cur["status"]), None
+                             cur.get("provenance"),
+                             bound=cur.get("bound"),
+                             bound_reason=cur.get("bound_reason")), None
+        return _unobserved(cur["reason"], "measure", cur["status"],
+                           fix=cur.get("fix")), None
 
     points = entry["series"]["points"]
     hit = next((p for p in points if p["period_end"] == item["at"]), None)
@@ -3582,10 +3780,22 @@ def _pool(ctx, kind) -> dict:
 
 
 def _setting_observation(ctx, kind, fid):
-    """A declared value or an answered input, read out of the context."""
+    """A declared value or an answered input, read out of the context.
+
+    An input can be missing for a reason only the role that failed to answer
+    it knows — a cash record nobody has opened is not a setting nobody has
+    filled in, and telling the reader to edit a field that takes no answer
+    is a dead end wearing helpful words. Where the context carries that
+    reason (`input_reasons`, written by the same resolution that left the
+    value out), it is the sentence; the generic one covers the rest.
+    """
     pool = _pool(ctx, kind)
     if fid not in pool or pool[fid] is None:
-        return _unobserved("this setting has no value yet", kind), None
+        why = None
+        if kind == "input":
+            why = (ctx.get("input_reasons") or {}).get(fid)
+        return _unobserved(why or "this setting has no value yet",
+                           kind), None
     return _observed(pool[fid], kind), None
 
 
@@ -3741,7 +3951,37 @@ def _outcome(observation, comparator, threshold, absent):
     if cmp_["numeric_only"] and _kind_of(actual) not in ("number", "date"):
         return None, (f'"{comparator}" only means something for numbers and '
                       "dates.")
+    if observation.get("bound") == "at_least":
+        return _bounded_outcome(comparator, actual, threshold), None
     return (PASS if cmp_["fn"](actual, threshold) else FAIL), None
+
+
+def _bounded_outcome(comparator, floor, threshold) -> str:
+    """A comparison against a value that is a floor, not a point.
+
+    "At least thirteen" is conclusive in one direction only: the true value
+    lies somewhere in [floor, ∞), so a comparison resolves only where every
+    value in that interval answers the same way. A test the interval settles
+    is settled — thirteen-plus is at least ten, and it is more than five. A
+    test it cannot settle is `unknown`, never a fail: the record ran out
+    before the answer did, and absence must not read as failure any more
+    than it reads as success. The reason travels on the observation
+    (`bound_reason`), where the reader of the unknown goes looking.
+    """
+    if comparator in ("at_least", "above"):
+        conclusive = COMPARATORS[comparator]["fn"](floor, threshold)
+        return PASS if conclusive else UNKNOWN
+    if comparator in ("at_most", "below"):
+        # The whole interval is over the line only if even the floor is.
+        breached = not COMPARATORS[comparator]["fn"](floor, threshold)
+        return FAIL if breached else UNKNOWN
+    if comparator == "equals":
+        # The interval can never be exactly one number; it can only be
+        # shown not to contain the target.
+        return FAIL if threshold < floor else UNKNOWN
+    if comparator == "not_equals":
+        return PASS if threshold < floor else UNKNOWN
+    return UNKNOWN
 
 
 def _cited_as(item) -> str:
@@ -4275,11 +4515,21 @@ def _contradicted_commit(record, evidence, groups) -> list[str]:
             continue
         need = (f'all {g["tested"]}' if g["requires"] == "all"
                 else (g["test"] or {}).get("threshold"))
+        # The rows that carried it, by name. "Needed all 3 and 2 did" tells
+        # the author a group fell short; which requirement fell is what they
+        # go and look at, and making them diff the rollup against the rows
+        # is the work this sentence exists to save.
+        rows = [r for r in evidence
+                if r.get("group") == g["id"] and r.get("test") is not None
+                and r["outcome"] in (FAIL, UNKNOWN)]
+        named = "; ".join(
+            f'"{r["subject"]["label"]}" '
+            + ("failed" if r["outcome"] == FAIL else "could not be worked out")
+            for r in rows)
         problems.append(
             f'"{g["name"]}" needed {need} of its {g["tested"]} tests to '
             f'pass and {g["passed"]} did'
-            + (f' ({g["unknown"]} could not be worked out)'
-               if g["unknown"] else "") + ".")
+            + (f' ({named})' if named else "") + ".")
     for r in evidence:
         if not r.get("group") and r["outcome"] == FAIL:
             problems.append(

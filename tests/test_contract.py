@@ -287,13 +287,162 @@ class TestInputRoles:
         assert any("both claim" in e and "no way to know" in e
                    for e in errors)
 
-    def test_a_value_can_never_carry_a_role(self):
-        """A role is a fact about the user's account. A value ships a
-        default, and no strategy can ship a default for someone's cash."""
+    def test_a_bounded_observation_settles_only_one_way(self):
+        """A truncated streak is "at least thirteen", which is conclusive in
+        one direction and not the other: it settles a test asking for ten
+        and cannot settle one asking for twenty. Served as a plain thirteen
+        it FAILED the twenty — a false fail on a knockout vetoes the
+        company — and that is the wrong answer this word exists to refuse.
+        Never a fail on the open side: the record ran out before the answer
+        did, and absence must not read as failure any more than success."""
+        def ctx_with(value, bound=None):
+            cur = {"status": "known", "value": value,
+                   "cautions": [], "provenance": []}
+            if bound:
+                cur["bound"] = bound
+                cur["bound_reason"] = "the record reaches only so far"
+            return {"contract": contract.CONTRACT_VERSION,
+                    "today": "2026-08-15", "inputs": {}, "values": {},
+                    "measures": {"m": {"current": cur,
+                                       "series": {"points": []}}}}
+
+        def outcome(value, comparator, threshold, bound="at_least"):
+            return contract.test(
+                ctx_with(value, bound),
+                {"measure": "m", "comparator": comparator,
+                 "threshold": threshold})
+
+        # settled: the whole interval [floor, ∞) answers the same way
+        assert outcome(13, "at_least", 10) == "pass"
+        assert outcome(13, "above", 10) == "pass"
+        assert outcome(13, "at_most", 10) == "fail"
+        assert outcome(13, "below", 10) == "fail"
+        assert outcome(13, "equals", 10) == "fail"
+        assert outcome(13, "not_equals", 10) == "pass"
+        # unsettled: the interval straddles the line — unknown, never fail
+        assert outcome(13, "at_least", 20) == "unknown"
+        assert outcome(13, "above", 20) == "unknown"
+        assert outcome(13, "at_most", 20) == "unknown"
+        assert outcome(13, "below", 20) == "unknown"
+        assert outcome(13, "equals", 20) == "unknown"
+        assert outcome(13, "not_equals", 13) == "unknown"
+        # and without the bound, the same numbers compare as points
+        assert outcome(13, "at_least", 20, bound=None) == "fail"
+
+    def test_the_bound_travels_onto_the_evidence_row(self):
+        """The reader of the unknown outcome goes looking at the row, so the
+        row has to carry the floor and why the record stops there."""
+        cur = {"status": "known", "value": 13.0, "bound": "at_least",
+               "bound_reason": "the record reaches only so far",
+               "cautions": [], "provenance": []}
+        rec = record(
+            states=[{"id": "sit", "name": "Sit", "render": "hold",
+                     "description": "Do nothing."}],
+            decide=lambda c: {
+                "state": "sit", "payload": {},
+                "reason": {"rule": "always", "summary": "By design.",
+                           "evidence": [{"measure": "m",
+                                         "comparator": "at_least",
+                                         "threshold": 20}]}})
+        out = contract.evaluate(rec, {
+            "contract": contract.CONTRACT_VERSION, "today": "2026-08-15",
+            "inputs": {}, "values": {},
+            "measures": {"m": {"current": cur, "series": {"points": []}}}})
+        [row] = out["reason"]["evidence"]
+        assert row["outcome"] == "unknown"
+        assert row["observed"]["bound"] == "at_least"
+        assert row["observed"]["bound_reason"] == \
+            "the record reaches only so far"
+
+    def test_an_unopened_cash_record_names_its_own_fix(self):
+        """A strategy citing the cash input when the record is unopened used
+        to get "this setting has no value yet" — a sentence pointing at a
+        field nobody can set, when the fix is opening the record. The role
+        resolution composes the honest sentence; the citation must carry it
+        rather than the generic one."""
+        rec = record(
+            inputs=[field("free-cash", role="cash", unit="usd",
+                          type="number")],
+            states=[{"id": "sit", "name": "Sit", "render": "hold",
+                     "description": "Do nothing."}],
+            decide=lambda c: {
+                "state": "sit", "payload": {},
+                "reason": {"rule": "always", "summary": "By design.",
+                           "evidence": [{"input": "free-cash"}]}})
+        roles = contract.input_roles(
+            rec, {}, {"cash": {"status": "absent",
+                               "reason": "this journal has no cash record "
+                                         "yet. Record what the account "
+                                         "holds to open it."}})
+        absences = contract.input_absences(roles)
+        assert "no cash record" in absences["free-cash"]
+        out = contract.evaluate(rec, {
+            "contract": contract.CONTRACT_VERSION, "today": "2026-08-15",
+            "inputs": {}, "values": {}, "measures": {},
+            "input_reasons": absences})
+        [row] = out["reason"]["evidence"]
+        assert "no cash record" in row["observed"]["reason"]
+        assert "no value yet" not in row["observed"]["reason"]
+
+    def test_a_citation_outside_declared_reads_is_refused(self):
+        """`reads` is a promise the host holds the strategy to — the chooser
+        and the reference screens speak from it, and a citation outside it
+        would make them wrong. Undeclared, nothing changes; declared, it is
+        enforced the way an invented state is."""
+        cur = {"status": "known", "value": 1.0,
+               "cautions": [], "provenance": []}
+        measures = {"m": {"current": cur, "series": {"points": []}},
+                    "n": {"current": cur, "series": {"points": []}}}
+        decide = lambda c: {                                   # noqa: E731
+            "state": "sit", "payload": {},
+            "reason": {"rule": "always", "summary": "By design.",
+                       "evidence": [{"measure": "n", "comparator": "at_least",
+                                     "threshold": 0}]}}
+        states = [{"id": "sit", "name": "Sit", "render": "hold",
+                   "description": "Do nothing."}]
+        ctx = {"contract": contract.CONTRACT_VERSION, "today": "2026-08-15",
+               "inputs": {}, "values": {}, "measures": measures}
+        held = contract.evaluate(
+            record(reads=("m",), states=states, decide=decide), ctx)
+        assert held["state"]["id"] == "host:invalid-decision"
+        assert '"n"' in held["reason"]["summary"]
+        assert "declared it reads" in held["reason"]["summary"]
+        free = contract.evaluate(record(states=states, decide=decide), ctx)
+        assert free["state"]["id"] == "sit"
+
+    def test_a_value_cannot_claim_an_input_role(self):
+        """A value may claim a VALUE role — a shipped default the host reads
+        without knowing what it means — but never an input role: those are
+        facts about the user's account, and no strategy can ship a default
+        for someone's cash. The two tables are separate on purpose."""
         errors = contract.validate_declaration(decl(values=[
             field("c", role="cash", unit="usd")]))
-        assert any("only an input can" in e for e in errors)
-        assert any("account balance" in e for e in errors)
+        assert any("must be one of" in e and "position-limit" in e
+                   for e in errors)
+
+    def test_a_value_role_is_validated_and_read(self):
+        """The whole channel: a value claiming "position-limit" must match
+        the role's type and unit, only one value may claim it, and
+        `value_roles` resolves it against the values in force with its
+        label and source attached — which is everything a header needs to
+        say "6 of 20" without knowing what a slot is."""
+        good = field("slots", role="position-limit", type="integer",
+                     unit="count", source={"name": "a test source", "reasoning": True})
+        assert contract.validate_declaration(decl(values=[good])) == []
+        errors = contract.validate_declaration(decl(values=[
+            field("slots", role="position-limit", type="number",
+                  unit="percent", source={"name": "a test source", "reasoning": True})]))
+        assert any("position-limit" in e and "type" in e for e in errors)
+        errors = contract.validate_declaration(decl(values=[
+            good, field("slots2", role="position-limit", type="integer",
+                        unit="count", source={"name": "a test source", "reasoning": True})]))
+        assert any("both claim" in e for e in errors)
+        roles = contract.value_roles(
+            {"values": [good]}, {"slots": 20})
+        assert roles["position-limit"]["value"] == 20
+        assert roles["position-limit"]["label"] == "Slots"
+        # unresolved value → the role is simply absent, never invented
+        assert contract.value_roles({"values": [good]}, {}) == {}
 
     def test_a_host_answered_role_takes_the_hosts_figure_and_no_other(self):
         """The cash role is worked out by the host from the journal's own
